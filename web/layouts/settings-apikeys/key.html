@@ -56,13 +56,13 @@
             hx-post='{{ partsURL .Const.APIKeysEndpoint .Params.ID }}'
             hx-disabled-elt="this"
             @click="pcTrackEvent('Rotate');"
-            class="pc-internal-form-button pc-internal-form-button-secondary pc-internal-button-smaller hidden sm:inline-flex">Rotate<span class="sr-only">, API key</span></a>
+            class="pc-internal-form-button pc-internal-form-button-secondary pc-internal-button-smaller inline-flex">Rotate<span class="sr-only">, API key</span></a>
         {{ end }}
         <a href="#"
             hx-confirm="Are you sure you want to delete this API key?" 
             hx-delete='{{ partsURL .Const.APIKeysEndpoint .Params.ID }}'
             @click="pcTrackEvent('Delete');"
             hx-disabled-elt="this"
-            class="pc-internal-form-button pc-internal-form-button-danger pc-internal-button-smaller hidden sm:inline-flex">Delete<span class="sr-only">, API key</span></a>
+            class="pc-internal-form-button pc-internal-form-button-danger pc-internal-button-smaller inline-flex">Delete<span class="sr-only">, API key</span></a>
     </div>
 </li>

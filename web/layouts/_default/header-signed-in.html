@@ -12,8 +12,8 @@
                         <div class="hidden md:block">
                             <div class="ml-10 flex items-baseline space-x-4">
                                 <a href="{{ relURL "/" }}" class="pc-dashboard-menu-button {{ if eq .Ctx.Path (relURL "/") }}pc-dashboard-menu-button-current{{end}}" aria-current="page">Dashboard</a>
-                                <a href="https://docs.privatecaptcha.com/" target="_blank" class="pc-dashboard-menu-button">Docs</a>
-                                {{if .Ctx.FirstSession}}<a href="https://docs.privatecaptcha.com/docs/getting-started/" target="_blank" class="pc-dashboard-menu-button">Getting started</a>{{end}}
+                                <a href="https://docs.privatecaptcha.com/" target="_blank" rel="noopener noreferrer" class="pc-dashboard-menu-button">Docs</a>
+                                {{if .Ctx.FirstSession}}<a href="https://docs.privatecaptcha.com/docs/getting-started/" target="_blank" rel="noopener noreferrer" class="pc-dashboard-menu-button">Getting started</a>{{end}}
                             </div>
                         </div>
                     </div>
@@ -43,7 +43,7 @@
                                     class="pc-header-dropdown" role="menu" aria-orientation="vertical" aria-labelledby="user-menu-button" tabindex="-1">
                                     {{- if not $.Platform.Registered }}
                                     <div class="px-4 py-3">
-                                        <a href="https://privatecaptcha.com/self-hosting/" target="_blank" class="pc-badge pc-badge-warn">UNLICENSED</a>
+                                        <a href="https://privatecaptcha.com/self-hosting/" target="_blank" rel="noopener noreferrer" class="pc-badge pc-badge-warn">UNLICENSED</a>
                                     </div>
                                     {{- end }}
                                     <div {{if not $.Platform.Registered }}class="py-1"{{end}}>
@@ -56,7 +56,7 @@
                         </div>
                     </div>
                     <div class="-mr-2 flex md:hidden">
-                        <button type="button" class="relative inline-flex items-center justify-center rounded-pc bg-pc-bg p-2 text-pc-grey-950 hover:bg-black/5 hover:text-pc-green-hover focus:outline-none focus:ring-2 focus:ring-pc-green focus:ring-offset-2 focus:ring-offset-pc-bg" aria-controls="mobile-menu" aria-expanded="false">
+                        <button type="button" @click="mobileMenuOpen = !mobileMenuOpen" class="relative inline-flex items-center justify-center rounded-pc bg-pc-bg p-2 text-pc-grey-950 hover:bg-black/5 hover:text-pc-green-hover focus:outline-none focus:ring-2 focus:ring-pc-green focus:ring-offset-2 focus:ring-offset-pc-bg" aria-controls="mobile-menu" :aria-expanded="mobileMenuOpen">
                             <span class="absolute -inset-0.5"></span>
                             <span class="sr-only">Open main menu</span>
                             <svg class="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
@@ -73,8 +73,8 @@
         <div x-cloak x-show="mobileMenuOpen" class="border-t border-dashed border-pc-grey-250 md:hidden" id="mobile-menu">
             <div class="space-y-1 px-2 py-3 sm:px-3">
                 <a href="{{ relURL "/" }}" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile {{ if eq .Ctx.Path (relURL "/") }}pc-dashboard-menu-button-current{{end}}" aria-current="page">Dashboard</a>
-                <a href="https://docs.privatecaptcha.com/" target="_blank" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile">Docs</a>
-                {{if .Ctx.FirstSession}}<a href="https://docs.privatecaptcha.com/docs/getting-started/" target="_blank" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile">Getting started</a>{{end}}
+                <a href="https://docs.privatecaptcha.com/" target="_blank" rel="noopener noreferrer" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile">Docs</a>
+                {{if .Ctx.FirstSession}}<a href="https://docs.privatecaptcha.com/docs/getting-started/" target="_blank" rel="noopener noreferrer" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile">Getting started</a>{{end}}
             </div>
             <div class="border-t border-dashed border-pc-grey-250 pb-3 pt-4">
                 <div class="flex items-center px-5">

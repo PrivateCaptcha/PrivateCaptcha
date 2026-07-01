@@ -52,7 +52,7 @@
         </div>
         <div class="mt-2 md:flex md:items-center md:justify-between">
             <div class="min-w-0 flex-1">
-                <h2 class="text-2xl font-medium leading-7 text-pc-grey-950 sm:truncate sm:text-3xl sm:tracking-tight inline-flex flex-row flex-wrap items-center gap-y-2 pr-1"><span class="font-heading">{{ $.Params.Form.Name }}</span>
+                <h2 class="text-pc-grey-950 sm:truncate sm:tracking-tight inline-flex flex-row flex-wrap items-center gap-y-2 pr-1"><span class="pc-page-title">{{ $.Params.Form.Name }}</span>
                     <a href="{{ partsURL $.Const.OrgEndpoint $.Params.Form.OrgID $.Const.FormEndpoint $.Params.Form.ID }}?{{ $.Const.Tab }}={{$.Const.SettingsEndpoint}}"
                         class="ml-3 pc-badge {{ if $.Params.Form.Active }}pc-badge-green{{ else }}pc-badge-warn{{ end }}">
                         {{if $.Params.Form.Active}}Active{{else}}Inactive{{end}}

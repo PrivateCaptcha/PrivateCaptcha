@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @font-face {
-    font-family: 'Erode';
+    font-family: Erode;
     src: url('../fonts/erode-400.woff2') format('woff2');
     font-weight: 400;
     font-style: normal;
@@ -11,9 +11,25 @@
 }
 
 @font-face {
-    font-family: 'Erode';
+    font-family: Erode;
     src: url('../fonts/erode-500.woff2') format('woff2');
     font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: Erode;
+    src: url('../fonts/erode-600.woff2') format('woff2');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: Erode;
+    src: url('../fonts/erode-700.woff2') format('woff2');
+    font-weight: 700;
     font-style: normal;
     font-display: swap;
 }
@@ -322,11 +338,7 @@
 }
 
 h1.pc-form-caption {
-    @apply font-heading;
-    @apply text-2xl;
-    @apply font-medium;
-    @apply tracking-tight;
-    @apply text-pc-grey-950;
+    @apply font-heading text-3xl font-semibold tracking-tight text-pc-grey-950;
 }
 
 body.pc-vertical-stretch {
@@ -559,6 +571,11 @@ body.pc-vertical-stretch {
     @apply md:block;
 }
 
+.pc-wizard-step-separator path {
+    stroke-width: 1;
+    stroke-dasharray: 0.022 0.022;
+}
+
 .pc-wizard-footer {
     @apply mt-20;
     @apply flex;
@@ -572,8 +589,7 @@ body.pc-vertical-stretch {
 }
 
 .pc-wizard-section-title {
-    @apply text-base;
-    @apply font-semibold;
+    @apply font-heading text-xl font-semibold tracking-tight;
     @apply text-pc-grey-950;
 }
 
@@ -711,6 +727,8 @@ body.pc-vertical-stretch {
 }
 
 .pc-header-nav {
+    @apply relative;
+    @apply z-10;
     @apply bg-pc-bg;
     @apply border-b;
     @apply border-dashed;
@@ -734,10 +752,9 @@ body.pc-vertical-stretch {
 
 .pc-widget-host {
     @apply relative;
-    @apply mx-auto;
     @apply mt-2;
     @apply w-full;
-    width: 100%;
+
     max-width: min(365px, 100%);
     height: 113px;
     min-height: 113px;
@@ -748,7 +765,7 @@ body.pc-vertical-stretch {
     @apply ml-0 mr-auto;
 }
 
-.pc-widget-host::before {
+.pc-widget-preview .pc-widget-host::before {
     content: '';
     position: absolute;
     left: 3.3%;
@@ -762,7 +779,7 @@ body.pc-vertical-stretch {
     z-index: 0;
 }
 
-.pc-widget-host::after {
+.pc-widget-preview .pc-widget-host::after {
     content: '';
     position: absolute;
     inset: 0;
@@ -775,12 +792,12 @@ body.pc-vertical-stretch {
 }
 
 @media (max-width: 639px) {
-    .pc-widget-host {
+    .pc-widget-preview .pc-widget-host {
         height: 104px;
         min-height: 104px;
     }
 
-    .pc-widget-host::before {
+    .pc-widget-preview .pc-widget-host::before {
         left: 2%;
         top: 14%;
         width: calc(100% - 2%);
@@ -809,6 +826,7 @@ body.pc-vertical-stretch {
     @apply relative;
     @apply z-10;
     @apply shrink-0;
+    @apply w-full;
     @apply bg-pc-bg;
     @apply text-pc-grey-800;
     @apply border-t;
@@ -816,22 +834,26 @@ body.pc-vertical-stretch {
     @apply border-pc-grey-250;
 }
 
+.pc-footer-shell {
+    @apply mx-auto;
+    @apply w-full;
+    @apply max-w-none;
+    @apply px-0;
+}
+
 .pc-footer-container {
     @apply relative;
-    @apply mx-auto;
-    @apply max-w-7xl;
-    @apply border-l;
-    @apply border-r;
+    @apply w-full;
     @apply border-dashed;
     @apply border-pc-grey-250;
-    @apply px-4;
-    @apply sm:px-6;
-    @apply lg:px-8;
 }
 
 .pc-footer-inner {
     @apply flex;
     @apply flex-col;
+    @apply px-4;
+    @apply sm:px-6;
+    @apply lg:px-8;
     @apply text-center;
     @apply xl:flex-row;
     @apply xl:items-stretch;
@@ -901,6 +923,24 @@ body.pc-vertical-stretch {
     @apply duration-200;
     @apply hover:text-pc-green-hover;
     @apply focus:text-pc-green-hover;
+}
+
+@media (min-width: 900px) {
+    .pc-footer-shell {
+        @apply max-w-7xl;
+        @apply px-6;
+    }
+
+    .pc-footer-container {
+        @apply border-l;
+        @apply border-r;
+    }
+}
+
+@media (min-width: 1024px) {
+    .pc-footer-shell {
+        @apply px-8;
+    }
 }
 
 .pc-internal-form-select {
@@ -995,8 +1035,20 @@ body.pc-vertical-stretch {
     @apply bg-white px-4 py-4 sm:px-6;
 }
 
+.pc-modal-title {
+    @apply font-heading text-2xl font-semibold leading-8 tracking-tight text-pc-grey-950;
+}
+
+.pc-page-title {
+    @apply font-heading text-[1.625rem] leading-[2.25rem] sm:text-[2rem] sm:leading-[2.5rem] font-semibold tracking-tight text-pc-grey-950;
+}
+
+.pc-subsection-title {
+    @apply font-heading text-xl font-semibold leading-7 tracking-tight text-pc-grey-950;
+}
+
 .pc-section-heading {
-    @apply font-heading text-base font-medium leading-7 text-pc-grey-950;
+    @apply font-heading text-xl font-semibold leading-7 tracking-tight text-pc-grey-950;
 }
 
 .pc-section-desc {
@@ -1246,6 +1298,8 @@ body.pc-vertical-stretch {
     @apply border;
     @apply border-dashed;
     @apply border-pc-grey-250;
+    @apply transition-colors;
+    @apply duration-200;
 }
 
 .pc-user-menu-name {
@@ -1253,11 +1307,18 @@ body.pc-vertical-stretch {
     @apply text-sm;
     @apply font-medium;
     @apply text-pc-grey-950;
+    @apply transition-colors;
+    @apply duration-200;
 }
 
 .pc-user-menu-button:hover .pc-user-menu-name,
 .pc-user-menu-button[aria-expanded="true"] .pc-user-menu-name {
     @apply text-pc-green-hover;
+}
+
+.pc-user-menu-button:hover .pc-user-menu-avatar,
+.pc-user-menu-button[aria-expanded="true"] .pc-user-menu-avatar {
+    @apply border-pc-green-hover;
 }
 
 .pc-docs-link {
@@ -1275,7 +1336,7 @@ body.pc-vertical-stretch {
     width: 10px;
     height: 10px;
     flex-shrink: 0;
-    background-color: currentColor;
+    background-color: currentcolor;
     mask-image: url('../img/icons/arrow-top-right.svg');
     mask-repeat: no-repeat;
     mask-position: center;
@@ -1305,6 +1366,7 @@ body.pc-vertical-stretch {
     @apply border-solid;
     @apply border-pc-grey-950;
     @apply text-pc-grey-950;
+
     font-family: Helvetica, Arial, sans-serif;
     font-size: 13px;
     line-height: 1;
@@ -1356,7 +1418,7 @@ body.pc-vertical-stretch {
     @apply border;
     @apply border-dashed;
     @apply border-pc-error/30;
-    @apply bg-pc-pastel-50;
+    @apply bg-pcred-50;
     @apply p-4;
 }
 
@@ -1365,11 +1427,11 @@ body.pc-vertical-stretch {
 }
 
 .pc-error-message-text {
-    @apply text-sm font-medium text-pc-grey-950;
+    @apply text-sm font-medium text-pcred-700;
 }
 
 .pc-error-message-dismiss {
-    @apply inline-flex rounded-pc bg-pc-pastel-50 p-1.5 text-pc-grey-600 hover:bg-pc-pastel-80 focus:outline-none focus:ring-2 focus:ring-pc-error focus:ring-offset-2 focus:ring-offset-pc-pastel-50;
+    @apply inline-flex rounded-pc bg-pcred-50 p-1.5 text-pc-error hover:bg-pcred-100 focus:outline-none focus:ring-2 focus:ring-pc-error focus:ring-offset-2 focus:ring-offset-pcred-50;
 }
 
 .pc-warning-message {
@@ -1387,6 +1449,43 @@ body.pc-vertical-stretch {
 
 .pc-warning-message-text {
     @apply text-sm text-yellow-900;
+}
+
+.pc-rule-condition-panel {
+    @apply space-y-4 rounded-pc border border-dashed border-pc-grey-250 bg-pc-bg p-4;
+}
+
+.pc-rule-action-panel {
+    @apply space-y-4 rounded-pc border border-dashed border-pc-grey-250 bg-pc-blue/10 p-4;
+}
+
+.pc-rule-chip {
+    @apply inline-flex items-center rounded-pc border border-pc-grey-250 px-1.5 py-0.5 text-xs font-medium;
+}
+
+.pc-rule-chip-condition {
+    @apply bg-pc-bg text-pc-grey-800;
+}
+
+.pc-rule-chip-condition-muted {
+    @apply border-pc-grey-250/60 bg-white text-pc-grey-600;
+}
+
+.pc-rule-chip-action {
+    @apply border-pc-blue/20 bg-pc-blue/10 text-pc-blue;
+}
+
+.pc-rule-chip-action-muted {
+    @apply border-pc-grey-250/60 bg-white text-pc-grey-600;
+}
+
+.pc-rule-country-item {
+    @apply cursor-pointer select-none rounded-pc px-3 py-2 text-pc-grey-950 [&:not([hidden])]:block;
+    @apply hover:bg-pc-bg aria-selected:bg-pc-bg;
+}
+
+.pc-rule-code-chip {
+    @apply inline-flex items-center rounded-pc border border-pc-grey-250 bg-pc-bg px-1.5 py-1 font-mono text-sm text-pc-grey-800;
 }
 
 .pc-notification {
@@ -1501,10 +1600,10 @@ body.pc-vertical-stretch {
     @apply overflow-y-auto;
     @apply rounded-pc;
     @apply bg-white;
-    @apply py-1;
     @apply border;
     @apply border-dashed;
     @apply border-pc-grey-250;
+    @apply divide-y divide-dashed divide-pc-grey-250;
     @apply focus:outline-none;
 }
 
@@ -1524,10 +1623,7 @@ body.pc-vertical-stretch {
 .pc-org-switcher-add {
     @apply inline-flex;
     @apply items-center;
-    @apply justify-center;
     @apply w-full;
-    @apply h-full;
-    @apply p-4;
     @apply text-pc-grey-950;
     @apply hover:text-pc-green-hover;
 }

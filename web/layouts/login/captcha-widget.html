@@ -1,15 +1,12 @@
 {{define "login-captcha-widget.html"}}
-<div class="pc-widget-host !mt-12">
-    <div class="private-captcha"
-            data-sitekey="{{.Params.CaptchaSitekey}}"
-            data-solution-field="{{.Params.CaptchaSolutionField}}"
-            data-start-mode="auto"
-            data-started-callback="onCaptchaStarted"
-            data-finished-callback="onCaptchaSolved"
-            data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}"
-            data-theme="light"
-            data-styles="--border-radius: 2px; --border: 1px solid transparent; --dark-color: #0e0f0e; --accent-color: #437540; --background-color: transparent; --gray-color: #bfbebc; --pie-color: #d9e1cf; --checkbox-background-color: #ffffff; --checkbox-hover-color: #ecf0e7; --warn-color: #c33030; --label-spacing: clamp(0.25rem, 1.5vw, 0.5rem); font-size: clamp(14px, 4.2vw, 18px); min-width: 0;"
-            {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
-    </div>
+<div class="private-captcha mt-8"
+        data-sitekey="{{.Params.CaptchaSitekey}}"
+        data-solution-field="{{.Params.CaptchaSolutionField}}"
+        data-start-mode="auto"
+        data-started-callback="onCaptchaStarted"
+        data-finished-callback="onCaptchaSolved"
+        data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}"
+        data-styles="--border-radius: .75rem;"
+        {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
 </div>
 {{end}}

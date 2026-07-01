@@ -44,7 +44,7 @@
         </div>
         <div class="mt-2 md:flex md:items-center md:justify-between">
             <div class="min-w-0 flex-1">
-                <h2 class="font-heading text-2xl font-medium leading-7 text-pc-grey-950 sm:truncate sm:text-3xl sm:tracking-tight">Organization Wizard</h2>
+                <h2 class="pc-page-title sm:truncate">Organization Wizard</h2>
             </div>
         </div>
     </div>
@@ -55,30 +55,28 @@
 <main class="-mt-32 flex flex-1">
     <div class="mx-auto flex w-full max-w-7xl flex-1 px-4 pb-12 sm:px-6 lg:px-8">
         <div class="pc-content-card flex flex-1 flex-col pc-tab-content">
-            <div class="pc-wizard-column flex flex-1 flex-col">
-                <nav class="pc-wizard-progress w-full" aria-label="Progress">
-                    <ol role="list">
-                        <li class="pc-wizard-step">
-                            <span aria-current="step" class="pc-wizard-step-body">
-                                <span class="pc-wizard-step-marker pc-wizard-step-marker-current">
-                                    <span>01</span>
-                                </span>
-                                <span class="pc-wizard-step-label-current">Create new organization</span>
+            <nav class="pc-wizard-progress w-full" aria-label="Progress">
+                <ol role="list">
+                    <li class="pc-wizard-step">
+                        <span aria-current="step" class="pc-wizard-step-body">
+                            <span class="pc-wizard-step-marker pc-wizard-step-marker-current">
+                                <span>01</span>
                             </span>
-                        </li>
-                    </ol>
-                </nav>
+                            <span class="pc-wizard-step-label-current">Create new organization</span>
+                        </span>
+                    </li>
+                </ol>
+            </nav>
 
-                <div class="flex flex-1 flex-col justify-center pt-8">
-                    <form
-                        hx-post='{{ partsURL .Const.OrgEndpoint .Const.NewEndpoint }}'
-                        hx-target="this"
-                        hx-swap="innerHTML"
-                        hx-indicator="#spinner"
-                        hx-disabled-elt="input, button">
-                        {{template "form.html" .}}
-                    </form>
-                </div>
+            <div class="pc-wizard-column flex flex-1 flex-col justify-center pt-8">
+                <form
+                    hx-post='{{ partsURL .Const.OrgEndpoint .Const.NewEndpoint }}'
+                    hx-target="this"
+                    hx-swap="innerHTML"
+                    hx-indicator="#spinner"
+                    hx-disabled-elt="input, button">
+                    {{template "form.html" .}}
+                </form>
             </div>
         </div>
     </div>

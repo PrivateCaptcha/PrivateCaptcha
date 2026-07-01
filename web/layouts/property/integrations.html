@@ -6,7 +6,7 @@
     <div class="mt-10">
         <div class="mx-auto max-w-2xl lg:mx-0 lg:max-w-none">
             <div class="-mt-2 -ml-2 flex flex-wrap items-baseline">
-                <h3 class="mt-2 ml-2 text-base font-semibold text-pc-grey-950">On the website</h3>
+                <h3 class="mt-2 ml-2 pc-subsection-title">On the website</h3>
                 <p class="mt-1 ml-2 truncate text-sm text-pc-grey-800">use sitekey <code class="pc-chip">{{ .Params.Sitekey }}</code></p>
             </div>
             <div class="mt-6 pc-content-card overflow-hidden divide-y divide-pc-grey-250">
@@ -18,7 +18,7 @@
                                     <img class="h-12 w-12" src="{{$.Ctx.CDN}}/portal/img/html5.svg" alt="">
                                 </div>
                                 <div class="ml-4">
-                                    <h3 class="text-base font-semibold leading-6 text-pc-grey-950">HTML/JS Snippet</h3>
+                                    <h3 class="pc-subsection-title">HTML/JS Snippet</h3>
                                     <p class="text-sm text-pc-grey-800">
                                     Client-side part of the integration
                                     </p>
@@ -72,7 +72,7 @@
     <div class="mt-10">
         <div class="mx-auto max-w-2xl lg:mx-0 lg:max-w-none">
             <div class="-mt-2 -ml-2 flex flex-wrap items-baseline">
-                <h3 class="mt-2 ml-2 text-base font-semibold text-pc-grey-950">On the server</h3>
+                <h3 class="mt-2 ml-2 pc-subsection-title">On the server</h3>
                 <p class="mt-1 ml-2 truncate text-sm text-pc-grey-800"><a target="_blank" class="underline hover:text-pc-green-hover" href="{{ relURL .Const.SettingsEndpoint }}?{{ $.Const.Tab }}={{ $.Const.APIKeysEndpoint }}">create an API key</a></p>
             </div>
             <ul class="mt-6 grid grid-cols-1 gap-x-6 gap-y-8 lg:grid-cols-3 xl:gap-x-8">
@@ -101,7 +101,7 @@
     <div class="mt-10">
         <div class="mx-auto max-w-2xl lg:mx-0 lg:max-w-none">
             <div class="-mt-2 -ml-2 flex flex-wrap items-baseline">
-                <h3 class="mt-2 ml-2 text-base font-semibold text-pc-grey-950">Other</h3>
+                <h3 class="mt-2 ml-2 pc-subsection-title">Other</h3>
             </div>
             <ul class="mt-6 grid grid-cols-1 gap-x-6 gap-y-8 lg:grid-cols-3 xl:gap-x-8">
                 {{ range $item := $.Data.integrations.other }}

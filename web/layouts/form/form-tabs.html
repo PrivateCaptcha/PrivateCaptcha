@@ -9,6 +9,7 @@
             hx-target="#form-tabs"
             hx-get="{{ partsURL $root.Const.OrgEndpoint $root.Params.Form.OrgID $root.Const.FormEndpoint $root.Params.Form.ID $root.Const.TabEndpoint }}"
             hx-on::config-request="event.detail.path += '/'+this.value"
+            hx-on::after-request="if(event.detail.successful) { history.pushState(null, '', '{{ partsURL $root.Const.OrgEndpoint $root.Params.Form.OrgID $root.Const.FormEndpoint $root.Params.Form.ID }}?{{ $root.Const.Tab }}=' + this.value) }"
             hx-swap="innerHTML">
             <option value="{{ $root.Const.ReportsEndpoint }}" {{ if eq $active "reports" }}selected{{ end }}>Reports</option>
             <option value="{{ $root.Const.IntegrationsEndpoint }}" {{ if eq $active "integrations" }}selected{{ end }}>Integrations</option>

@@ -21,7 +21,7 @@
                 x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
                 <div class="pc-modal-panel sm:my-8 sm:w-full sm:max-w-lg sm:flex">
                     <form class="sm:flex-1 sm:flex sm:flex-col"
-                        hx-target="#settings-content-area"
+                        hx-target="#settings-tab-content"
                         hx-swap="innerHTML"
                         hx-post="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.APIKeysEndpoint $.Const.NewEndpoint }}">
                         {{ template "form.html" . }}

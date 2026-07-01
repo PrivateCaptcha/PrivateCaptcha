@@ -34,7 +34,7 @@
         </div>
     </div>
 
-    <div class="space-y-4 bg-pc-pastel-50 p-4 rounded-pc border border-dashed border-pc-grey-250">
+    <div class="pc-rule-condition-panel">
         <div>
             <label for="{{ .Const.ConditionProperty }}" class="pc-internal-form-label">Condition</label>
             <div class="mt-2">
@@ -115,12 +115,12 @@
             <div class="mt-2">
                 <div class="border border-pc-grey-250 bg-white rounded-pc max-h-48 overflow-y-auto p-2 space-y-1">
                     {{ range .Params.Countries }}
-                    <div class="group select-none px-3 py-2 text-pc-grey-950 cursor-pointer aria-selected:bg-pc-pastel-50 hover:bg-pc-pastel-80 rounded-pc [&:not([hidden])]:block"
+                    <div class="pc-rule-country-item group"
                         :aria-selected="isCountrySelected('{{ .Code }}')"
                         @click="toggleCountry('{{ .Code }}')">
-                        <div class="flex gap-3 items-center">
+                        <div class="flex items-center gap-3">
                             <svg class="pointer-events-none size-3.5 self-center justify-self-center group-has-[:disabled]:stroke-pc-grey-950/25"
-                                :class="isCountrySelected('{{ .Code }}') ? 'stroke-pc-green' : 'stroke-pc-grey-250'"
+                                :class="isCountrySelected('{{ .Code }}') ? 'stroke-pc-grey-800' : 'stroke-pc-grey-250'"
                                 viewBox="0 0 14 14" fill="none">
                                 <path class="opacity-0 group-hover:opacity-100 group-aria-selected:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
@@ -132,7 +132,7 @@
                     {{ end }}
                 </div>
 
-                <p class="mt-1 text-xs text-pc-grey-800 truncate" x-cloak x-show="selectedCountries.length > 0">Selected countries: <code class="pc-chip" x-text="selectedCountries.join(',')"></code></p>
+                <p class="mt-1 truncate text-xs text-pc-grey-800" x-cloak x-show="selectedCountries.length > 0">Selected countries: <code class="pc-rule-code-chip" x-text="selectedCountries.join(',')"></code></p>
 
                 <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Const.OperatorIn }}_negated' : '{{ .Const.OperatorIn }}'" :disabled="conditionProperty !== '{{ .Const.ConditionPropertyCountryCode }}'" />
             </div>
@@ -143,7 +143,7 @@
         {{ block "rule-condition-value-extension" . }}{{ end }}
     </div>
 
-    <div class="space-y-4 bg-pc-coral/10 p-4 rounded-pc border border-dashed border-pc-grey-250">
+    <div class="pc-rule-action-panel">
         <div>
             <label for="{{ .Const.ActionProperty }}" class="pc-internal-form-label">Action</label>
             <div class="mt-2">

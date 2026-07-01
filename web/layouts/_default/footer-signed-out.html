@@ -1,6 +1,7 @@
 {{define "footer-signed-out"}}
 <footer class="pc-footer">
-    <div class="pc-footer-container">
+    <div class="pc-footer-shell">
+        <div class="pc-footer-container">
         <div class="pc-footer-inner">
             <div class="pc-footer-copyright">
                 <p class="text-sm text-pc-grey-800">© Copyright {{.Ctx.CurrentYear}} Private Captcha {{if not $.Platform.Enterprise}}<span class="text-pc-grey-600">(Community Edition)</span>{{end}}</p>
@@ -12,10 +13,10 @@
                         <a href="https://privatecaptcha.com/about/" class="pc-footer-link">About</a>
                     </li>
                     <li>
-                        <a href="https://privatecaptcha.com/legal/privacy-end-user/" target="_blank" class="pc-footer-link">Privacy Policy</a>
+                        <a href="https://privatecaptcha.com/legal/privacy-end-user/" target="_blank" rel="noopener noreferrer" class="pc-footer-link">Privacy Policy</a>
                     </li>
                     <li>
-                        <a href="https://privatecaptcha.com/legal/terms-and-conditions/" target="_blank" class="pc-footer-link">Terms &amp; Conditions</a>
+                        <a href="https://privatecaptcha.com/legal/terms-and-conditions/" target="_blank" rel="noopener noreferrer" class="pc-footer-link">Terms &amp; Conditions</a>
                     </li>
                 </ul>
                 <div class="pc-footer-divider" aria-hidden="true"></div>
@@ -31,6 +32,7 @@
                     </a>
                 </div>
             </div>
+        </div>
         </div>
     </div>
 </footer>

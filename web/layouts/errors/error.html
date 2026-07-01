@@ -6,7 +6,7 @@
 <main class="flex flex-1 items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
     <div class="pc-content-card w-full max-w-lg px-8 py-10 text-center sm:px-10 sm:py-12">
         <p class="text-sm font-semibold text-pc-error">{{.Params.ErrorCode}}</p>
-        <h1 class="mt-3 font-heading text-2xl font-medium tracking-tight text-pc-grey-950 sm:text-3xl">{{.Params.ErrorMessage}}</h1>
+        <h1 class="mt-3 pc-page-title">{{.Params.ErrorMessage}}</h1>
         <p class="mt-4 text-base leading-7 text-pc-grey-800">{{.Params.Detail}}</p>
         <div class="mt-8 flex items-center justify-center">
             <a href="{{ relURL "/" }}" class="pc-internal-form-button pc-internal-form-button-primary">Go back home</a>

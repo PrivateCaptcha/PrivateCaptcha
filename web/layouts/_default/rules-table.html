@@ -12,7 +12,7 @@
                             <div>
                                 <p class="rule-name text-sm/6 text-pc-grey-950 {{if $rule.Enabled }} font-semibold{{ end }}">{{ $rule.Name }}</p>
                                 <div class="mt-2.5 flex items-center gap-x-2 text-xs/5 {{if $rule.Enabled }}text-pc-grey-600{{else}}text-pc-grey-600/60{{end}}">
-                                    <p class="whitespace-nowrap">If <span class="inline-flex items-center rounded-pc {{if $rule.Enabled}}bg-pc-pastel-80 text-pc-green{{else}}bg-pc-pastel-50 text-pc-grey-600{{end}} px-1.5 py-0.5 text-xs font-medium">{{$rule.ConditionProperty}}</span> <strong>{{$rule.ConditionOperator}}</strong>{{ if $rule.ConditionValue}} <span class="inline-flex items-center rounded-pc {{if $rule.Enabled}}bg-pc-pastel-80 text-pc-green{{else}}bg-pc-pastel-50 text-pc-grey-600{{end}} px-1.5 py-0.5 text-xs font-medium max-w-48 truncate">{{$rule.ConditionValue}}</span>{{end}}, then <strong>{{$rule.ActionAction}}</strong> <span class="inline-flex items-center rounded-pc {{if $rule.Enabled}}bg-pc-blue/10 text-pc-blue{{else}}bg-pc-pastel-50 text-pc-grey-600{{end}} px-1.5 py-0.5 text-xs font-medium">{{$rule.ActionProperty}}</span>{{ if $rule.ActionValue }} to <span class="inline-flex items-center rounded-pc {{if $rule.Enabled}}bg-pc-blue/10 text-pc-blue{{else}}bg-pc-pastel-50 text-pc-grey-600{{end}} px-1.5 py-0.5 text-xs font-medium">{{$rule.ActionValue}}</span>{{ end }}{{ if and $rule.Enabled $rule.Terminal }} and <span class="pc-badge pc-badge-warn px-1.5 py-0.5">stop</span> processing{{ end }}</p>
+                                    <p class="whitespace-nowrap">If <span class="pc-rule-chip {{if $rule.Enabled}}pc-rule-chip-condition{{else}}pc-rule-chip-condition-muted{{end}}">{{$rule.ConditionProperty}}</span> <strong>{{$rule.ConditionOperator}}</strong>{{ if $rule.ConditionValue}} <span class="pc-rule-chip {{if $rule.Enabled}}pc-rule-chip-condition{{else}}pc-rule-chip-condition-muted{{end}} max-w-48 truncate">{{$rule.ConditionValue}}</span>{{end}}, then <strong>{{$rule.ActionAction}}</strong> <span class="pc-rule-chip {{if $rule.Enabled}}pc-rule-chip-action{{else}}pc-rule-chip-action-muted{{end}}">{{$rule.ActionProperty}}</span>{{ if $rule.ActionValue }} to <span class="pc-rule-chip {{if $rule.Enabled}}pc-rule-chip-action{{else}}pc-rule-chip-action-muted{{end}}">{{$rule.ActionValue}}</span>{{ end }}{{ if and $rule.Enabled $rule.Terminal }} and <span class="pc-badge pc-badge-warn px-1.5 py-0.5">stop</span> processing{{ end }}</p>
                                 </div>
                             </div>
                         </div>
@@ -69,7 +69,7 @@
                         <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-6">
                             <div class="sm:flex sm:items-start">
                                 <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                                    <h3 class="text-base font-semibold leading-6 text-pc-grey-950 truncate" id="modal-title">Reorder rule</h3>
+                                    <h3 class="pc-modal-title truncate" id="modal-title">Reorder rule</h3>
                                     <div class="mt-2">
                                         <p class="pc-text-body">Rule &quot;<span x-text="moveRuleName"></span>&quot; is currently at position <span class="italic" x-text="moveRuleIndex + 1"></span>.</p>
                                     </div>

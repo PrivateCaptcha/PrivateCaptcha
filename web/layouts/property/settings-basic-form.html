@@ -56,10 +56,11 @@
             </div>
             <div class="text-sm/6">
                 <label for="{{ .Const.AllowLocalhost }}" class="pc-checkbox-label">Allow localhost</label>
+                <span id="{{ .Const.AllowLocalhost }}-description" class="sr-only">Allow localhost for testing</span>
                 {{ if $.Params.Property.AllowLocalhost -}}
-                <span class="pc-badge pc-badge-warn ml-3">Testing</span>
+                <span class="pc-badge pc-badge-warn ml-3" aria-hidden="true">Testing</span>
                 {{- else -}}
-                <span id="{{ .Const.AllowLocalhost }}-description" class="pc-checkbox-desc"><span class="sr-only">Allow localhost</span>for testing</span>
+                <span class="pc-checkbox-desc"><span class="sr-only">Allow localhost </span>for testing</span>
                 {{- end }}
             </div>
         </div>
@@ -93,10 +94,11 @@
             </div>
             <div class="text-sm/6">
                 <label for="{{ .Const.AllowReplay }}" class="pc-checkbox-label">Accept repeated solutions</label>
+                <span id="{{ .Const.AllowReplay }}-description" class="sr-only">Accept repeated solutions during verification window</span>
                 {{ if $.Params.Property.AllowReplay -}}
-                <span class="pc-badge pc-badge-warn ml-3">Security trade-off</span>
+                <span class="pc-badge pc-badge-warn ml-3" aria-hidden="true">Security trade-off</span>
                 {{- else -}}
-                <span id="{{ .Const.AllowReplay }}-description" class="pc-checkbox-desc"><span class="sr-only">Accept repeated solutions</span>during verification window</span>
+                <span class="pc-checkbox-desc"><span class="sr-only">Accept repeated solutions </span>during verification window</span>
                 {{- end }}
             </div>
         </div>
@@ -134,7 +136,7 @@
 
     <div class="col-span-full">
         <div class="pc-widget-preview">
-            <h3 class="font-heading text-base font-medium text-pc-grey-950">Test widget here</h3>
+            <h3 class="pc-subsection-title">Test widget here</h3>
             <div class="pc-widget-host">
                 <div class="private-captcha"
                     data-sitekey="{{.Params.CaptchaSitekey}}"

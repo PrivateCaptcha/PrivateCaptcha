@@ -11,8 +11,10 @@
 <div class="pc-hero">
     {{template "header-signed-in" .}}
     <div class="py-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"
+        data-org-id="{{ .Params.CurrentOrg.ID }}"
+        data-org-name="{{ .Params.CurrentOrg.Name }}"
         x-data="{open: false, orgID: '', orgName: '', toggle() { this.open = ! this.open } }"
-        x-init="orgID = '{{ .Params.CurrentOrg.ID }}'; orgName = '{{ .Params.CurrentOrg.Name }}'">
+        x-init="orgID = $el.dataset.orgId; orgName = $el.dataset.orgName">
         <div>
             <nav class="sm:hidden" aria-label="Back">
                 <a href="{{ relURL "/" }}" class="flex items-center text-sm font-medium text-pc-grey-950 hover:text-pc-green-hover">
@@ -46,7 +48,7 @@
         </div>
         <div class="mt-2 md:flex md:items-center md:justify-between">
             <div class="min-w-0 flex-1">
-                <h2 class="font-heading text-2xl font-medium leading-7 text-pc-grey-950 sm:truncate sm:text-3xl sm:tracking-tight">Dashboard</h2>
+                <h2 class="pc-page-title sm:truncate">Dashboard</h2>
             </div>
             <div class="mt-4 flex md:ml-4 md:mt-0">
                 <div>
@@ -77,7 +79,7 @@
                             class="pc-org-switcher-menu" tabindex="-1" role="listbox" aria-labelledby="listbox-label">
                             {{ range $org := .Params.Orgs }}
                             {{ if eq $org.Level $.Const.OrgLevelInvited }}
-                            <li class="pc-org-switcher-item pc-org-switcher-item-muted" role="option" aria-hidden="true" aria-selected="false">
+                            <li class="pc-org-switcher-item pc-org-switcher-item-muted" role="option" aria-selected="false">
                                 <a href="{{ partsURL $.Const.OrgEndpoint $org.ID }}" class="flex justify-between">
                                     <p :class="orgID == '{{ $org.ID }}' ? 'font-semibold' : 'font-normal'">{{ $org.Name }}</p>
                                     <span
@@ -90,8 +92,10 @@
                                 </a>
                             </li>
                             {{ else }}
-                            <li class="pc-org-switcher-item" aria-hidden="true"
-                                @click="open = false; orgID = '{{ $org.ID }}'; orgName = '{{ $org.Name }}'"
+                            <li class="pc-org-switcher-item"
+                                data-org-id="{{ $org.ID }}"
+                                data-org-name="{{ $org.Name }}"
+                                @click="open = false; orgID = $el.dataset.orgId; orgName = $el.dataset.orgName"
                                 hx-target="#org-tabs"
                                 hx-swap="innerHTML"
                                 hx-trigger="click"
@@ -113,7 +117,7 @@
                             {{ end }}
                             {{ end }}
                             {{ if $.Platform.Enterprise }}
-                            <li class="pc-org-switcher-item" role="option" aria-hidden="true" aria-selected="false">
+                            <li class="pc-org-switcher-item" role="option" aria-selected="false">
                                 <a
                                     href="{{ partsURL $.Const.OrgEndpoint .Const.NewEndpoint }}"
                                     class="pc-org-switcher-add"
@@ -159,7 +163,7 @@
                     x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
                     x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
                     <div class="mx-auto max-w-xl px-8 pb-8 pt-10">
-                        <h2 id="onboarding-modal-title" class="font-heading text-base font-medium text-pc-grey-950">Welcome to Private Captcha!</h2>
+                        <h2 id="onboarding-modal-title" class="pc-modal-title">Welcome to Private Captcha!</h2>
                         <p class="mt-1 text-sm text-pc-grey-800">Get started by protecting your first website or inviting your team.</p>
                         <ul role="list" class="mt-6 divide-y divide-dashed divide-pc-grey-250 border-y border-dashed border-pc-grey-250">
                             <li>
@@ -230,7 +234,7 @@
                     {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelInvited }}
                     <div class="pc-invite-card">
                         <div class="pc-invite-card-inner">
-                            <h3 class="font-heading text-base font-medium leading-6 text-pc-grey-950">Join {{ .Params.CurrentOrg.Name }}?</h3>
+                            <h3 class="pc-modal-title leading-6">Join {{ .Params.CurrentOrg.Name }}?</h3>
                             <div class="mt-2 pc-text-body">
                                 <p class="org-invite">You were invited to join organization <strong>{{ .Params.CurrentOrg.Name }}</strong>. Accepting the invite will grant you access to properties and settings.</p>
                             </div>
