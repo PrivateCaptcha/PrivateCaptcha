@@ -171,7 +171,7 @@ type Server struct {
 	SettingsTabs       []*SettingsTab
 	RateLimiter        ratelimit.HTTPRateLimiter
 	RenderConstants    interface{}
-	Jobs               Jobs
+	Jobs               db.UserJobs
 	PlatformCtx        interface{}
 	DataCtx            interface{}
 	AdminEmail         common.ConfigItem

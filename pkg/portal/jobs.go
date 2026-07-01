@@ -17,13 +17,6 @@ const (
 	spammerEmail = "spammer@privatecaptcha.local"
 )
 
-type Jobs interface {
-	OnboardUser(user *dbgen.User, plan billing.Plan, orgInviteID *int32) common.OneOffJob
-	OffboardUser(user *dbgen.User) common.OneOffJob
-	LoginUser(sess *session.Session) common.OneOffJob
-	CheckRegistration(sess *session.Session, r *http.Request) common.OneOffJob
-}
-
 func (s *Server) OnboardUser(user *dbgen.User, plan billing.Plan, orgInviteID *int32) common.OneOffJob {
 	return &onboardUserJob{user: user, mailer: s.Mailer, store: s.Store, orgInviteID: orgInviteID}
 }
