@@ -160,13 +160,13 @@
             <label for="difficulty_level_input" class="pc-internal-form-label tooltip" data-tooltip="Change initial difficulty for any captcha request, before automatic difficulty scaling">Difficulty Change (<span x-text="difficultyLevelLabel"></span>)</label>
             <div class="mt-2">
                 <div class="flex flex-col space-y-1 py-2">
-                    <input type="range" x-model="actionValueDifficultyLevel" id="difficulty_level_input" min="-300" max="300" step="25" class="pc-difficulty-range w-full" :class="difficultyLevelAccent" :style="{ '--range-progress': difficultyLevelProgress }" />
+                    <input type="range" x-model="actionValueDifficultyLevel" id="difficulty_level_input" min="-300" max="300" step="25" class="w-full" :class="difficultyLevelAccent" />
                     <div class="relative w-full h-4 text-xs">
                         <span class="absolute left-0 text-pc-green font-medium">-300%</span>
                         <span class="absolute left-[25%] -translate-x-1/2 text-pc-green">-150%</span>
                         <span class="absolute left-[50%] -translate-x-1/2 text-pc-grey-600">0</span>
-                        <span class="absolute left-[75%] -translate-x-1/2 text-pc-coral">+150%</span>
-                        <span class="absolute right-0 text-pc-coral font-medium">+300%</span>
+                        <span class="absolute left-[75%] -translate-x-1/2 text-pc-error">+150%</span>
+                        <span class="absolute right-0 text-pc-error font-medium">+300%</span>
                     </div>
                 </div>
             </div>

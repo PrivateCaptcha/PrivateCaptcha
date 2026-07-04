@@ -318,6 +318,10 @@
     @apply border-pc-green;
 }
 
+.pc-form-input-normal:hover:not(:disabled) {
+    @apply border-pc-green;
+}
+
 .pc-form-input-error {
     @apply text-pc-grey-950;
     @apply border-pc-error;
@@ -435,7 +439,7 @@ body.pc-vertical-stretch {
 
 .pc-badge-blue {
     @apply bg-pc-blue/10;
-    @apply text-pc-blue;
+    @apply text-pc-blue-600;
     @apply ring-pc-blue/30;
 }
 
@@ -1060,145 +1064,6 @@ body.pc-vertical-stretch {
     @apply mt-1 text-sm leading-6 text-pc-grey-600;
 }
 
-.pc-difficulty-range {
-    -webkit-appearance: none;
-    appearance: none;
-    height: 1rem;
-    background: transparent;
-    cursor: pointer;
-}
-
-.pc-difficulty-range:focus {
-    outline: none;
-}
-
-.pc-difficulty-range:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-}
-
-.pc-difficulty-range:focus-visible::-webkit-slider-thumb {
-    outline: 2px solid #437540;
-    outline-offset: 2px;
-}
-
-.pc-difficulty-range::-webkit-slider-runnable-track {
-    height: 4px;
-    border-radius: 2px;
-}
-
-.pc-difficulty-range::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 14px;
-    height: 14px;
-    margin-top: -5px;
-    border: 1px solid #0e0f0e;
-    border-radius: 2px;
-}
-
-.pc-difficulty-range-accent-green::-webkit-slider-runnable-track {
-    background: linear-gradient(
-        to right,
-        #437540 0%,
-        #437540 var(--range-progress, 50%),
-        #ecf0e7 var(--range-progress, 50%),
-        #ecf0e7 100%
-    );
-}
-
-.pc-difficulty-range-accent-green::-webkit-slider-thumb {
-    background-color: #437540;
-}
-
-.pc-difficulty-range-accent-grey::-webkit-slider-runnable-track {
-    background: linear-gradient(
-        to right,
-        #bfbebc 0%,
-        #bfbebc var(--range-progress, 50%),
-        #f5f7f0 var(--range-progress, 50%),
-        #f5f7f0 100%
-    );
-}
-
-.pc-difficulty-range-accent-grey::-webkit-slider-thumb {
-    background-color: #bfbebc;
-}
-
-.pc-difficulty-range-accent-coral::-webkit-slider-runnable-track {
-    background: linear-gradient(
-        to right,
-        #de6565 0%,
-        #de6565 var(--range-progress, 50%),
-        #e4e2e2 var(--range-progress, 50%),
-        #e4e2e2 100%
-    );
-}
-
-.pc-difficulty-range-accent-coral::-webkit-slider-thumb {
-    background-color: #de6565;
-}
-
-.pc-difficulty-range-accent-green::-moz-range-track {
-    height: 4px;
-    border-radius: 2px;
-    background: #ecf0e7;
-}
-
-.pc-difficulty-range-accent-green::-moz-range-progress {
-    height: 4px;
-    border-radius: 2px;
-    background: #437540;
-}
-
-.pc-difficulty-range-accent-green::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
-    border: 1px solid #0e0f0e;
-    border-radius: 2px;
-    background: #437540;
-}
-
-.pc-difficulty-range-accent-grey::-moz-range-track {
-    height: 4px;
-    border-radius: 2px;
-    background: #f5f7f0;
-}
-
-.pc-difficulty-range-accent-grey::-moz-range-progress {
-    height: 4px;
-    border-radius: 2px;
-    background: #bfbebc;
-}
-
-.pc-difficulty-range-accent-grey::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
-    border: 1px solid #0e0f0e;
-    border-radius: 2px;
-    background: #bfbebc;
-}
-
-.pc-difficulty-range-accent-coral::-moz-range-track {
-    height: 4px;
-    border-radius: 2px;
-    background: #e4e2e2;
-}
-
-.pc-difficulty-range-accent-coral::-moz-range-progress {
-    height: 4px;
-    border-radius: 2px;
-    background: #de6565;
-}
-
-.pc-difficulty-range-accent-coral::-moz-range-thumb {
-    width: 14px;
-    height: 14px;
-    border: 1px solid #0e0f0e;
-    border-radius: 2px;
-    background: #de6565;
-}
-
 .pc-settings-shell {
     @apply flex w-full flex-1 flex-col lg:flex-row;
     @apply overflow-hidden;
@@ -1496,7 +1361,7 @@ body.pc-vertical-stretch {
 }
 
 .pc-rule-chip-condition {
-    @apply bg-pc-coral-50 border-pc-coral/20 text-pc-coral;
+    @apply bg-pc-coral-50 border-pc-coral/20 text-pc-coral-500;
 }
 
 .pc-rule-chip-condition-muted {
@@ -1504,7 +1369,7 @@ body.pc-vertical-stretch {
 }
 
 .pc-rule-chip-action {
-    @apply border-pc-blue/20 bg-pc-blue/10 text-pc-blue;
+    @apply border-pc-blue/30 bg-pc-blue/10 text-pc-blue-600;
 }
 
 .pc-rule-chip-action-muted {

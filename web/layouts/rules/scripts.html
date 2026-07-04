@@ -157,17 +157,12 @@ function ruleFormData() {
         get difficultyLevelAccent() {
             const val = parseInt(this.actionValueDifficultyLevel) || 0;
             if (val < 0) {
-                return 'pc-difficulty-range-accent-green';
+                return 'accent-pc-green';
             } else if (val > 0) {
-                return 'pc-difficulty-range-accent-coral';
+                return 'accent-pc-error';
             } else {
-                return 'pc-difficulty-range-accent-grey';
+                return 'accent-pc-grey-600';
             }
-        },
-
-        get difficultyLevelProgress() {
-            const val = parseInt(this.actionValueDifficultyLevel) || 0;
-            return ((val + 300) / 600) * 100 + '%';
         },
 
         init() {

@@ -32,12 +32,15 @@ module.exports = {
                 'pc-blue': {
                     DEFAULT: '#709ecc',
                     200: '#b3cae1',
+                    500: '#5d7a93',
+                    600: '#496175',
                 },
                 'pc-coral': {
                     DEFAULT: '#de6565',
                     50: '#fbf1f1',
                     100: '#f7e4e4',
                     300: '#e8a9a9',
+                    500: '#dd5252',
                 },
                 'pcteal': {
                     50: "#E5FBFB",

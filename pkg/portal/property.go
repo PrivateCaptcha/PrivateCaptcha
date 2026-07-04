@@ -3,7 +3,6 @@ package portal
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -102,11 +101,10 @@ type propertyDashboardRenderContext struct {
 type propertySettingsRenderContext struct {
 	propertyDashboardRenderContext
 	difficultyLevelsRenderContext
-	Orgs                    []*UserOrg
-	MinLevel                int
-	MaxLevel                int
-	DifficultyRangeProgress string
-	CanMove                 bool
+	Orgs     []*UserOrg
+	MinLevel int
+	MaxLevel int
+	CanMove  bool
 }
 
 func (pc *propertySettingsRenderContext) UpdateLevels() {
@@ -116,14 +114,6 @@ func (pc *propertySettingsRenderContext) UpdateLevels() {
 	pc.MaxLevel = min(int(common.MaxDifficultyLevel), pc.HardLevel+epsilon)
 
 	pc.Property.Level = max(pc.MinLevel, min(pc.MaxLevel, pc.Property.Level))
-
-	span := pc.MaxLevel - pc.MinLevel
-	if span > 0 {
-		progress := float64(pc.Property.Level-pc.MinLevel) / float64(span) * 100
-		pc.DifficultyRangeProgress = fmt.Sprintf("%.4f%%", progress)
-	} else {
-		pc.DifficultyRangeProgress = "0%"
-	}
 }
 
 type propertyIntegrationsRenderContext struct {

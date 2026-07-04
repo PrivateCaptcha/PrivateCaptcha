@@ -124,7 +124,7 @@
         <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label tooltip" data-tooltip="Initial difficulty for any captcha request before auto scaling. Every 8 steps requires 100% more resources."> Base difficulty </label>
         <div class="mt-2">
             <div class="flex flex-col space-y-2 py-2">
-                <input id="property-difficulty-input" name="{{ .Const.Difficulty }}" type="range" class="pc-difficulty-range w-full pc-difficulty-range-accent-green" min="{{$.Params.MinLevel}}" max="{{$.Params.MaxLevel}}" step="1" value="{{$.Params.Property.Level}}" list="steplist" style="--range-progress: {{ $.Params.DifficultyRangeProgress }}" onchange="onDifficultyChange(this)" oninput="this.title = this.value; updatePropertyRangeProgress(this)" title="{{$.Params.Property.Level}}" {{ if not .Params.CanEdit }}disabled{{ end }}/>
+                <input name="{{ .Const.Difficulty }}" type="range" class="w-full accent-pc-green" min="{{$.Params.MinLevel}}" max="{{$.Params.MaxLevel}}" step="1" value="{{$.Params.Property.Level}}" list="steplist" onchange="onDifficultyChange(this)" title="{{$.Params.Property.Level}}" oninput="this.title = this.value" {{ if not .Params.CanEdit }}disabled{{ end }}/>
                 <datalist id="steplist" class="flex justify-evenly w-full">
                     <option value="{{$.Params.EasyLevel}}" label="Easy" class="translate-x-1/2"></option>
                     <option value="{{$.Params.NormalLevel}}" label="Normal"></option>
