@@ -315,6 +315,6 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		case context.Canceled:
 			return
 		}
-		s.renderError(ctx, w, errorStatus)
+		s.renderError(ctx, w, r, errorStatus)
 	}
 }

@@ -2,32 +2,32 @@
 <div class="flex-1 mt-8">
     <div class="grid grid-cols-1 gap-8 sm:grid-cols-2">
         {{ range $form := .Params.Forms }}
-        <div class="relative flex items-center space-x-3 rounded-lg border {{ if not $form.Enabled }}border-gray-200 bg-gray-50 opacity-80{{ else }}border-gray-300 bg-white focus-within:ring-2 focus-within:ring-pclime-500 focus-within:ring-offset-2 hover:border-gray-400{{ end }} px-6 py-5 shadow-sm">
+        <div class="pc-property-card {{ if not $form.Enabled }}opacity-80{{ end }}">
             <div class="flex-shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-pc-grey-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
                 </svg>
             </div>
             <div class="min-w-0 flex-1">
                 <a href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.FormEndpoint $form.ID }}" class="focus:outline-none">
                     <span class="absolute inset-0" aria-hidden="true"></span>
-                    <p class="flex flex-row items-center gap-x-2 text-sm font-medium text-gray-900"><span class="form-name">{{ $form.Name }}</span><span class="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset {{ if $form.Active }}bg-green-50 text-green-700 ring-green-600/20{{else}}bg-yellow-50 text-yellow-800 ring-yellow-600/20{{end}}">{{ if $form.Active }}Active{{else}}Inactive{{ end }}</span></p>
-                    <p class="truncate text-sm text-gray-500">{{ $form.WebhookPrefix }}</p>
+                    <p class="flex flex-row flex-wrap items-center gap-x-2 text-sm font-medium text-pc-grey-950"><span class="form-name">{{ $form.Name }}</span><span class="pc-badge {{ if $form.Active }}pc-badge-green{{ else }}pc-badge-warn{{ end }}">{{ if $form.Active }}Active{{else}}Inactive{{ end }}</span></p>
+                    <p class="truncate text-sm text-pc-grey-600">{{ $form.WebhookPrefix }}</p>
                 </a>
             </div>
         </div>
         {{ end }}
     </div>
 </div>
-<nav aria-label="Pagination" class="flex items-center justify-between border-t border-gray-200 bg-white mt-8 pt-3">
+<nav aria-label="Pagination" class="flex items-center justify-between border-t border-dashed border-pc-grey-250 mt-8 pt-3">
     <div class="hidden sm:block">
-        <p class="text-sm text-gray-700">
+        <p class="text-sm text-pc-grey-600">
         Showing
-        <span class="font-medium">{{.Params.From}}</span>
+        <span class="font-medium text-pc-grey-950">{{.Params.From}}</span>
         to
-        <span class="font-medium">{{.Params.To}}</span>
+        <span class="font-medium text-pc-grey-950">{{.Params.To}}</span>
         of
-        <span class="font-medium">{{.Params.Count}}</span>
+        <span class="font-medium text-pc-grey-950">{{.Params.Count}}</span>
         results
         </p>
     </div>

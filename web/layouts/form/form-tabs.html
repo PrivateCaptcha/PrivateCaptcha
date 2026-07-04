@@ -1,0 +1,63 @@
+{{define "form-tabs.html"}}
+{{ $root := .Root }}
+{{ $active := .ActiveTab }}
+<div>
+    <div class="sm:hidden">
+        <label for="tabs" class="sr-only">Select a tab</label>
+        <select id="tabs" name="tabs" class="pc-internal-form-select"
+            {{ if eq $active "settings" }}data-unsaved-changes-scope="form-settings"{{ end }}
+            hx-target="#form-tabs"
+            hx-get="{{ partsURL $root.Const.OrgEndpoint $root.Params.Form.OrgID $root.Const.FormEndpoint $root.Params.Form.ID $root.Const.TabEndpoint }}"
+            hx-on::config-request="event.detail.path += '/'+this.value"
+            hx-on::after-request="if(event.detail.successful) { history.pushState(null, '', '{{ partsURL $root.Const.OrgEndpoint $root.Params.Form.OrgID $root.Const.FormEndpoint $root.Params.Form.ID }}?{{ $root.Const.Tab }}=' + this.value) }"
+            hx-swap="innerHTML">
+            <option value="{{ $root.Const.ReportsEndpoint }}" {{ if eq $active "reports" }}selected{{ end }}>Reports</option>
+            <option value="{{ $root.Const.IntegrationsEndpoint }}" {{ if eq $active "integrations" }}selected{{ end }}>Integrations</option>
+            <option value="{{ $root.Const.SettingsEndpoint }}" {{ if eq $active "settings" }}selected{{ end }}>Settings</option>
+            <option value="{{ $root.Const.EventsEndpoint }}" {{ if eq $active "auditlogs" }}selected{{ end }}>Audit logs</option>
+        </select>
+    </div>
+    <div class="hidden sm:block">
+        <div class="pc-tab-nav">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs" {{ if eq $active "settings" }}data-unsaved-changes-scope="form-settings"{{ end }}>
+                <a href="#"
+                    {{ if ne $active "reports" }}
+                    hx-get="{{ partsURL $root.Const.OrgEndpoint $root.Params.Form.OrgID $root.Const.FormEndpoint $root.Params.Form.ID $root.Const.TabEndpoint $root.Const.ReportsEndpoint }}"
+                    hx-push-url="{{ partsURL $root.Const.OrgEndpoint $root.Params.Form.OrgID $root.Const.FormEndpoint $root.Params.Form.ID }}?{{ $root.Const.Tab }}={{$root.Const.ReportsEndpoint}}"
+                    hx-target="#form-tabs"
+                    hx-swap="innerHTML"
+                    {{ end }}
+                    class="pc-tab {{ if eq $active "reports" }}pc-tab-active{{ end }}"
+                    {{ if eq $active "reports" }}aria-current="page"{{ end }}>Reports</a>
+                <a href="#"
+                    {{ if ne $active "integrations" }}
+                    hx-get="{{ partsURL $root.Const.OrgEndpoint $root.Params.Form.OrgID $root.Const.FormEndpoint $root.Params.Form.ID $root.Const.TabEndpoint $root.Const.IntegrationsEndpoint }}"
+                    hx-push-url="{{ partsURL $root.Const.OrgEndpoint $root.Params.Form.OrgID $root.Const.FormEndpoint $root.Params.Form.ID }}?{{ $root.Const.Tab }}={{$root.Const.IntegrationsEndpoint}}"
+                    hx-target="#form-tabs"
+                    hx-swap="innerHTML"
+                    {{ end }}
+                    class="pc-tab {{ if eq $active "integrations" }}pc-tab-active{{ end }}"
+                    {{ if eq $active "integrations" }}aria-current="page"{{ end }}>Integrations</a>
+                <a href="#"
+                    {{ if ne $active "settings" }}
+                    hx-target="#form-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $root.Const.OrgEndpoint $root.Params.Form.OrgID $root.Const.FormEndpoint $root.Params.Form.ID $root.Const.TabEndpoint $root.Const.SettingsEndpoint }}"
+                    hx-push-url="{{ partsURL $root.Const.OrgEndpoint $root.Params.Form.OrgID $root.Const.FormEndpoint $root.Params.Form.ID }}?{{ $root.Const.Tab }}={{$root.Const.SettingsEndpoint }}"
+                    {{ end }}
+                    class="pc-tab {{ if eq $active "settings" }}pc-tab-active{{ end }}"
+                    {{ if eq $active "settings" }}aria-current="page"{{ end }}>Settings</a>
+                <a href="#"
+                    {{ if ne $active "auditlogs" }}
+                    hx-target="#form-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $root.Const.OrgEndpoint $root.Params.Form.OrgID $root.Const.FormEndpoint $root.Params.Form.ID $root.Const.TabEndpoint $root.Const.EventsEndpoint }}"
+                    hx-push-url="{{ partsURL $root.Const.OrgEndpoint $root.Params.Form.OrgID $root.Const.FormEndpoint $root.Params.Form.ID }}?{{ $root.Const.Tab }}={{$root.Const.EventsEndpoint }}"
+                    {{ end }}
+                    class="pc-tab {{ if eq $active "auditlogs" }}pc-tab-active{{ end }}"
+                    {{ if eq $active "auditlogs" }}aria-current="page"{{ end }}>Audit logs</a>
+            </nav>
+        </div>
+    </div>
+</div>
+{{end}}

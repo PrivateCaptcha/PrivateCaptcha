@@ -2,27 +2,22 @@
 
 {{define "title"}}Login{{end}}
 
+{{define "html_class"}}h-full bg-pc-bg{{end}}
+{{define "body_class"}}h-full min-h-full flex flex-col{{end}}
+
 {{define "header"}}{{template "header-signed-out" .}}{{end}}
 {{define "footer"}}{{template "footer-signed-out" .}}{{end}}
 
-{{define "body_class"}}pc-vertical-stretch{{end}}
-
 {{define "main"}}
-<div class="flex flex-1 flex-col justify-center px-6 lg:px-8 bg-pcpalegreen">
-<section class="-mt-20">
-    <div class="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
-        <div class="relative max-w-md mx-auto lg:max-w-lg">
-            <div class="relative overflow-hidden bg-white shadow-xl rounded-xl">
-                <div id="login-container" class="px-4 py-6 sm:px-8" hx-on::after-swap="window.privateCaptcha.setup()">
-                    {{ if .Params.IsRegister }}
-                    {{ template "register-contents.html" . }}
-                    {{ else }}
-                    {{ template "login-contents.html" . }}
-                    {{ end }}
-                </div>
-            </div>
+<main class="pc-auth-shell">
+    <div class="pc-auth-card">
+        <div id="login-container" hx-on::after-swap="window.privateCaptcha.setup()">
+            {{ if .Params.IsRegister }}
+            {{ template "register-contents.html" . }}
+            {{ else }}
+            {{ template "login-contents.html" . }}
+            {{ end }}
         </div>
     </div>
-</section>
-</div>
+</main>
 {{end}}

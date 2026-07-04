@@ -2,19 +2,19 @@
 
 {{define "title"}}{{ if .Params.IsEdit }}Edit rule{{ else }}Create new rule{{ end }}{{end}}
 
-{{define "html_class"}}h-full bg-gray-100{{end}}
+{{define "html_class"}}h-full bg-pc-bg{{end}}
 {{define "body_class"}}h-full min-h-full flex flex-col{{end}}
 
 {{define "footer"}}{{template "footer-signed-in" .}}{{end}}
 
 {{define "header"}}
-<div class="bg-pcteal-800 pb-32">
+<div class="pc-hero">
     {{template "header-signed-in" .}}
     <div class="py-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div>
             <nav class="sm:hidden" aria-label="Back">
-                <a href="{{ if .Params.Property }}{{ partsURL .Const.OrgEndpoint .Params.Property.OrgID .Const.PropertyEndpoint .Params.Property.ID }}{{ else }}{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID }}{{ end }}" class="flex items-center text-sm font-medium text-gray-400 hover:text-gray-200">
-                    <svg class="-ml-1 mr-1 h-5 w-5 flex-shrink-0 text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <a href="{{ if .Params.Property }}{{ partsURL .Const.OrgEndpoint .Params.Property.OrgID .Const.PropertyEndpoint .Params.Property.ID }}?{{ $.Const.Tab }}={{$.Const.RulesEndpoint}}{{ else }}{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID }}?{{ $.Const.Tab }}={{$.Const.RulesEndpoint}}{{ end }}" class="flex items-center text-sm font-medium text-pc-grey-950 hover:text-pc-green-hover">
+                    <svg class="-ml-1 mr-1 h-5 w-5 flex-shrink-0 text-pc-grey-950" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                         <path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" />
                     </svg>
                     Back
@@ -24,8 +24,8 @@
                 <ol class="flex items-center space-x-4">
                     <li>
                         <div class="flex">
-                            <a href="{{ relURL "/" }}" class="text-sm font-medium text-gray-400 hover:text-gray-200">
-                                <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <a href="{{ relURL "/" }}" aria-label="Home" class="text-sm font-medium text-pc-grey-950 hover:text-pc-green-hover">
+                                <svg class="w-4 h-4 text-pc-grey-950" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                                 </svg>
                             </a>
@@ -33,28 +33,28 @@
                     </li>
                     <li>
                         <div class="flex items-center">
-                            <svg class="h-5 w-5 flex-shrink-0 text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <svg class="h-5 w-5 flex-shrink-0 text-pc-grey-950" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
                             </svg>
-                            <a href="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID }}" class="ml-4 text-sm font-medium text-gray-400 hover:text-gray-200">{{ .Params.CurrentOrg.Name }}</a>
+                            <a href="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID }}?{{ $.Const.Tab }}={{$.Const.RulesEndpoint}}" class="ml-4 text-sm font-medium text-pc-grey-950 hover:text-pc-green-hover">{{ .Params.CurrentOrg.Name }}</a>
                         </div>
                     </li>
                     {{ if .Params.Property }}
                     <li>
                         <div class="flex items-center">
-                            <svg class="h-5 w-5 flex-shrink-0 text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <svg class="h-5 w-5 flex-shrink-0 text-pc-grey-950" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
                             </svg>
-                            <a href="{{ partsURL .Const.OrgEndpoint .Params.Property.OrgID .Const.PropertyEndpoint .Params.Property.ID }}" class="ml-4 text-sm font-medium text-gray-400 hover:text-gray-200">{{ .Params.Property.Name }}</a>
+                            <a href="{{ partsURL .Const.OrgEndpoint .Params.Property.OrgID .Const.PropertyEndpoint .Params.Property.ID }}?{{ $.Const.Tab }}={{$.Const.RulesEndpoint}}" class="ml-4 text-sm font-medium text-pc-grey-950 hover:text-pc-green-hover">{{ .Params.Property.Name }}</a>
                         </div>
                     </li>
                     {{ end }}
                     <li>
                         <div class="flex items-center">
-                            <svg class="h-5 w-5 flex-shrink-0 text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <svg class="h-5 w-5 flex-shrink-0 text-pc-grey-950" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
                             </svg>
-                            <span aria-current="page" class="ml-4 text-sm font-medium text-gray-400">{{ if .Params.IsEdit }}Edit Rule{{ else }}New Rule{{ end }}</span>
+                            <span aria-current="page" class="ml-4 text-sm font-medium text-pc-grey-950">{{ if .Params.IsEdit }}Edit Rule{{ else }}New Rule{{ end }}</span>
                         </div>
                     </li>
                 </ol>
@@ -62,7 +62,7 @@
         </div>
         <div class="mt-2 md:flex md:items-center md:justify-between">
             <div class="min-w-0 flex-1">
-                <h2 class="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:tracking-tight">{{ if .Params.IsEdit }}Edit Rule{{ else }}Create New Rule{{ end }}</h2>
+                <h2 class="pc-page-title sm:truncate">{{ if .Params.IsEdit }}Edit Rule{{ else }}Create New Rule{{ end }}</h2>
             </div>
         </div>
     </div>
@@ -70,10 +70,10 @@
 {{end}}
 
 {{define "main"}}
-<main class='-mt-32 flex flex-1'>
+<main class="-mt-32 flex flex-1">
     <div class="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8 flex flex-1">
-        <div class="rounded-lg bg-white px-6 py-8 shadow sm:px-6 flex flex-1 xl:items-center justify-center">
-            <div class="max-w-md flex-1 max-lg:mt-12">
+        <div class="pc-content-card flex flex-1 pc-tab-content">
+            <div class="max-w-md flex-1 mx-auto w-full py-8 sm:px-6 xl:py-10">
                 <form
                     {{ if .Params.IsEdit }}
                         {{ if .Params.Property }}

@@ -264,7 +264,7 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 		},
 		View:        formWizardSetupTemplate,
 		AuditEvents: auditEvents,
-		IsNew:       true,
+		IsNew:       false,
 	}, nil
 }
 

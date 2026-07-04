@@ -1,5 +1,5 @@
 {{- if not $.Platform.Registered}}
-<a href="https://privatecaptcha.com/self-hosting/" target="_blank" class="inline-flex items-center rounded-md bg-yellow-50 px-1.5 py-0.5 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">UNLICENSED</a>
+<a href="https://privatecaptcha.com/self-hosting/" target="_blank" class="pc-badge pc-badge-warn">UNLICENSED</a>
 {{- else }}
-<span class="inline-flex items-center rounded-md bg-pcslate-50 px-1.5 py-0.5 text-xs font-medium text-pclime-600 ring-1 ring-inset ring-pclime-600/20">Licensed</span>
+<span class="pc-badge pc-badge-green">Licensed</span>
 {{- end }}

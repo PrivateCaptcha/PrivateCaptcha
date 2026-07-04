@@ -1,0 +1,12 @@
+{{define "login-captcha-widget"}}
+<div class="private-captcha mt-8"
+        data-sitekey="{{.Params.CaptchaSitekey}}"
+        data-solution-field="{{.Params.CaptchaSolutionField}}"
+        data-start-mode="auto"
+        data-started-callback="onCaptchaStarted"
+        data-finished-callback="onCaptchaSolved"
+        data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}"
+        data-styles="--border-radius: 2px; --dark-color: #0e0f0e; --accent-color: #437540; --gray-color: #bfbebc; --pie-color: #d9e1cf; --checkbox-hover-color: #ecf0e7; --warn-color: #c33030; --label-spacing: clamp(0.25rem, 1.5vw, 0.5rem);"
+        {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
+</div>
+{{end}}

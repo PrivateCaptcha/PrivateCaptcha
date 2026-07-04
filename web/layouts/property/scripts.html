@@ -7,10 +7,29 @@
     // Minimum bar height threshold for rendering (avoids extremely thin bars)
     const BAR_MIN_HEIGHT_THRESHOLD = 1e-6;
 
+    function updatePropertyRangeProgress(rangeElement) {
+        const min = Number(rangeElement.min);
+        const max = Number(rangeElement.max);
+        const val = Number(rangeElement.value);
+        const progress = max > min ? ((val - min) / (max - min)) * 100 : 0;
+        rangeElement.style.setProperty('--range-progress', progress + '%');
+    }
+
+    function initPropertyDifficultyRange() {
+        const range = document.getElementById('property-difficulty-input');
+        if (range) {
+            updatePropertyRangeProgress(range);
+        }
+    }
+
     function onDifficultyChange(rangeElement) {
+        updatePropertyRangeProgress(rangeElement);
         const endpoint = '{{.Params.CaptchaEndpoint}}/' + rangeElement.value
         demoWidget.onDifficultyChange(endpoint);
     }
+
+    document.addEventListener('DOMContentLoaded', initPropertyDifficultyRange);
+    document.body.addEventListener('htmx:afterSwap', initPropertyDifficultyRange);
 
     function onCaptchaStarted() {
         pcTrackEvent('Captcha Click');
@@ -27,10 +46,10 @@
         const yTicksCount = 7;
         const maxBarWidth = 7;
 
-        const backgroundColor = '#e4e4e7';
-        const requestedColor = '#188B8B'; // pcteal-600
-        const verifiedColor = '#F45D5D'; //pcred-300
-        const grayColor = "#6b7280";
+        const backgroundColor = '#ecf0e7'; // pc-pastel-80
+        const requestedColor = '#437540'; // pc-green
+        const verifiedColor = '#de6565'; // pc-coral (marketing site)
+        const grayColor = '#686868'; // pc-grey-600
 
         const weekdayFormat = d3.timeFormat("%a");
         const monthlyFormat = d3.timeFormat("%b");
@@ -131,7 +150,7 @@
                 .style("stroke-width", 2)
                 .selectAll("text")
                 .style("text-anchor", "end")
-                .style("color", "#000")
+                .style("fill", "#0e0f0e")
                 .attr("dx", "-.8em")
                 .attr("dy", "-.55em")
                 .attr("transform", "rotate(-90)" );
@@ -162,8 +181,6 @@
                 .attr("width", function() { return Math.min(x.bandwidth(), maxBarWidth) - barSpacing/2; })
                 .attr("y", function(d) { return y(d.y); })
                 .attr("height", function(d) { return d.y > BAR_MIN_HEIGHT_THRESHOLD ? height - y(d.y) : 0; })
-                .attr("rx", 3)
-                .attr("ry", 3)
                 .attr("fill", color)
                 .attr("opacity", 1)
                 .on("mouseover", function() { d3.select(this).attr("opacity", 0.8); })
@@ -258,7 +275,7 @@
                 .style("stroke-width", 2)
                 .selectAll("text")
                 .style("text-anchor", "end")
-                .style("color", "#000")
+                .style("fill", "#0e0f0e")
                 .attr("dx", "-.8em")
                 .attr("dy", "-.55em")
                 .attr("transform", "rotate(-90)" );
@@ -356,9 +373,9 @@
         const yTicksCount = 7;
         const maxBarWidth = 7;
 
-        const backgroundColor = '#e4e4e7';
-        const usageColor = '#9B9193'; // pcgray-400
-        const grayColor = "#6b7280";
+        const backgroundColor = '#ecf0e7'; // pc-pastel-80
+        const usageColor = '#437540'; // pc-green
+        const grayColor = '#686868'; // pc-grey-600
 
         const monthlyFormat = d3.timeFormat("%b");
 
@@ -434,7 +451,7 @@
                 .style("stroke-width", 2)
                 .selectAll("text")
                 .style("text-anchor", "end")
-                .style("color", "#000")
+                .style("fill", "#0e0f0e")
                 .attr("dx", "-.8em")
                 .attr("dy", "-.55em")
                 .attr("transform", "rotate(-90)" );
@@ -511,8 +528,6 @@
                 .attr("width", function() { return Math.min(x.bandwidth(), maxBarWidth); })
                 .attr("y", function(d) { return y(d.y); })
                 .attr("height", function(d) { return d.y > BAR_MIN_HEIGHT_THRESHOLD ? height - y(d.y) : 0; })
-                .attr("rx", 3)
-                .attr("ry", 3)
                 .attr("fill", usageColor)
                 .attr("opacity", 1)
                 .on("mouseover", function() { d3.select(this).attr("opacity", 0.8); })
@@ -528,7 +543,7 @@
                 .style("stroke-width", 2)
                 .selectAll("text")
                 .style("text-anchor", "end")
-                .style("color", "#000")
+                .style("fill", "#0e0f0e")
                 .attr("dx", "-.8em")
                 .attr("dy", "-.55em")
                 .attr("transform", "rotate(-90)" );

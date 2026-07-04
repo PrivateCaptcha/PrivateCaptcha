@@ -2,23 +2,22 @@
 
 {{define "title"}}Account verification{{end}}
 
+{{define "html_class"}}h-full bg-pc-bg{{end}}
+{{define "body_class"}}h-full min-h-full flex flex-col{{end}}
+
 {{define "header"}}{{template "header-signed-out" .}}{{end}}
 {{define "footer"}}{{template "footer-signed-out" .}}{{end}}
 
-{{define "body_class"}}pc-vertical-stretch{{end}}
-
 {{define "main"}}
-<div class="flex flex-1 flex-col justify-center px-6 lg:px-8 bg-pcpalegreen">
-<section class="-mt-20">
-    <div class="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
-        <div class="relative max-w-md mx-auto lg:max-w-lg">
-            <div class="relative overflow-hidden bg-white shadow-xl rounded-xl">
-                <div id="verification-container" class="px-4 py-6 sm:px-8">
-                    <p>Registration is not possible at this time.</p>
-                </div>
+<main class="pc-auth-shell">
+    <div class="pc-auth-card text-center">
+        <div id="verification-container">
+            <h1 class="pc-page-title">Account verification</h1>
+            <p class="mt-4 text-base leading-7 text-pc-grey-800">Registration is not possible at this time.</p>
+            <div class="mt-8 flex items-center justify-center">
+                <a href="{{ relURL .Const.LoginEndpoint }}" class="pc-internal-form-button pc-internal-form-button-primary">Back to sign in</a>
             </div>
         </div>
     </div>
-</section>
-</div>
+</main>
 {{end}}

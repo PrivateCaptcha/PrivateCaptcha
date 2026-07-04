@@ -9,7 +9,7 @@
 {{end}}
 <div class="sm:flex sm:items-center">
     <div class="sm:flex-auto">
-        <p class="mt-2 text-sm text-gray-700">A list of the events that happened with or related to your account.</p>
+        <p class="mt-2 text-sm text-pc-grey-800">A list of the events that happened with or related to your account.</p>
     </div>
     <div class="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
         <div class="flex flex-row gap-x-6 items-center">
@@ -24,11 +24,14 @@
                 <option value="{{ . }}" {{ if eq $.Params.Days . }}selected="selected"{{ end }}>{{ . }} days</option>
                 {{ end }}
             </select>
-            <a href="{{ if $.Platform.Enterprise }}{{ partsURL $.Const.AuditLogsEndpoint $.Const.ExportEndpoint }}?{{ $.Const.Days }}={{ $.Params.Days }}{{else}}#{{end}}"
-                {{ if not $.Platform.Enterprise }}disabled{{end}}
-                class="pc-internal-form-button {{ if $.Platform.Enterprise }}pc-internal-form-button-secondary{{else}}pc-internal-form-button-disabled{{end}}">
-                Export to CSV
-            </a>
+            <form action="{{ if $.Platform.Enterprise }}{{ partsURL $.Const.AuditLogsEndpoint $.Const.ExportEndpoint }}{{else}}#{{end}}" method="get" class="inline-flex shrink-0">
+                <input type="hidden" name="{{ $.Const.Days }}" value="{{ $.Params.Days }}">
+                <button type="submit"
+                    {{ if not $.Platform.Enterprise }}disabled{{end}}
+                    class="pc-internal-form-button {{ if $.Platform.Enterprise }}pc-internal-form-button-secondary{{else}}pc-internal-form-button-disabled{{end}}">
+                    Export to CSV
+                </button>
+            </form>
         </div>
     </div>
 </div>
@@ -39,9 +42,9 @@
         </div>
     </div>
 </div>
-<nav aria-label="Pagination" class="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
+<nav aria-label="Pagination" class="flex items-center justify-between border-t border-dashed border-pc-grey-250 px-4 py-3 sm:px-6">
     <div class="hidden sm:block">
-        <p class="text-sm text-gray-700">
+        <p class="text-sm text-pc-grey-800">
         Showing
         <span class="font-medium">{{.Params.From}}</span>
         to

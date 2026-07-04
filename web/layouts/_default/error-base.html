@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en" class='{{block "html_class" .}}h-full bg-pc-bg{{end}}'>
+<head>
+    {{block "head" .}}
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{block "title" .}}{{end}} - Private Captcha</title>
+    <link rel="stylesheet" href="{{$.Ctx.CDN}}/portal/css/style.css?v={{$.Platform.GitCommit}}">
+    <link rel="shortcut icon" type="image/png" href="{{$.Ctx.CDN}}/portal/img/favicon.png">
+    {{end}}
+    {{block "scripts" .}}{{template "default-scripts.html" .}}{{end}}
+</head>
+<body class='{{block "body_class" .}}h-full min-h-full flex flex-col{{end}}' {{ if .Params.Token }}hx-headers='{"{{ .Const.HeaderCSRFToken }}": "{{ .Params.Token }}"}'{{ end }}>
+    {{- if $.Ctx.LoggedIn -}}
+    {{template "header-signed-in" .}}
+    {{- else -}}
+    {{template "header-signed-out" .}}
+    {{- end -}}
+    {{block "main" .}}{{end}}
+    {{- if $.Ctx.LoggedIn -}}
+    {{template "footer-signed-in" .}}
+    {{- else -}}
+    {{template "footer-signed-out" .}}
+    {{- end -}}
+</body>
+</html>

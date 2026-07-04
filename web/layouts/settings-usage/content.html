@@ -1,4 +1,4 @@
-<main class="px-4 py-16 sm:px-6 lg:flex-auto lg:px-0 lg:py-20">
+<main class="lg:flex-auto">
     {{if .Params.ErrorMessage}}
         <div class="pb-5">{{template "error-message.html" .Params.ErrorMessage}}</div>
     {{else if .Params.SuccessMessage}}
@@ -8,36 +8,34 @@
     {{else if .Params.WarningMessage}}
         <div class="pb-5">{{template "warning-message.html" .Params.WarningMessage}}</div>
     {{end}}
-    <div class="pt-5 relative z-0">
-        <div class="flex flex-wrap items-center justify-between">
-            <p class="text-base font-bold text-gray-900 lg:order-1">Total usage</p>
-        </div>
+    <div class="pc-chart-card overflow-hidden relative z-0">
+        <div class="px-4 pt-5 sm:px-6">
+            <p class="text-base font-bold text-pc-grey-950">Total usage</p>
 
-        <div class="mt-5">
-            <dl class="grid grid-cols-1 gap-5 sm:grid-cols-4">
-                <div class="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
-                    <dt class="truncate text-sm font-medium text-gray-500">Organizations</dt>
-                    <dd class="mt-1 text-3xl font-semibold tracking-tight text-gray-500">{{if .Params.IncludedOrgsCount}}<span class="text-gray-900">{{.Params.OrgsCount}}</span> / {{.Params.IncludedOrgsCount}}{{else}}<span class="text-xl">Calculating...</span>{{end}}</dd>
+            <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="pc-stat-card">
+                    <dt class="pc-stat-label">Organizations</dt>
+                    <dd class="pc-stat-value">{{if .Params.IncludedOrgsCount}}<span class="text-pc-grey-950">{{.Params.OrgsCount}}</span> / {{.Params.IncludedOrgsCount}}{{else}}<span class="text-xl">Calculating...</span>{{end}}</dd>
                 </div>
-                <div class="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
-                    <dt class="truncate text-sm font-medium text-gray-500">Properties</dt>
-                    <dd class="mt-1 text-3xl font-semibold tracking-tight text-gray-500">{{if .Params.IncludedPropertiesCount}}<span class="text-gray-900">{{.Params.PropertiesCount}}</span> / {{.Params.IncludedPropertiesCount}}{{else}}<span class="text-xl">Calculating...</span>{{end}}</dd>
+                <div class="pc-stat-card">
+                    <dt class="pc-stat-label">Properties</dt>
+                    <dd class="pc-stat-value">{{if .Params.IncludedPropertiesCount}}<span class="text-pc-grey-950">{{.Params.PropertiesCount}}</span> / {{.Params.IncludedPropertiesCount}}{{else}}<span class="text-xl">Calculating...</span>{{end}}</dd>
                 </div>
-                <div class="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
-                    <dt class="truncate text-sm font-medium text-gray-500">Forms</dt>
-                    <dd class="mt-1 text-3xl font-semibold tracking-tight text-gray-500">{{if .Params.IncludedFormsCount}}<span class="text-gray-900">{{.Params.FormsCount}}</span> / {{.Params.IncludedFormsCount}}{{else}}<span class="text-xl">Calculating...</span>{{end}}</dd>
+                <div class="pc-stat-card">
+                    <dt class="pc-stat-label">Forms</dt>
+                    <dd class="pc-stat-value">{{if .Params.IncludedFormsCount}}<span class="text-pc-grey-950">{{.Params.FormsCount}}</span> / {{.Params.IncludedFormsCount}}{{else}}<span class="text-xl">Calculating...</span>{{end}}</dd>
                 </div>
-                <div class="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
-                    <dt class="truncate text-sm font-medium text-gray-500">Captcha requests</dt>
-                    <dd class="mt-1 text-3xl font-semibold tracking-tight text-gray-900" id="totalRequests">Calculating...</dd>
+                <div class="pc-stat-card">
+                    <dt class="pc-stat-label">Captcha requests</dt>
+                    <dd class="pc-stat-value text-pc-grey-950" id="totalRequests">Calculating...</dd>
                 </div>
             </dl>
+
+            <div class="mt-6 min-h-96" id="usage-chart"></div>
         </div>
 
-        <div class="mt-6 min-h-96" id="usage-chart"></div>
-
         <div id="usage-spinner" class="absolute inset-0 flex justify-center items-center z-10 hidden">
-            <svg id="usage-chart-spinner" class="animate-spin h-10 w-10 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <svg id="usage-chart-spinner" class="animate-spin h-10 w-10 text-pc-grey-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25 " cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>

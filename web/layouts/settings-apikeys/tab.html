@@ -1,4 +1,8 @@
+<div class="pc-settings-shell pc-content-card flex w-full flex-1 flex-col lg:flex-row">
 {{ template "settings-nav.html" .}}
-<div id="settings-content-area" class="lg:flex-auto">
-    {{ template "content.html" . }}
+<div id="settings-content-area" class="pc-settings-content">
+    <div id="settings-tab-content" class="pc-tab-content">
+        {{ template "content.html" . }}
+    </div>
+</div>
 </div>

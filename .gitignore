@@ -24,6 +24,8 @@ node_modules
 
 web/static/*
 !web/static/img
+!web/static/fonts
+!web/static/fonts/**
 widget/static/
 widget/lib/*.js
 widget/lib/*.js.map

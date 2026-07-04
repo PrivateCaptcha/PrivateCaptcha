@@ -2,21 +2,23 @@
 
 {{define "title"}}Portal{{end}}
 
-{{define "html_class"}}h-full bg-gray-100{{end}}
+{{define "html_class"}}h-full bg-pc-bg{{end}}
 {{define "body_class"}}h-full min-h-full flex flex-col{{end}}
 
 {{define "footer"}}{{template "footer-signed-in" .}}{{end}}
 
 {{define "header"}}
-<div class="bg-pcteal-800 pb-32">
+<div class="pc-hero">
     {{template "header-signed-in" .}}
     <div class="py-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"
+        data-org-id="{{ .Params.CurrentOrg.ID }}"
+        data-org-name="{{ .Params.CurrentOrg.Name }}"
         x-data="{open: false, orgID: '', orgName: '', toggle() { this.open = ! this.open } }"
-        x-init="orgID = '{{ .Params.CurrentOrg.ID }}'; orgName = '{{ .Params.CurrentOrg.Name }}'">
+        x-init="orgID = $el.dataset.orgId; orgName = $el.dataset.orgName">
         <div>
             <nav class="sm:hidden" aria-label="Back">
-                <a href="{{ relURL "/" }}" class="flex items-center text-sm font-medium text-gray-400 hover:text-gray-200">
-                    <svg class="-ml-1 mr-1 h-5 w-5 flex-shrink-0 text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <a href="{{ relURL "/" }}" class="flex items-center text-sm font-medium text-pc-grey-950 hover:text-pc-green-hover">
+                    <svg class="-ml-1 mr-1 h-5 w-5 flex-shrink-0 text-pc-grey-950" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                         <path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" />
                     </svg>
                     Back
@@ -26,8 +28,8 @@
                 <ol class="flex items-center space-x-4">
                     <li>
                         <div class="flex">
-                            <a href="{{ relURL "/" }}" class="text-sm font-medium text-gray-400 hover:text-gray-200">
-                                <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <a href="{{ relURL "/" }}" class="text-sm font-medium text-pc-grey-950 hover:text-pc-green-hover">
+                                <svg class="w-4 h-4 text-pc-grey-950" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                                 </svg>
                             </a>
@@ -35,10 +37,10 @@
                     </li>
                     <li>
                         <div class="flex items-center">
-                            <svg class="h-5 w-5 flex-shrink-0 text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <svg class="h-5 w-5 flex-shrink-0 text-pc-grey-950" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
                             </svg>
-                            <span class="ml-4 text-sm font-medium text-gray-400" x-text="orgName"></span>
+                            <span class="ml-4 text-sm font-medium text-pc-grey-950" x-text="orgName"></span>
                         </div>
                     </li>
                 </ol>
@@ -46,24 +48,24 @@
         </div>
         <div class="mt-2 md:flex md:items-center md:justify-between">
             <div class="min-w-0 flex-1">
-                <h2 class="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:tracking-tight">Dashboard</h2>
+                <h2 class="pc-page-title sm:truncate">Dashboard</h2>
             </div>
             <div class="mt-4 flex md:ml-4 md:mt-0">
                 <div>
                     <div class="absolute top-0 left-0 w-full h-screen z-0 bg-transparent" x-on:click="toggle()" x-cloak x-show="open"></div>
                     <label id="listbox-label" class="sr-only">Change selected organization</label>
                     <div class="relative">
-                        <div class="inline-flex divide-x divide-white/20 rounded-md shadow-sm">
-                            <div class="inline-flex items-center gap-x-2.5 {{ if $.Platform.Enterprise }}rounded-l-md{{else}}rounded-md{{end}} bg-white/10 px-3 py-2 text-white shadow-sm">
-                                <svg class="-ml-0.5 w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6" aria-hidden="true">
+                        <div class="pc-org-switcher inline-flex divide-x divide-dashed divide-pc-grey-250">
+                            <div class="pc-org-switcher-label {{ if $.Platform.Enterprise }}rounded-l-pc{{else}}rounded-pc{{end}}">
+                                <svg class="-ml-0.5 w-5 h-5 text-pc-grey-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
   <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Z" />
 </svg>
-                                <p class="text-sm font-semibold" x-text="orgName"></p>
+                                <p class="text-sm font-semibold text-pc-grey-950" x-text="orgName"></p>
                             </div>
                             {{ if $.Platform.Enterprise }}
-                            <button type="button" @click="toggle()" class="inline-flex items-center rounded-l-none rounded-r-md bg-white/10 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/10 focus:ring-offset-2 focus:ring-offset-gray-800" aria-haspopup="listbox" aria-expanded="true" aria-labelledby="listbox-label">
+                            <button type="button" @click="toggle()" class="pc-org-switcher-button" aria-haspopup="listbox" :aria-expanded="open" aria-labelledby="listbox-label">
                                 <span class="sr-only">Change selected organization</span>
-                                <svg class="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <svg class="h-5 w-5 text-pc-grey-950" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                     <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
                                 </svg>
                             </button>
@@ -74,15 +76,15 @@
                             x-transition:leave="transition ease-in duration-100"
                             x-transition:leave-start="opacity-100"
                             x-transition:leave-end="opacity-0"
-                            class="absolute right-0 z-10 mt-2 w-72 origin-top-right divide-y divide-gray-200 max-h-96 overflow-y-auto rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none" tabindex="-1" role="listbox" aria-labelledby="listbox-label">
+                            class="pc-org-switcher-menu" tabindex="-1" role="listbox" aria-labelledby="listbox-label">
                             {{ range $org := .Params.Orgs }}
                             {{ if eq $org.Level $.Const.OrgLevelInvited }}
-                            <li class="group text-gray-900 cursor-default select-none p-4 text-sm hover:bg-gray-100" role="option" aria-hidden="true" aria-selected="false">
-                                <a href="{{ partsURL $.Const.OrgEndpoint $org.ID }}" class="inline-block cursor-default flex justify-between">
+                            <li class="pc-org-switcher-item pc-org-switcher-item-muted" role="option" aria-selected="false">
+                                <a href="{{ partsURL $.Const.OrgEndpoint $org.ID }}" class="flex justify-between">
                                     <p :class="orgID == '{{ $org.ID }}' ? 'font-semibold' : 'font-normal'">{{ $org.Name }}</p>
                                     <span
                                         x-cloak x-show="orgID == '{{ $org.ID }}'"
-                                        class="text-gray-900">
+                                        class="text-pc-green">
                                         <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                             <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
                                         </svg>
@@ -90,8 +92,10 @@
                                 </a>
                             </li>
                             {{ else }}
-                            <li class="group text-gray-900 cursor-default select-none p-4 text-sm hover:bg-gray-100" aria-hidden="true"
-                                @click="open = false; orgID = '{{ $org.ID }}'; orgName = '{{ $org.Name }}'"
+                            <li class="pc-org-switcher-item"
+                                data-org-id="{{ $org.ID }}"
+                                data-org-name="{{ $org.Name }}"
+                                @click="open = false; orgID = $el.dataset.orgId; orgName = $el.dataset.orgName"
                                 hx-target="#org-tabs"
                                 hx-swap="innerHTML"
                                 hx-trigger="click"
@@ -103,7 +107,7 @@
                                     <p :class="orgID == '{{ $org.ID }}' ? 'font-semibold' : 'font-normal'">{{ $org.Name }}</p>
                                     <span
                                         x-cloak x-show="orgID == '{{ $org.ID }}'"
-                                        class="text-gray-900">
+                                        class="text-pc-green">
                                         <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                             <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
                                         </svg>
@@ -113,10 +117,10 @@
                             {{ end }}
                             {{ end }}
                             {{ if $.Platform.Enterprise }}
-                            <li class="group text-gray-900 cursor-default select-none text-sm hover:bg-gray-100" role="option" aria-hidden="true" aria-selected="false">
+                            <li class="pc-org-switcher-item" role="option" aria-selected="false">
                                 <a
                                     href="{{ partsURL $.Const.OrgEndpoint .Const.NewEndpoint }}"
-                                    class="inline-flex items-center justify-center leading-4 text-gray-900 w-full h-full p-4 cursor-default"
+                                    class="pc-org-switcher-add"
                                     >
                                     <svg class="w-4 h-4 mr-2 -ml-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -137,7 +141,7 @@
 {{define "main"}}
 <main class='-mt-32 flex flex-1' x-data="{propertiesOptionsOpen: false, showSitekeys: $persist(false), onboardingOpen: {{ $.Params.ShowOnboarding }}}">
     {{ if $.Platform.Enterprise }}
-    <div class="relative z-10" aria-labelledby="onboarding-modal-title" role="dialog" aria-modal="true"
+    <div class="pc-modal-root" aria-labelledby="onboarding-modal-title" role="dialog" aria-modal="true"
         x-cloak x-show="onboardingOpen"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="opacity-0"
@@ -146,11 +150,11 @@
         x-transition:leave-start="opacity-100"
         x-transition:leave-end="opacity-0"
         >
-        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+        <div class="pc-modal-overlay"></div>
 
-        <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+        <div class="pc-modal-layer">
             <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-                <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-xl"
+                <div class="pc-modal-panel sm:my-8 sm:w-full sm:max-w-xl"
                     x-cloak x-show="onboardingOpen"
                     x-transition:enter="ease-out duration-300"
                     x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
@@ -159,52 +163,52 @@
                     x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
                     x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
                     <div class="mx-auto max-w-xl px-8 pb-8 pt-10">
-                        <h2 class="text-base font-semibold text-gray-900">Welcome to Private Captcha!</h2>
-                        <p class="mt-1 text-sm text-gray-500">Get started by protecting your first website or inviting your team.</p>
-                        <ul role="list" class="mt-6 divide-y divide-gray-200 border-y border-gray-200">
+                        <h2 id="onboarding-modal-title" class="pc-modal-title">Welcome to Private Captcha!</h2>
+                        <p class="mt-1 text-sm text-pc-grey-800">Get started by protecting your first website or inviting your team.</p>
+                        <ul role="list" class="mt-6 divide-y divide-dashed divide-pc-grey-250 border-y border-dashed border-pc-grey-250">
                             <li>
-                                <div class="group relative flex items-start space-x-3 py-4">
+                                <div class="group relative flex items-start gap-x-3 py-4">
                                     <div class="shrink-0">
-                                        <span class="inline-flex size-10 items-center justify-center rounded-lg bg-pcteal-700">
+                                        <span class="inline-flex size-10 items-center justify-center rounded-pc bg-pc-green">
                                             <img class="h-6 w-auto" src="{{.Ctx.CDN}}/portal/img/pc-icon-light.svg" alt="">
                                         </span>
                                     </div>
                                     <div class="min-w-0 flex-1">
-                                        <div class="text-sm font-medium text-gray-900">
-                                            <a href="{{ partsURL $.Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertyEndpoint .Const.NewEndpoint }}">
+                                        <div class="text-sm font-medium text-pc-grey-950">
+                                            <a href="{{ partsURL $.Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertyEndpoint .Const.NewEndpoint }}" class="group-hover:text-pc-green-hover">
                                                 <span aria-hidden="true" class="absolute inset-0"></span>
                                                 Protect a website
                                             </a>
                                         </div>
-                                        <p class="text-sm text-gray-500">Create and integrate your first CAPTCHA widget.</p>
+                                        <p class="text-sm text-pc-grey-800">Create and integrate your first CAPTCHA widget.</p>
                                     </div>
                                     <div class="shrink-0 self-center">
-                                        <svg viewBox="0 0 20 20" fill="currentColor" data-slot="icon" aria-hidden="true" class="size-5 text-gray-400 group-hover:text-gray-500">
+                                        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" class="size-5 text-pc-grey-600 group-hover:text-pc-green">
                                             <path d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" fill-rule="evenodd" />
                                         </svg>
                                     </div>
                                 </div>
                             </li>
                             <li>
-                                <div class="group relative flex items-start space-x-3 py-4">
+                                <div class="group relative flex items-start gap-x-3 py-4">
                                     <div class="shrink-0">
-                                        <span class="inline-flex size-10 items-center justify-center rounded-lg bg-pcpalegreen">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-pcteal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <span class="inline-flex size-10 items-center justify-center rounded-pc bg-pc-pastel-50 ring-1 ring-inset ring-pc-grey-250">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-pc-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                                             </svg>
                                         </span>
                                     </div>
                                     <div class="min-w-0 flex-1">
-                                        <div class="text-sm font-medium text-gray-900">
-                                            <a href="{{ partsURL $.Const.OrgEndpoint .Params.CurrentOrg.ID }}?{{ $.Const.Tab }}={{$.Const.MembersEndpoint}}">
+                                        <div class="text-sm font-medium text-pc-grey-950">
+                                            <a href="{{ partsURL $.Const.OrgEndpoint .Params.CurrentOrg.ID }}?{{ $.Const.Tab }}={{$.Const.MembersEndpoint}}" class="group-hover:text-pc-green-hover">
                                                 <span aria-hidden="true" class="absolute inset-0"></span>
                                                 Invite your team
                                             </a>
                                         </div>
-                                        <p class="text-sm text-gray-500">Give your team access while keeping full control.</p>
+                                        <p class="text-sm text-pc-grey-800">Give your team access while keeping full control.</p>
                                     </div>
                                     <div class="shrink-0 self-center">
-                                        <svg viewBox="0 0 20 20" fill="currentColor" data-slot="icon" aria-hidden="true" class="size-5 text-gray-400 group-hover:text-gray-500">
+                                        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" class="size-5 text-pc-grey-600 group-hover:text-pc-green">
                                             <path d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" fill-rule="evenodd" />
                                         </svg>
                                     </div>
@@ -212,9 +216,8 @@
                             </li>
                         </ul>
                         <div class="mt-6 flex">
-                            <a href="{{ partsURL $.Const.OrgEndpoint .Params.CurrentOrg.ID }}" class="text-sm font-medium text-pclime-600 hover:text-pclime-500">
+                            <a href="{{ partsURL $.Const.OrgEndpoint .Params.CurrentOrg.ID }}" @click="onboardingOpen = false" class="pc-docs-link">
                                 Or start from your dashboard
-                                <span aria-hidden="true"> &rarr;</span>
                             </a>
                         </div>
                     </div>
@@ -225,20 +228,20 @@
     {{ end }}
     <div class="absolute top-0 left-0 w-full h-screen z-0 bg-transparent" x-on:click="propertiesOptionsOpen = false" x-cloak x-show="propertiesOptionsOpen"></div>
     <div class="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8 flex flex-1">
-        <div class="rounded-lg bg-white shadow flex flex-1">
-            <div class="flex-1 flex px-12 pt-8 pb-12">
+        <div class="pc-content-card flex flex-1">
+            <div class="pc-tab-content">
                 <div id="org-tabs" class="flex-1 flex flex-col">
                     {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelInvited }}
-                    <div class="bg-gray-50 sm:rounded-lg mt-4">
-                        <div class="px-4 py-5 sm:p-6">
-                            <h3 class="text-base font-semibold leading-6 text-gray-900">Join {{ .Params.CurrentOrg.Name }}?</h3>
-                            <div class="mt-2 text-sm text-gray-500">
+                    <div class="pc-invite-card">
+                        <div class="pc-invite-card-inner">
+                            <h3 class="pc-modal-title leading-6">Join {{ .Params.CurrentOrg.Name }}?</h3>
+                            <div class="mt-2 pc-text-body">
                                 <p class="org-invite">You were invited to join organization <strong>{{ .Params.CurrentOrg.Name }}</strong>. Accepting the invite will grant you access to properties and settings.</p>
                             </div>
                             <div class="mt-5">
                                 <button type="button"
                                     hx-put="{{ partsURL $.Const.OrgEndpoint .Params.CurrentOrg.ID .Const.MembersEndpoint }}"
-                                    class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Accept invite</button>
+                                    class="pc-internal-form-button pc-internal-form-button-primary">Accept invite</button>
                             </div>
                         </div>
                     </div>

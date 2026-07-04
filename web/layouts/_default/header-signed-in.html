@@ -1,38 +1,35 @@
 {{define "header-signed-in"}}
 <header>
-    <nav class="bg-pcteal-800" x-data="{profileMenuOpen: false, mobileMenuOpen: false}">
+    <nav class="pc-header-nav" x-data="{profileMenuOpen: false, mobileMenuOpen: false}">
         <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
             <div class="absolute top-0 left-0 w-full h-screen z-0 bg-transparent" x-on:click="profileMenuOpen = false" x-cloak x-show="profileMenuOpen"></div>
-            <div class="border-b border-gray-700">
-                <div class="flex h-16 items-center justify-between px-4 sm:px-0">
+            <div class="flex h-16 items-center justify-between px-4 sm:px-0">
                     <div class="flex items-center">
                         <div class="flex-shrink-0 relative">
-                            <img class="h-8 w-auto" src="{{$.Ctx.CDN}}/portal/img/pc-logo-light.svg" alt="Private Captcha">
-                            {{if not $.Platform.Enterprise}}<div class="absolute -top-2 -right-4 text-xs py-0.25 px-0.5 border border-gray-300 rounded-sm text-gray-300">CE</div>{{end}}
+                            <img class="h-8 w-auto" src="{{$.Ctx.CDN}}/portal/img/pc-logo-dark.svg" alt="Private Captcha">
+                            {{if not $.Platform.Enterprise}}<div class="absolute -top-2 -right-4 text-xs py-0.25 px-0.5 border border-pc-grey-950 rounded-sm text-pc-grey-950">CE</div>{{end}}
                         </div>
                         <div class="hidden md:block">
                             <div class="ml-10 flex items-baseline space-x-4">
-                                <!-- Current: "bg-pcteal-900 text-white", Default: "text-gray-300 hover:bg-pcteal-700 hover:text-white" -->
                                 <a href="{{ relURL "/" }}" class="pc-dashboard-menu-button {{ if eq .Ctx.Path (relURL "/") }}pc-dashboard-menu-button-current{{end}}" aria-current="page">Dashboard</a>
-                                <a href="https://docs.privatecaptcha.com/" target="_blank" class="pc-dashboard-menu-button">Docs</a>
-                                {{if .Ctx.FirstSession}}<a href="https://docs.privatecaptcha.com/docs/getting-started/" target="_blank" class="pc-dashboard-menu-button">Getting started</a>{{end}}
+                                <a href="https://docs.privatecaptcha.com/" target="_blank" rel="noopener noreferrer" class="pc-dashboard-menu-button">Docs</a>
+                                {{if .Ctx.FirstSession}}<a href="https://docs.privatecaptcha.com/docs/getting-started/" target="_blank" rel="noopener noreferrer" class="pc-dashboard-menu-button">Getting started</a>{{end}}
                             </div>
                         </div>
                     </div>
                     <div class="hidden md:block">
                         <div class="ml-4 flex items-center md:ml-6">
-                            <!-- Profile dropdown -->
                             <div class="relative ml-3">
                                 <div>
-                                    <button type="button" @click="profileMenuOpen = !profileMenuOpen" class="relative group flex max-w-xs items-center rounded-full bg-pcteal-800 text-sm focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800" id="user-menu-button" aria-expanded="false" aria-haspopup="true">
+                                    <button type="button" @click="profileMenuOpen = !profileMenuOpen" class="pc-user-menu-button" id="user-menu-button" :aria-expanded="profileMenuOpen" aria-haspopup="true">
                                         <span class="absolute -inset-1.5"></span>
                                         <span class="sr-only">Open user menu</span>
-                                        <span class="inline-block h-8 w-8 overflow-hidden rounded-full bg-gray-100">
-                                            <svg class="h-full w-full text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                                        <span class="pc-user-menu-avatar">
+                                            <svg class="h-full w-full text-pc-grey-950" fill="currentColor" viewBox="0 0 24 24">
                                                 <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
                                             </svg>
                                         </span>
-                                        <span class="ml-3 text-sm font-medium text-gray-300 group-hover:text-white">{{.Ctx.UserName}}</span>
+                                        <span class="pc-user-menu-name">{{.Ctx.UserName}}</span>
                                     </button>
                                 </div>
                                 <div
@@ -43,64 +40,57 @@
                                     x-transition:leave="transition ease-in duration-75"
                                     x-transition:leave-start="transform opacity-100 scale-100"
                                     x-transition:leave-end="transform opacity-0 scale-95"
-                                    class="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none divide-y divide-gray-100" role="menu" aria-orientation="vertical" aria-labelledby="user-menu-button" tabindex="-1">
+                                    class="pc-header-dropdown" role="menu" aria-orientation="vertical" aria-labelledby="user-menu-button" tabindex="-1">
                                     {{- if not $.Platform.Registered }}
                                     <div class="px-4 py-3">
-                                        <a href="https://privatecaptcha.com/self-hosting/" target="_blank" class="inline-flex items-center rounded-md bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-800">UNLICENSED</a>
+                                        <a href="https://privatecaptcha.com/self-hosting/" target="_blank" rel="noopener noreferrer" class="pc-badge pc-badge-warn">UNLICENSED</a>
                                     </div>
                                     {{- end }}
                                     <div {{if not $.Platform.Registered }}class="py-1"{{end}}>
-                                        <!-- Active: "bg-gray-100", Not Active: "" -->
-                                        <a href="{{ relURL .Const.AuditLogsEndpoint }}" class="hover:bg-gray-100 block px-4 py-2 text-sm text-gray-700" role="menuitem" tabindex="-1" id="user-menu-item-1">Audit logs</a>
-                                        <a href="{{ relURL .Const.SettingsEndpoint }}" class="hover:bg-gray-100 block px-4 py-2 text-sm text-gray-700" role="menuitem" tabindex="-1" id="user-menu-item-2">Settings</a>
-                                        <a href="{{ relURL .Const.LogoutEndpoint }}" class="hover:bg-gray-100 block px-4 py-2 text-sm text-gray-700" role="menuitem" tabindex="-1" id="user-menu-item-3">Sign out</a>
+                                        <a href="{{ relURL .Const.AuditLogsEndpoint }}" class="pc-header-dropdown-link" role="menuitem" tabindex="-1" id="user-menu-item-1">Audit logs</a>
+                                        <a href="{{ relURL .Const.SettingsEndpoint }}" class="pc-header-dropdown-link" role="menuitem" tabindex="-1" id="user-menu-item-2">Settings</a>
+                                        <a href="{{ relURL .Const.LogoutEndpoint }}" class="pc-header-dropdown-link" role="menuitem" tabindex="-1" id="user-menu-item-3">Sign out</a>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="-mr-2 flex md:hidden">
-                        <!-- Mobile menu button -->
-                        <button type="button" class="relative inline-flex items-center justify-center rounded-md bg-pcteal-800 p-2 text-gray-400 hover:bg-pcteal-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-gray-800" aria-controls="mobile-menu" aria-expanded="false">
+                        <button type="button" @click="mobileMenuOpen = !mobileMenuOpen" class="relative inline-flex items-center justify-center rounded-pc bg-pc-bg p-2 text-pc-grey-950 hover:bg-black/5 hover:text-pc-green-hover focus:outline-none focus:ring-2 focus:ring-pc-green focus:ring-offset-2 focus:ring-offset-pc-bg" aria-controls="mobile-menu" :aria-expanded="mobileMenuOpen">
                             <span class="absolute -inset-0.5"></span>
                             <span class="sr-only">Open main menu</span>
-                            <!-- Menu open: "hidden", Menu closed: "block" -->
                             <svg class="block h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
                             </svg>
-                            <!-- Menu open: "block", Menu closed: "hidden" -->
                             <svg class="hidden h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         </button>
-                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Mobile menu, show/hide based on menu state. -->
-        <div x-cloak x-show="mobileMenuOpen" class="border-b border-gray-700 md:hidden" id="mobile-menu">
+        <div x-cloak x-show="mobileMenuOpen" class="border-t border-dashed border-pc-grey-250 md:hidden" id="mobile-menu">
             <div class="space-y-1 px-2 py-3 sm:px-3">
-                <!-- Current: "bg-pcteal-900 text-white", Default: "text-gray-300 hover:bg-pcteal-700 hover:text-white" -->
-                <a href="{{ relURL "/" }}" class="block rounded-md px-3 py-2 text-base font-medium {{ if eq .Ctx.Path (relURL "/") }}bg-pcteal-900 text-white{{ else }}text-gray-300 hover:bg-pcteal-700 hover:text-white{{ end }}" aria-current="page">Dashboard</a>
-                <a href="https://docs.privatecaptcha.com/" target="_blank" class="text-gray-300 hover:bg-pcteal-700 hover:text-white block rounded-md px-3 py-2 text-base font-medium">Docs</a>
-                {{if .Ctx.FirstSession}}<a href="https://docs.privatecaptcha.com/docs/getting-started/" target="_blank" class="text-gray-300 hover:bg-pcteal-700 hover:text-white block rounded-md px-3 py-2 text-base font-medium">Getting started</a>{{end}}
+                <a href="{{ relURL "/" }}" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile {{ if eq .Ctx.Path (relURL "/") }}pc-dashboard-menu-button-current{{end}}" aria-current="page">Dashboard</a>
+                <a href="https://docs.privatecaptcha.com/" target="_blank" rel="noopener noreferrer" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile">Docs</a>
+                {{if .Ctx.FirstSession}}<a href="https://docs.privatecaptcha.com/docs/getting-started/" target="_blank" rel="noopener noreferrer" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile">Getting started</a>{{end}}
             </div>
-            <div class="border-t border-gray-700 pb-3 pt-4">
+            <div class="border-t border-dashed border-pc-grey-250 pb-3 pt-4">
                 <div class="flex items-center px-5">
                     <div class="flex-shrink-0">
-                        <svg class="h-10 w-10 text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                        <svg class="h-10 w-10 text-pc-grey-950" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
                     </div>
                     <div class="ml-3">
-                        <div class="text-base font-medium leading-none text-white">{{.Ctx.UserName}}</div>
+                        <div class="text-base font-medium leading-none text-pc-grey-950">{{.Ctx.UserName}}</div>
                     </div>
                 </div>
                 <div class="mt-3 space-y-1 px-2">
-                    <a href="{{ relURL .Const.AuditLogsEndpoint }}" class="block rounded-md px-3 py-2 text-base font-medium text-gray-400 hover:bg-pcteal-700 hover:text-white">Audit logs</a>
-                    <a href="{{ relURL .Const.SettingsEndpoint }}" class="block rounded-md px-3 py-2 text-base font-medium text-gray-400 hover:bg-pcteal-700 hover:text-white">Settings</a>
-                    <a href="{{ relURL .Const.LogoutEndpoint }}" class="block rounded-md px-3 py-2 text-base font-medium text-gray-400 hover:bg-pcteal-700 hover:text-white">Sign out</a>
+                    <a href="{{ relURL .Const.AuditLogsEndpoint }}" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile">Audit logs</a>
+                    <a href="{{ relURL .Const.SettingsEndpoint }}" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile">Settings</a>
+                    <a href="{{ relURL .Const.LogoutEndpoint }}" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile">Sign out</a>
                 </div>
             </div>
         </div>
