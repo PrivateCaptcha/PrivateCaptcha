@@ -1323,37 +1323,37 @@ body.pc-vertical-stretch {
 }
 
 .pc-rule-condition-panel {
-    @apply space-y-4 rounded-pc border border-dashed border-pc-grey-250 bg-pc-coral-50 p-4;
-}
-
-.pc-rule-condition-panel select:hover:not(:disabled) {
-    @apply border-pc-coral;
-}
-
-.pc-rule-condition-panel .pc-form-input-normal:hover:not(:disabled) {
-    @apply border-pc-coral;
-}
-
-.pc-rule-condition-panel .pc-form-input-normal:focus-visible {
-    @apply border-pc-coral;
-    @apply outline-pc-coral;
-}
-
-.pc-rule-action-panel {
     @apply space-y-4 rounded-pc border border-dashed border-pc-grey-250 bg-pc-blue/10 p-4;
 }
 
-.pc-rule-action-panel select:hover:not(:disabled) {
+.pc-rule-condition-panel select:hover:not(:disabled) {
     @apply border-pc-blue;
+}
+
+.pc-rule-condition-panel .pc-form-input-normal:hover:not(:disabled) {
+    @apply border-pc-blue;
+}
+
+.pc-rule-condition-panel .pc-form-input-normal:focus-visible {
+    @apply border-pc-blue;
+    @apply outline-pc-blue;
+}
+
+.pc-rule-action-panel {
+    @apply space-y-4 rounded-pc border border-dashed border-pc-grey-250 bg-pc-coral-50 p-4;
+}
+
+.pc-rule-action-panel select:hover:not(:disabled) {
+    @apply border-pc-coral;
 }
 
 .pc-rule-action-panel .pc-form-input-normal:hover:not(:disabled) {
-    @apply border-pc-blue;
+    @apply border-pc-coral;
 }
 
 .pc-rule-action-panel .pc-form-input-normal:focus-visible {
-    @apply border-pc-blue;
-    @apply outline-pc-blue;
+    @apply border-pc-coral;
+    @apply outline-pc-coral;
 }
 
 .pc-rule-chip {
@@ -1361,7 +1361,7 @@ body.pc-vertical-stretch {
 }
 
 .pc-rule-chip-condition {
-    @apply bg-pc-coral-50 border-pc-coral/20 text-pc-coral-500;
+    @apply border-pc-blue/30 bg-pc-blue/10 text-pc-blue-600;
 }
 
 .pc-rule-chip-condition-muted {
@@ -1369,7 +1369,7 @@ body.pc-vertical-stretch {
 }
 
 .pc-rule-chip-action {
-    @apply border-pc-blue/30 bg-pc-blue/10 text-pc-blue-600;
+    @apply bg-pc-coral-50 border-pc-coral/20 text-pc-coral-500;
 }
 
 .pc-rule-chip-action-muted {
