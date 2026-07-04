@@ -362,7 +362,7 @@ body.pc-vertical-stretch {
 }
 
 .pc-internal-form-label {
-    @apply text-xs;
+    @apply text-sm;
     @apply font-medium;
     @apply text-pc-grey-800;
     @apply font-sans;
