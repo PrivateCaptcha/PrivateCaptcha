@@ -85,23 +85,23 @@
 }
 
 .pc-code-snippet {
-    @apply text-gray-800;
+    @apply text-pc-grey-950;
 }
 
 .pc-code-tag {
-    @apply text-pcteal-600;
+    @apply text-pc-blue-600;
 }
 
 .pc-code-attr {
-    @apply text-pcred-400;
+    @apply text-pc-coral-500;
 }
 
 .pc-code-string {
-    @apply text-pclime-600;
+    @apply text-pc-success;
 }
 
 .pc-code-comment {
-    @apply text-gray-500;
+    @apply text-pc-grey-400;
 }
 
 .pc-form-link {
@@ -1605,7 +1605,7 @@ input[type=button]:disabled {
   @apply px-3;
   @apply py-2;
   @apply rounded-md;
-  @apply bg-pcteal-900;
+  @apply bg-pc-grey-800;
   @apply text-white;
 
   text-align: center;
