@@ -52,4 +52,5 @@ const (
 	ClientSetupEndpoint   = "clientsetup"
 	ServerSetupEndpoint   = "serversetup"
 	TestEndpoint          = "test"
+	CacheEndpoint         = "cache"
 )

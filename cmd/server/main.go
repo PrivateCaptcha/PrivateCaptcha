@@ -501,6 +501,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		localRateLimiter := ipRateLimiter.RateLimitExFunc(localLeakyBucketCap, localLeakInterval)
 		localMiddleware := alice.New(common.ServiceMiddleware("local"), recovered, localRateLimiter, common.APIKeyMiddleware(localAPIKey), monitoring.Logged)
 		jobs.Setup(localRouter, localMiddleware)
+		localRouter.Handle(http.MethodDelete+" /"+common.CacheEndpoint, localMiddleware.ThenFunc(func(http.ResponseWriter, *http.Request) { businessDB.ClearCache() }))
 		localRouter.Handle(http.MethodGet+" /"+common.LiveEndpoint, recovered(http.HandlerFunc(healthCheck.LiveHandler)))
 		localRouter.Handle(http.MethodGet+" /"+common.ReadyEndpoint, recovered(http.HandlerFunc(healthCheck.ReadyHandler)))
 		localServer = &http.Server{

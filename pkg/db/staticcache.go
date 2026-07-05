@@ -148,3 +148,7 @@ func (c *StaticCache[TKey, TValue]) SaveTo(context.Context, io.Writer, int) erro
 func (c *StaticCache[TKey, TValue]) LoadFrom(context.Context, io.Reader, time.Duration) error {
 	return nil
 }
+
+func (c *StaticCache[TKey, TValue]) Clear() {
+	c.cache.Clear()
+}

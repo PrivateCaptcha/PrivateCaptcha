@@ -36,6 +36,7 @@ type Cache[TKey comparable, TValue any] interface {
 	LoadFrom(ctx context.Context, r io.Reader, ttl time.Duration) error
 	Missing() TValue
 	HitRatio() float64
+	Clear()
 }
 
 type ConfigItem interface {

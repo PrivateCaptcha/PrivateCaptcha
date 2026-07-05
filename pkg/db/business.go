@@ -251,3 +251,7 @@ func (s *BusinessStore) LoadCache(ctx context.Context, dir string) error {
 
 	return common.LoadCacheFromFile(ctx, dir, cachePersistFile, DefaultCacheTTL, mc.store)
 }
+
+func (s *BusinessStore) ClearCache() {
+	s.Cache.Clear()
+}

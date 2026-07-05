@@ -283,6 +283,10 @@ func (c *memcache[TKey, TValue]) LoadFrom(ctx context.Context, r io.Reader, ttl 
 	return common.LoadCacheFromReader(ctx, r, c.store, ttl)
 }
 
+func (c *memcache[TKey, TValue]) Clear() {
+	c.store.InvalidateAll()
+}
+
 type CacheKeyPrefix byte
 
 const (

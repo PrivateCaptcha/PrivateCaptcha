@@ -71,6 +71,11 @@ func (c *TxCache) SaveTo(context.Context, io.Writer, int) error             { re
 
 func (c *TxCache) HitRatio() float64 { return 0.0 }
 func (c *TxCache) Missing() any      { return nil }
+func (c *TxCache) Clear() {
+	c.set = make(map[CacheKey]*txCacheArg)
+	c.del = make(map[CacheKey]struct{})
+	c.missing = make(map[CacheKey]struct{})
+}
 func (c *TxCache) GetWithRefresh(_ context.Context, _ CacheKey) (any, bool, error) {
 	return nil, false, errTransactionCache
 }

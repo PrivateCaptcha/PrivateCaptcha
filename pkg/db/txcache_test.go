@@ -239,6 +239,10 @@ func (m *mockCache) LoadFrom(context.Context, io.Reader, time.Duration) error {
 }
 
 func (m *mockCache) Missing() any { return nil }
+func (m *mockCache) Clear() {
+	m.setValues = make(map[CacheKey]any)
+	m.setTTLs = make(map[CacheKey]time.Duration)
+}
 func (m *mockCache) GetWithRefresh(ctx context.Context, key CacheKey) (any, bool, error) {
 	val, err := m.Get(ctx, key)
 	return val, false, err
