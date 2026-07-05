@@ -216,6 +216,29 @@ func countryCodeConditionParser(conditionOperator, conditionValue, _ string) (st
 	return conditionValue, separator, common.StatusOK
 }
 
+func commaSeparatedConditionValueFormatter(rule *dbgen.DifficultyRule) string {
+	if !rule.ConditionValueStr.Valid {
+		return ""
+	}
+
+	separator := ","
+	if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
+		separator = rule.ConditionValueSeparator.String
+	}
+
+	values := strings.Split(rule.ConditionValueStr.String, separator)
+	formattedValues := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if len(value) == 0 {
+			continue
+		}
+		formattedValues = append(formattedValues, value)
+	}
+
+	return strings.Join(formattedValues, ", ")
+}
+
 func domainConditionParser(conditionOperator, conditionValue, domain string) (string, string, common.StatusCode) {
 	if len(domain) == 0 {
 		// not supported for orgs (that pass empty domain)
@@ -333,9 +356,13 @@ func alwaysConditionParser(_, _, _ string) (string, string, common.StatusCode) {
 func NewRuleRegistry() *RuleRegistry {
 	return &RuleRegistry{
 		conditions: map[string]ConditionRegistration{
-			string(dbgen.RuleConditionPropertyUserAgent):      ConditionRegistration{Parser: userAgentConditionParser, DisplayName: "User Agent"},
-			string(dbgen.RuleConditionPropertyIPAddress):      ConditionRegistration{Parser: ipAddressConditionParser, DisplayName: "IP address"},
-			string(dbgen.RuleConditionPropertyCountryCode):    ConditionRegistration{Parser: countryCodeConditionParser, DisplayName: "Country Code"},
+			string(dbgen.RuleConditionPropertyUserAgent): ConditionRegistration{Parser: userAgentConditionParser, DisplayName: "User Agent"},
+			string(dbgen.RuleConditionPropertyIPAddress): ConditionRegistration{Parser: ipAddressConditionParser, DisplayName: "IP address"},
+			string(dbgen.RuleConditionPropertyCountryCode): ConditionRegistration{
+				Parser:         countryCodeConditionParser,
+				DisplayName:    "Country Code",
+				ValueFormatter: commaSeparatedConditionValueFormatter,
+			},
 			string(dbgen.RuleConditionPropertyDomain):         ConditionRegistration{Parser: domainConditionParser, DisplayName: "Domain"},
 			string(dbgen.RuleConditionPropertyHTTPHeaderName): ConditionRegistration{Parser: httpHeaderNameConditionParser, DisplayName: "HTTP Header Name"},
 			string(dbgen.RuleConditionPropertyAlways):         ConditionRegistration{Parser: alwaysConditionParser, DisplayName: "Always"},

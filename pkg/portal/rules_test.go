@@ -307,6 +307,20 @@ func TestFormatConditionValue(t *testing.T) {
 		}
 	})
 
+	t.Run("DefaultRegistryFormatsCountryCodeList", func(t *testing.T) {
+		rule := &dbgen.DifficultyRule{
+			ConditionProperty:       dbgen.RuleConditionPropertyCountryCode,
+			ConditionValueStr:       db.Text("US,CA,GB"),
+			ConditionValueSeparator: db.Text(","),
+		}
+
+		registry := NewRuleRegistry()
+		result := registry.FormatConditionValue(rule)
+		if result != "US, CA, GB" {
+			t.Errorf("Expected 'US, CA, GB', got '%s'", result)
+		}
+	})
+
 	t.Run("FormatterUsedInDifficultyRuleToDisplay", func(t *testing.T) {
 		hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
 		rule := &dbgen.DifficultyRule{
