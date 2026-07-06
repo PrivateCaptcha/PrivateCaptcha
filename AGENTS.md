@@ -72,7 +72,7 @@
 - To get integration tests code coverage, after running integration tests, open `coverage_integration/` directory in repository root
 - Integration tests for Portal and API have global variables `store` (Postgres `db.BusinessStore`), `timeSeries` (ClickHouse, `common.TimeSeriesStore`) and `server` (respective server resource) that can be used instead of creating new resources.
 - For exact HTTP routes to endpoints always check how they are setup in `server.go` and `server_enterprise.go`
-- Any and all render tests should be inside `pkg/portal/render_test.go`
+- Portal render tests should be inside `pkg/portal/render_test.go`
 - Always make sure all unit **and** integration tests pass before declaring done
 
 ## Output
