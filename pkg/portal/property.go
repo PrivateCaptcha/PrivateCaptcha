@@ -83,6 +83,7 @@ type orgPropertiesRenderContext struct {
 	PaginationRenderContext
 	Properties []*userProperty
 	CurrentOrg *UserOrg
+	Sort       db.OrgPropertiesSort
 }
 
 type propertyDashboardRenderContext struct {

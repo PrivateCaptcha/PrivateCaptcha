@@ -130,6 +130,28 @@ func ruleNames(rules []*DifficultyRuleModel) []string {
 	return result
 }
 
+func TestRenderPropertiesPaginationPreservesSort(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), orgPropertiesTemplate, &orgPropertiesRenderContext{
+		PaginationRenderContext: PaginationRenderContext{From: 1, To: 1, Count: 2, Page: 0, PerPage: 30},
+		CurrentOrg:              stubOrg("123"),
+		Properties:              []*userProperty{stubProperty("Property", "123")},
+		Sort:                    db.OrgPropertiesSortNameDescending,
+	}, &RequestContext{Path: server.RelURL("/org/123/properties")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if actual := strings.Count(buf.String(), `"sort": "name_desc"`); actual != 2 {
+		t.Fatalf("expected both pagination controls to preserve sort, got %d", actual)
+	}
+}
+
 func TestRenderHTML(t *testing.T) {
 	enterpriseOnly := new(bool)
 	*enterpriseOnly = true

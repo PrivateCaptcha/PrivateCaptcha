@@ -104,6 +104,7 @@ type orgDashboardRenderContext struct {
 	PaginationRenderContext
 	// shortened from CurrentOrgProperties for simplicity
 	Properties []*userProperty
+	Sort       db.OrgPropertiesSort
 }
 
 type orgWizardRenderContext struct {
@@ -273,19 +274,21 @@ func (s *Server) createPortalBaseContext(ctx context.Context, orgID int32, sess 
 	return renderCtx, org, nil
 }
 
-func (s *Server) createOrgDashboardContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization) (*orgDashboardRenderContext, error) {
+func (s *Server) createOrgDashboardContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, sort db.OrgPropertiesSort) (*orgDashboardRenderContext, error) {
 	baseCtx.Tab = portalPropertiesTabIndex
+	sort = db.ParseOrgPropertiesSort(string(sort))
 
 	renderCtx := &orgDashboardRenderContext{
 		portalBaseRenderContext: *baseCtx,
 		Properties:              []*userProperty{},
+		Sort:                    sort,
 	}
 
 	if baseCtx.CurrentOrg.Level == string(dbgen.AccessLevelInvited) {
 		return renderCtx, nil
 	}
 
-	if properties, hasMore, err := s.Store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0 /*offset*/, propertiesPerPage); err == nil {
+	if properties, hasMore, err := s.Store.Impl().RetrieveOrgProperties(ctx, org, sort, 0 /*offset*/, propertiesPerPage); err == nil {
 		renderCtx.Properties = propertiesToUserProperties(ctx, properties, s.IDHasher)
 
 		renderCtx.PaginationRenderContext = PaginationRenderContext{
@@ -377,6 +380,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tabParam := r.URL.Query().Get(common.ParamTab)
+	propertySort := db.ParseOrgPropertiesSort(r.URL.Query().Get(common.ParamSort))
 	slog.Log(ctx, common.LevelTrace, "Portal tab was requested", "tab", tabParam)
 
 	var baseCtx *portalBaseRenderContext
@@ -393,6 +397,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 			s.render(w, r, portalTemplate, &orgDashboardRenderContext{
 				portalBaseRenderContext: *baseCtx,
 				Properties:              []*userProperty{},
+				Sort:                    propertySort,
 			}, true /*new*/)
 			return
 		}
@@ -446,7 +451,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		if (tabParam != "") && (tabParam != common.DashboardEndpoint) {
 			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
 		}
-		if vm, err := s.createOrgDashboardContext(ctx, baseCtx, org); err == nil {
+		if vm, err := s.createOrgDashboardContext(ctx, baseCtx, org, propertySort); err == nil {
 			if _, ok := sess.Get(ctx, session.KeyFirstSession).(bool); ok {
 				onboardingParam := r.URL.Query().Get(common.ParamOnboarding)
 				vm.ShowOnboarding = common.ParseBoolean(onboardingParam)
@@ -469,12 +474,13 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, portalTemplate, model, true /*new*/)
 }
 
-func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User, page int) (*orgPropertiesRenderContext, error) {
+func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User, page int, sort db.OrgPropertiesSort) (*orgPropertiesRenderContext, error) {
 	if page < 0 {
 		page = 0
 	}
+	sort = db.ParseOrgPropertiesSort(string(sort))
 
-	properties, hasMore, err := s.Store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, page*propertiesPerPage, propertiesPerPage)
+	properties, hasMore, err := s.Store.Impl().RetrieveOrgProperties(ctx, org, sort, page*propertiesPerPage, propertiesPerPage)
 	if err != nil {
 		return nil, err
 	}
@@ -488,6 +494,7 @@ func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Orga
 		},
 		CurrentOrg: orgToUserOrg(org, user.ID, s.IDHasher),
 		Properties: propertiesToUserProperties(ctx, properties, s.IDHasher),
+		Sort:       sort,
 	}
 
 	if len(properties) > 0 {
@@ -521,7 +528,8 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, db.ErrPermissions
 	}
 
-	renderCtx, err := s.createOrgPropertiesContext(ctx, org, user, 0 /*page*/)
+	sort := db.ParseOrgPropertiesSort(r.URL.Query().Get(common.ParamSort))
+	renderCtx, err := s.createOrgPropertiesContext(ctx, org, user, 0 /*page*/, sort)
 	if err != nil {
 		return nil, err
 	}
@@ -613,7 +621,8 @@ func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) (*View
 		}
 	}
 
-	renderCtx, err := s.createOrgPropertiesContext(ctx, org, user, page)
+	sort := db.ParseOrgPropertiesSort(r.URL.Query().Get(common.ParamSort))
+	renderCtx, err := s.createOrgPropertiesContext(ctx, org, user, page, sort)
 	if err != nil {
 		return nil, err
 	}
