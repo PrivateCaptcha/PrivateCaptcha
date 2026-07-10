@@ -189,6 +189,9 @@ func TestRenderPropertySortOptions(t *testing.T) {
 	if actual := strings.Count(body, `"page": 0`); actual < 4 {
 		t.Fatalf("expected every sort control to reset pagination, got %d controls", actual)
 	}
+	if !strings.Contains(body, "htmx.ajax('GET'") || !strings.Contains(body, "propertiesSort !== 'date_asc'") {
+		t.Fatal("expected persisted non-default sort to refresh properties on page load")
+	}
 }
 
 func TestRenderHTML(t *testing.T) {
