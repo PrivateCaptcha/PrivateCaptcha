@@ -41,7 +41,7 @@
             @click="pcTrackEvent('Previous')"
             hx-get="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertiesEndpoint }}"
             hx-target="#properties"
-            hx-vals='{"{{$.Const.Page}}": {{if gt .Params.Page 0}}{{sub .Params.Page 1}}{{else}}0{{end}}}'
+            hx-vals='{"{{$.Const.Page}}": {{if gt .Params.Page 0}}{{sub .Params.Page 1}}{{else}}0{{end}}, "{{$.Const.Sort}}": "{{.Params.Sort}}"}'
             {{if le .Params.Page 0}}disabled{{end}}
             class="pc-internal-form-button pc-internal-button-smaller {{if le .Params.Page 0}}pc-internal-form-button-disabled{{ else }}pc-internal-form-button-secondary{{ end }}">
             Previous
@@ -50,7 +50,7 @@
             @click="pcTrackEvent('Next')"
             hx-get="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertiesEndpoint }}"
             hx-target="#properties"
-            hx-vals='{"{{$.Const.Page}}": {{if lt .Params.To .Params.Count}}{{plus1 .Params.Page}}{{else}}{{.Params.Page}}{{end}}}'
+            hx-vals='{"{{$.Const.Page}}": {{if lt .Params.To .Params.Count}}{{plus1 .Params.Page}}{{else}}{{.Params.Page}}{{end}}, "{{$.Const.Sort}}": "{{.Params.Sort}}"}'
             {{if ge .Params.To .Params.Count}}disabled{{end}}
             class="ml-3 pc-internal-form-button pc-internal-button-smaller {{if ge .Params.To .Params.Count}}pc-internal-form-button-disabled{{ else }}pc-internal-form-button-secondary{{ end }}">
             Next

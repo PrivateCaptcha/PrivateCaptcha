@@ -868,7 +868,7 @@ func TestMoveForm(t *testing.T) {
 		t.Fatal("form was not moved")
 	}
 
-	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org2, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org2, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1069,7 +1069,7 @@ func TestDeleteForm(t *testing.T) {
 		t.Fatal("form should have been deleted")
 	}
 
-	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}

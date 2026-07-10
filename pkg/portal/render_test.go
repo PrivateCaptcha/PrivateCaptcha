@@ -223,6 +223,18 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{},
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertiesEndpoint},
+			template: orgPropertiesTemplate,
+			model: &orgPropertiesRenderContext{
+				PaginationRenderContext: PaginationRenderContext{From: 1, To: 1, Count: 2, Page: 0, PerPage: 30},
+				CurrentOrg:              stubOrg("123"),
+				Properties:              []*userProperty{stubProperty("Property", "123")},
+				Sort:                    db.OrgPropertiesSortNameDescending,
+			},
+			selector: "button[hx-vals*=\"name_desc\"]",
+			matches:  []string{"Previous", "Next"},
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.MembersEndpoint},
 			template: orgMembersTemplate,
 			model: &orgMemberRenderContext{

@@ -21,6 +21,19 @@
             <option value="{{ $root.Const.EventsEndpoint }}" {{ if eq $active "auditlogs" }}selected{{ end }}>Audit logs</option>
             {{ end }}
         </select>
+        {{ if and (eq $active "dashboard") $root.Params.Properties }}
+        <div class="mt-3 flex justify-end">
+            <label for="propertiesSortSelect" class="sr-only">Sort properties</label>
+            <select id="propertiesSortSelect" class="pc-internal-form-select w-auto"
+                x-model="propertiesSort"
+                x-on:change="propertiesSort = $event.target.value; htmx.ajax('GET', '{{ partsURL $root.Const.OrgEndpoint $root.Params.CurrentOrg.ID $root.Const.PropertiesEndpoint }}?{{$root.Const.Page}}=0&amp;{{$root.Const.Sort}}=' + $event.target.value, {target: '#properties', swap: 'innerHTML'})">
+                <option value="date_asc">Oldest first</option>
+                <option value="date_desc">Newest first</option>
+                <option value="name_asc">Name A-Z</option>
+                <option value="name_desc">Name Z-A</option>
+            </select>
+        </div>
+        {{ end }}
     </div>
     <div class="hidden sm:block">
         <div class="pc-tab-nav">
@@ -87,13 +100,14 @@
                 <div class="grow flex items-center justify-end gap-x-4">
                     <div class="relative">
                         <button type="button" class="pc-setup-button gap-x-1.5"
-                            @click="propertiesOptionsOpen = !propertiesOptionsOpen" id="properties-options-button" :aria-expanded="propertiesOptionsOpen" aria-haspopup="true">
+                            @click="propertiesOptionsOpen = !propertiesOptionsOpen" id="properties-options-button" x-ref="propertiesOptionsButton" :aria-expanded="propertiesOptionsOpen" aria-controls="properties-options">
                             Options
                             <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" class="-mr-1 w-5 h-5 text-pc-grey-600">
                                 <path d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" fill-rule="evenodd" />
                             </svg>
                         </button>
                         <div
+                            id="properties-options"
                             x-cloak x-show="propertiesOptionsOpen"
                             x-transition:enter="transition ease-out duration-100"
                             x-transition:enter-start="transform opacity-0 scale-95"
@@ -101,7 +115,7 @@
                             x-transition:leave="transition ease-in duration-75"
                             x-transition:leave-start="transform opacity-100 scale-100"
                             x-transition:leave-end="transform opacity-0 scale-95"
-                            class="pc-header-dropdown" role="menu" aria-orientation="vertical" aria-labelledby="properties-options-button" tabindex="-1">
+                            class="pc-header-dropdown">
                             <div class="flex gap-3 px-4 py-2">
                                 <div class="flex h-6 shrink-0 items-center">
                                     <div class="group grid size-4 grid-cols-1">
@@ -115,6 +129,27 @@
                                 <div class="text-sm/6">
                                     <label for="showSitekeysCheckbox" class="pc-checkbox-label">Show Sitekeys</label>
                                 </div>
+                            </div>
+                            <div class="px-4 py-2">
+                                <fieldset>
+                                    <legend class="text-xs font-medium uppercase tracking-wide text-pc-grey-600">Sort properties</legend>
+                                    <div class="mt-1 space-y-1">
+                                        {{ range $option := $root.Params.SortOptions }}
+                                        <div class="flex items-center gap-3 py-1">
+                                            <div class="flex size-4 shrink-0 items-center">
+                                                <input id="{{ $option.ID }}" type="radio" name="propertiesSort" value="{{ $option.Value }}" x-model="propertiesSort"
+                                                    @change="propertiesOptionsOpen = false; $nextTick(() => $refs.propertiesOptionsButton.focus())"
+                                                    hx-trigger="change"
+                                                    hx-get="{{ partsURL $root.Const.OrgEndpoint $root.Params.CurrentOrg.ID $root.Const.PropertiesEndpoint }}"
+                                                    hx-target="#properties"
+                                                    hx-vals='{"{{$root.Const.Page}}": 0, "{{$root.Const.Sort}}": "{{ $option.Value }}"}'
+                                                    class="h-4 w-4 shrink-0 border-pc-grey-250 text-pc-green focus:ring-pc-green active:ring-2 active:ring-pc-green active:ring-offset-2" />
+                                            </div>
+                                            <label for="{{ $option.ID }}" class="pc-checkbox-label">{{ $option.Label }}</label>
+                                        </div>
+                                        {{ end }}
+                                    </div>
+                                </fieldset>
                             </div>
                         </div>
                     </div>

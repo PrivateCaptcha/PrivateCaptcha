@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -365,6 +366,112 @@ func TestGetOrgProperties(t *testing.T) {
 
 	if len(renderCtx.Properties) != 1 {
 		t.Errorf("Expected 1 property, got %d", len(renderCtx.Properties))
+	}
+}
+
+func TestGetOrgPropertiesSorted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{"Zulu", "Alpha", "Middle"} {
+		params := db_tests.CreateNewPropertyParams(user.ID, strings.ToLower(name)+".example.com")
+		params.Name = name
+		if _, _, err := server.Store.Impl().CreateNewProperty(ctx, params, org); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	tests := []struct {
+		name         string
+		path         string
+		want         []string
+		wantSortVal  bool
+		wantStatus   int
+		wantLocation string
+	}{
+		{
+			name: "DashboardPage",
+			path: fmt.Sprintf("/org/%s?%s=name_desc", orgID, common.ParamSort),
+			want: []string{"Zulu", "Middle", "Alpha"},
+		},
+		{
+			name: "DashboardTab",
+			path: fmt.Sprintf("/org/%s/tab/dashboard?%s=name_asc", orgID, common.ParamSort),
+			want: []string{"Alpha", "Middle", "Zulu"},
+		},
+		{
+			name:        "PropertiesPartial",
+			path:        fmt.Sprintf("/org/%s/properties?%s=name_desc", orgID, common.ParamSort),
+			want:        []string{"Zulu", "Middle", "Alpha"},
+			wantSortVal: true,
+		},
+		{
+			name: "InvalidDefaultsToDateAscending",
+			path: fmt.Sprintf("/org/%s/properties?%s=unexpected", orgID, common.ParamSort),
+			want: []string{"Zulu", "Alpha", "Middle"},
+		},
+		{
+			name:         "PageMultiplicationOverflows",
+			path:         fmt.Sprintf("/org/%s/properties?%s=%d", orgID, common.ParamPage, math.MaxInt/15+1),
+			wantStatus:   http.StatusSeeOther,
+			wantLocation: "/error/400",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", tt.path, nil)
+			req.AddCookie(cookie)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			wantStatus := tt.wantStatus
+			if wantStatus == 0 {
+				wantStatus = http.StatusOK
+			}
+			if w.Code != wantStatus {
+				t.Fatalf("expected status %d, got %d", wantStatus, w.Code)
+			}
+			if wantStatus != http.StatusOK {
+				if tt.wantLocation != "" && w.Header().Get("Location") != tt.wantLocation {
+					t.Fatalf("expected redirect to %q, got %q", tt.wantLocation, w.Header().Get("Location"))
+				}
+				return
+			}
+
+			body := w.Body.String()
+			previousIndex := -1
+			for _, name := range tt.want {
+				index := strings.Index(body, name)
+				if index == -1 {
+					t.Fatalf("expected body to contain %q", name)
+				}
+				if index < previousIndex {
+					t.Fatalf("expected %q after the previous property", name)
+				}
+				previousIndex = index
+			}
+			if tt.wantSortVal && !strings.Contains(body, `"sort": "name_desc"`) {
+				t.Fatal("expected pagination to preserve the selected sort")
+			}
+		})
 	}
 }
 

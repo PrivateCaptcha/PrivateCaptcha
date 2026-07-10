@@ -56,6 +56,7 @@ const (
 	ParamMaxReplayCount         = "max_replay_count"
 	ParamPage                   = "page"
 	ParamPerPage                = "per_page"
+	ParamSort                   = "sort"
 	ParamScope                  = "scope"
 	ParamEnabled                = "enabled"
 	ParamActive                 = "active"

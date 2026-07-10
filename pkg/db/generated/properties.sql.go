@@ -83,23 +83,188 @@ func (q *Queries) DeleteProperties(ctx context.Context, dollar_1 []int32) (int64
 	return result.RowsAffected(), nil
 }
 
-const getOrgProperties = `-- name: GetOrgProperties :many
+const getOrgPropertiesByDateAscending = `-- name: GetOrgPropertiesByDateAscending :many
 SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, show_notice
 FROM backend.properties
 WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
-ORDER BY created_at
+ORDER BY created_at ASC, id ASC
 OFFSET $2
 LIMIT $3
 `
 
-type GetOrgPropertiesParams struct {
+type GetOrgPropertiesByDateAscendingParams struct {
 	OrgID  pgtype.Int4 `db:"org_id" json:"org_id"`
 	Offset int32       `db:"offset" json:"offset"`
 	Limit  int32       `db:"limit" json:"limit"`
 }
 
-func (q *Queries) GetOrgProperties(ctx context.Context, arg *GetOrgPropertiesParams) ([]*Property, error) {
-	rows, err := q.db.Query(ctx, getOrgProperties, arg.OrgID, arg.Offset, arg.Limit)
+func (q *Queries) GetOrgPropertiesByDateAscending(ctx context.Context, arg *GetOrgPropertiesByDateAscendingParams) ([]*Property, error) {
+	rows, err := q.db.Query(ctx, getOrgPropertiesByDateAscending, arg.OrgID, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*Property
+	for rows.Next() {
+		var i Property
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.ExternalID,
+			&i.OrgID,
+			&i.CreatorID,
+			&i.OrgOwnerID,
+			&i.Domain,
+			&i.Level,
+			&i.Salt,
+			&i.Growth,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.ValidityInterval,
+			&i.AllowSubdomains,
+			&i.AllowLocalhost,
+			&i.MaxReplayCount,
+			&i.Enabled,
+			&i.ShowNotice,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOrgPropertiesByDateDescending = `-- name: GetOrgPropertiesByDateDescending :many
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, show_notice
+FROM backend.properties
+WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
+ORDER BY created_at DESC, id DESC
+OFFSET $2
+LIMIT $3
+`
+
+type GetOrgPropertiesByDateDescendingParams struct {
+	OrgID  pgtype.Int4 `db:"org_id" json:"org_id"`
+	Offset int32       `db:"offset" json:"offset"`
+	Limit  int32       `db:"limit" json:"limit"`
+}
+
+func (q *Queries) GetOrgPropertiesByDateDescending(ctx context.Context, arg *GetOrgPropertiesByDateDescendingParams) ([]*Property, error) {
+	rows, err := q.db.Query(ctx, getOrgPropertiesByDateDescending, arg.OrgID, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*Property
+	for rows.Next() {
+		var i Property
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.ExternalID,
+			&i.OrgID,
+			&i.CreatorID,
+			&i.OrgOwnerID,
+			&i.Domain,
+			&i.Level,
+			&i.Salt,
+			&i.Growth,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.ValidityInterval,
+			&i.AllowSubdomains,
+			&i.AllowLocalhost,
+			&i.MaxReplayCount,
+			&i.Enabled,
+			&i.ShowNotice,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOrgPropertiesByNameAscending = `-- name: GetOrgPropertiesByNameAscending :many
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, show_notice
+FROM backend.properties
+WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
+ORDER BY name ASC, id ASC
+OFFSET $2
+LIMIT $3
+`
+
+type GetOrgPropertiesByNameAscendingParams struct {
+	OrgID  pgtype.Int4 `db:"org_id" json:"org_id"`
+	Offset int32       `db:"offset" json:"offset"`
+	Limit  int32       `db:"limit" json:"limit"`
+}
+
+func (q *Queries) GetOrgPropertiesByNameAscending(ctx context.Context, arg *GetOrgPropertiesByNameAscendingParams) ([]*Property, error) {
+	rows, err := q.db.Query(ctx, getOrgPropertiesByNameAscending, arg.OrgID, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*Property
+	for rows.Next() {
+		var i Property
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.ExternalID,
+			&i.OrgID,
+			&i.CreatorID,
+			&i.OrgOwnerID,
+			&i.Domain,
+			&i.Level,
+			&i.Salt,
+			&i.Growth,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.ValidityInterval,
+			&i.AllowSubdomains,
+			&i.AllowLocalhost,
+			&i.MaxReplayCount,
+			&i.Enabled,
+			&i.ShowNotice,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOrgPropertiesByNameDescending = `-- name: GetOrgPropertiesByNameDescending :many
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, show_notice
+FROM backend.properties
+WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
+ORDER BY name DESC, id DESC
+OFFSET $2
+LIMIT $3
+`
+
+type GetOrgPropertiesByNameDescendingParams struct {
+	OrgID  pgtype.Int4 `db:"org_id" json:"org_id"`
+	Offset int32       `db:"offset" json:"offset"`
+	Limit  int32       `db:"limit" json:"limit"`
+}
+
+func (q *Queries) GetOrgPropertiesByNameDescending(ctx context.Context, arg *GetOrgPropertiesByNameDescendingParams) ([]*Property, error) {
+	rows, err := q.db.Query(ctx, getOrgPropertiesByNameDescending, arg.OrgID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}

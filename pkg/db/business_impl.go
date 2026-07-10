@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -29,12 +30,50 @@ const (
 	asyncTaskTTL             = 1 * time.Minute
 	SubscriptionRefresh      = 10 * time.Minute
 	MaxOrgPropertiesPageSize = 50
-	orgPropertiesCacheKeyStr = "0" // "0" as in "first page"
 	orgFormsCacheKeyStr      = "0"
 	maxPropertyNameLength    = 255
 	formPropertyNameSuffix   = " (form)"
 	MaxFormURLLength         = 1024
 )
+
+type OrgPropertiesSort string
+
+const (
+	OrgPropertiesSortDateAscending  OrgPropertiesSort = "date_asc"
+	OrgPropertiesSortDateDescending OrgPropertiesSort = "date_desc"
+	OrgPropertiesSortNameAscending  OrgPropertiesSort = "name_asc"
+	OrgPropertiesSortNameDescending OrgPropertiesSort = "name_desc"
+)
+
+var orgPropertiesSorts = [...]OrgPropertiesSort{
+	OrgPropertiesSortDateAscending,
+	OrgPropertiesSortDateDescending,
+	OrgPropertiesSortNameAscending,
+	OrgPropertiesSortNameDescending,
+}
+
+func ParseOrgPropertiesSort(value string) OrgPropertiesSort {
+	sort := OrgPropertiesSort(value)
+	switch sort {
+	case OrgPropertiesSortDateAscending,
+		OrgPropertiesSortDateDescending,
+		OrgPropertiesSortNameAscending,
+		OrgPropertiesSortNameDescending:
+		return sort
+	default:
+		return OrgPropertiesSortDateAscending
+	}
+}
+
+func orgPropertiesCacheKey(orgID int32, sort OrgPropertiesSort) CacheKey {
+	return OrgPropertiesCacheKey(orgID, string(sort))
+}
+
+func (impl *BusinessStoreImpl) invalidateOrgPropertiesCache(ctx context.Context, orgID int32) {
+	for _, sort := range orgPropertiesSorts {
+		_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(orgID, sort))
+	}
+}
 
 var (
 	errTransactionCache     = errors.New("cache is not supported during transaction")
@@ -367,7 +406,7 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 	if orgs, err := FetchCachedArray[dbgen.GetUserOrganizationsRow](ctx, impl.cache, userOrgsCacheKey); err == nil {
 		for _, org := range orgs {
 			_ = impl.cache.Delete(ctx, orgCacheKey(org.Organization.ID))
-			_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(org.Organization.ID, orgPropertiesCacheKeyStr))
+			impl.invalidateOrgPropertiesCache(ctx, org.Organization.ID)
 		}
 		_ = impl.cache.Delete(ctx, userOrgsCacheKey)
 	}
@@ -1037,14 +1076,14 @@ func (impl *BusinessStoreImpl) InvalidatePropertyCache(ctx context.Context, prop
 		return
 	}
 
-	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(property.OrgID.Int32, orgPropertiesCacheKeyStr))
+	impl.invalidateOrgPropertiesCache(ctx, property.OrgID.Int32)
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(property.OrgID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.CreatorID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
 }
 
 func (impl *BusinessStoreImpl) GetCachedOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
-	return FetchCachedArray[dbgen.Property](ctx, impl.cache, OrgPropertiesCacheKey(orgID, orgPropertiesCacheKeyStr))
+	return FetchCachedArray[dbgen.Property](ctx, impl.cache, orgPropertiesCacheKey(orgID, OrgPropertiesSortDateAscending))
 }
 
 func (impl *BusinessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, propID int32) (*dbgen.Property, error) {
@@ -1056,7 +1095,7 @@ func (impl *BusinessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, p
 		return nil, ErrNegativeCacheHit
 	}
 
-	if properties, err := FetchCachedArray[dbgen.Property](ctx, impl.cache, OrgPropertiesCacheKey(orgID, orgPropertiesCacheKeyStr)); err == nil {
+	if properties, err := FetchCachedArray[dbgen.Property](ctx, impl.cache, orgPropertiesCacheKey(orgID, OrgPropertiesSortDateAscending)); err == nil {
 		if index := slices.IndexFunc(properties, func(p *dbgen.Property) bool { return p.ID == propID }); index != -1 {
 			property := properties[index]
 			impl.cacheProperty(ctx, property)
@@ -1206,7 +1245,7 @@ func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *db
 
 	impl.cacheProperty(ctx, property)
 	// invalidate org properties in cache as we just created a new property
-	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(params.OrgID.Int32, orgPropertiesCacheKeyStr))
+	impl.invalidateOrgPropertiesCache(ctx, params.OrgID.Int32)
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.CreatorID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(property.OrgID.Int32))
@@ -1424,8 +1463,8 @@ func (impl *BusinessStoreImpl) MoveForm(ctx context.Context, user *dbgen.User, f
 	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(updatedForm.OrgID.Int32, orgFormsCacheKeyStr))
 	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(oldOrgID))
 	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(updatedForm.OrgID.Int32))
-	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(oldOrgID, orgPropertiesCacheKeyStr))
-	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(updatedProperty.OrgID.Int32, orgPropertiesCacheKeyStr))
+	impl.invalidateOrgPropertiesCache(ctx, oldOrgID)
+	impl.invalidateOrgPropertiesCache(ctx, updatedProperty.OrgID.Int32)
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(oldOrgID))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(updatedProperty.OrgID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
@@ -1511,7 +1550,7 @@ func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Or
 	cacheProperty := createPropertyFromUpdate(updatedProperty)
 	impl.cacheProperty(ctx, cacheProperty)
 	// invalidate org properties in cache as we just created a new property
-	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(updatedProperty.OrgID.Int32, orgPropertiesCacheKeyStr))
+	impl.invalidateOrgPropertiesCache(ctx, updatedProperty.OrgID.Int32)
 	_ = impl.cache.Delete(ctx, propertyAuditLogsCacheKey(updatedProperty.ID))
 
 	auditEvent := newUpdatePropertyAuditLogEvent(cacheProperty, updatedProperty, org, user)
@@ -1611,27 +1650,65 @@ func (impl *BusinessStoreImpl) SoftDeleteProperties(ctx context.Context, ids []i
 	return deletedIDs, auditEvents, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveOrgProperties(ctx context.Context, org *dbgen.Organization, offset, limit int) ([]*dbgen.Property, bool, error) {
-	if (offset < 0) || (limit <= 0) {
+type orgPropertiesQueryParams struct {
+	OrgID  int32
+	Offset int32
+	Limit  int32
+	Sort   OrgPropertiesSort
+}
+
+func (impl *BusinessStoreImpl) queryOrgProperties(ctx context.Context, params *orgPropertiesQueryParams) ([]*dbgen.Property, error) {
+	switch params.Sort {
+	case OrgPropertiesSortDateDescending:
+		return impl.querier.GetOrgPropertiesByDateDescending(ctx, &dbgen.GetOrgPropertiesByDateDescendingParams{
+			OrgID:  Int(params.OrgID),
+			Offset: params.Offset,
+			Limit:  params.Limit,
+		})
+	case OrgPropertiesSortNameAscending:
+		return impl.querier.GetOrgPropertiesByNameAscending(ctx, &dbgen.GetOrgPropertiesByNameAscendingParams{
+			OrgID:  Int(params.OrgID),
+			Offset: params.Offset,
+			Limit:  params.Limit,
+		})
+	case OrgPropertiesSortNameDescending:
+		return impl.querier.GetOrgPropertiesByNameDescending(ctx, &dbgen.GetOrgPropertiesByNameDescendingParams{
+			OrgID:  Int(params.OrgID),
+			Offset: params.Offset,
+			Limit:  params.Limit,
+		})
+	default:
+		return impl.querier.GetOrgPropertiesByDateAscending(ctx, &dbgen.GetOrgPropertiesByDateAscendingParams{
+			OrgID:  Int(params.OrgID),
+			Offset: params.Offset,
+			Limit:  params.Limit,
+		})
+	}
+}
+
+func (impl *BusinessStoreImpl) RetrieveOrgProperties(ctx context.Context, org *dbgen.Organization, sort OrgPropertiesSort, offset, limit int) ([]*dbgen.Property, bool, error) {
+	if (offset < 0) || (offset > math.MaxInt32) || (limit <= 0) {
 		return nil, false, ErrInvalidInput
 	}
 
-	params := &dbgen.GetOrgPropertiesParams{
-		OrgID:  Int(org.ID),
+	sort = ParseOrgPropertiesSort(string(sort))
+	params := &orgPropertiesQueryParams{
+		OrgID:  org.ID,
 		Offset: int32(offset),
 		Limit:  MaxOrgPropertiesPageSize + 1,
+		Sort:   sort,
 	}
 
 	if offset == 0 {
-		reader := &StoreArrayReader[*dbgen.GetOrgPropertiesParams, dbgen.Property]{
-			CacheKey:    OrgPropertiesCacheKey(org.ID, orgPropertiesCacheKeyStr),
+		reader := &StoreArrayReader[*orgPropertiesQueryParams, dbgen.Property]{
+			CacheKey:    orgPropertiesCacheKey(org.ID, sort),
 			Cache:       impl.cache,
 			DropInvalid: true,
 		}
 
 		if impl.querier != nil {
-			reader.QueryKeyFunc = func(ck CacheKey) (*dbgen.GetOrgPropertiesParams, error) { return params, nil }
-			reader.QueryFunc = impl.querier.GetOrgProperties
+			reader.QueryKeyFunc = func(CacheKey) (*orgPropertiesQueryParams, error) { return params, nil }
+			reader.QueryFunc = impl.queryOrgProperties
 		}
 
 		properties, err := reader.Read(ctx)
@@ -1651,19 +1728,23 @@ func (impl *BusinessStoreImpl) RetrieveOrgProperties(ctx context.Context, org *d
 	actualLimit := min(MaxOrgPropertiesPageSize, limit)
 	params.Limit = int32(actualLimit) + 1
 
-	properties, err := impl.querier.GetOrgProperties(ctx, params)
+	properties, err := impl.queryOrgProperties(ctx, params)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve org properties", "offset", offset, "limit", actualLimit, "orgID", org.ID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to retrieve org properties", "sort", sort, "offset", offset, "limit", actualLimit, "orgID", org.ID, common.ErrAttr(err))
 		return nil, false, err
 	}
 
-	slog.DebugContext(ctx, "Retrieved org properties", "offset", offset, "limit", actualLimit, "orgID", org.ID, "count", len(properties))
+	slog.DebugContext(ctx, "Retrieved org properties", "sort", sort, "offset", offset, "limit", actualLimit, "orgID", org.ID, "count", len(properties))
 
 	return properties[:min(len(properties), actualLimit)], len(properties) == int(params.Limit), nil
 }
 
+func (impl *BusinessStoreImpl) RetrieveOrgPropertiesByDateAscending(ctx context.Context, org *dbgen.Organization, offset, limit int) ([]*dbgen.Property, bool, error) {
+	return impl.RetrieveOrgProperties(ctx, org, OrgPropertiesSortDateAscending, offset, limit)
+}
+
 func (impl *BusinessStoreImpl) RetrieveOrgForms(ctx context.Context, org *dbgen.Organization, offset, limit int) ([]*dbgen.Form, bool, error) {
-	if (offset < 0) || (limit <= 0) {
+	if (offset < 0) || (offset > math.MaxInt32) || (limit <= 0) {
 		return nil, false, ErrInvalidInput
 	}
 
@@ -3188,8 +3269,8 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 	slog.InfoContext(ctx, "Moved property to another org", "propID", property.ID, "oldOrgID", property.OrgID.Int32, "newOrgID", org.Organization.ID)
 
 	// Invalidate cache for both old and new organizations
-	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(oldOrgID, orgPropertiesCacheKeyStr))
-	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(updatedProperty.OrgID.Int32, orgPropertiesCacheKeyStr))
+	impl.invalidateOrgPropertiesCache(ctx, oldOrgID)
+	impl.invalidateOrgPropertiesCache(ctx, updatedProperty.OrgID.Int32)
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(oldOrgID))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(updatedProperty.OrgID.Int32))
 	// and cache property
@@ -3269,7 +3350,7 @@ func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *d
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(newOwner.ID))
 	_ = impl.cache.Delete(ctx, orgCacheKey(org.ID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
-	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(org.ID, orgPropertiesCacheKeyStr))
+	impl.invalidateOrgPropertiesCache(ctx, org.ID)
 	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(org.ID, orgFormsCacheKeyStr))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(user.ID))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(newOwner.ID))
