@@ -36,6 +36,28 @@ const (
 	MaxFormURLLength         = 1024
 )
 
+type OrgPropertiesSort string
+
+const (
+	OrgPropertiesSortDateAscending  OrgPropertiesSort = "date_asc"
+	OrgPropertiesSortDateDescending OrgPropertiesSort = "date_desc"
+	OrgPropertiesSortNameAscending  OrgPropertiesSort = "name_asc"
+	OrgPropertiesSortNameDescending OrgPropertiesSort = "name_desc"
+)
+
+func ParseOrgPropertiesSort(value string) OrgPropertiesSort {
+	sort := OrgPropertiesSort(value)
+	switch sort {
+	case OrgPropertiesSortDateAscending,
+		OrgPropertiesSortDateDescending,
+		OrgPropertiesSortNameAscending,
+		OrgPropertiesSortNameDescending:
+		return sort
+	default:
+		return OrgPropertiesSortDateAscending
+	}
+}
+
 var (
 	errTransactionCache     = errors.New("cache is not supported during transaction")
 	errRulesNeedRebalancing = errors.New("rules need rebalancing")
@@ -1611,7 +1633,7 @@ func (impl *BusinessStoreImpl) SoftDeleteProperties(ctx context.Context, ids []i
 	return deletedIDs, auditEvents, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveOrgProperties(ctx context.Context, org *dbgen.Organization, offset, limit int) ([]*dbgen.Property, bool, error) {
+func (impl *BusinessStoreImpl) RetrieveOrgPropertiesByDateAscending(ctx context.Context, org *dbgen.Organization, offset, limit int) ([]*dbgen.Property, bool, error) {
 	if (offset < 0) || (limit <= 0) {
 		return nil, false, ErrInvalidInput
 	}

@@ -239,7 +239,7 @@ func TestPostNewOrgProperty(t *testing.T) {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
 
-	pp, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	pp, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestMoveProperty(t *testing.T) {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
 
-	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org2, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org2, 0, db.MaxOrgPropertiesPageSize)
 	if len(properties) != 1 || properties[0].ID != property.ID {
 		t.Errorf("Property was not moved")
 	}
@@ -336,7 +336,7 @@ func TestRetrieveProperties(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("properties_offset_%v_count_%v", tc.offset, tc.count), func(t *testing.T) {
-			properties, hasMore, err := server.Store.Impl().RetrieveOrgProperties(ctx, org, tc.offset, tc.count)
+			properties, hasMore, err := server.Store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, tc.offset, tc.count)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -960,7 +960,7 @@ func TestDeleteProperty(t *testing.T) {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
 
-	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1624,7 +1624,7 @@ func runOrgMemberPropertyCreationPortalTest(t *testing.T, memberSubscrParams *db
 	}
 
 	// Step 6: Verify properties were created by the member
-	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2092,7 +2092,7 @@ func TestDeletePropertyAttachedToFormFailsGracefully(t *testing.T) {
 		t.Errorf("Expected 409 Conflict for attached property delete, got %d", w.Code)
 	}
 
-	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2149,7 +2149,7 @@ func TestMovePropertyAttachedToFormFailsGracefully(t *testing.T) {
 		t.Errorf("Expected 409 Conflict for attached property move, got %d", w.Code)
 	}
 
-	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org1, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org1, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}

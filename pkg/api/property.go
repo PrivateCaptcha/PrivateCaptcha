@@ -969,7 +969,7 @@ func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	properties, hasMore, err := s.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, offset, validatedPerPage)
+	properties, hasMore, err := s.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, offset, validatedPerPage)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org properties", common.ErrAttr(err))
 		s.sendHTTPErrorResponse(err, w)

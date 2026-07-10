@@ -105,6 +105,29 @@ func setupTestStore(t *testing.T, expectedErr error) *BusinessStoreImpl {
 	}
 }
 
+func TestParseOrgPropertiesSort(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  OrgPropertiesSort
+	}{
+		{name: "DateAscending", value: "date_asc", want: OrgPropertiesSortDateAscending},
+		{name: "DateDescending", value: "date_desc", want: OrgPropertiesSortDateDescending},
+		{name: "NameAscending", value: "name_asc", want: OrgPropertiesSortNameAscending},
+		{name: "NameDescending", value: "name_desc", want: OrgPropertiesSortNameDescending},
+		{name: "MissingDefaultsToDateAscending", want: OrgPropertiesSortDateAscending},
+		{name: "InvalidDefaultsToDateAscending", value: "unexpected", want: OrgPropertiesSortDateAscending},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if actual := ParseOrgPropertiesSort(tt.value); actual != tt.want {
+				t.Errorf("ParseOrgPropertiesSort(%q) = %q, want %q", tt.value, actual, tt.want)
+			}
+		})
+	}
+}
+
 func TestBusinessStoreImplRetrieveFromCache(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
@@ -1005,10 +1028,10 @@ func TestBusinessStoreImplSoftDeleteProperties(t *testing.T) {
 	})
 }
 
-func TestBusinessStoreImplRetrieveOrgProperties(t *testing.T) {
+func TestBusinessStoreImplRetrieveOrgPropertiesByDateAscending(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
-		_, _, err := store.RetrieveOrgProperties(context.Background(), &dbgen.Organization{ID: 1}, 1, 1)
+		_, _, err := store.RetrieveOrgPropertiesByDateAscending(context.Background(), &dbgen.Organization{ID: 1}, 1, 1)
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}
@@ -1017,7 +1040,7 @@ func TestBusinessStoreImplRetrieveOrgProperties(t *testing.T) {
 	t.Run("GenericError", func(t *testing.T) {
 		expectedErr := errors.New("db error")
 		store := setupTestStore(t, expectedErr)
-		_, _, err := store.RetrieveOrgProperties(context.Background(), &dbgen.Organization{ID: 1}, 1, 1)
+		_, _, err := store.RetrieveOrgPropertiesByDateAscending(context.Background(), &dbgen.Organization{ID: 1}, 1, 1)
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}
@@ -1025,7 +1048,7 @@ func TestBusinessStoreImplRetrieveOrgProperties(t *testing.T) {
 
 	t.Run("InvalidInput", func(t *testing.T) {
 		store := setupTestStore(t, nil)
-		_, _, err := store.RetrieveOrgProperties(context.Background(), &dbgen.Organization{}, 0, 0)
+		_, _, err := store.RetrieveOrgPropertiesByDateAscending(context.Background(), &dbgen.Organization{}, 0, 0)
 		if !errors.Is(err, ErrInvalidInput) {
 			t.Errorf("expected ErrInvalidInput, got %v", err)
 		}

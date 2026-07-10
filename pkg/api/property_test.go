@@ -252,7 +252,7 @@ func TestApiPostProperties(t *testing.T) {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
-	properties, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +328,7 @@ func TestApiPostPropertiesEmptyDomain(t *testing.T) {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
-	properties, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -566,7 +566,7 @@ func TestApiDeleteProperties(t *testing.T) {
 	}
 
 	// Verify P1 deleted
-	props1, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org1, 0, db.MaxOrgPropertiesPageSize)
+	props1, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org1, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -589,7 +589,7 @@ func TestApiDeleteProperties(t *testing.T) {
 	}
 
 	// Verify P2 deleted
-	props2, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org2, 0, db.MaxOrgPropertiesPageSize)
+	props2, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org2, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2017,7 +2017,7 @@ func runOrgMemberPropertyCreationTest(t *testing.T, memberSubscrParams *dbgen.Cr
 	}
 
 	// Step 7: Verify properties were created by the member
-	properties, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}

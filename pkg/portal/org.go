@@ -285,7 +285,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, baseCtx *portalB
 		return renderCtx, nil
 	}
 
-	if properties, hasMore, err := s.Store.Impl().RetrieveOrgProperties(ctx, org, 0 /*offset*/, propertiesPerPage); err == nil {
+	if properties, hasMore, err := s.Store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0 /*offset*/, propertiesPerPage); err == nil {
 		renderCtx.Properties = propertiesToUserProperties(ctx, properties, s.IDHasher)
 
 		renderCtx.PaginationRenderContext = PaginationRenderContext{
@@ -474,7 +474,7 @@ func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Orga
 		page = 0
 	}
 
-	properties, hasMore, err := s.Store.Impl().RetrieveOrgProperties(ctx, org, page*propertiesPerPage, propertiesPerPage)
+	properties, hasMore, err := s.Store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, page*propertiesPerPage, propertiesPerPage)
 	if err != nil {
 		return nil, err
 	}
