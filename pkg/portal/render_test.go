@@ -181,6 +181,9 @@ func TestRenderPropertySortOptions(t *testing.T) {
 			t.Fatalf("expected sort option %q", label)
 		}
 	}
+	if !strings.Contains(body, `id="propertiesSortSelect"`) {
+		t.Fatal("expected mobile property sort selector")
+	}
 	for _, sort := range []string{"date_asc", "date_desc", "name_asc", "name_desc"} {
 		if !strings.Contains(body, `"sort": "`+sort+`"`) {
 			t.Fatalf("expected %s sort request value", sort)
