@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"slices"
 	"strconv"
@@ -50,6 +51,7 @@ type portalBaseRenderContext struct {
 	SystemNotificationContext
 	Orgs           []*UserOrg
 	CurrentOrg     *UserOrg
+	SortOptions    []orgPropertiesSortOption
 	Tab            int
 	CanEdit        bool
 	ShowOnboarding bool
@@ -99,11 +101,25 @@ type UserOrg struct {
 	Level string
 }
 
+type orgPropertiesSortOption struct {
+	Value db.OrgPropertiesSort
+	Label string
+	ID    string
+}
+
+var orgPropertiesSortOptions = []orgPropertiesSortOption{
+	{Value: db.OrgPropertiesSortDateAscending, Label: "Oldest first", ID: "sortPropertiesDateAscending"},
+	{Value: db.OrgPropertiesSortDateDescending, Label: "Newest first", ID: "sortPropertiesDateDescending"},
+	{Value: db.OrgPropertiesSortNameAscending, Label: "Name A-Z", ID: "sortPropertiesNameAscending"},
+	{Value: db.OrgPropertiesSortNameDescending, Label: "Name Z-A", ID: "sortPropertiesNameDescending"},
+}
+
 type orgDashboardRenderContext struct {
 	portalBaseRenderContext
 	PaginationRenderContext
 	// shortened from CurrentOrgProperties for simplicity
 	Properties []*userProperty
+	Sort       db.OrgPropertiesSort
 }
 
 type orgWizardRenderContext struct {
@@ -203,6 +219,7 @@ func (s *Server) createPortalTabBaseContext(org *dbgen.Organization, user *dbgen
 		CsrfRenderContext:         s.CreateCsrfContext(user),
 		SystemNotificationContext: SystemNotificationContext{},
 		CurrentOrg:                orgToUserOrg(org, user.ID, s.IDHasher),
+		SortOptions:               orgPropertiesSortOptions,
 		Tab:                       tab,
 		CanEdit:                   org.UserID.Int32 == user.ID,
 	}
@@ -245,6 +262,7 @@ func (s *Server) createPortalBaseContext(ctx context.Context, orgID int32, sess 
 		SystemNotificationContext: s.createSystemNotificationContext(ctx, sess),
 		Orgs:                      orgsToUserOrgs(orgs, s.IDHasher),
 		CurrentOrg:                stubUserOrg,
+		SortOptions:               orgPropertiesSortOptions,
 		Tab:                       tab,
 	}
 
@@ -273,19 +291,21 @@ func (s *Server) createPortalBaseContext(ctx context.Context, orgID int32, sess 
 	return renderCtx, org, nil
 }
 
-func (s *Server) createOrgDashboardContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization) (*orgDashboardRenderContext, error) {
+func (s *Server) createOrgDashboardContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, sort db.OrgPropertiesSort) (*orgDashboardRenderContext, error) {
 	baseCtx.Tab = portalPropertiesTabIndex
+	sort = db.ParseOrgPropertiesSort(string(sort))
 
 	renderCtx := &orgDashboardRenderContext{
 		portalBaseRenderContext: *baseCtx,
 		Properties:              []*userProperty{},
+		Sort:                    sort,
 	}
 
 	if baseCtx.CurrentOrg.Level == string(dbgen.AccessLevelInvited) {
 		return renderCtx, nil
 	}
 
-	if properties, hasMore, err := s.Store.Impl().RetrieveOrgProperties(ctx, org, 0 /*offset*/, propertiesPerPage); err == nil {
+	if properties, hasMore, err := s.Store.Impl().RetrieveOrgProperties(ctx, org, sort, 0 /*offset*/, propertiesPerPage); err == nil {
 		renderCtx.Properties = propertiesToUserProperties(ctx, properties, s.IDHasher)
 
 		renderCtx.PaginationRenderContext = PaginationRenderContext{
@@ -301,6 +321,8 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, baseCtx *portalB
 				renderCtx.Count = int(count)
 			}
 		}
+	} else {
+		return renderCtx, err
 	}
 
 	return renderCtx, nil
@@ -311,6 +333,10 @@ func (s *Server) createOrgFormsRenderContext(ctx context.Context, baseCtx *porta
 	if page < 0 {
 		page = 0
 	}
+	if page > math.MaxInt32/propertiesPerPage {
+		return nil, db.ErrInvalidInput
+	}
+	offset := page * propertiesPerPage
 
 	renderCtx := &orgFormsRenderContext{
 		portalBaseRenderContext: *baseCtx,
@@ -321,7 +347,7 @@ func (s *Server) createOrgFormsRenderContext(ctx context.Context, baseCtx *porta
 		return renderCtx, nil
 	}
 
-	forms, hasMore, err := s.Store.Impl().RetrieveOrgForms(ctx, org, page*propertiesPerPage, propertiesPerPage)
+	forms, hasMore, err := s.Store.Impl().RetrieveOrgForms(ctx, org, offset, propertiesPerPage)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +360,7 @@ func (s *Server) createOrgFormsRenderContext(ctx context.Context, baseCtx *porta
 	}
 
 	if len(renderCtx.Forms) > 0 {
-		from := 1 + page*propertiesPerPage
+		from := 1 + offset
 		renderCtx.From = from
 		renderCtx.To = from + len(renderCtx.Forms) - 1
 	}
@@ -377,6 +403,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tabParam := r.URL.Query().Get(common.ParamTab)
+	propertySort := db.ParseOrgPropertiesSort(r.URL.Query().Get(common.ParamSort))
 	slog.Log(ctx, common.LevelTrace, "Portal tab was requested", "tab", tabParam)
 
 	var baseCtx *portalBaseRenderContext
@@ -393,6 +420,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 			s.render(w, r, portalTemplate, &orgDashboardRenderContext{
 				portalBaseRenderContext: *baseCtx,
 				Properties:              []*userProperty{},
+				Sort:                    propertySort,
 			}, true /*new*/)
 			return
 		}
@@ -446,7 +474,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		if (tabParam != "") && (tabParam != common.DashboardEndpoint) {
 			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
 		}
-		if vm, err := s.createOrgDashboardContext(ctx, baseCtx, org); err == nil {
+		if vm, err := s.createOrgDashboardContext(ctx, baseCtx, org, propertySort); err == nil {
 			if _, ok := sess.Get(ctx, session.KeyFirstSession).(bool); ok {
 				onboardingParam := r.URL.Query().Get(common.ParamOnboarding)
 				vm.ShowOnboarding = common.ParseBoolean(onboardingParam)
@@ -469,12 +497,17 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, portalTemplate, model, true /*new*/)
 }
 
-func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User, page int) (*orgPropertiesRenderContext, error) {
+func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User, page int, sort db.OrgPropertiesSort) (*orgPropertiesRenderContext, error) {
 	if page < 0 {
 		page = 0
 	}
+	sort = db.ParseOrgPropertiesSort(string(sort))
+	if page > math.MaxInt32/propertiesPerPage {
+		return nil, db.ErrInvalidInput
+	}
+	offset := page * propertiesPerPage
 
-	properties, hasMore, err := s.Store.Impl().RetrieveOrgProperties(ctx, org, page*propertiesPerPage, propertiesPerPage)
+	properties, hasMore, err := s.Store.Impl().RetrieveOrgProperties(ctx, org, sort, offset, propertiesPerPage)
 	if err != nil {
 		return nil, err
 	}
@@ -486,12 +519,14 @@ func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Orga
 			Page:    page,
 			PerPage: propertiesPerPage,
 		},
-		CurrentOrg: orgToUserOrg(org, user.ID, s.IDHasher),
-		Properties: propertiesToUserProperties(ctx, properties, s.IDHasher),
+		CurrentOrg:  orgToUserOrg(org, user.ID, s.IDHasher),
+		Properties:  propertiesToUserProperties(ctx, properties, s.IDHasher),
+		Sort:        sort,
+		SortOptions: orgPropertiesSortOptions,
 	}
 
 	if len(properties) > 0 {
-		from := 1 + page*propertiesPerPage
+		from := 1 + offset
 		renderCtx.From = from
 		renderCtx.To = from + len(properties) - 1
 	}
@@ -521,7 +556,8 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, db.ErrPermissions
 	}
 
-	renderCtx, err := s.createOrgPropertiesContext(ctx, org, user, 0 /*page*/)
+	sort := db.ParseOrgPropertiesSort(r.URL.Query().Get(common.ParamSort))
+	renderCtx, err := s.createOrgPropertiesContext(ctx, org, user, 0 /*page*/, sort)
 	if err != nil {
 		return nil, err
 	}
@@ -613,7 +649,8 @@ func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) (*View
 		}
 	}
 
-	renderCtx, err := s.createOrgPropertiesContext(ctx, org, user, page)
+	sort := db.ParseOrgPropertiesSort(r.URL.Query().Get(common.ParamSort))
+	renderCtx, err := s.createOrgPropertiesContext(ctx, org, user, page, sort)
 	if err != nil {
 		return nil, err
 	}

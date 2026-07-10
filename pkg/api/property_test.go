@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -252,7 +253,7 @@ func TestApiPostProperties(t *testing.T) {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
-	properties, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +329,7 @@ func TestApiPostPropertiesEmptyDomain(t *testing.T) {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
-	properties, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -566,7 +567,7 @@ func TestApiDeleteProperties(t *testing.T) {
 	}
 
 	// Verify P1 deleted
-	props1, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org1, 0, db.MaxOrgPropertiesPageSize)
+	props1, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org1, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -589,7 +590,7 @@ func TestApiDeleteProperties(t *testing.T) {
 	}
 
 	// Verify P2 deleted
-	props2, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org2, 0, db.MaxOrgPropertiesPageSize)
+	props2, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org2, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -769,6 +770,83 @@ func TestApiGetProperties(t *testing.T) {
 
 	if actual := len(properties); actual != db.MaxOrgPropertiesPageSize/2-1 {
 		t.Fatalf("Unexpected number of properties: %v", actual)
+	}
+}
+
+func TestApiGetPropertiesSorted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{"Zulu", "Alpha", "Middle"} {
+		params := db_tests.CreateNewPropertyParams(user.ID, name+".example.com")
+		params.Name = name
+		if _, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, params, org); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	endpoint := fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint)
+	tests := []struct {
+		name string
+		sort string
+		want []string
+	}{
+		{name: "DefaultDateAscending", want: []string{"Zulu", "Alpha", "Middle"}},
+		{name: "DateDescending", sort: "date_desc", want: []string{"Middle", "Alpha", "Zulu"}},
+		{name: "NameAscending", sort: "name_asc", want: []string{"Alpha", "Middle", "Zulu"}},
+		{name: "NameDescending", sort: "name_desc", want: []string{"Zulu", "Middle", "Alpha"}},
+		{name: "InvalidDefaultsToDateAscending", sort: "unexpected", want: []string{"Zulu", "Alpha", "Middle"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := endpoint
+			if len(tt.sort) > 0 {
+				path += "?" + common.ParamSort + "=" + tt.sort
+			}
+
+			properties, meta, err := requestResponseAPISuite[[]*apiOrgPropertyOutput](ctx, nil, http.MethodGet, path, apiKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !meta.Code.Success() {
+				t.Fatalf("unexpected API response: %s", meta.Description)
+			}
+			if len(properties) != len(tt.want) {
+				t.Fatalf("got %d properties, want %d", len(properties), len(tt.want))
+			}
+			for i, property := range properties {
+				if property.Name != tt.want[i] {
+					t.Errorf("property %d name = %q, want %q", i, property.Name, tt.want[i])
+				}
+			}
+		})
+	}
+
+	nameAscendingResponse, err := apiRequestSuite(ctx, nil, http.MethodGet, endpoint+"?"+common.ParamSort+"=name_asc", apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nameAscendingResponse.Body.Close()
+
+	nameDescendingResponse, err := apiRequestSuite(ctx, nil, http.MethodGet, endpoint+"?"+common.ParamSort+"=name_desc", apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nameDescendingResponse.Body.Close()
+
+	if nameAscendingResponse.StatusCode != http.StatusOK || nameDescendingResponse.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected sorted response statuses: %d, %d", nameAscendingResponse.StatusCode, nameDescendingResponse.StatusCode)
+	}
+	if nameAscendingResponse.Header.Get(common.HeaderETag) == nameDescendingResponse.Header.Get(common.HeaderETag) {
+		t.Fatal("expected sort-specific ETags")
 	}
 }
 
@@ -2017,7 +2095,7 @@ func runOrgMemberPropertyCreationTest(t *testing.T, memberSubscrParams *dbgen.Cr
 	}
 
 	// Step 7: Verify properties were created by the member
-	properties, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2146,6 +2224,22 @@ func TestApiPropertiesRequestBadRequestCases(t *testing.T) {
 			body:        nil,
 			contentType: "",
 			wantStatus:  http.StatusBadRequest, // negative page is rejected
+		},
+		{
+			name:        "GetOrgPropertiesOffsetExceedsInt32",
+			method:      http.MethodGet,
+			endpoint:    fmt.Sprintf("/%s/%s/%s?page=%d&per_page=1", common.OrgEndpoint, orgID, common.PropertiesEndpoint, int64(math.MaxInt32)+1),
+			body:        nil,
+			contentType: "",
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "GetOrgPropertiesOffsetMultiplicationOverflows",
+			method:      http.MethodGet,
+			endpoint:    fmt.Sprintf("/%s/%s/%s?page=%d&per_page=2", common.OrgEndpoint, orgID, common.PropertiesEndpoint, math.MaxInt),
+			body:        nil,
+			contentType: "",
+			wantStatus:  http.StatusBadRequest,
 		},
 	}
 

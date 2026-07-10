@@ -70,6 +70,7 @@ type RenderConstants struct {
 	AuditLogsEndpoint               string
 	EventsEndpoint                  string
 	Page                            string
+	Sort                            string
 	ExportEndpoint                  string
 	Scope                           string
 	APIKeyScopePuzzle               string
@@ -180,6 +181,7 @@ func NewRenderConstants() *RenderConstants {
 		AuditLogsEndpoint:               common.AuditLogsEndpoint,
 		EventsEndpoint:                  common.EventsEndpoint,
 		Page:                            common.ParamPage,
+		Sort:                            common.ParamSort,
 		ExportEndpoint:                  common.ExportEndpoint,
 		Scope:                           common.ParamScope,
 		APIKeyScopePuzzle:               apiKeyScopePuzzle,

@@ -81,8 +81,10 @@ type userProperty struct {
 type orgPropertiesRenderContext struct {
 	CsrfRenderContext
 	PaginationRenderContext
-	Properties []*userProperty
-	CurrentOrg *UserOrg
+	Properties  []*userProperty
+	CurrentOrg  *UserOrg
+	Sort        db.OrgPropertiesSort
+	SortOptions []orgPropertiesSortOption
 }
 
 type propertyDashboardRenderContext struct {

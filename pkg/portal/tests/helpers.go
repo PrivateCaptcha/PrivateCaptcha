@@ -80,6 +80,7 @@ func AssertWellFormedHTML(t *testing.T, buf *bytes.Buffer) {
 	// special handling for Alpine.js, otherwise we get XML parsing error "attribute expected"
 	data = bytes.ReplaceAll(data, []byte(" @click="), []byte(" click="))
 	data = bytes.ReplaceAll(data, []byte(" @click."), []byte(" click."))
+	data = bytes.ReplaceAll(data, []byte(" @change="), []byte(" change="))
 	data = bytes.ReplaceAll(data, []byte(" @htmx:"), []byte(" htmx-"))
 	data = bytes.ReplaceAll(data, []byte(" hx-on::"), []byte(" hx-on-"))
 

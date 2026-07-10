@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/netip"
 	"strconv"
@@ -959,24 +960,35 @@ func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) {
 	}
 
 	validatedPerPage := min(db.MaxOrgPropertiesPageSize, max(perPage, 0))
-	offset := max(page, 0) * validatedPerPage
+	if page > math.MaxInt/validatedPerPage {
+		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		return
+	}
+
+	offset := page * validatedPerPage
+	if offset > math.MaxInt32 {
+		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		return
+	}
+
+	sort := db.ParseOrgPropertiesSort(r.URL.Query().Get(common.ParamSort))
 
 	// NOTE: we might need to add more things to etag like org.updated_at later
 	etag := common.GenerateETag(strconv.Itoa(int(user.ID)), strconv.Itoa(int(org.ID)),
-		strconv.Itoa(offset), strconv.Itoa(validatedPerPage))
+		strconv.Itoa(offset), strconv.Itoa(validatedPerPage), string(sort))
 	if etagHeader := r.Header.Get(common.HeaderIfNoneMatch); len(etagHeader) > 0 && (etagHeader == etag) {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 
-	properties, hasMore, err := s.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, offset, validatedPerPage)
+	properties, hasMore, err := s.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, sort, offset, validatedPerPage)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org properties", common.ErrAttr(err))
 		s.sendHTTPErrorResponse(err, w)
 		return
 	}
 
-	slog.DebugContext(ctx, "Retrieved org properties", "count", len(properties), "more", hasMore, "page", page, "perPage", validatedPerPage)
+	slog.DebugContext(ctx, "Retrieved org properties", "sort", sort, "count", len(properties), "more", hasMore, "page", page, "perPage", validatedPerPage)
 
 	response := &APIResponse{
 		Data: propertiesToApiOrgProperties(properties, s.IDHasher),

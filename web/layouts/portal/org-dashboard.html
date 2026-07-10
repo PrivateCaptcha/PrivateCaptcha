@@ -1,7 +1,8 @@
 {{template "org-tabs.html" (dict "Root" . "ActiveTab" "dashboard")}}
 
 {{ if .Params.Properties }}
-<div id="properties" class="flex-1 flex flex-col">
+<div id="properties" class="flex-1 flex flex-col"
+    x-init="$nextTick(() => { if (propertiesSort !== '{{ .Params.Sort }}') { htmx.ajax('GET', '{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertiesEndpoint }}?{{ .Const.Page }}=0&{{ .Const.Sort }}=' + propertiesSort, {target: '#properties', swap: 'innerHTML'}) } })">
     {{template "properties.html" .}}
 </div>
 {{ else }}

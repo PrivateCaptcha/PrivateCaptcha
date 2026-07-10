@@ -118,7 +118,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 
 	baseCtx := func(tab int) portalBaseRenderContext {
 		return portalBaseRenderContext{
-			CsrfRenderContext: token, Orgs: orgs, CurrentOrg: org, Tab: tab, CanEdit: true,
+			CsrfRenderContext: token, Orgs: orgs, CurrentOrg: org, SortOptions: orgPropertiesSortOptions, Tab: tab, CanEdit: true,
 		}
 	}
 
@@ -332,6 +332,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 					portalBaseRenderContext: baseCtx(portalPropertiesTabIndex),
 					PaginationRenderContext: pagination,
 					Properties:              []*userProperty{prop, viewStubProperty("Blog", "org1")},
+					Sort:                    db.OrgPropertiesSortDateAscending,
 				}
 			},
 		},
@@ -343,6 +344,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 					CsrfRenderContext: token, PaginationRenderContext: pagination,
 					Properties: []*userProperty{prop, viewStubProperty("Blog", "org1")},
 					CurrentOrg: org,
+					Sort:       db.OrgPropertiesSortDateAscending,
 				}
 			},
 		},
@@ -717,6 +719,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 					portalBaseRenderContext: bctx,
 					PaginationRenderContext: pagination,
 					Properties:              []*userProperty{prop, viewStubProperty("Blog", "org1")},
+					Sort:                    db.OrgPropertiesSortDateAscending,
 				}
 			},
 		},
