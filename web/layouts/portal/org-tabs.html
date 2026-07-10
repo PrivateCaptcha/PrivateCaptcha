@@ -116,6 +116,79 @@
                                     <label for="showSitekeysCheckbox" class="pc-checkbox-label">Show Sitekeys</label>
                                 </div>
                             </div>
+                            <div class="px-4 py-2">
+                                <p class="text-xs font-medium uppercase tracking-wide text-pc-grey-600">Sort properties</p>
+                                <div class="mt-1 space-y-1">
+                                    <div class="flex items-center gap-3 py-1">
+                                        <div class="group grid size-4 shrink-0 grid-cols-1">
+                                            <input id="sortPropertiesDateAscending" type="checkbox" name="propertiesSort"
+                                                :checked="propertiesSort === 'date_asc'"
+                                                :aria-checked="propertiesSort === 'date_asc'"
+                                                @click.prevent="propertiesSort = 'date_asc'; propertiesOptionsOpen = false"
+                                                hx-trigger="click"
+                                                hx-get="{{ partsURL $root.Const.OrgEndpoint $root.Params.CurrentOrg.ID $root.Const.PropertiesEndpoint }}"
+                                                hx-target="#properties"
+                                                hx-vals='{"{{$root.Const.Page}}": 0, "{{$root.Const.Sort}}": "date_asc"}'
+                                                class="col-start-1 row-start-1 pc-internal-form-checkbox" />
+                                            <svg viewBox="0 0 14 14" fill="none" class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-pc-grey-950/25">
+                                                <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-0 group-has-[:checked]:opacity-100" />
+                                            </svg>
+                                        </div>
+                                        <label for="sortPropertiesDateAscending" class="pc-checkbox-label">Oldest first</label>
+                                    </div>
+                                    <div class="flex items-center gap-3 py-1">
+                                        <div class="group grid size-4 shrink-0 grid-cols-1">
+                                            <input id="sortPropertiesDateDescending" type="checkbox" name="propertiesSort"
+                                                :checked="propertiesSort === 'date_desc'"
+                                                :aria-checked="propertiesSort === 'date_desc'"
+                                                @click.prevent="propertiesSort = 'date_desc'; propertiesOptionsOpen = false"
+                                                hx-trigger="click"
+                                                hx-get="{{ partsURL $root.Const.OrgEndpoint $root.Params.CurrentOrg.ID $root.Const.PropertiesEndpoint }}"
+                                                hx-target="#properties"
+                                                hx-vals='{"{{$root.Const.Page}}": 0, "{{$root.Const.Sort}}": "date_desc"}'
+                                                class="col-start-1 row-start-1 pc-internal-form-checkbox" />
+                                            <svg viewBox="0 0 14 14" fill="none" class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-pc-grey-950/25">
+                                                <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-0 group-has-[:checked]:opacity-100" />
+                                            </svg>
+                                        </div>
+                                        <label for="sortPropertiesDateDescending" class="pc-checkbox-label">Newest first</label>
+                                    </div>
+                                    <div class="flex items-center gap-3 py-1">
+                                        <div class="group grid size-4 shrink-0 grid-cols-1">
+                                            <input id="sortPropertiesNameAscending" type="checkbox" name="propertiesSort"
+                                                :checked="propertiesSort === 'name_asc'"
+                                                :aria-checked="propertiesSort === 'name_asc'"
+                                                @click.prevent="propertiesSort = 'name_asc'; propertiesOptionsOpen = false"
+                                                hx-trigger="click"
+                                                hx-get="{{ partsURL $root.Const.OrgEndpoint $root.Params.CurrentOrg.ID $root.Const.PropertiesEndpoint }}"
+                                                hx-target="#properties"
+                                                hx-vals='{"{{$root.Const.Page}}": 0, "{{$root.Const.Sort}}": "name_asc"}'
+                                                class="col-start-1 row-start-1 pc-internal-form-checkbox" />
+                                            <svg viewBox="0 0 14 14" fill="none" class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-pc-grey-950/25">
+                                                <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-0 group-has-[:checked]:opacity-100" />
+                                            </svg>
+                                        </div>
+                                        <label for="sortPropertiesNameAscending" class="pc-checkbox-label">Name A-Z</label>
+                                    </div>
+                                    <div class="flex items-center gap-3 py-1">
+                                        <div class="group grid size-4 shrink-0 grid-cols-1">
+                                            <input id="sortPropertiesNameDescending" type="checkbox" name="propertiesSort"
+                                                :checked="propertiesSort === 'name_desc'"
+                                                :aria-checked="propertiesSort === 'name_desc'"
+                                                @click.prevent="propertiesSort = 'name_desc'; propertiesOptionsOpen = false"
+                                                hx-trigger="click"
+                                                hx-get="{{ partsURL $root.Const.OrgEndpoint $root.Params.CurrentOrg.ID $root.Const.PropertiesEndpoint }}"
+                                                hx-target="#properties"
+                                                hx-vals='{"{{$root.Const.Page}}": 0, "{{$root.Const.Sort}}": "name_desc"}'
+                                                class="col-start-1 row-start-1 pc-internal-form-checkbox" />
+                                            <svg viewBox="0 0 14 14" fill="none" class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-pc-grey-950/25">
+                                                <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-0 group-has-[:checked]:opacity-100" />
+                                            </svg>
+                                        </div>
+                                        <label for="sortPropertiesNameDescending" class="pc-checkbox-label">Name Z-A</label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <a href="{{ partsURL $root.Const.OrgEndpoint $root.Params.CurrentOrg.ID $root.Const.PropertyEndpoint $root.Const.NewEndpoint }}"

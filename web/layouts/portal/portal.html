@@ -139,7 +139,7 @@
 {{end}}
 
 {{define "main"}}
-<main class='-mt-32 flex flex-1' x-data="{propertiesOptionsOpen: false, showSitekeys: $persist(false), onboardingOpen: {{ $.Params.ShowOnboarding }}}">
+<main class='-mt-32 flex flex-1' x-data="{propertiesOptionsOpen: false, showSitekeys: $persist(false), propertiesSort: $persist('date_asc'), onboardingOpen: {{ $.Params.ShowOnboarding }}}">
     {{ if $.Platform.Enterprise }}
     <div class="pc-modal-root" aria-labelledby="onboarding-modal-title" role="dialog" aria-modal="true"
         x-cloak x-show="onboardingOpen"

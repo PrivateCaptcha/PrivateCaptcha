@@ -152,6 +152,45 @@ func TestRenderPropertiesPaginationPreservesSort(t *testing.T) {
 	}
 }
 
+func TestRenderPropertySortOptions(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), portalTemplate, &orgDashboardRenderContext{
+		portalBaseRenderContext: portalBaseRenderContext{
+			Orgs:       []*UserOrg{stubOrg("123")},
+			CurrentOrg: stubOrg("123"),
+		},
+		PaginationRenderContext: PaginationRenderContext{From: 1, To: 1, Count: 2, Page: 0, PerPage: 30},
+		Properties:              []*userProperty{stubProperty("Property", "123")},
+		Sort:                    db.OrgPropertiesSortDateAscending,
+	}, &RequestContext{Path: server.RelURL("/org/123")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := buf.String()
+	if !strings.Contains(body, "propertiesSort: $persist('date_asc')") {
+		t.Fatal("expected persisted property sort state")
+	}
+	for _, label := range []string{"Oldest first", "Newest first", "Name A-Z", "Name Z-A"} {
+		if !strings.Contains(body, label) {
+			t.Fatalf("expected sort option %q", label)
+		}
+	}
+	for _, sort := range []string{"date_asc", "date_desc", "name_asc", "name_desc"} {
+		if !strings.Contains(body, `"sort": "`+sort+`"`) {
+			t.Fatalf("expected %s sort request value", sort)
+		}
+	}
+	if actual := strings.Count(body, `"page": 0`); actual < 4 {
+		t.Fatalf("expected every sort control to reset pagination, got %d controls", actual)
+	}
+}
+
 func TestRenderHTML(t *testing.T) {
 	enterpriseOnly := new(bool)
 	*enterpriseOnly = true
