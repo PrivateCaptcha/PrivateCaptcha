@@ -772,6 +772,82 @@ func TestApiGetProperties(t *testing.T) {
 	}
 }
 
+func TestApiGetPropertiesSorted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, name := range []string{"Zulu", "Alpha", "Middle"} {
+		params := db_tests.CreateNewPropertyParams(user.ID, name+".example.com")
+		params.Name = name
+		if _, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, params, org); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	endpoint := fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint)
+	tests := []struct {
+		name string
+		sort string
+		want []string
+	}{
+		{name: "DefaultDateAscending", want: []string{"Zulu", "Alpha", "Middle"}},
+		{name: "NameAscending", sort: "name_asc", want: []string{"Alpha", "Middle", "Zulu"}},
+		{name: "NameDescending", sort: "name_desc", want: []string{"Zulu", "Middle", "Alpha"}},
+		{name: "InvalidDefaultsToDateAscending", sort: "unexpected", want: []string{"Zulu", "Alpha", "Middle"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := endpoint
+			if len(tt.sort) > 0 {
+				path += "?" + common.ParamSort + "=" + tt.sort
+			}
+
+			properties, meta, err := requestResponseAPISuite[[]*apiOrgPropertyOutput](ctx, nil, http.MethodGet, path, apiKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !meta.Code.Success() {
+				t.Fatalf("unexpected API response: %s", meta.Description)
+			}
+			if len(properties) != len(tt.want) {
+				t.Fatalf("got %d properties, want %d", len(properties), len(tt.want))
+			}
+			for i, property := range properties {
+				if property.Name != tt.want[i] {
+					t.Errorf("property %d name = %q, want %q", i, property.Name, tt.want[i])
+				}
+			}
+		})
+	}
+
+	nameAscendingResponse, err := apiRequestSuite(ctx, nil, http.MethodGet, endpoint+"?"+common.ParamSort+"=name_asc", apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nameAscendingResponse.Body.Close()
+
+	nameDescendingResponse, err := apiRequestSuite(ctx, nil, http.MethodGet, endpoint+"?"+common.ParamSort+"=name_desc", apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nameDescendingResponse.Body.Close()
+
+	if nameAscendingResponse.StatusCode != http.StatusOK || nameDescendingResponse.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected sorted response statuses: %d, %d", nameAscendingResponse.StatusCode, nameDescendingResponse.StatusCode)
+	}
+	if nameAscendingResponse.Header.Get(common.HeaderETag) == nameDescendingResponse.Header.Get(common.HeaderETag) {
+		t.Fatal("expected sort-specific ETags")
+	}
+}
+
 func TestApiGetPropertyInvalidOrgID(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
