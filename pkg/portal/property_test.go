@@ -352,6 +352,68 @@ func TestRetrieveProperties(t *testing.T) {
 	}
 }
 
+func TestRetrievePropertiesSorted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	properties := make([]*dbgen.Property, 0, 3)
+	for _, name := range []string{"Zulu", "Alpha", "Middle"} {
+		params := db_tests.CreateNewPropertyParams(user.ID, strings.ToLower(name)+".example.com")
+		params.Name = name
+		property, _, err := server.Store.Impl().CreateNewProperty(ctx, params, org)
+		if err != nil {
+			t.Fatal(err)
+		}
+		properties = append(properties, property)
+	}
+
+	tests := []struct {
+		name string
+		sort db.OrgPropertiesSort
+		want []int32
+	}{
+		{name: "DateAscending", sort: db.OrgPropertiesSortDateAscending, want: []int32{properties[0].ID, properties[1].ID, properties[2].ID}},
+		{name: "DateDescending", sort: db.OrgPropertiesSortDateDescending, want: []int32{properties[2].ID, properties[1].ID, properties[0].ID}},
+		{name: "NameAscending", sort: db.OrgPropertiesSortNameAscending, want: []int32{properties[1].ID, properties[2].ID, properties[0].ID}},
+		{name: "NameDescending", sort: db.OrgPropertiesSortNameDescending, want: []int32{properties[0].ID, properties[2].ID, properties[1].ID}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual, _, err := server.Store.Impl().RetrieveOrgProperties(ctx, org, tt.sort, 0, db.MaxOrgPropertiesPageSize)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(actual) != len(tt.want) {
+				t.Fatalf("got %d properties, want %d", len(actual), len(tt.want))
+			}
+			for i, property := range actual {
+				if property.ID != tt.want[i] {
+					t.Errorf("property %d ID = %d, want %d", i, property.ID, tt.want[i])
+				}
+			}
+		})
+	}
+
+	actual, hasMore, err := server.Store.Impl().RetrieveOrgProperties(ctx, org, db.OrgPropertiesSortNameAscending, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(actual) != 1 || actual[0].ID != properties[2].ID {
+		t.Fatalf("unexpected second name-sorted property: %#v", actual)
+	}
+	if !hasMore {
+		t.Fatal("expected a third name-sorted property")
+	}
+}
+
 func TestGetPropertyStats(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

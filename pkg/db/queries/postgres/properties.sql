@@ -60,11 +60,35 @@ SELECT * from backend.properties WHERE org_id = $1 AND name = $2 AND deleted_at 
 -- name: GetPropertyByID :one
 SELECT * from backend.properties WHERE id = $1;
 
--- name: GetOrgProperties :many
+-- name: GetOrgPropertiesByDateAscending :many
 SELECT *
 FROM backend.properties
 WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
-ORDER BY created_at
+ORDER BY created_at ASC, id ASC
+OFFSET $2
+LIMIT $3;
+
+-- name: GetOrgPropertiesByDateDescending :many
+SELECT *
+FROM backend.properties
+WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
+ORDER BY created_at DESC, id DESC
+OFFSET $2
+LIMIT $3;
+
+-- name: GetOrgPropertiesByNameAscending :many
+SELECT *
+FROM backend.properties
+WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
+ORDER BY name ASC, id ASC
+OFFSET $2
+LIMIT $3;
+
+-- name: GetOrgPropertiesByNameDescending :many
+SELECT *
+FROM backend.properties
+WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
+ORDER BY name DESC, id DESC
 OFFSET $2
 LIMIT $3;
 

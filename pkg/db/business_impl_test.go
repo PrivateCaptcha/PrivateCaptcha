@@ -47,6 +47,12 @@ type retrieveUserFormsQuerierStub struct {
 	countCalls     int
 }
 
+type retrieveSortedOrgPropertiesQuerierStub struct {
+	*QuerierStub
+	properties map[OrgPropertiesSort][]*dbgen.Property
+	calls      map[OrgPropertiesSort]int
+}
+
 type deactivateFormsQuerierStub struct {
 	*QuerierStub
 	forms []*dbgen.Form
@@ -91,6 +97,26 @@ func (s *retrieveUserFormsQuerierStub) GetUserFormsCount(ctx context.Context, or
 	return s.count, s.Error
 }
 
+func (s *retrieveSortedOrgPropertiesQuerierStub) GetOrgPropertiesByDateAscending(ctx context.Context, arg *dbgen.GetOrgPropertiesByDateAscendingParams) ([]*dbgen.Property, error) {
+	s.calls[OrgPropertiesSortDateAscending]++
+	return s.properties[OrgPropertiesSortDateAscending], s.Error
+}
+
+func (s *retrieveSortedOrgPropertiesQuerierStub) GetOrgPropertiesByDateDescending(ctx context.Context, arg *dbgen.GetOrgPropertiesByDateDescendingParams) ([]*dbgen.Property, error) {
+	s.calls[OrgPropertiesSortDateDescending]++
+	return s.properties[OrgPropertiesSortDateDescending], s.Error
+}
+
+func (s *retrieveSortedOrgPropertiesQuerierStub) GetOrgPropertiesByNameAscending(ctx context.Context, arg *dbgen.GetOrgPropertiesByNameAscendingParams) ([]*dbgen.Property, error) {
+	s.calls[OrgPropertiesSortNameAscending]++
+	return s.properties[OrgPropertiesSortNameAscending], s.Error
+}
+
+func (s *retrieveSortedOrgPropertiesQuerierStub) GetOrgPropertiesByNameDescending(ctx context.Context, arg *dbgen.GetOrgPropertiesByNameDescendingParams) ([]*dbgen.Property, error) {
+	s.calls[OrgPropertiesSortNameDescending]++
+	return s.properties[OrgPropertiesSortNameDescending], s.Error
+}
+
 func (s *deactivateFormsQuerierStub) DeactivateForms(ctx context.Context, ids []int32) ([]*dbgen.Form, error) {
 	s.ids = ids
 	return s.forms, s.Error
@@ -125,6 +151,84 @@ func TestParseOrgPropertiesSort(t *testing.T) {
 				t.Errorf("ParseOrgPropertiesSort(%q) = %q, want %q", tt.value, actual, tt.want)
 			}
 		})
+	}
+}
+
+func TestBusinessStoreImplRetrieveOrgProperties(t *testing.T) {
+	ctx := context.Background()
+	org := &dbgen.Organization{ID: 1}
+	sorts := []OrgPropertiesSort{
+		OrgPropertiesSortDateAscending,
+		OrgPropertiesSortDateDescending,
+		OrgPropertiesSortNameAscending,
+		OrgPropertiesSortNameDescending,
+	}
+	querier := &retrieveSortedOrgPropertiesQuerierStub{
+		QuerierStub: &QuerierStub{},
+		properties: map[OrgPropertiesSort][]*dbgen.Property{
+			OrgPropertiesSortDateAscending:  {{ID: 1}, {ID: 10}},
+			OrgPropertiesSortDateDescending: {{ID: 2}, {ID: 20}},
+			OrgPropertiesSortNameAscending:  {{ID: 3}, {ID: 30}},
+			OrgPropertiesSortNameDescending: {{ID: 4}, {ID: 40}},
+		},
+		calls: make(map[OrgPropertiesSort]int),
+	}
+	store := &BusinessStoreImpl{
+		querier: querier,
+		cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
+	}
+
+	for i, sort := range sorts {
+		properties, hasMore, err := store.RetrieveOrgProperties(ctx, org, sort, 0, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(properties) != 1 || properties[0].ID != int32(i+1) {
+			t.Fatalf("unexpected %s properties: %#v", sort, properties)
+		}
+		if !hasMore {
+			t.Fatalf("expected more %s properties", sort)
+		}
+	}
+
+	cached, err := store.GetCachedOrgProperties(ctx, org.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cached) != 2 || cached[0].ID != 1 {
+		t.Fatalf("unexpected default cached properties: %#v", cached)
+	}
+
+	if _, _, err := store.RetrieveOrgProperties(ctx, org, OrgPropertiesSortNameAscending, 0, 1); err != nil {
+		t.Fatal(err)
+	}
+	if actual := querier.calls[OrgPropertiesSortNameAscending]; actual != 1 {
+		t.Fatalf("expected first name-ascending page to be cached, got %d queries", actual)
+	}
+
+	if _, _, err := store.RetrieveOrgProperties(ctx, org, OrgPropertiesSortNameAscending, 1, 1); err != nil {
+		t.Fatal(err)
+	}
+	if actual := querier.calls[OrgPropertiesSortNameAscending]; actual != 2 {
+		t.Fatalf("expected later name-ascending page to bypass cache, got %d queries", actual)
+	}
+
+	store.InvalidatePropertyCache(ctx, &dbgen.Property{OrgID: Int(org.ID)})
+
+	for _, sort := range sorts {
+		if _, _, err := store.RetrieveOrgProperties(ctx, org, sort, 0, 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, sort := range sorts {
+		want := 2
+		if sort == OrgPropertiesSortNameAscending {
+			want = 3
+		}
+		if actual := querier.calls[sort]; actual != want {
+			t.Errorf("expected invalidated %s cache to query %d times, got %d", sort, want, actual)
+		}
 	}
 }
 

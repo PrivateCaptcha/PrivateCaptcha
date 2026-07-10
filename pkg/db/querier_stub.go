@@ -172,7 +172,16 @@ func (s *QuerierStub) GetOrgAuditLogs(ctx context.Context, arg *dbgen.GetOrgAudi
 func (s *QuerierStub) GetFormAuditLogs(ctx context.Context, arg *dbgen.GetFormAuditLogsParams) ([]*dbgen.GetFormAuditLogsRow, error) {
 	return nil, s.Error
 }
-func (s *QuerierStub) GetOrgProperties(ctx context.Context, arg *dbgen.GetOrgPropertiesParams) ([]*dbgen.Property, error) {
+func (s *QuerierStub) GetOrgPropertiesByDateAscending(ctx context.Context, arg *dbgen.GetOrgPropertiesByDateAscendingParams) ([]*dbgen.Property, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetOrgPropertiesByDateDescending(ctx context.Context, arg *dbgen.GetOrgPropertiesByDateDescendingParams) ([]*dbgen.Property, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetOrgPropertiesByNameAscending(ctx context.Context, arg *dbgen.GetOrgPropertiesByNameAscendingParams) ([]*dbgen.Property, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetOrgPropertiesByNameDescending(ctx context.Context, arg *dbgen.GetOrgPropertiesByNameDescendingParams) ([]*dbgen.Property, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) GetOrgPropertiesCount(ctx context.Context, orgID pgtype.Int4) (int64, error) {
