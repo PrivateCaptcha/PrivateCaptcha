@@ -375,6 +375,17 @@ paths:
           in: query
           schema:
             type: integer
+        - name: sort
+          in: query
+          description: Property sort order. Invalid values default to date_asc.
+          schema:
+            type: string
+            default: date_asc
+            enum:
+              - date_asc
+              - date_desc
+              - name_asc
+              - name_desc
       responses:
         "200":
           description: List of properties

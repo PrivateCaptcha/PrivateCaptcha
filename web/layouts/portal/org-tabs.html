@@ -26,7 +26,7 @@
             <label for="propertiesSortSelect" class="sr-only">Sort properties</label>
             <select id="propertiesSortSelect" class="pc-internal-form-select w-auto"
                 x-model="propertiesSort"
-                x-on:change="htmx.ajax('GET', '{{ partsURL $root.Const.OrgEndpoint $root.Params.CurrentOrg.ID $root.Const.PropertiesEndpoint }}?{{$root.Const.Page}}=0&amp;{{$root.Const.Sort}}=' + $event.target.value, {target: '`#properties`', swap: 'innerHTML'})">
+                x-on:change="htmx.ajax('GET', '{{ partsURL $root.Const.OrgEndpoint $root.Params.CurrentOrg.ID $root.Const.PropertiesEndpoint }}?{{$root.Const.Page}}=0&amp;{{$root.Const.Sort}}=' + $event.target.value, {target: '#properties', swap: 'innerHTML'})">
                 <option value="date_asc">Oldest first</option>
                 <option value="date_desc">Newest first</option>
                 <option value="name_asc">Name A-Z</option>

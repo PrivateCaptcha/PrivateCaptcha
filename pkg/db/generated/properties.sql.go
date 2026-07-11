@@ -304,7 +304,7 @@ func (q *Queries) GetOrgPropertiesByNameDescending(ctx context.Context, arg *Get
 }
 
 const getOrgPropertiesCount = `-- name: GetOrgPropertiesCount :one
-SELECT COUNT(*) as count FROM backend.properties WHERE org_id = $1 AND deleted_at IS NULL
+SELECT COUNT(*) as count FROM backend.properties WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
 `
 
 func (q *Queries) GetOrgPropertiesCount(ctx context.Context, orgID pgtype.Int4) (int64, error) {
