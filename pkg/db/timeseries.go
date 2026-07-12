@@ -318,6 +318,11 @@ ORDER BY timestamp`
 		results = append(results, bc)
 	}
 
+	if err := rows.Err(); err != nil {
+		slog.ErrorContext(ctx, "Row iteration error in property stats query", common.ErrAttr(err))
+		return nil, err
+	}
+
 	slog.DebugContext(ctx, "Read property stats", "count", len(results), "from", from)
 
 	return results, nil
@@ -370,6 +375,11 @@ ORDER BY org_id, ts`
 			return nil, err
 		}
 		results = append(results, bc)
+	}
+
+	if err := rows.Err(); err != nil {
+		slog.ErrorContext(ctx, "Row iteration error in account stats query", common.ErrAttr(err))
+		return nil, err
 	}
 
 	_ = ts.Cache.Set(ctx, cacheKey, results)
@@ -427,6 +437,11 @@ ORDER BY current_requests DESC`
 		stats.TotalPrevRequests += ps.PrevRequests
 		stats.TotalCurrentVerifies += ps.CurrentVerifies
 		stats.TotalPrevVerifies += ps.PrevVerifies
+	}
+
+	if err := rows.Err(); err != nil {
+		slog.ErrorContext(ctx, "Row iteration error in report stats query", common.ErrAttr(err))
+		return nil, err
 	}
 
 	return stats, nil
@@ -507,6 +522,11 @@ ORDER BY current_submissions DESC`
 		stats.TotalPrevSubmissions += fs.PrevSubmissions
 		stats.TotalCurrentErrors += fs.CurrentErrors
 		stats.TotalPrevErrors += fs.PrevErrors
+	}
+
+	if err := rows.Err(); err != nil {
+		slog.ErrorContext(ctx, "Row iteration error in form reports query", common.ErrAttr(err))
+		return nil, err
 	}
 
 	return stats, nil
@@ -643,6 +663,11 @@ func (ts *TimeSeriesDB) RetrievePropertyStatsByPeriod(ctx context.Context, orgID
 		results = append(results, bc)
 	}
 
+	if err := rows.Err(); err != nil {
+		slog.ErrorContext(ctx, "Row iteration error in property stats query", common.ErrAttr(err))
+		return nil, err
+	}
+
 	slog.InfoContext(ctx, "Fetched time period stats", "count", len(results), "orgID", orgID, "propID", propertyID,
 		"from", timeFrom, "period", period)
 
@@ -737,6 +762,11 @@ func (ts *TimeSeriesDB) RetrieveFormStatsByPeriod(ctx context.Context, orgID, fo
 		results = append(results, stat)
 	}
 
+	if err := rows.Err(); err != nil {
+		slog.ErrorContext(ctx, "Row iteration error in form stats query", common.ErrAttr(err))
+		return nil, err
+	}
+
 	slog.InfoContext(ctx, "Fetched form submit stats", "count", len(results), "orgID", orgID, "formID", formID,
 		"from", timeFrom, "period", period)
 
@@ -818,6 +848,7 @@ LIMIT {limit_val:UInt32};`, FormSubmitLogTableName1h)
 	}
 
 	if err := rows.Err(); err != nil {
+		slog.ErrorContext(ctx, "Row iteration error in failing forms query", common.ErrAttr(err))
 		return nil, err
 	}
 
@@ -900,6 +931,11 @@ func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, u
 		results = append(results, bc)
 	}
 
+	if err := rows.Err(); err != nil {
+		slog.ErrorContext(ctx, "Row iteration error in property rule stats query", common.ErrAttr(err))
+		return nil, err
+	}
+
 	slog.InfoContext(ctx, "Fetched rule stats", "count", len(results), "orgID", orgID, "propID", propertyID,
 		"from", timeFrom, "period", period)
 
@@ -941,6 +977,11 @@ LIMIT %d`
 			return nil, err
 		}
 		properties[propertyID]++
+	}
+
+	if err := rows.Err(); err != nil {
+		slog.ErrorContext(ctx, "Row iteration error in top properties query", common.ErrAttr(err))
+		return nil, err
 	}
 
 	return properties, nil
