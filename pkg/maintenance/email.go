@@ -85,13 +85,15 @@ func (j *UserEmailNotificationsJob) Name() string {
 	return "user_email_notifications_job"
 }
 
-func groupNotificationsByTemplate(ctx context.Context, notifications []*dbgen.GetPendingUserNotificationsRow) map[string][]*dbgen.GetPendingUserNotificationsRow {
+func groupNotificationsByTemplate(ctx context.Context, notifications []*dbgen.GetPendingUserNotificationsRow) (map[string][]*dbgen.GetPendingUserNotificationsRow, []int32) {
 	result := make(map[string][]*dbgen.GetPendingUserNotificationsRow, len(notifications)/2)
+	var orphanedIDs []int32
 
 	for _, n := range notifications {
 		un := &n.UserNotification
 		if !un.TemplateID.Valid {
 			slog.ErrorContext(ctx, "Skipping notification template with orphaned hash", "nid", un.ID)
+			orphanedIDs = append(orphanedIDs, un.ID)
 			continue
 		}
 
@@ -102,7 +104,7 @@ func groupNotificationsByTemplate(ctx context.Context, notifications []*dbgen.Ge
 		}
 	}
 
-	return result
+	return result, orphanedIDs
 }
 
 func indexTemplates(ctx context.Context, templates []*common.EmailTemplate) map[string]*common.EmailTemplate {
@@ -251,7 +253,7 @@ func (j *UserEmailNotificationsJob) RunOnce(ctx context.Context, params any) err
 		Jitter: true,
 	}
 
-	groups := groupNotificationsByTemplate(ctx, notifications)
+	groups, orphanedIDs := groupNotificationsByTemplate(ctx, notifications)
 	for tplHash, nn := range groups {
 		if len(nn) == 0 {
 			slog.WarnContext(ctx, "Skipping empty notifications for template", "hash", tplHash)
@@ -265,6 +267,11 @@ func (j *UserEmailNotificationsJob) RunOnce(ctx context.Context, params any) err
 		} else {
 			slog.ErrorContext(ctx, "Failed to get notifications template", common.ErrAttr(err))
 		}
+	}
+
+	if len(orphanedIDs) > 0 {
+		// this will cause eventually for orphanned notifications to be excluded by attempt limit
+		_ = j.Store.Impl().MarkUserNotificationsAttempted(ctx, orphanedIDs)
 	}
 
 	return nil
