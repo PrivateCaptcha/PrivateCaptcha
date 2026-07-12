@@ -1848,7 +1848,11 @@ func TestApiDeletePropertiesNoSubscription(t *testing.T) {
 
 	ctx := common.TraceContext(t.Context(), t.Name())
 
-	user, _, err := db_test.CreateNewAccountForTestEx(ctx, store, t.Name(), nil)
+	user, org, err := db_test.CreateNewAccountForTestEx(ctx, store, t.Name(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1861,14 +1865,25 @@ func TestApiDeletePropertiesNoSubscription(t *testing.T) {
 	}
 	apiKeyStr := db.UUIDToSecret(apikey.ExternalID)
 
-	input := []string{server.IDHasher.Encrypt(1)}
-	resp, err := apiRequestSuite(ctx, input, http.MethodDelete, "/"+common.PropertiesEndpoint, apiKeyStr)
+	input := []string{server.IDHasher.Encrypt(int(property.ID))}
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, input, http.MethodDelete, "/"+common.PropertiesEndpoint, apiKeyStr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if resp.StatusCode != http.StatusPaymentRequired {
-		t.Fatalf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
+	if !meta.Code.Success() {
+		t.Fatalf("unexpected status code: %v", meta.Description)
+	}
+	if !waitForAsyncTaskCompletionDirect(ctx, t, output.ID) {
+		t.Fatal("async task did not complete within timeout")
+	}
+
+	properties, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(properties) != 0 {
+		t.Fatalf("expected property to be deleted, got %d properties", len(properties))
 	}
 }
 
@@ -1879,7 +1894,11 @@ func TestApiUpdatePropertiesNoSubscription(t *testing.T) {
 
 	ctx := common.TraceContext(t.Context(), t.Name())
 
-	user, _, err := db_test.CreateNewAccountForTestEx(ctx, store, t.Name(), nil)
+	user, org, err := db_test.CreateNewAccountForTestEx(ctx, store, t.Name(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1893,15 +1912,26 @@ func TestApiUpdatePropertiesNoSubscription(t *testing.T) {
 	apiKeyStr := db.UUIDToSecret(apikey.ExternalID)
 
 	input := []*apiUpdatePropertyInput{
-		{ID: server.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Updated Name"}},
+		{ID: server.IDHasher.Encrypt(int(property.ID)), apiPropertySettings: apiPropertySettings{Name: "Updated Name"}},
 	}
-	resp, err := apiRequestSuite(ctx, input, http.MethodPut, "/"+common.PropertiesEndpoint, apiKeyStr)
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, input, http.MethodPut, "/"+common.PropertiesEndpoint, apiKeyStr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if resp.StatusCode != http.StatusPaymentRequired {
-		t.Fatalf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
+	if !meta.Code.Success() {
+		t.Fatalf("unexpected status code: %v", meta.Description)
+	}
+	if !waitForAsyncTaskCompletionDirect(ctx, t, output.ID) {
+		t.Fatal("async task did not complete within timeout")
+	}
+
+	updated, err := server.BusinessDB.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Name != input[0].Name {
+		t.Fatalf("expected property name %q, got %q", input[0].Name, updated.Name)
 	}
 }
 
