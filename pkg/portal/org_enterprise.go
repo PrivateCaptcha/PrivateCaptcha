@@ -101,7 +101,7 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 }
 
 // here we know that user is already organization owner
-func (s *Server) validateAddOrgMemberEmail(ctx context.Context, user *dbgen.User, org *dbgen.Organization, members []*dbgen.GetOrganizationUsersRow, inviteEmail string) string {
+func (s *Server) validateAddOrgMemberEmail(ctx context.Context, user *dbgen.User, org *dbgen.Organization, members []*dbgen.GetOrganizationUsersWithEmailInvitesRow, inviteEmail string) string {
 	if inviteEmail == user.Email {
 		return errorMessageSelfAlreadyMember
 	}
@@ -111,10 +111,12 @@ func (s *Server) validateAddOrgMemberEmail(ctx context.Context, user *dbgen.User
 		return "Email address is not valid."
 	}
 
-	existingIndex := slices.IndexFunc(members, func(r *dbgen.GetOrganizationUsersRow) bool { return r.User.Email == inviteEmail })
+	existingIndex := slices.IndexFunc(members, func(r *dbgen.GetOrganizationUsersWithEmailInvitesRow) bool {
+		return r.UserEmail.String == inviteEmail || r.OrganizationUser.Email.String == inviteEmail
+	})
 	if existingIndex != -1 {
 		member := members[existingIndex]
-		slog.WarnContext(ctx, "User is already a member", "userID", member.User.ID, "level", member.Level)
+		slog.WarnContext(ctx, "User is already a member", "userID", member.LinkedUserID.Int32, "level", member.OrganizationUser.Level)
 		return errorMessageUserAlreadyMember
 	}
 
@@ -147,15 +149,17 @@ func (s *Server) validateAddOrgMemberEmail(ctx context.Context, user *dbgen.User
 }
 
 // here we know that user is already organization owner
-func (s *Server) validateAddOrgMemberID(ctx context.Context, user *dbgen.User, org *dbgen.Organization, members []*dbgen.GetOrganizationUsersRow, inviteUserID int32) string {
+func (s *Server) validateAddOrgMemberID(ctx context.Context, user *dbgen.User, org *dbgen.Organization, members []*dbgen.GetOrganizationUsersWithEmailInvitesRow, inviteUserID int32) string {
 	if inviteUserID == user.ID {
 		return errorMessageSelfAlreadyMember
 	}
 
-	existingIndex := slices.IndexFunc(members, func(r *dbgen.GetOrganizationUsersRow) bool { return r.User.ID == inviteUserID })
+	existingIndex := slices.IndexFunc(members, func(r *dbgen.GetOrganizationUsersWithEmailInvitesRow) bool {
+		return r.LinkedUserID.Int32 == inviteUserID
+	})
 	if existingIndex != -1 {
 		member := members[existingIndex]
-		slog.WarnContext(ctx, "User is already a member", "userID", member.User.ID, "level", member.Level)
+		slog.WarnContext(ctx, "User is already a member", "userID", member.LinkedUserID.Int32, "level", member.OrganizationUser.Level)
 		return errorMessageUserAlreadyMember
 	}
 
@@ -205,7 +209,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, err
 	}
 
-	members, err := s.Store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
+	members, err := s.Store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org users", common.ErrAttr(err))
 		return nil, err

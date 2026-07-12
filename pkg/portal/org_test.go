@@ -150,6 +150,65 @@ func TestInviteUser(t *testing.T) {
 	}
 }
 
+func TestInviteExistingUserWithEmailInvite(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	invitee, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_invitee", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create invitee account: %v", err)
+	}
+
+	emailInvite, _, err := store.Impl().InviteEmailToOrg(ctx, owner, org, invitee.Email)
+	if err != nil {
+		t.Fatalf("Failed to create email-only invite: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
+	form.Set(common.ParamEmail, invitee.Email)
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/members", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Unexpected status code %v", w.Code)
+	}
+
+	members, err := store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(members) != 1 {
+		t.Fatalf("Expected only the existing email-only invite, got %d members", len(members))
+	}
+
+	member := members[0].OrganizationUser
+	if member.ID != emailInvite.ID || member.UserID.Valid || !member.Email.Valid || member.Email.String != invitee.Email {
+		t.Error("Expected the original email-only invite to remain unchanged")
+	}
+}
+
 func TestDeleteUserFromOrgPermissions(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
