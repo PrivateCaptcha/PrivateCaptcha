@@ -369,7 +369,8 @@ export class CaptchaElement extends SafeHTMLElement {
                 const strings = i18n.STRINGS[this._lang];
                 debugText = errorDescription(this._error, strings);
             } else if (this._notice) {
-                debugText = i18n.STRINGS[i18n.NOTICE];
+                const strings = i18n.STRINGS[this._lang];
+                debugText = strings[i18n.NOTICE];
             } else {
                 debugText = `[${text}]`;
             }
