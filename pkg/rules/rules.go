@@ -98,7 +98,7 @@ func (cr *CompiledRules) GobDecode(data []byte) error {
 
 func isBlockedByRules(rules []rule, ri *RequestInfo) (blocked bool, terminal bool) {
 	for _, r := range rules {
-		if r == nil || !r.IsTerminal() {
+		if r == nil || !r.IsTerminal() || r.IsStale() {
 			continue
 		}
 		if !r.Matches(ri) {
@@ -128,7 +128,7 @@ func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) (difficul
 	anyMatched := false
 
 	for _, rule := range cr.rules {
-		if rule == nil || !rule.Matches(ri) {
+		if rule == nil || rule.IsStale() || !rule.Matches(ri) {
 			continue
 		}
 

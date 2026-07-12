@@ -3296,3 +3296,49 @@ func TestCompiledRulesGobRoundTripPreservesBreakRule(t *testing.T) {
 		t.Fatalf("expected decoded break rule to stop later overrides, got level %d", applied.Level())
 	}
 }
+
+func TestCompiledRulesApplySkipsStaleRule(t *testing.T) {
+	compiled := testCompiler.Compile(context.Background(), []*dbgen.DifficultyRule{
+		{
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorBot,
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Enabled:           true,
+		},
+	})
+	decoded := roundTripCompiledRules(t, compiled)
+
+	if !decoded.IsStale() {
+		t.Fatal("expected decoded bot rule to be stale")
+	}
+
+	property := stubProperty(50)
+	applied, terminal := decoded.Apply(newCoreRequestInfo("", netip.MustParseAddr("1.2.3.4")), property)
+	if terminal {
+		t.Fatal("expected stale rule to not terminate processing")
+	}
+	if applied != property {
+		t.Fatal("expected stale rule to leave property unchanged")
+	}
+}
+
+func TestCompiledRulesStaleRuleDoesNotBlockRequest(t *testing.T) {
+	compiled := testCompiler.Compile(context.Background(), []*dbgen.DifficultyRule{
+		{
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorBot,
+			ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
+			ActionValue:       1,
+			Enabled:           true,
+		},
+	})
+	decoded := roundTripCompiledRules(t, compiled)
+
+	if !decoded.IsStale() {
+		t.Fatal("expected decoded bot rule to be stale")
+	}
+	if decoded.IsRequestBlocked(newCoreRequestInfo("", netip.MustParseAddr("1.2.3.4"))) {
+		t.Fatal("expected stale rule to not block request")
+	}
+}
