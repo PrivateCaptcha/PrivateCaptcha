@@ -80,6 +80,42 @@ func (j *stubPeriodicJob) wasExecuted() bool {
 	return atomic.LoadInt32(&j.executed) == 1
 }
 
+type slowOneOffJob struct {
+	started   int32
+	cancelled int32
+}
+
+func (j *slowOneOffJob) Name() string {
+	return "slowOneOffJob"
+}
+
+func (j *slowOneOffJob) InitialPause() time.Duration {
+	return 0
+}
+
+func (j *slowOneOffJob) NewParams() any {
+	return struct{}{}
+}
+
+func (j *slowOneOffJob) RunOnce(ctx context.Context, params any) error {
+	atomic.StoreInt32(&j.started, 1)
+	select {
+	case <-ctx.Done():
+		atomic.StoreInt32(&j.cancelled, 1)
+	case <-time.After(10 * time.Second):
+	}
+
+	return nil
+}
+
+func (j *slowOneOffJob) wasCancelled() bool {
+	return atomic.LoadInt32(&j.cancelled) == 1
+}
+
+func (j *slowOneOffJob) wasStarted() bool {
+	return atomic.LoadInt32(&j.started) == 1
+}
+
 func TestOneOffJobExecution(t *testing.T) {
 	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Stop()
@@ -266,5 +302,32 @@ func TestJobsSpawn(t *testing.T) {
 
 	if !stubJob.wasExecuted() {
 		t.Error("Spawned job was not executed")
+	}
+}
+
+func TestOnDemandOneOffJobIgnoresStop(t *testing.T) {
+	jobsManager := NewJobs(nil, 2)
+	stubJob := &slowOneOffJob{}
+	jobsManager.AddOneOff(stubJob)
+
+	mux := http.NewServeMux()
+	jobsManager.Setup(mux, alice.New())
+
+	// Trigger job via HTTP handler (on-demand)
+	req := httptest.NewRequest(http.MethodPost, "/maintenance/oneoff/slowOneOffJob", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	time.Sleep(50 * time.Millisecond)
+	if !stubJob.wasStarted() {
+		t.Fatal("Job was not started")
+	}
+
+	// Call Stop() - should cancel the job
+	jobsManager.Stop()
+	time.Sleep(50 * time.Millisecond)
+
+	if !stubJob.wasCancelled() {
+		t.Error("On-demand OneOffJob ignored Stop()")
 	}
 }

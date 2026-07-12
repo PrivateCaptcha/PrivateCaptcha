@@ -117,7 +117,7 @@ func (j *jobs) handlePeriodicJob(w http.ResponseWriter, r *http.Request) {
 			}
 
 			go func() {
-				_ = common.RunPeriodicJobOnce(common.CopyTraceID(ctx, context.Background()), job, params)
+				_ = common.RunPeriodicJobOnce(common.CopyTraceID(ctx, j.maintenanceCtx), job, params)
 			}()
 			found = true
 			break
@@ -156,7 +156,7 @@ func (j *jobs) handleOneoffJob(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), job, params)
+			go common.RunOneOffJob(common.CopyTraceID(ctx, j.maintenanceCtx), job, params)
 
 			found = true
 			break
