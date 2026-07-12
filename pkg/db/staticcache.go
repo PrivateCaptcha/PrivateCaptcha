@@ -74,7 +74,7 @@ func (c *StaticCache[TKey, TValue]) GetEx(ctx context.Context, key TKey, loader 
 
 	if loadErr != nil {
 		slog.ErrorContext(ctx, "Failed to load the value", "key", key, common.ErrAttr(loadErr))
-		return c.missingValue, ErrCacheMiss
+		return c.missingValue, loadErr
 	}
 
 	if !ok {
