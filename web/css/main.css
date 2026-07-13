@@ -1386,7 +1386,11 @@ body.pc-vertical-stretch {
 }
 
 .pc-notification {
-    @apply pointer-events-auto w-full max-w-sm overflow-hidden rounded-pc border border-dashed border-pc-grey-250 bg-white;
+    @apply pointer-events-auto w-full max-w-sm overflow-hidden rounded-pc bg-white;
+    @apply border-2;
+    @apply border-solid;
+    @apply border-pc-black;
+    @apply shadow-pc-hard;
 }
 
 .pc-notification-icon {

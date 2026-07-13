@@ -119,6 +119,11 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 	baseCtx := func(tab int) portalBaseRenderContext {
 		return portalBaseRenderContext{
 			CsrfRenderContext: token, Orgs: orgs, CurrentOrg: org, SortOptions: orgPropertiesSortOptions, Tab: tab, CanEdit: true,
+			// uncomment for system notification debugging
+			//SystemNotificationContext: SystemNotificationContext{
+			//	Notification:   "Test notification",
+			//	NotificationID: "123",
+			//},
 		}
 	}
 
