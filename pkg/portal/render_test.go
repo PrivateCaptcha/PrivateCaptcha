@@ -133,6 +133,46 @@ func ruleNames(rules []*DifficultyRuleModel) []string {
 func TestRenderHTML(t *testing.T) {
 	enterpriseOnly := new(bool)
 	*enterpriseOnly = true
+	hostileOrg := stubOrg("123")
+	hostileOrg.Name = "'-alert(1)-'"
+	previewOrg := stubOrg("123")
+	invitedOrg := stubOrgEx("123", dbgen.AccessLevelInvited)
+	memberOrg := stubOrgEx("456", dbgen.AccessLevelMember)
+	hostileOrgModel := &orgDashboardRenderContext{
+		portalBaseRenderContext: portalBaseRenderContext{
+			Orgs:       []*UserOrg{hostileOrg},
+			CurrentOrg: hostileOrg,
+		},
+	}
+	previewModel := &orgDashboardRenderContext{
+		portalBaseRenderContext: portalBaseRenderContext{
+			Orgs:       []*UserOrg{previewOrg},
+			CurrentOrg: previewOrg,
+			Search: &OrgSearchRenderContext{
+				CurrentOrg: previewOrg,
+				SearchTerm: "Searchable",
+				SearchResults: []*OrgSearchResult{
+					{ID: "property-1", Type: "property", Name: "Searchable Property", Description: "search-domain.example.com"},
+					{ID: "form-1", Type: "form", Name: "Searchable Form", Description: "https://hooks.example.com/search-target"},
+				},
+				NextOffset: 10,
+				HasMore:    true,
+			},
+		},
+	}
+	moreSearchModel := &OrgSearchRenderContext{
+		CurrentOrg: stubOrg("123"),
+		SearchTerm: "Searchable",
+		NextOffset: 10,
+		HasMore:    true,
+	}
+	invitedModel := &orgDashboardRenderContext{
+		portalBaseRenderContext: portalBaseRenderContext{
+			Orgs:       []*UserOrg{invitedOrg, memberOrg},
+			CurrentOrg: invitedOrg,
+		},
+		Properties: []*userProperty{stubProperty("1", "123"), stubProperty("2", "123")},
+	}
 
 	testCases := []struct {
 		path       []string
@@ -208,19 +248,112 @@ func TestRenderHTML(t *testing.T) {
 			selector: "p.property-name",
 			matches:  []string{"1", "2"},
 		},
+		{
+			path:     []string{common.OrgEndpoint, "123", "search-close"},
+			template: portalTemplate,
+			model: &orgDashboardRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
+				},
+			},
+			selector: "button.pc-notification-dismiss",
+			matches:  []string{"Close"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", "search-safe-data"},
+			template: portalTemplate,
+			model:    hostileOrgModel,
+			selector: `[aria-labelledby="search-modal-title"][data-org-name="'-alert(1)-'"][x-init="$store.search.initialize($el.dataset.orgId, $el.dataset.orgName)"] h2`,
+			matches:  []string{""},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", "search-preview-results"},
+			template: portalTemplate,
+			model:    previewModel,
+			selector: "#searchResults li p",
+			matches:  []string{"Searchable Property", "search-domain.example.com", "Searchable Form", "https://hooks.example.com/search-target"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", "search-preview-pagination"},
+			template: portalTemplate,
+			model:    previewModel,
+			selector: "#searchMore button.pc-form-link",
+			matches:  []string{"Show more"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.SearchEndpoint},
+			template: orgSearchTemplate,
+			model: &OrgSearchRenderContext{
+				CurrentOrg: stubOrg("123"),
+				SearchResults: []*OrgSearchResult{
+					{ID: "property-1", Type: "property", Name: "Searchable Property", Description: "search-domain.example.com"},
+				},
+			},
+			selector: "li p",
+			matches:  []string{"Searchable Property", "search-domain.example.com"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.SearchEndpoint},
+			template: orgSearchTemplate,
+			model: &OrgSearchRenderContext{
+				CurrentOrg: stubOrg("123"),
+				SearchResults: []*OrgSearchResult{
+					{ID: "form-1", Type: "form", Name: "Searchable Form", Description: "https://hooks.example.com/search-target"},
+				},
+			},
+			selector: "li p",
+			matches:  []string{"Searchable Form", "https://hooks.example.com/search-target"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.SearchEndpoint, "more-link"},
+			template: orgSearchTemplate,
+			model:    moreSearchModel,
+			selector: "#searchMore button.pc-form-link",
+			matches:  []string{"Show more"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.SearchEndpoint, "more-oob"},
+			template: orgSearchTemplate,
+			model:    moreSearchModel,
+			selector: `#searchMore[hx-swap-oob="innerHTML"] button`,
+			matches:  []string{"Show more"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.SearchEndpoint, "more-append"},
+			template: orgSearchTemplate,
+			model:    moreSearchModel,
+			selector: `#searchMore button[hx-target="#searchResults > li:last-child"][hx-swap="afterend"]`,
+			matches:  []string{"Show more"},
+		},
 		// same as above, but when Invited, we don't show properties
 		{
 			path:     []string{common.OrgEndpoint, "123"},
 			template: portalTemplate,
-			model: &orgDashboardRenderContext{
-				portalBaseRenderContext: portalBaseRenderContext{
-					Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelInvited)},
-					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelInvited),
-				},
-				Properties: []*userProperty{stubProperty("1", "123"), stubProperty("2", "123")},
-			},
+			model:    invitedModel,
 			selector: "p.property-name",
 			matches:  []string{},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", "invited-search-trigger"},
+			template: portalTemplate,
+			model:    invitedModel,
+			selector: "button.pc-setup-button",
+			matches:  []string{},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", "invited-search-modal"},
+			template: portalTemplate,
+			model:    invitedModel,
+			selector: `[aria-labelledby="search-modal-title"]`,
+			matches:  []string{},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", "invited-org-switch"},
+			template: portalTemplate,
+			model:    invitedModel,
+			selector: `a[href$="/org/456"]`,
+			matches:  []string{"My Org 456"},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertiesEndpoint},

@@ -54,6 +54,12 @@ type retrieveSortedOrgPropertiesQuerierStub struct {
 	calls      map[OrgPropertiesSort]int
 }
 
+type retrieveOrgSearchQuerierStub struct {
+	*QuerierStub
+	results []*dbgen.SearchOrgRow
+	params  *dbgen.SearchOrgParams
+}
+
 type deactivateFormsQuerierStub struct {
 	*QuerierStub
 	forms []*dbgen.Form
@@ -116,6 +122,11 @@ func (s *retrieveSortedOrgPropertiesQuerierStub) GetOrgPropertiesByNameAscending
 func (s *retrieveSortedOrgPropertiesQuerierStub) GetOrgPropertiesByNameDescending(ctx context.Context, arg *dbgen.GetOrgPropertiesByNameDescendingParams) ([]*dbgen.Property, error) {
 	s.calls[OrgPropertiesSortNameDescending]++
 	return s.properties[OrgPropertiesSortNameDescending], s.Error
+}
+
+func (s *retrieveOrgSearchQuerierStub) SearchOrg(ctx context.Context, arg *dbgen.SearchOrgParams) ([]*dbgen.SearchOrgRow, error) {
+	s.params = arg
+	return s.results, s.Error
 }
 
 func (s *deactivateFormsQuerierStub) DeactivateForms(ctx context.Context, ids []int32) ([]*dbgen.Form, error) {
@@ -236,6 +247,57 @@ func TestBusinessStoreImplRetrieveOrgProperties(t *testing.T) {
 		_, _, err := store.RetrieveOrgProperties(ctx, org, OrgPropertiesSortDateAscending, int(math.MaxInt32)+1, 1)
 		if !errors.Is(err, ErrInvalidInput) {
 			t.Errorf("expected ErrInvalidInput, got %v", err)
+		}
+	})
+}
+
+func TestBusinessStoreImplRetrieveOrgSearch(t *testing.T) {
+	querier := &retrieveOrgSearchQuerierStub{
+		QuerierStub: &QuerierStub{},
+		results: []*dbgen.SearchOrgRow{
+			{ID: 1}, {ID: 2}, {ID: 3},
+		},
+	}
+	store := &BusinessStoreImpl{querier: querier}
+
+	results, hasMore, err := store.RetrieveOrgSearch(context.Background(), &dbgen.Organization{ID: 7}, "search", 2, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 2 || !hasMore {
+		t.Fatalf("expected two results with more available, got %d and %t", len(results), hasMore)
+	}
+	if querier.params == nil || querier.params.OrgID != 7 || querier.params.ResultOffset != 2 || querier.params.ResultLimit != 3 {
+		t.Fatalf("unexpected search params: %#v", querier.params)
+	}
+
+	for _, tt := range []struct {
+		name   string
+		org    *dbgen.Organization
+		offset int
+		limit  int
+	}{
+		{name: "NilOrg", offset: 0, limit: 1},
+		{name: "NegativeOffset", org: &dbgen.Organization{ID: 1}, offset: -1, limit: 1},
+		{name: "LargeOffset", org: &dbgen.Organization{ID: 1}, offset: int(math.MaxInt32) + 1, limit: 1},
+		{name: "ZeroLimit", org: &dbgen.Organization{ID: 1}, offset: 0, limit: 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := store.RetrieveOrgSearch(context.Background(), tt.org, "search", tt.offset, tt.limit)
+			if !errors.Is(err, ErrInvalidInput) {
+				t.Fatalf("expected ErrInvalidInput, got %v", err)
+			}
+		})
+	}
+
+	t.Run("NoRowsReturnsEmptyResult", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		results, hasMore, err := store.RetrieveOrgSearch(context.Background(), &dbgen.Organization{ID: 1}, "search", 0, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(results) != 0 || hasMore {
+			t.Fatalf("expected empty result without more, got %#v and %t", results, hasMore)
 		}
 	})
 }

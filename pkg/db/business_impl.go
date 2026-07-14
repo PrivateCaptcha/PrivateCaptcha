@@ -30,6 +30,7 @@ const (
 	asyncTaskTTL             = 1 * time.Minute
 	SubscriptionRefresh      = 10 * time.Minute
 	MaxOrgPropertiesPageSize = 50
+	MaxOrgSearchPageSize     = 50
 	orgFormsCacheKeyStr      = "0"
 	maxPropertyNameLength    = 255
 	formPropertyNameSuffix   = " (form)"
@@ -1792,6 +1793,49 @@ func (impl *BusinessStoreImpl) RetrieveOrgForms(ctx context.Context, org *dbgen.
 	slog.DebugContext(ctx, "Retrieved org forms", "offset", offset, "limit", actualLimit, "orgID", org.ID, "count", len(forms))
 
 	return forms[:min(len(forms), actualLimit)], len(forms) == int(params.Limit), nil
+}
+
+func (impl *BusinessStoreImpl) RetrieveOrgSearch(ctx context.Context, org *dbgen.Organization, searchTerm string, offset, limit int) ([]*dbgen.SearchOrgRow, bool, error) {
+	if (org == nil) || (offset < 0) || (offset > math.MaxInt32) || (limit <= 0) {
+		return nil, false, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, false, ErrMaintenance
+	}
+
+	actualLimit := min(MaxOrgSearchPageSize, limit)
+	params := &dbgen.SearchOrgParams{
+		SearchTerm:   searchTerm,
+		ResultOffset: int32(offset),
+		ResultLimit:  int32(actualLimit + 1),
+		OrgID:        org.ID,
+	}
+
+	var results []*dbgen.SearchOrgRow
+	var err error
+	if offset == 0 {
+		reader := &StoreArrayReader[*dbgen.SearchOrgParams, dbgen.SearchOrgRow]{
+			CacheKey:     orgSearchCacheKey(org.ID, searchTerm, actualLimit),
+			Cache:        impl.cache,
+			TTL:          time.Minute,
+			QueryKeyFunc: func(CacheKey) (*dbgen.SearchOrgParams, error) { return params, nil },
+			QueryFunc:    impl.querier.SearchOrg,
+			DropInvalid:  true,
+		}
+		results, err = reader.Read(ctx)
+	} else {
+		results, err = impl.querier.SearchOrg(ctx, params)
+	}
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []*dbgen.SearchOrgRow{}, false, nil
+		}
+		slog.ErrorContext(ctx, "Failed to search organization", "orgID", org.ID, "offset", offset, "limit", actualLimit, common.ErrAttr(err))
+		return nil, false, err
+	}
+	slog.DebugContext(ctx, "Retrieved organization search results", "orgID", org.ID, "offset", offset, "limit", actualLimit, "count", len(results))
+
+	return results[:min(len(results), actualLimit)], len(results) > actualLimit, nil
 }
 
 func (impl *BusinessStoreImpl) UpdateOrganization(ctx context.Context, user *dbgen.User, org *dbgen.Organization, name string) (*dbgen.Organization, *common.AuditLogEvent, error) {

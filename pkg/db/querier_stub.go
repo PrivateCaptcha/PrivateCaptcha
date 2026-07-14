@@ -202,6 +202,9 @@ func (s *QuerierStub) GetOrganizationUsersWithEmailInvites(ctx context.Context, 
 func (s *QuerierStub) GetOrganizationWithAccess(ctx context.Context, arg *dbgen.GetOrganizationWithAccessParams) (*dbgen.GetOrganizationWithAccessRow, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) SearchOrg(ctx context.Context, arg *dbgen.SearchOrgParams) ([]*dbgen.SearchOrgRow, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) GetPendingAsyncTasks(ctx context.Context, arg *dbgen.GetPendingAsyncTasksParams) ([]*dbgen.GetPendingAsyncTasksRow, error) {
 	return nil, s.Error
 }

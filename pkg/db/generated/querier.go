@@ -113,6 +113,7 @@ type Querier interface {
 	RemoveUnlinkedOrgInviteByID(ctx context.Context, id int32) (pgtype.Text, error)
 	RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgParams) (int64, error)
 	RotateAPIKey(ctx context.Context, arg *RotateAPIKeyParams) (*APIKey, error)
+	SearchOrg(ctx context.Context, arg *SearchOrgParams) ([]*SearchOrgRow, error)
 	SoftDeleteForm(ctx context.Context, id int32) (*Form, error)
 	SoftDeleteProperties(ctx context.Context, arg *SoftDeletePropertiesParams) ([]*Property, error)
 	SoftDeleteProperty(ctx context.Context, id int32) (*Property, error)

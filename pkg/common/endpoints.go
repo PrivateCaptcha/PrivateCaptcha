@@ -53,4 +53,5 @@ const (
 	ServerSetupEndpoint   = "serversetup"
 	TestEndpoint          = "test"
 	CacheEndpoint         = "cache"
+	SearchEndpoint        = "search"
 )

@@ -534,6 +534,150 @@ func TestGetOrgPropertiesSorted(t *testing.T) {
 	}
 }
 
+func TestGetOrgSearch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	propertyParams := db_tests.CreateNewPropertyParams(user.ID, "search-domain.example.com")
+	propertyParams.Name = "Searchable Property"
+	property, _, err := store.Impl().CreateNewProperty(ctx, propertyParams, org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	formPropertyParams := db_tests.CreateNewPropertyParams(user.ID, "form-domain.example.com")
+	formParams := db_tests.CreateNewFormParams(user.ID, "https://hooks.example.com/search-target")
+	formParams.Name = "Searchable Form"
+	form, _, _, err := store.Impl().CreateNewForm(ctx, formPropertyParams, formParams, org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		term string
+		want string
+	}{
+		{name: "PropertyName", term: "PROPERTY", want: property.Name},
+		{name: "PropertyDomain", term: "DOMAIN", want: property.Name},
+		{name: "PropertySitekey", term: db.UUIDToSiteKey(property.ExternalID), want: property.Name},
+		{name: "FormName", term: "FORM", want: form.Name},
+		{name: "FormURL", term: "TARGET", want: form.Name},
+		{name: "FormExternalID", term: db.UUIDToString(form.ExternalID), want: form.Name},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query := url.Values{common.ParamQuery: {tt.term}}
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/search?%s", server.IDHasher.Encrypt(int(org.ID)), query.Encode()), nil)
+			req.Header.Set(common.HeaderHtmxRequest, "true")
+			req.AddCookie(cookie)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("expected status %d, got %d", http.StatusOK, w.Code)
+			}
+			if !strings.Contains(w.Body.String(), tt.want) {
+				t.Fatalf("expected search response to contain %q, got %s", tt.want, w.Body.String())
+			}
+		})
+	}
+
+}
+
+func TestNormalizeOrgSearchTerm(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "TrimsValidTerm", input: "  Search 123  ", want: "Search 123"},
+		{name: "AcceptsPropertyAndFormNameCharacters", input: "Form-name_[1]: Example's", want: "Form-name_[1]: Example's"},
+		{name: "AcceptsDomainDot", input: "example.com", want: "example.com"},
+		{name: "AcceptsUnicodeLetters", input: "caf\u00e9", want: "caf\u00e9"},
+		{name: "RejectsEmptyTerm", input: "   ", wantErr: true},
+		{name: "RejectsShortTerm", input: "ab", wantErr: true},
+		{name: "RejectsUnsupportedPunctuation", input: "abc@def", wantErr: true},
+		{name: "RejectsControlWhitespace", input: "abc\tdef", wantErr: true},
+		{name: "RejectsLeadingControlWhitespace", input: "\tabc", wantErr: true},
+		{name: "RejectsLongTerm", input: strings.Repeat("a", 256), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeOrgSearchTerm(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected an error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestGetOrgSearchRejectsInvalidRequests(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, values := range []url.Values{
+		{common.ParamQuery: {"  "}},
+		{common.ParamQuery: {"ab"}},
+		{common.ParamQuery: {"abc@def"}},
+		{common.ParamQuery: {"abc\tdef"}},
+		{common.ParamQuery: {strings.Repeat("a", 256)}},
+		{common.ParamQuery: {"valid"}, common.ParamOffset: {"invalid"}},
+		{common.ParamQuery: {"valid"}, common.ParamOffset: {"-1"}},
+		{common.ParamQuery: {"valid"}, common.ParamOffset: {strconv.FormatInt(int64(math.MaxInt32)+1, 10)}},
+	} {
+		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/search?%s", server.IDHasher.Encrypt(int(org.ID)), values.Encode()), nil)
+		req.Header.Set(common.HeaderHtmxRequest, "true")
+		req.AddCookie(cookie)
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("expected status %d for %s, got %d", http.StatusBadRequest, values.Encode(), w.Code)
+		}
+	}
+}
+
 func TestGetOrgMembers(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

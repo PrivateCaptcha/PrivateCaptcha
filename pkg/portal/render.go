@@ -70,6 +70,7 @@ type RenderConstants struct {
 	AuditLogsEndpoint               string
 	EventsEndpoint                  string
 	Page                            string
+	Offset                          string
 	Sort                            string
 	ExportEndpoint                  string
 	Scope                           string
@@ -121,6 +122,8 @@ type RenderConstants struct {
 	ServerSetupEndpoint             string
 	TestEndpoint                    string
 	Body                            string
+	Query                           string
+	SearchEndpoint                  string
 }
 
 func NewRenderConstants() *RenderConstants {
@@ -181,6 +184,7 @@ func NewRenderConstants() *RenderConstants {
 		AuditLogsEndpoint:               common.AuditLogsEndpoint,
 		EventsEndpoint:                  common.EventsEndpoint,
 		Page:                            common.ParamPage,
+		Offset:                          common.ParamOffset,
 		Sort:                            common.ParamSort,
 		ExportEndpoint:                  common.ExportEndpoint,
 		Scope:                           common.ParamScope,
@@ -232,6 +236,8 @@ func NewRenderConstants() *RenderConstants {
 		ServerSetupEndpoint:             common.ServerSetupEndpoint,
 		TestEndpoint:                    common.TestEndpoint,
 		Body:                            common.ParamBody,
+		Query:                           common.ParamQuery,
+		SearchEndpoint:                  common.SearchEndpoint,
 	}
 }
 

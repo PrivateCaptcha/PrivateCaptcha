@@ -1,0 +1,43 @@
+{{ define "org-search-results" }}
+{{ if not .Params.SearchResults }}
+<li class="py-4 text-sm text-pc-grey-600">No search results found.</li>
+{{ else }}
+    {{ range $result := .Params.SearchResults }}
+    <li class="flex items-center justify-between space-x-3 border-b border-dashed border-pc-grey-250 py-4 first:border-t">
+        <div class="flex min-w-0 flex-1 items-center space-x-3">
+            <div class="shrink-0">
+                {{ if eq $result.Type "property" }}
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-pc-grey-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                </svg>
+                {{ else if eq $result.Type "form" }}
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-pc-grey-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 00-2-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+                {{ end }}
+            </div>
+            <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium text-pc-grey-950">{{ $result.Name }}</p>
+                <p class="truncate text-sm text-pc-grey-600">{{ $result.Description }}</p>
+            </div>
+        </div>
+        <div class="shrink-0">
+            {{ if eq $result.Type "property" }}
+            <a href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.PropertyEndpoint $result.ID }}" class="pc-internal-form-button pc-internal-form-button-secondary pc-internal-button-smaller inline-flex">View</a>
+            {{ else if eq $result.Type "form" }}
+            <a href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.FormEndpoint $result.ID }}" class="pc-internal-form-button pc-internal-form-button-secondary pc-internal-button-smaller inline-flex">View</a>
+            {{ end }}
+        </div>
+    </li>
+    {{ end }}
+{{ end }}
+{{ end }}
+
+{{ define "org-search-more" }}{{ if .Params.HasMore }}
+<div class="flex justify-center pt-4">
+    <button type="button" hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.SearchEndpoint }}?{{$.Const.Query}}={{qescape .Params.SearchTerm}}&{{$.Const.Offset}}={{.Params.NextOffset}}" hx-target="#searchResults > li:last-child" hx-swap="afterend" class="pc-form-link">Show more</button>
+</div>
+{{ end }}{{ end }}
+
+{{ template "org-search-results" . }}
+<div id="searchMore" hx-swap-oob="innerHTML">{{ template "org-search-more" . }}</div>
