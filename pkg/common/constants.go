@@ -55,6 +55,7 @@ const (
 	ParamTerms                  = "terms"
 	ParamMaxReplayCount         = "max_replay_count"
 	ParamPage                   = "page"
+	ParamOffset                 = "offset"
 	ParamPerPage                = "per_page"
 	ParamSort                   = "sort"
 	ParamScope                  = "scope"
@@ -75,6 +76,7 @@ const (
 	ParamMonthlyReport          = "monthly_report"
 	ParamOnboarding             = "onboarding"
 	ParamBody                   = "body"
+	ParamSearch                 = "search"
 	All                         = "all"
 )
 

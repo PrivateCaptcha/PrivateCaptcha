@@ -364,6 +364,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.SettingsEndpoint), privateRead, s.Handler(s.getOrgSettings))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getOrgAuditLogs))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.RulesEndpoint), privateRead, s.Handler(s.getOrgRules))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.ParamSearch), privateRead, s.Handler(s.getOrgSearch))
 	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.EditEndpoint), privateWrite, s.Handler(s.putOrg))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormsEndpoint), privateRead, s.Handler(s.getOrgForms))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrgForm))

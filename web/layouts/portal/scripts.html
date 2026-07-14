@@ -1,4 +1,26 @@
 {{define "scripts"}}
 <script defer src="{{$.Ctx.CDN}}/portal/js/alpine.persist.min.js" crossorigin="anonymous"></script>
 {{template "default-scripts.html" .}}
+<script type="text/javascript">
+document.addEventListener('alpine:init', () => {
+    Alpine.store('search', {
+        open: false,
+        orgID: '',
+        orgName: '',
+        close() {
+            this.open = false;
+            document.querySelector('#searchOpen')?.focus();
+        },
+        initialize(orgID, orgName) {
+            this.orgID = orgID;
+            this.orgName = orgName;
+        },
+        reset(orgID, orgName) {
+            this.initialize(orgID, orgName);
+            document.querySelector('#searchResults').replaceChildren();
+            document.querySelector('#searchMore').replaceChildren();
+        }
+    });
+});
+</script>
 {{end}}

@@ -115,6 +115,16 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 	token := CsrfRenderContext{Token: "stub-csrf-token"}
 	rules := viewStubRules()
 	auditLogs := viewStubAuditLogs()
+	search := &OrgSearchRenderContext{
+		CurrentOrg: org,
+		SearchTerm: "search",
+		SearchResults: []*OrgSearchResult{
+			{ID: "123", Type: "property", Name: "My Property", Description: "mydomain.com"},
+			{ID: "456", Type: "form", Name: "My Form", Description: "https://hooks.example.com/my-form"},
+		},
+		NextOffset: 10,
+		HasMore:    true,
+	}
 
 	baseCtx := func(tab int) portalBaseRenderContext {
 		return portalBaseRenderContext{
@@ -333,8 +343,10 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			Template:   portalTemplate,
 			ShowInList: true,
 			ModelFunc: func(_ AlertRenderContext) interface{} {
+				base := baseCtx(portalPropertiesTabIndex)
+				base.Search = search
 				return &orgDashboardRenderContext{
-					portalBaseRenderContext: baseCtx(portalPropertiesTabIndex),
+					portalBaseRenderContext: base,
 					PaginationRenderContext: pagination,
 					Properties:              []*userProperty{prop, viewStubProperty("Blog", "org1")},
 					Sort:                    db.OrgPropertiesSortDateAscending,

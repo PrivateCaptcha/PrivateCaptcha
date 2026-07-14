@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -18,10 +19,11 @@ import (
 )
 
 var (
-	ErrInvalidSession = errors.New("session contains invalid data")
-	errNoOrgs         = errors.New("user has no organizations")
-	stubUserOrg       = &UserOrg{ID: "-1"}
-	propertiesPerPage = 30
+	ErrInvalidSession       = errors.New("session contains invalid data")
+	errNoOrgs               = errors.New("user has no organizations")
+	stubUserOrg             = &UserOrg{ID: "-1"}
+	propertiesPerPage       = 30
+	orgSearchResultsPerPage = 10
 )
 
 const (
@@ -33,6 +35,7 @@ const (
 	orgMembersTemplate            = "portal/org-members.html"
 	orgAuditLogsTemplate          = "portal/org-auditlogs.html"
 	orgRulesTemplate              = "portal/org-rules.html"
+	orgSearchTemplate             = "portal/org-search.html"
 	orgWizardTemplate             = "org-wizard/wizard.html"
 	portalTemplate                = "portal/portal.html"
 	activeSubscriptionForOrgError = "You need an active subscription to create new organizations."
@@ -55,6 +58,7 @@ type portalBaseRenderContext struct {
 	Tab            int
 	CanEdit        bool
 	ShowOnboarding bool
+	Search         *OrgSearchRenderContext
 }
 
 type orgSettingsRenderContext struct {
@@ -126,6 +130,51 @@ type orgWizardRenderContext struct {
 	CsrfRenderContext
 	AlertRenderContext
 	NameError string
+}
+
+type OrgSearchResult struct {
+	ID          string
+	Type        string
+	Name        string
+	Description string
+}
+
+type OrgSearchRenderContext struct {
+	CurrentOrg    *UserOrg
+	SearchTerm    string
+	SearchResults []*OrgSearchResult
+	Offset        int
+	NextOffset    int
+	HasMore       bool
+}
+
+func normalizeOrgSearchTerm(term string) (string, error) {
+	term = strings.Trim(term, " ")
+	if (len(term) < 3) || (len(term) > 255) {
+		return "", ErrInvalidRequestArg
+	}
+
+	for _, c := range term {
+		if !(unicode.IsLetter(c) || unicode.IsDigit(c) || c == ' ' || strings.ContainsRune("'-_.:()[]", c)) {
+			return "", ErrInvalidRequestArg
+		}
+	}
+
+	return term, nil
+}
+
+func orgSearchRowsToResults(rows []*dbgen.SearchOrgRow, hasher common.IdentifierHasher) []*OrgSearchResult {
+	results := make([]*OrgSearchResult, 0, len(rows))
+	for _, row := range rows {
+		results = append(results, &OrgSearchResult{
+			ID:          hasher.Encrypt(int(row.ID)),
+			Type:        row.Type,
+			Name:        row.Name,
+			Description: row.Description,
+		})
+	}
+
+	return results
 }
 
 func userToOrgUser(user *dbgen.User, level string, hasher common.IdentifierHasher) *orgUser {
@@ -656,6 +705,55 @@ func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) (*View
 	}
 
 	return &ViewModel{Model: renderCtx, View: orgPropertiesTemplate, IsNew: false}, nil
+}
+
+func (s *Server) getOrgSearch(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, level, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
+	}
+
+	searchTerm, err := normalizeOrgSearchTerm(r.URL.Query().Get(common.ParamSearch))
+	if err != nil {
+		return nil, err
+	}
+
+	offset := 0
+	if value := r.URL.Query().Get(common.ParamOffset); value != "" {
+		offset, err = strconv.Atoi(value)
+		if (err != nil) || (offset < 0) || (offset > math.MaxInt32) {
+			return nil, ErrInvalidRequestArg
+		}
+	}
+
+	rows, hasMore, err := s.Store.Impl().RetrieveOrgSearch(ctx, org, searchTerm, offset, orgSearchResultsPerPage)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve organization search results", "orgID", org.ID, "offset", offset, common.ErrAttr(err))
+		return nil, err
+	}
+	slog.DebugContext(ctx, "Retrieved organization search results", "orgID", org.ID, "offset", offset, "count", len(rows), "hasMore", hasMore)
+
+	return &ViewModel{
+		Model: &OrgSearchRenderContext{
+			CurrentOrg:    orgToUserOrg(org, user.ID, s.IDHasher),
+			SearchTerm:    searchTerm,
+			SearchResults: orgSearchRowsToResults(rows, s.IDHasher),
+			Offset:        offset,
+			NextOffset:    offset + len(rows),
+			HasMore:       hasMore,
+		},
+		View:  orgSearchTemplate,
+		IsNew: false,
+	}, nil
 }
 
 func (s *Server) createOrgMembersRenderContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*orgMemberRenderContext, *common.AuditLogEvent, error) {
