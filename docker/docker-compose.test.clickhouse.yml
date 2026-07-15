@@ -24,7 +24,7 @@ services:
       - test_clickhouse_network
 
   clickhouse:
-    image: clickhouse/clickhouse-server:26.5.4-alpine
+    image: clickhouse/clickhouse-server:26.5.5-alpine
     pull_policy: if_not_present
     environment:
       CLICKHOUSE_DB: privatecaptcha
