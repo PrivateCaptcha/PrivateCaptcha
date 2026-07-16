@@ -27,7 +27,7 @@ require (
 	github.com/tsenart/vegeta/v12 v12.13.0
 	golang.org/x/crypto v0.53.0
 	golang.org/x/net v0.56.0
-	golang.org/x/sync v0.21.0
+	golang.org/x/sync v0.22.0
 	golang.org/x/text v0.38.0
 )
 
