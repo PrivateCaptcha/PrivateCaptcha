@@ -35,7 +35,7 @@
 
 {{ define "org-search-more" }}{{ if .Params.HasMore }}
 <div class="flex justify-center pt-4">
-    <button type="button" hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.SearchEndpoint }}?{{$.Const.Query}}={{qescape .Params.SearchTerm}}&{{$.Const.Offset}}={{.Params.NextOffset}}" hx-target="#searchResults > li:last-child" hx-swap="afterend" class="pc-form-link">Show more</button>
+    <button type="button" hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.SearchEndpoint }}?{{$.Const.Query}}={{qescape .Params.SearchTerm}}&{{$.Const.Offset}}={{.Params.NextOffset}}" hx-target="#searchResults > li:last-child" hx-swap="afterend" class="pc-form-link text-sm">Show more</button>
 </div>
 {{ end }}{{ end }}
 

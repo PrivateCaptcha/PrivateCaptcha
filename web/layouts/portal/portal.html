@@ -232,6 +232,12 @@
                     x-transition:leave="ease-in duration-200"
                     x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
                     x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
+                    <button type="button" class="pc-notification-dismiss absolute right-4 top-4" @click="onboardingOpen = false">
+                        <span class="sr-only">Close</span>
+                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                        </svg>
+                    </button>
                     <div class="mx-auto max-w-xl px-8 pb-8 pt-10">
                         <h2 id="onboarding-modal-title" class="pc-modal-title">Welcome to Private Captcha!</h2>
                         <p class="mt-1 text-sm text-pc-grey-800">Get started by protecting your first website or inviting your team.</p>
