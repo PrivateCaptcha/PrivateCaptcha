@@ -2,6 +2,7 @@ package portal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type transferOrgSubscriptionLimitsStub struct {
@@ -204,7 +206,7 @@ func TestInviteExistingUserWithEmailInvite(t *testing.T) {
 	}
 
 	member := members[0].OrganizationUser
-	if member.ID != emailInvite.ID || member.UserID.Valid || !member.Email.Valid || member.Email.String != invitee.Email {
+	if member.ID != emailInvite.ID || member.UserID.Valid || !member.Email.Valid || member.Email.String != strings.ToLower(invitee.Email) {
 		t.Error("Expected the original email-only invite to remain unchanged")
 	}
 }
@@ -1873,6 +1875,72 @@ func TestInviteNonExistingUserByEmail(t *testing.T) {
 	// The actual invite is verified by the org members page response
 }
 
+func TestInviteEmailToOrgIgnoresCase(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(owner.ID)))
+	inviteEmail := "mixed-case-" + t.Name() + "@example.com"
+	invite := func(email string) *httptest.ResponseRecorder {
+		form := url.Values{
+			common.ParamCSRFToken: {csrfToken},
+			common.ParamEmail:     {email},
+		}
+		req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/members", orgID), strings.NewReader(form.Encode()))
+		req.AddCookie(cookie)
+		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+		return w
+	}
+
+	firstResponse := invite(inviteEmail)
+	if !strings.Contains(firstResponse.Body.String(), "Invite is sent.") {
+		t.Fatalf("Expected first invite to succeed, got: %s", firstResponse.Body.String())
+	}
+
+	duplicateResponse := invite(strings.ToUpper(inviteEmail))
+	if !strings.Contains(duplicateResponse.Body.String(), errorMessageUserAlreadyMember) {
+		t.Errorf("Expected differently-cased duplicate invite to be rejected, got: %s", duplicateResponse.Body.String())
+	}
+
+	_, err = store.Pool.Exec(ctx, `
+		INSERT INTO backend.organization_users (org_id, email, level)
+		VALUES ($1, $2, 'invited')`, org.ID, strings.ToUpper(inviteEmail))
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23505" || pgErr.ConstraintName != "organization_users_org_email_lower_idx" {
+		t.Errorf("Expected case-insensitive unique violation, got %v", err)
+	}
+
+	members, err := store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve organization invites: %v", err)
+	}
+	if len(members) != 1 {
+		t.Fatalf("Expected one organization invite, got %d", len(members))
+	}
+	if members[0].OrganizationUser.Email.String != strings.ToLower(inviteEmail) {
+		t.Errorf("Expected invite email to be stored lowercase, got %q", members[0].OrganizationUser.Email.String)
+	}
+}
+
 func TestOrgInviteRegisterInvalidID(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -2076,7 +2144,7 @@ func TestOrgMembersShowsEmailInvites(t *testing.T) {
 		if m.Email == common.MaskEmail(existingUser.Email, '*') {
 			foundExistingUser = true
 		}
-		if m.Email == common.MaskEmail(emailInvite, '*') {
+		if m.Email == common.MaskEmail(strings.ToLower(emailInvite), '*') {
 			foundEmailInvite = true
 		}
 	}

@@ -14,7 +14,8 @@ WHERE ou.org_id = $1;
 INSERT INTO backend.organization_users (org_id, user_id, level) VALUES ($1, $2, 'invited') RETURNING *;
 
 -- name: InviteEmailToOrg :one
-INSERT INTO backend.organization_users (org_id, email, level) VALUES ($1, $2, 'invited') RETURNING *;
+INSERT INTO backend.organization_users (org_id, email, level)
+VALUES (sqlc.arg(org_id), LOWER(sqlc.arg(email)), 'invited') RETURNING *;
 
 -- name: LinkOrgInviteToUser :one
 UPDATE backend.organization_users 

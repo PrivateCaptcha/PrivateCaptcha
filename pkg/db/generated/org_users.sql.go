@@ -99,12 +99,13 @@ func (q *Queries) GetOrganizationUsersWithEmailInvites(ctx context.Context, orgI
 }
 
 const inviteEmailToOrg = `-- name: InviteEmailToOrg :one
-INSERT INTO backend.organization_users (org_id, email, level) VALUES ($1, $2, 'invited') RETURNING org_id, user_id, level, created_at, updated_at, id, email
+INSERT INTO backend.organization_users (org_id, email, level)
+VALUES ($1, LOWER($2), 'invited') RETURNING org_id, user_id, level, created_at, updated_at, id, email
 `
 
 type InviteEmailToOrgParams struct {
-	OrgID int32       `db:"org_id" json:"org_id"`
-	Email pgtype.Text `db:"email" json:"email"`
+	OrgID int32  `db:"org_id" json:"org_id"`
+	Email string `db:"email" json:"email"`
 }
 
 func (q *Queries) InviteEmailToOrg(ctx context.Context, arg *InviteEmailToOrgParams) (*OrganizationUser, error) {

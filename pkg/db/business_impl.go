@@ -1952,7 +1952,7 @@ func (impl *BusinessStoreImpl) InviteEmailToOrg(ctx context.Context, user *dbgen
 
 	inviteRecord, err := impl.querier.InviteEmailToOrg(ctx, &dbgen.InviteEmailToOrgParams{
 		OrgID: org.ID,
-		Email: Text(email),
+		Email: email,
 	})
 
 	if err != nil {

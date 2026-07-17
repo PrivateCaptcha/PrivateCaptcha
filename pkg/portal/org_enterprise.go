@@ -102,7 +102,7 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 
 // here we know that user is already organization owner
 func (s *Server) validateAddOrgMemberEmail(ctx context.Context, user *dbgen.User, org *dbgen.Organization, members []*dbgen.GetOrganizationUsersWithEmailInvitesRow, inviteEmail string) string {
-	if inviteEmail == user.Email {
+	if strings.EqualFold(inviteEmail, user.Email) {
 		return errorMessageSelfAlreadyMember
 	}
 
@@ -112,7 +112,7 @@ func (s *Server) validateAddOrgMemberEmail(ctx context.Context, user *dbgen.User
 	}
 
 	existingIndex := slices.IndexFunc(members, func(r *dbgen.GetOrganizationUsersWithEmailInvitesRow) bool {
-		return r.UserEmail.String == inviteEmail || r.OrganizationUser.Email.String == inviteEmail
+		return strings.EqualFold(r.UserEmail.String, inviteEmail) || strings.EqualFold(r.OrganizationUser.Email.String, inviteEmail)
 	})
 	if existingIndex != -1 {
 		member := members[existingIndex]
