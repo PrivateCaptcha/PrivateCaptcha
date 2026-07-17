@@ -82,6 +82,7 @@ func AssertWellFormedHTML(t *testing.T, buf *bytes.Buffer) {
 	data = bytes.ReplaceAll(data, []byte(" @click."), []byte(" click."))
 	data = bytes.ReplaceAll(data, []byte(" @change="), []byte(" change="))
 	data = bytes.ReplaceAll(data, []byte(" @htmx:"), []byte(" htmx-"))
+	data = bytes.ReplaceAll(data, []byte(" @keydown."), []byte(" keydown."))
 	data = bytes.ReplaceAll(data, []byte(" hx-on::"), []byte(" hx-on-"))
 
 	decoder := xml.NewDecoder(bytes.NewReader(data))

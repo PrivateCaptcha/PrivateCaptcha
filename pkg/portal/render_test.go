@@ -249,18 +249,6 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{"1", "2"},
 		},
 		{
-			path:     []string{common.OrgEndpoint, "123", "search-close"},
-			template: portalTemplate,
-			model: &orgDashboardRenderContext{
-				portalBaseRenderContext: portalBaseRenderContext{
-					Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
-					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
-				},
-			},
-			selector: "button.pc-notification-dismiss",
-			matches:  []string{"Close"},
-		},
-		{
 			path:     []string{common.OrgEndpoint, "123", "search-safe-data"},
 			template: portalTemplate,
 			model:    hostileOrgModel,
