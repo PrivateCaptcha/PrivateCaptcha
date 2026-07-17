@@ -52,7 +52,7 @@
             </div>
             {{ if ne .Params.CurrentOrg.Level .Const.OrgLevelInvited }}
             <div class="mt-4 flex flex-shrink-0 md:ml-4 md:mt-0">
-                <button id="searchOpen" class="pc-setup-button gap-x-1.5 px-4" @click="$store.search.open = true">
+                <button id="searchOpen" class="pc-setup-button gap-x-1.5 px-4" @click="$store.search.open = true" @keydown.window="if (($event.ctrlKey || $event.metaKey) && $event.key.toLowerCase() === 'k') { $event.preventDefault(); $store.search.open = true }" aria-keyshortcuts="Control+K Meta+K">
                     <svg xmlns="http://www.w3.org/2000/svg" class="-ml-0.5 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
                     </svg>
@@ -155,6 +155,7 @@
         data-org-id="{{ .Params.CurrentOrg.ID }}"
         data-org-name="{{ .Params.CurrentOrg.Name }}"
         x-init="$store.search.initialize($el.dataset.orgId, $el.dataset.orgName)"
+        @keydown.escape.window="$store.search.open && $store.search.close()"
         x-cloak x-show="$store.search.open"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="opacity-0"
