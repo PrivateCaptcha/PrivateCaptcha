@@ -55,7 +55,8 @@
         {{ end }}
     </div>
     {{ if $.Platform.Enterprise }}
-    <div class="pc-modal-root" x-cloak x-show="moveOpen" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="pc-modal-root" x-cloak x-show="moveOpen" aria-labelledby="modal-title" role="dialog" aria-modal="true"
+        @keydown.escape.window="moveOpen && (moveOpen = false)">
         <div class="pc-modal-overlay" aria-hidden="true"></div>
         <div class="pc-modal-layer">
             <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">

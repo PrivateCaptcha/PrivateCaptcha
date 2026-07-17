@@ -1,5 +1,6 @@
 <main class="lg:flex-auto" x-data="{createOpen: {{ .Params.CreateOpen }}, selectedScope: '{{ .Const.APIKeyScopePuzzle }}'}">
     <div class="pc-modal-root" aria-labelledby="modal-title" role="dialog" aria-modal="true"
+        @keydown.escape.window="createOpen && (createOpen = false)"
         x-cloak x-show="createOpen"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="opacity-0"

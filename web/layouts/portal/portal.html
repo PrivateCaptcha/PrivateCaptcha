@@ -211,6 +211,7 @@
     {{ end }}
     {{ if $.Platform.Enterprise }}
     <div class="pc-modal-root" aria-labelledby="onboarding-modal-title" role="dialog" aria-modal="true"
+        @keydown.escape.window="onboardingOpen && (onboardingOpen = false)"
         x-cloak x-show="onboardingOpen"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="opacity-0"

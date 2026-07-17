@@ -1,5 +1,6 @@
 <main class="lg:flex-auto" x-data="{deleteOpen: false}">
     <div class="pc-modal-root" aria-labelledby="modal-title" role="dialog" aria-modal="true"
+        @keydown.escape.window="deleteOpen && (deleteOpen = false)"
         x-cloak x-show="deleteOpen"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="opacity-0"

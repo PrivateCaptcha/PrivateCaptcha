@@ -2,6 +2,7 @@
 
 <div class="pc-section-divide" x-data="{deleteOpen: false, moveOpen: false}">
     <div class="pc-modal-root" aria-labelledby="delete-property-modal-title" role="dialog" aria-modal="true"
+        @keydown.escape.window="deleteOpen && (deleteOpen = false)"
         x-cloak x-show="deleteOpen"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="opacity-0"
@@ -63,6 +64,7 @@
     </div>
     {{ if $.Platform.Enterprise }}
     <div class="pc-modal-root" aria-labelledby="move-property-modal-title" role="dialog" aria-modal="true"
+        @keydown.escape.window="moveOpen && (moveOpen = false)"
         x-cloak x-show="moveOpen"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="opacity-0"
