@@ -3,7 +3,6 @@ package portal
 import (
 	"bytes"
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -258,7 +257,7 @@ func (s *Server) RenderResponse(ctx context.Context, name string, data interface
 
 	out := &bytes.Buffer{}
 
-	if err := ctx.Err(); errors.Is(err, context.DeadlineExceeded) {
+	if err := ctx.Err(); err != nil {
 		return out, err
 	}
 
