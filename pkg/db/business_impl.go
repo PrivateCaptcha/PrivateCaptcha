@@ -37,6 +37,11 @@ const (
 	MaxFormURLLength         = 1024
 )
 
+var (
+	invalidPropertyID int32 = -1
+	invalidFormID     int32 = -1
+)
+
 type OrgPropertiesSort string
 
 const (
@@ -70,10 +75,44 @@ func orgPropertiesCacheKey(orgID int32, sort OrgPropertiesSort) CacheKey {
 	return OrgPropertiesCacheKey(orgID, string(sort))
 }
 
-func (impl *BusinessStoreImpl) invalidateOrgPropertiesCache(ctx context.Context, orgID int32) {
+// NOTE: we must pass propertyID pointer non-nil ONLY in "public" APIs
+func (impl *BusinessStoreImpl) invalidateOrgPropertiesCache(ctx context.Context, orgID int32, propertyID *int32) {
 	for _, sort := range orgPropertiesSorts {
-		_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(orgID, sort))
+		cacheKey := orgPropertiesCacheKey(orgID, sort)
+
+		if propertyID == nil {
+			if properties, err := FetchCachedArray[dbgen.Property](ctx, impl.cache, cacheKey); err == nil {
+				for _, property := range properties {
+					impl.invalidatePropertyCache(ctx, property)
+				}
+			}
+		} else if *propertyID > 0 {
+			if property, err := FetchCachedOne[dbgen.Property](ctx, impl.cache, PropertyByIDCacheKey(*propertyID)); err == nil {
+				impl.invalidatePropertyCache(ctx, property)
+			}
+		}
+
+		_ = impl.cache.Delete(ctx, cacheKey)
 	}
+}
+
+// NOTE: we must pass formID pointer non-nil ONLY in "public" APIs
+func (impl *BusinessStoreImpl) invalidateOrgFormsCache(ctx context.Context, orgID int32, formID *int32) {
+	cacheKey := OrgFormsCacheKey(orgID, orgFormsCacheKeyStr)
+
+	if formID == nil {
+		if forms, err := FetchCachedArray[dbgen.Form](ctx, impl.cache, cacheKey); err == nil {
+			for _, form := range forms {
+				impl.invalidateFormCache(ctx, form)
+			}
+		}
+	} else if *formID > 0 {
+		if form, err := FetchCachedOne[dbgen.Form](ctx, impl.cache, formByIDCacheKey(*formID)); err == nil {
+			impl.invalidateFormCache(ctx, form)
+		}
+	}
+
+	_ = impl.cache.Delete(ctx, cacheKey)
 }
 
 var (
@@ -407,7 +446,8 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 	if orgs, err := FetchCachedArray[dbgen.GetUserOrganizationsRow](ctx, impl.cache, userOrgsCacheKey); err == nil {
 		for _, org := range orgs {
 			_ = impl.cache.Delete(ctx, orgCacheKey(org.Organization.ID))
-			impl.invalidateOrgPropertiesCache(ctx, org.Organization.ID)
+			impl.invalidateOrgPropertiesCache(ctx, org.Organization.ID, nil /*all properties*/)
+			impl.invalidateOrgFormsCache(ctx, org.Organization.ID, nil /*all forms*/)
 		}
 		_ = impl.cache.Delete(ctx, userOrgsCacheKey)
 	}
@@ -662,7 +702,7 @@ func (impl *BusinessStoreImpl) RetrievePropertiesByID(ctx context.Context, batch
 	reader := &StoreBulkReader[int32, int32, dbgen.Property]{
 		ArgFunc:      propertyIDFunc,
 		Cache:        impl.cache,
-		CacheKeyFunc: propertyByIDCacheKey,
+		CacheKeyFunc: PropertyByIDCacheKey,
 		QueryKeyFunc: IdentityKeyFunc[int32],
 		DropInvalid:  true,
 	}
@@ -690,8 +730,8 @@ func (impl *BusinessStoreImpl) RetrievePropertiesByID(ctx context.Context, batch
 func (impl *BusinessStoreImpl) retrieveOrgForm(ctx context.Context, orgID, formID int32) (*dbgen.Form, error) {
 	cacheKey := formByIDCacheKey(formID)
 
-	if prop, err := FetchCachedOne[dbgen.Form](ctx, impl.cache, cacheKey); err == nil {
-		return prop, nil
+	if form, err := FetchCachedOne[dbgen.Form](ctx, impl.cache, cacheKey); err == nil {
+		return form, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
 	}
@@ -1028,7 +1068,7 @@ func (impl *BusinessStoreImpl) cacheProperty(ctx context.Context, property *dbge
 		return
 	}
 
-	key := propertyByIDCacheKey(property.ID)
+	key := PropertyByIDCacheKey(property.ID)
 	_ = impl.cache.Set(ctx, key, property)
 	sitekey := UUIDToSiteKey(property.ExternalID)
 	_ = impl.cache.SetEx(ctx, PropertyBySitekeyCacheKey(sitekey), property, propertyTTL, defaultCacheRefresh)
@@ -1045,16 +1085,29 @@ func (impl *BusinessStoreImpl) cacheForm(ctx context.Context, form *dbgen.Form) 
 	}
 }
 
-func (impl *BusinessStoreImpl) deleteCachedForm(ctx context.Context, form *dbgen.Form) {
+func (impl *BusinessStoreImpl) invalidateFormCache(ctx context.Context, form *dbgen.Form) {
 	if form == nil {
 		return
 	}
 
 	if externalID := UUIDToString(form.ExternalID); len(externalID) > 0 {
+		_ = impl.cache.Delete(ctx, FormByExternalIDCacheKey(externalID))
+	}
+	_ = impl.cache.Delete(ctx, formByIDCacheKey(form.ID))
+}
+
+func (impl *BusinessStoreImpl) deleteCachedForm(ctx context.Context, form *dbgen.Form) {
+	if form == nil {
+		return
+	}
+
+	// we pass invalid ID because we set missing below rather than just delete
+	impl.invalidateOrgFormsCache(ctx, form.OrgID.Int32, &invalidFormID)
+
+	if externalID := UUIDToString(form.ExternalID); len(externalID) > 0 {
 		_ = impl.cache.SetMissing(ctx, FormByExternalIDCacheKey(externalID))
 	}
 	_ = impl.cache.SetMissing(ctx, formByIDCacheKey(form.ID))
-	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(form.OrgID.Int32, orgFormsCacheKeyStr))
 	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(form.OrgID.Int32))
 }
 
@@ -1063,24 +1116,27 @@ func (impl *BusinessStoreImpl) deleteCachedProperty(ctx context.Context, propert
 		return
 	}
 
-	// update caches
-	sitekey := UUIDToSiteKey(property.ExternalID)
-	// cache mostly used in API server
-	_ = impl.cache.SetMissing(ctx, PropertyBySitekeyCacheKey(sitekey))
-	_ = impl.cache.SetMissing(ctx, propertyByIDCacheKey(property.ID))
 	// invalidate org properties in cache as we just deleted a property
-	impl.InvalidatePropertyCache(ctx, property)
+	impl.invalidateOrgPropertiesCache(ctx, property.OrgID.Int32, &property.ID)
+
+	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(property.OrgID.Int32))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.CreatorID.Int32))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
+
+	// cache mostly used in API server
+	sitekey := UUIDToSiteKey(property.ExternalID)
+	_ = impl.cache.SetMissing(ctx, PropertyBySitekeyCacheKey(sitekey))
+	_ = impl.cache.SetMissing(ctx, PropertyByIDCacheKey(property.ID))
 }
 
-func (impl *BusinessStoreImpl) InvalidatePropertyCache(ctx context.Context, property *dbgen.Property) {
+func (impl *BusinessStoreImpl) invalidatePropertyCache(ctx context.Context, property *dbgen.Property) {
 	if property == nil {
 		return
 	}
 
-	impl.invalidateOrgPropertiesCache(ctx, property.OrgID.Int32)
-	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(property.OrgID.Int32))
-	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.CreatorID.Int32))
-	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
+	sitekey := UUIDToSiteKey(property.ExternalID)
+	_ = impl.cache.Delete(ctx, PropertyBySitekeyCacheKey(sitekey))
+	_ = impl.cache.Delete(ctx, PropertyByIDCacheKey(property.ID))
 }
 
 func (impl *BusinessStoreImpl) GetCachedOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
@@ -1088,7 +1144,7 @@ func (impl *BusinessStoreImpl) GetCachedOrgProperties(ctx context.Context, orgID
 }
 
 func (impl *BusinessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, propID int32) (*dbgen.Property, error) {
-	cacheKey := propertyByIDCacheKey(propID)
+	cacheKey := PropertyByIDCacheKey(propID)
 
 	if prop, err := FetchCachedOne[dbgen.Property](ctx, impl.cache, cacheKey); err == nil {
 		return prop, nil
@@ -1244,12 +1300,13 @@ func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *db
 
 	slog.InfoContext(ctx, "Created new property", "id", property.ID, "name", params.Name, "org", params.OrgID)
 
-	impl.cacheProperty(ctx, property)
 	// invalidate org properties in cache as we just created a new property
-	impl.invalidateOrgPropertiesCache(ctx, params.OrgID.Int32)
+	impl.invalidateOrgPropertiesCache(ctx, params.OrgID.Int32, &invalidPropertyID)
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.CreatorID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(property.OrgID.Int32))
+
+	impl.cacheProperty(ctx, property)
 
 	auditEvent := newCreatePropertyAuditLogEvent(property, org)
 
@@ -1294,8 +1351,8 @@ func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams
 	}
 
 	slog.InfoContext(ctx, "Created new form", "formID", form.ID, "propertyID", form.PropertyID)
+	impl.invalidateOrgFormsCache(ctx, org.ID, &invalidFormID)
 	impl.cacheForm(ctx, form)
-	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(property.OrgID.Int32, orgFormsCacheKeyStr))
 	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(property.OrgID.Int32))
 
 	auditEvents := []*common.AuditLogEvent{auditEvent, newCreateFormAuditLogEvent(form, org)}
@@ -1303,7 +1360,7 @@ func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams
 }
 
 func (impl *BusinessStoreImpl) GetCachedPropertyByID(ctx context.Context, propertyID int32) (*dbgen.Property, error) {
-	return FetchCachedOne[dbgen.Property](ctx, impl.cache, propertyByIDCacheKey(propertyID))
+	return FetchCachedOne[dbgen.Property](ctx, impl.cache, PropertyByIDCacheKey(propertyID))
 }
 
 func createPropertyFromUpdate(row *dbgen.UpdatePropertyRow) *dbgen.Property {
@@ -1385,8 +1442,8 @@ func (impl *BusinessStoreImpl) UpdateForm(ctx context.Context, org *dbgen.Organi
 	slog.InfoContext(ctx, "Updated form", "name", updatedForm.Name, "formID", updatedForm.ID)
 
 	cacheForm := createFormFromUpdate(updatedForm)
+	impl.invalidateOrgFormsCache(ctx, updatedForm.OrgID.Int32, &updatedForm.ID)
 	impl.cacheForm(ctx, cacheForm)
-	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(updatedForm.OrgID.Int32, orgFormsCacheKeyStr))
 	_ = impl.cache.Delete(ctx, formAuditLogsCacheKey(updatedForm.ID))
 
 	auditEvent := newUpdateFormAuditLogEvent(cacheForm, updatedForm, org, user)
@@ -1410,8 +1467,8 @@ func (impl *BusinessStoreImpl) DeactivateForms(ctx context.Context, ids []int32)
 	}
 
 	for _, form := range forms {
+		impl.invalidateOrgFormsCache(ctx, form.OrgID.Int32, &form.ID)
 		impl.cacheForm(ctx, form)
-		_ = impl.cache.Delete(ctx, OrgFormsCacheKey(form.OrgID.Int32, orgFormsCacheKeyStr))
 		_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(form.OrgID.Int32))
 	}
 
@@ -1460,12 +1517,12 @@ func (impl *BusinessStoreImpl) MoveForm(ctx context.Context, user *dbgen.User, f
 
 	slog.InfoContext(ctx, "Moved form to another org", "formID", form.ID, "propertyID", property.ID, "oldOrgID", oldOrgID, "newOrgID", org.Organization.ID)
 
-	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(oldOrgID, orgFormsCacheKeyStr))
-	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(updatedForm.OrgID.Int32, orgFormsCacheKeyStr))
+	impl.invalidateOrgFormsCache(ctx, oldOrgID, &updatedForm.ID)
+	impl.invalidateOrgFormsCache(ctx, updatedForm.OrgID.Int32, &updatedForm.ID)
 	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(oldOrgID))
 	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(updatedForm.OrgID.Int32))
-	impl.invalidateOrgPropertiesCache(ctx, oldOrgID)
-	impl.invalidateOrgPropertiesCache(ctx, updatedProperty.OrgID.Int32)
+	impl.invalidateOrgPropertiesCache(ctx, oldOrgID, &updatedProperty.ID)
+	impl.invalidateOrgPropertiesCache(ctx, updatedProperty.OrgID.Int32, &updatedProperty.ID)
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(oldOrgID))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(updatedProperty.OrgID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
@@ -1534,7 +1591,7 @@ func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Or
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			plog := slog.With("propID", params.ID, "userID", user.ID)
-			if property, err := FetchCachedOne[dbgen.Property](ctx, impl.cache, propertyByIDCacheKey(params.ID)); err == nil {
+			if property, err := FetchCachedOne[dbgen.Property](ctx, impl.cache, PropertyByIDCacheKey(params.ID)); err == nil {
 				plog = plog.With("orgOwnerID", property.OrgOwnerID.Int32, "creatorID", property.CreatorID.Int32)
 			}
 			plog.WarnContext(ctx, "Cannot update property in DB")
@@ -1551,7 +1608,7 @@ func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Or
 	cacheProperty := createPropertyFromUpdate(updatedProperty)
 	impl.cacheProperty(ctx, cacheProperty)
 	// invalidate org properties in cache as we just created a new property
-	impl.invalidateOrgPropertiesCache(ctx, updatedProperty.OrgID.Int32)
+	impl.invalidateOrgPropertiesCache(ctx, updatedProperty.OrgID.Int32, &updatedProperty.ID)
 	_ = impl.cache.Delete(ctx, propertyAuditLogsCacheKey(updatedProperty.ID))
 
 	auditEvent := newUpdatePropertyAuditLogEvent(cacheProperty, updatedProperty, org, user)
@@ -3313,8 +3370,8 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 	slog.InfoContext(ctx, "Moved property to another org", "propID", property.ID, "oldOrgID", property.OrgID.Int32, "newOrgID", org.Organization.ID)
 
 	// Invalidate cache for both old and new organizations
-	impl.invalidateOrgPropertiesCache(ctx, oldOrgID)
-	impl.invalidateOrgPropertiesCache(ctx, updatedProperty.OrgID.Int32)
+	impl.invalidateOrgPropertiesCache(ctx, oldOrgID, &property.ID)
+	impl.invalidateOrgPropertiesCache(ctx, updatedProperty.OrgID.Int32, &property.ID)
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(oldOrgID))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(updatedProperty.OrgID.Int32))
 	// and cache property
@@ -3394,8 +3451,8 @@ func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *d
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(newOwner.ID))
 	_ = impl.cache.Delete(ctx, orgCacheKey(org.ID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
-	impl.invalidateOrgPropertiesCache(ctx, org.ID)
-	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(org.ID, orgFormsCacheKeyStr))
+	impl.invalidateOrgPropertiesCache(ctx, org.ID, nil /*all properties*/)
+	impl.invalidateOrgFormsCache(ctx, org.ID, nil /*all forms*/)
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(user.ID))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(newOwner.ID))
 	_ = impl.cache.Delete(ctx, userFormsCountCacheKey(user.ID))

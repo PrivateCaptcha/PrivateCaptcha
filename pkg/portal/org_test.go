@@ -2707,8 +2707,8 @@ func TestRetrieveOrgPropertyDeletedFromCache(t *testing.T) {
 		t.Fatalf("Failed to create property: %v", err)
 	}
 
-	// Delete property from cache using the public wrapper
-	store.Impl().InvalidatePropertyCache(ctx, property)
+	_ = store.Cache.Delete(ctx, db.PropertyByIDCacheKey(property.ID))
+	_ = store.Cache.Delete(ctx, db.PropertyBySitekeyCacheKey(db.UUIDToSiteKey(property.ExternalID)))
 
 	// Now try to retrieve the property - should still work since it's in DB
 	retrievedProperty, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)

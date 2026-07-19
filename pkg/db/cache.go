@@ -499,9 +499,6 @@ func OrgFormsCacheKey(orgID int32, key string) CacheKey {
 func orgSearchCacheKey(orgID int32, searchTerm string, limit int) CacheKey {
 	return CacheKey{Prefix: orgSearchCacheKeyPrefix, IntValue: orgID, StrValue: fmt.Sprintf("%s/%d", searchTerm, limit)}
 }
-func propertyByIDCacheKey(propID int32) CacheKey {
-	return Int32CacheKey(propertyByIDCacheKeyPrefix, propID)
-}
 func PropertyByIDCacheKey(propID int32) CacheKey {
 	return Int32CacheKey(propertyByIDCacheKeyPrefix, propID)
 }

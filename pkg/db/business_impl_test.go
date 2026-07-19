@@ -225,7 +225,7 @@ func TestBusinessStoreImplRetrieveOrgProperties(t *testing.T) {
 		t.Fatalf("expected later name-ascending page to bypass cache, got %d queries", actual)
 	}
 
-	store.InvalidatePropertyCache(ctx, &dbgen.Property{OrgID: Int(org.ID)})
+	store.invalidateOrgPropertiesCache(ctx, org.ID, nil /*all properties*/)
 
 	for _, sort := range sorts {
 		if _, _, err := store.RetrieveOrgProperties(ctx, org, sort, 0, 1); err != nil {
