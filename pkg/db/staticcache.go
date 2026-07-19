@@ -58,6 +58,8 @@ func (c *StaticCache[TKey, TValue]) Get(ctx context.Context, key TKey) (TValue, 
 }
 
 func (c *StaticCache[TKey, TValue]) GetEx(ctx context.Context, key TKey, loader common.CacheLoader[TKey, TValue]) (TValue, error) {
+	c.compressIfNeeded()
+
 	var loadErr error
 	actual, ok := c.cache.Compute(key, func(oldValue TValue, loaded bool) (TValue, xsync.ComputeOp) {
 		if loaded {
@@ -89,6 +91,8 @@ func (c *StaticCache[TKey, TValue]) GetEx(ctx context.Context, key TKey, loader 
 }
 
 func (c *StaticCache[TKey, TValue]) SetMissing(ctx context.Context, key TKey) error {
+	c.compressIfNeeded()
+
 	c.cache.Store(key, c.missingValue)
 	return nil
 }
@@ -108,7 +112,7 @@ func (c *StaticCache[TKey, TValue]) compress() {
 	}
 }
 
-func (c *StaticCache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue) error {
+func (c *StaticCache[TKey, TValue]) compressIfNeeded() {
 	if c.cache.Size() >= c.upperBound {
 		c.compressMux.Lock()
 		defer c.compressMux.Unlock()
@@ -116,6 +120,10 @@ func (c *StaticCache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue)
 			c.compress()
 		}
 	}
+}
+
+func (c *StaticCache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue) error {
+	c.compressIfNeeded()
 
 	c.cache.Store(key, t)
 	return nil

@@ -229,3 +229,28 @@ func TestStaticCacheGetExMissingValue(t *testing.T) {
 		t.Errorf("Expected ErrNegativeCacheHit when loader returns missing value, got %v", err)
 	}
 }
+
+type nopLoader struct{}
+
+func (nopLoader) Load(ctx context.Context, key int) (int, error)                 { return key, nil }
+func (nopLoader) Reload(ctx context.Context, key int, oldValue int) (int, error) { return key, nil }
+
+func TestStaticCacheSetMissingBypassesCapacity(t *testing.T) {
+	c := NewStaticCache[int, int](10, 0)
+	for i := 0; i < 50; i++ {
+		_ = c.SetMissing(context.Background(), i)
+	}
+	if got := c.cache.Size(); got > 10 {
+		t.Fatalf("SetMissing bypassed capacity limit. Capacity=10, actual size=%d", got)
+	}
+}
+
+func TestStaticCacheGetExBypassesCapacity(t *testing.T) {
+	c := NewStaticCache[int, int](10, 0)
+	for i := 0; i < 50; i++ {
+		_, _ = c.GetEx(context.Background(), i, nopLoader{})
+	}
+	if got := c.cache.Size(); got > 10 {
+		t.Fatalf("GetEx bypassed capacity limit. Capacity=10, actual size=%d", got)
+	}
+}
