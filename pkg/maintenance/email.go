@@ -282,6 +282,13 @@ func (j *UserEmailNotificationsJob) updateNotifications(ctx context.Context,
 	processedIDs []int32) {
 	if err := j.Store.Impl().MarkUserNotificationsProcessed(ctx, processedIDs, time.Now().UTC()); err != nil {
 		slog.ErrorContext(ctx, "Failed to mark notifications processed", common.ErrAttr(err))
+
+		// We try to mark them attempted here because they are excluded below
+		if len(processedIDs) > 0 {
+			if markErr := j.Store.Impl().MarkUserNotificationsAttempted(ctx, processedIDs); markErr != nil {
+				slog.ErrorContext(ctx, "Failed to mark sent notifications attempted", common.ErrAttr(markErr))
+			}
+		}
 	}
 
 	processedNotifications := make(map[int32]struct{}, len(processedIDs))
