@@ -158,5 +158,8 @@ func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]ui
 // rollback tombstone when renew fails
 func (ss *SessionStore) RollbackRenew(ctx context.Context, oldSID string) {
 	impl := ss.store.Impl()
-	_ = impl.DeleteUserSession(ctx, oldSID)
+	impl.cache.Delete(ctx, SessionCacheKey(oldSID))
+	// Do NOT delete from database - only remove tombstone from local cache so
+	// the next read can fall through to the DB and recover the original session.
+	// _ = impl.DeleteUserSession(ctx, oldSID)
 }
