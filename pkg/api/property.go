@@ -673,6 +673,11 @@ func (s *Server) readUpdatePropertiesRequest(ctx context.Context, r *http.Reques
 			return nil, common.StatusPropertyIDEmptyError, nil
 		}
 
+		if _, err := s.IDHasher.Decrypt(input.ID); err != nil {
+			ilog.WarnContext(ctx, "Failed to decrypt property ID", "id", input.ID, common.ErrAttr(err))
+			return nil, common.StatusPropertyIDInvalidError, nil
+		}
+
 		if _, ok := idsMap[input.ID]; ok {
 			ilog.WarnContext(ctx, "Property ID duplicate found")
 			return nil, common.StatusPropertyIDDuplicateError, nil

@@ -2691,3 +2691,32 @@ func TestApiDeletePropertiesAfterRemovedFromOrgWithExistingKey(t *testing.T) {
 		t.Fatalf("User was able to delete property after being removed from org")
 	}
 }
+
+func TestApiUpdatePropertiesInvalidPropertyID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, _, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to update with invalid ID format
+	updateInput := []*apiUpdatePropertyInput{{ID: "invalid-id-format!"}}
+	updateInput[0].Name = "Updated Name!"
+
+	_, meta, err := requestResponseAPISuite[APIResponse](ctx, updateInput,
+		http.MethodPut,
+		"/"+common.PropertiesEndpoint,
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if meta.Code != common.StatusPropertyIDInvalidError {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+}
