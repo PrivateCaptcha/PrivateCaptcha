@@ -136,6 +136,12 @@
     cursor: pointer;
 }
 
+.pc-interactive-area input[type="checkbox"].error {
+    background-color: var(--checkbox-background-color);
+    border-color: var(--warn-color);
+    cursor: not-allowed;
+}
+
 .pc-interactive-area input[type="checkbox"].invalid {
     background-color: var(--checkbox-hover-color);
     border-color: var(--gray-color);
