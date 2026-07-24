@@ -1606,9 +1606,9 @@ func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Or
 	slog.InfoContext(ctx, "Updated property", "name", updatedProperty.Name, "propID", updatedProperty.ID)
 
 	cacheProperty := createPropertyFromUpdate(updatedProperty)
-	impl.cacheProperty(ctx, cacheProperty)
 	// invalidate org properties in cache as we just created a new property
 	impl.invalidateOrgPropertiesCache(ctx, updatedProperty.OrgID.Int32, &updatedProperty.ID)
+	impl.cacheProperty(ctx, cacheProperty)
 	_ = impl.cache.Delete(ctx, propertyAuditLogsCacheKey(updatedProperty.ID))
 
 	auditEvent := newUpdatePropertyAuditLogEvent(cacheProperty, updatedProperty, org, user)
