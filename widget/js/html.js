@@ -252,6 +252,7 @@ export class CaptchaElement extends SafeHTMLElement {
                 activeArea.appendChild(label(strings[i18n.UNAVAILABLE], CHECKBOX_ID));
                 break;
             case STATE_ERROR:
+                bindCheckEvent = true;
                 activeArea.appendChild(checkbox('error'));
                 activeArea.appendChild(label(strings[i18n.ERROR], CHECKBOX_ID));
                 break;

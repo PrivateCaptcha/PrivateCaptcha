@@ -139,7 +139,7 @@
 .pc-interactive-area input[type="checkbox"].error {
     background-color: var(--checkbox-background-color);
     border-color: var(--warn-color);
-    cursor: not-allowed;
+    cursor: pointer;
 }
 
 .pc-interactive-area input[type="checkbox"].invalid {
