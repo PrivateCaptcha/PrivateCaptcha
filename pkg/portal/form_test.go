@@ -1245,7 +1245,7 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 				values.Set(common.ParamName, "")
 			},
 			expectedStatus: http.StatusOK,
-			expectedBody:   common.StatusPropertyNameEmptyError.String(),
+			expectedBody:   common.StatusFormNameEmptyError.String(),
 			expectedCount:  0,
 		},
 		{
@@ -1381,7 +1381,7 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 				return user, org, user.Email, func() {}
 			},
 			expectedStatus: http.StatusOK,
-			expectedBody:   common.StatusPropertyNameDuplicateError.String(),
+			expectedBody:   common.StatusFormNameDuplicateError.String(),
 			expectedCount:  1,
 		},
 	}

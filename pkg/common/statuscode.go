@@ -80,6 +80,11 @@ const (
 	StatusRuleHTTPHeaderNameRequired        StatusCode = 1425
 	StatusRuleHTTPHeaderNameInvalid         StatusCode = 1426
 	StatusRuleNameInvalidCharsError         StatusCode = 1427
+	// forms errors
+	StatusFormNameEmptyError          StatusCode = 1500
+	StatusFormNameTooLongError        StatusCode = 1501
+	StatusFormNameInvalidSymbolsError StatusCode = 1502
+	StatusFormNameDuplicateError      StatusCode = 1503
 )
 
 func (sc StatusCode) Success() bool {
@@ -150,6 +155,14 @@ func (sc StatusCode) String() string {
 		return "Property limit reached for current subscription plan."
 	case StatusPropertyPermissionsError:
 		return "Insufficient permissions to update settings."
+	case StatusFormNameEmptyError:
+		return "Name cannot be empty."
+	case StatusFormNameTooLongError:
+		return "Name is too long."
+	case StatusFormNameInvalidSymbolsError:
+		return "Form name contains invalid characters."
+	case StatusFormNameDuplicateError:
+		return "Form with this name already exists."
 	case StatusRuleNameEmptyError:
 		return "Rule name is required."
 	case StatusRuleConditionPropertyRequired:

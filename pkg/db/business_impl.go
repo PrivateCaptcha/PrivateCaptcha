@@ -3711,21 +3711,21 @@ func (impl *BusinessStoreImpl) ValidateFormName(ctx context.Context, name string
 		slog.WarnContext(ctx, "Name length is invalid", "length", len(name))
 
 		if len(name) == 0 {
-			return common.StatusPropertyNameEmptyError
+			return common.StatusFormNameEmptyError
 		}
 
-		return common.StatusPropertyNameTooLongError
+		return common.StatusFormNameTooLongError
 	}
 
 	if pos, r := containsInvalidNameChars(name, "'-_.:()[]"); pos >= 0 {
 		slog.WarnContext(ctx, "Name contains invalid characters", "position", pos, "rune", r)
-		return common.StatusPropertyNameInvalidSymbolsError
+		return common.StatusFormNameInvalidSymbolsError
 	}
 
 	if org != nil {
 		if _, err := impl.FindOrgForm(ctx, name, org); err != ErrRecordNotFound {
 			slog.WarnContext(ctx, "Form already exists", "name", name, common.ErrAttr(err))
-			return common.StatusPropertyNameDuplicateError
+			return common.StatusFormNameDuplicateError
 		}
 	}
 

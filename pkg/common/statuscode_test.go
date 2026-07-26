@@ -65,6 +65,10 @@ func TestStatusCodeString(t *testing.T) {
 		StatusRuleNameInvalidCharsError,
 		StatusOrgRulesLimitError,
 		StatusOrgRulesSubscriptionRequired,
+		StatusFormNameEmptyError,
+		StatusFormNameTooLongError,
+		StatusFormNameInvalidSymbolsError,
+		StatusFormNameDuplicateError,
 	}
 
 	for _, sc := range statusCodes {
@@ -72,6 +76,26 @@ func TestStatusCodeString(t *testing.T) {
 			str := sc.String()
 			if len(str) == 0 {
 				t.Errorf("String() returned empty string for status code %d", sc)
+			}
+		})
+	}
+}
+
+func TestFormNameStatusCodeString(t *testing.T) {
+	tests := []struct {
+		code StatusCode
+		want string
+	}{
+		{code: StatusFormNameEmptyError, want: "Name cannot be empty."},
+		{code: StatusFormNameTooLongError, want: "Name is too long."},
+		{code: StatusFormNameInvalidSymbolsError, want: "Form name contains invalid characters."},
+		{code: StatusFormNameDuplicateError, want: "Form with this name already exists."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := tt.code.String(); got != tt.want {
+				t.Errorf("String() = %q, want %q", got, tt.want)
 			}
 		})
 	}

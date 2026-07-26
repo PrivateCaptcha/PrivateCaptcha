@@ -166,6 +166,29 @@ func TestParseOrgPropertiesSort(t *testing.T) {
 	}
 }
 
+func TestBusinessStoreImplValidateFormName(t *testing.T) {
+	store := setupTestStore(t, nil)
+	tests := []struct {
+		name     string
+		formName string
+		org      *dbgen.Organization
+		want     common.StatusCode
+	}{
+		{name: "Empty", want: common.StatusFormNameEmptyError},
+		{name: "TooLong", formName: strings.Repeat("a", 256), want: common.StatusFormNameTooLongError},
+		{name: "InvalidSymbols", formName: "invalid/form", want: common.StatusFormNameInvalidSymbolsError},
+		{name: "Duplicate", formName: "duplicate", org: &dbgen.Organization{ID: 1}, want: common.StatusFormNameDuplicateError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := store.ValidateFormName(t.Context(), tt.formName, tt.org); got != tt.want {
+				t.Errorf("ValidateFormName() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBusinessStoreImplRetrieveOrgProperties(t *testing.T) {
 	ctx := context.Background()
 	org := &dbgen.Organization{ID: 1}
