@@ -280,6 +280,7 @@ func (j *UserEmailNotificationsJob) RunOnce(ctx context.Context, params any) err
 func (j *UserEmailNotificationsJob) updateNotifications(ctx context.Context,
 	notifications []*dbgen.GetPendingUserNotificationsRow,
 	processedIDs []int32) {
+	markFailed := false
 	if err := j.Store.Impl().MarkUserNotificationsProcessed(ctx, processedIDs, time.Now().UTC()); err != nil {
 		slog.ErrorContext(ctx, "Failed to mark notifications processed", common.ErrAttr(err))
 
@@ -287,6 +288,7 @@ func (j *UserEmailNotificationsJob) updateNotifications(ctx context.Context,
 		if len(processedIDs) > 0 {
 			if markErr := j.Store.Impl().MarkUserNotificationsAttempted(ctx, processedIDs); markErr != nil {
 				slog.ErrorContext(ctx, "Failed to mark sent notifications attempted", common.ErrAttr(markErr))
+				markFailed = true
 			}
 		}
 	}
@@ -308,7 +310,8 @@ func (j *UserEmailNotificationsJob) updateNotifications(ctx context.Context,
 
 	attemptedNotificationIDs := make([]int32, 0, attemptedCount)
 	for _, n := range notifications {
-		if _, ok := processedNotifications[n.UserNotification.ID]; !ok {
+		_, excluded := processedNotifications[n.UserNotification.ID]
+		if !excluded || markFailed {
 			attemptedNotificationIDs = append(attemptedNotificationIDs, n.UserNotification.ID)
 		}
 	}
