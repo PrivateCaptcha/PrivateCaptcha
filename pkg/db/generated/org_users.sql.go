@@ -175,11 +175,18 @@ func (q *Queries) LinkOrgInviteToUser(ctx context.Context, arg *LinkOrgInviteToU
 }
 
 const removeUnlinkedOrgInviteByID = `-- name: RemoveUnlinkedOrgInviteByID :one
-DELETE FROM backend.organization_users WHERE id = $1 AND user_id IS NULL RETURNING email
+DELETE FROM backend.organization_users
+WHERE id = $1 AND org_id = $2 AND user_id IS NULL
+RETURNING email
 `
 
-func (q *Queries) RemoveUnlinkedOrgInviteByID(ctx context.Context, id int32) (pgtype.Text, error) {
-	row := q.db.QueryRow(ctx, removeUnlinkedOrgInviteByID, id)
+type RemoveUnlinkedOrgInviteByIDParams struct {
+	ID    int32 `db:"id" json:"id"`
+	OrgID int32 `db:"org_id" json:"org_id"`
+}
+
+func (q *Queries) RemoveUnlinkedOrgInviteByID(ctx context.Context, arg *RemoveUnlinkedOrgInviteByIDParams) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, removeUnlinkedOrgInviteByID, arg.ID, arg.OrgID)
 	var email pgtype.Text
 	err := row.Scan(&email)
 	return email, err

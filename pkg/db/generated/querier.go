@@ -110,7 +110,7 @@ type Querier interface {
 	MovePropertyWithForm(ctx context.Context, arg *MovePropertyWithFormParams) (*Property, error)
 	Ping(ctx context.Context) (int32, error)
 	RebalanceDifficultyRules(ctx context.Context, arg *RebalanceDifficultyRulesParams) ([]int32, error)
-	RemoveUnlinkedOrgInviteByID(ctx context.Context, id int32) (pgtype.Text, error)
+	RemoveUnlinkedOrgInviteByID(ctx context.Context, arg *RemoveUnlinkedOrgInviteByIDParams) (pgtype.Text, error)
 	RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgParams) (int64, error)
 	RotateAPIKey(ctx context.Context, arg *RotateAPIKeyParams) (*APIKey, error)
 	SearchOrg(ctx context.Context, arg *SearchOrgParams) ([]*SearchOrgRow, error)

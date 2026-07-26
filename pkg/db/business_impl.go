@@ -2164,11 +2164,18 @@ func (impl *BusinessStoreImpl) RemoveUserFromOrg(ctx context.Context, user *dbge
 }
 
 func (impl *BusinessStoreImpl) RemoveEmailInviteFromOrg(ctx context.Context, user *dbgen.User, org *dbgen.Organization, inviteID int32) (*common.AuditLogEvent, error) {
+	if (user == nil) || (org == nil) {
+		return nil, ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	email, err := impl.querier.RemoveUnlinkedOrgInviteByID(ctx, inviteID)
+	email, err := impl.querier.RemoveUnlinkedOrgInviteByID(ctx, &dbgen.RemoveUnlinkedOrgInviteByIDParams{
+		ID:    inviteID,
+		OrgID: org.ID,
+	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to remove org email invite", "inviteID", inviteID, "orgID", org.ID, common.ErrAttr(err))
 		return nil, err

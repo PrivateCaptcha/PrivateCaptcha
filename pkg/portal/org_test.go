@@ -2398,6 +2398,57 @@ func TestDeleteOrgMembersEmailInvite(t *testing.T) {
 	}
 }
 
+func TestCrossOrgInviteDeletion(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	ownerA, orgA, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner_a", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner A account: %v", err)
+	}
+
+	ownerB, orgB, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner_b", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner B account: %v", err)
+	}
+
+	inviteRecord, _, err := store.Impl().InviteEmailToOrg(ctx, ownerB, orgB, "victim@example.com")
+	if err != nil {
+		t.Fatalf("Failed to create email invite: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, ownerA.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(orgA.ID))
+	inviteID := server.IDHasher.Encrypt(int(inviteRecord.ID))
+	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/org/%s/orginvite/%s", orgID, inviteID), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(ownerA.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	inviteMembers, err := store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, orgB.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve org B invites: %v", err)
+	}
+
+	for _, member := range inviteMembers {
+		if member.OrganizationUser.ID == inviteRecord.ID {
+			return
+		}
+	}
+
+	t.Error("Invite from org B should not be deleted through org A")
+}
+
 func TestJoinOrgNotInvited(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

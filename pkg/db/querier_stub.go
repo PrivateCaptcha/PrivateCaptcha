@@ -316,7 +316,7 @@ func (s *QuerierStub) Ping(ctx context.Context) (int32, error) {
 func (s *QuerierStub) RebalanceDifficultyRules(ctx context.Context, arg *dbgen.RebalanceDifficultyRulesParams) ([]int32, error) {
 	return nil, s.Error
 }
-func (s *QuerierStub) RemoveUnlinkedOrgInviteByID(ctx context.Context, id int32) (pgtype.Text, error) {
+func (s *QuerierStub) RemoveUnlinkedOrgInviteByID(ctx context.Context, arg *dbgen.RemoveUnlinkedOrgInviteByIDParams) (pgtype.Text, error) {
 	return pgtype.Text{}, s.Error
 }
 func (s *QuerierStub) RemoveUserFromOrg(ctx context.Context, arg *dbgen.RemoveUserFromOrgParams) (int64, error) {
