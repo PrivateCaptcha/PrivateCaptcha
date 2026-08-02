@@ -1018,13 +1018,19 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, _, err := s.requestOrg(user, r, false /*only owner*/, &apiKey.OrgID)
+	org, level, err := s.requestOrg(user, r, false /*only owner*/, &apiKey.OrgID)
 	if err != nil {
 		if err == db.ErrInvalidInput {
 			s.sendAPIErrorResponse(ctx, common.StatusOrgIDInvalidError, r, w)
 		} else {
 			s.sendHTTPErrorResponse(err, w)
 		}
+		return
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		s.sendHTTPErrorResponse(db.ErrPermissions, w)
 		return
 	}
 
