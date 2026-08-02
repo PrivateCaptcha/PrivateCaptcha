@@ -243,7 +243,8 @@ func (ua *UserAgent) addMatch(result resultItem) bool {
 			internal.BrowserSilk,
 			internal.BrowserFalkon,
 			internal.BrowserNintendo,
-			internal.BrowserYandex:
+			internal.BrowserYandex,
+			internal.BrowserHuawei:
 			ua.browser = result.Match
 
 		case internal.BrowserOperaMini:

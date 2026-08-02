@@ -138,6 +138,11 @@ func (ua UserAgent) IsYandexBrowser() bool {
 	return ua.browser == internal.BrowserYandex
 }
 
+// IsHuaweiBrowser returns true if the user agent is a Huawei browser.
+func (ua UserAgent) IsHuaweiBrowser() bool {
+	return ua.browser == internal.BrowserHuawei
+}
+
 // IsAndroidOS returns true if the user agent is an Android OS device.
 func (ua UserAgent) IsAndroidOS() bool {
 	return ua.os == internal.OSAndroid

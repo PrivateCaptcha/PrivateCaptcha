@@ -24,6 +24,7 @@ const (
 	BrowserFalkon    Browser = "Falkon"
 	BrowserNintendo  Browser = "Nintendo Browser"
 	BrowserYandex    Browser = "Yandex Browser"
+	BrowserHuawei    Browser = "Huawei Browser"
 
 	OSAndroid  OS = "Android"
 	OSChromeOS OS = "ChromeOS"

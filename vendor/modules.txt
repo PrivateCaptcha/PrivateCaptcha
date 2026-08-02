@@ -141,7 +141,7 @@ github.com/maypok86/otter/v2/internal/xmath
 github.com/maypok86/otter/v2/internal/xruntime
 github.com/maypok86/otter/v2/internal/xsync
 github.com/maypok86/otter/v2/stats
-# github.com/medama-io/go-useragent v1.2.3
+# github.com/medama-io/go-useragent v1.2.4
 ## explicit; go 1.21.4
 github.com/medama-io/go-useragent
 github.com/medama-io/go-useragent/agents

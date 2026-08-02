@@ -27,6 +27,7 @@ const (
 	BrowserFalkon
 	BrowserNintendo
 	BrowserYandex
+	BrowserHuawei
 
 	OSAndroid
 	OSChromeOS
@@ -72,7 +73,8 @@ func (m Match) GetMatchType() MatchType {
 		BrowserSilk,
 		BrowserFalkon,
 		BrowserNintendo,
-		BrowserYandex:
+		BrowserYandex,
+		BrowserHuawei:
 		return MatchBrowser
 
 	case OSAndroid,
@@ -131,6 +133,8 @@ func (m Match) GetMatchBrowser() agents.Browser {
 		return agents.BrowserNintendo
 	case BrowserYandex:
 		return agents.BrowserYandex
+	case BrowserHuawei:
+		return agents.BrowserHuawei
 	}
 
 	return ""
