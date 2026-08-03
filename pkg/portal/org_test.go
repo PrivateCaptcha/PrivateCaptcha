@@ -2011,7 +2011,7 @@ func TestOrgInviteRegisterAlreadyLinked(t *testing.T) {
 	}
 
 	// Create an email invite and then link it to user3
-	testEmail := "linked-" + t.Name() + "@example.com"
+	testEmail := user3.Email
 	inviteRecord, _, err := store.Impl().InviteEmailToOrg(ctx, user1, org1, testEmail)
 	if err != nil {
 		t.Fatalf("Failed to create email invite: %v", err)
@@ -2171,14 +2171,15 @@ func TestOrgMemberBecomesMemberAfterJoining(t *testing.T) {
 	}
 
 	// Create an email-only invite
-	testEmail := "joining-user-" + t.Name() + "@example.com"
+	newUserTestName := t.Name() + "_newuser"
+	testEmail := newUserTestName + "@privatecaptcha.com"
 	inviteRecord, _, err := store.Impl().InviteEmailToOrg(ctx, owner, org, testEmail)
 	if err != nil {
 		t.Fatalf("Failed to create email invite: %v", err)
 	}
 
 	// Create a new user (simulating registration after receiving the email invite)
-	newUser, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_newuser", testPlan)
+	newUser, _, err := db_tests.CreateNewAccountForTest(ctx, store, newUserTestName, testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create new user account: %v", err)
 	}
