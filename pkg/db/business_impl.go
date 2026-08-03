@@ -2035,6 +2035,10 @@ func (impl *BusinessStoreImpl) GetCachedOrgInviteByID(ctx context.Context, invit
 }
 
 func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID int32, user *dbgen.User) error {
+	if user == nil {
+		return ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return ErrMaintenance
 	}
@@ -2042,6 +2046,7 @@ func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID
 	orgUser, err := impl.querier.LinkOrgInviteToUser(ctx, &dbgen.LinkOrgInviteToUserParams{
 		ID:     inviteID,
 		UserID: Int(user.ID),
+		Lower:  user.Email,
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to link org invite to user", "inviteID", inviteID, "userID", user.ID, "email", user.Email, common.ErrAttr(err))

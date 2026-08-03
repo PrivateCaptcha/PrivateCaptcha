@@ -148,19 +148,20 @@ func (q *Queries) InviteUserToOrg(ctx context.Context, arg *InviteUserToOrgParam
 }
 
 const linkOrgInviteToUser = `-- name: LinkOrgInviteToUser :one
-UPDATE backend.organization_users 
-SET user_id = $1, email = NULL, updated_at = NOW() 
-WHERE id = $2 AND user_id IS NULL
+UPDATE backend.organization_users
+SET user_id = $1, email = NULL, updated_at = NOW()
+WHERE id = $2 AND user_id IS NULL AND LOWER(email) = LOWER($3)
 RETURNING org_id, user_id, level, created_at, updated_at, id, email
 `
 
 type LinkOrgInviteToUserParams struct {
 	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
 	ID     int32       `db:"id" json:"id"`
+	Lower  string      `db:"lower" json:"lower"`
 }
 
 func (q *Queries) LinkOrgInviteToUser(ctx context.Context, arg *LinkOrgInviteToUserParams) (*OrganizationUser, error) {
-	row := q.db.QueryRow(ctx, linkOrgInviteToUser, arg.UserID, arg.ID)
+	row := q.db.QueryRow(ctx, linkOrgInviteToUser, arg.UserID, arg.ID, arg.Lower)
 	var i OrganizationUser
 	err := row.Scan(
 		&i.OrgID,
