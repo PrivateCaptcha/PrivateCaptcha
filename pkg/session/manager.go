@@ -2,13 +2,13 @@ package session
 
 import (
 	"context"
+	"crypto/rand"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/rs/xid"
 )
 
 type Manager struct {
@@ -20,7 +20,7 @@ type Manager struct {
 }
 
 func (m *Manager) sessionID() string {
-	return xid.New().String()
+	return rand.Text()
 }
 
 func (m *Manager) setSessionCookie(w http.ResponseWriter, r *http.Request, sid string, maxAge int) {
