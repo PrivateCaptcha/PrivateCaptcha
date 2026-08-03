@@ -23,8 +23,7 @@ func (vr *VerifyResult) Valid() bool {
 		(vr.UserID > 0) &&
 		(vr.OrgID > 0) &&
 		(vr.PropertyID > 0) &&
-		!vr.CreatedAt.IsZero() &&
-		len(vr.Domain) > 0
+		!vr.CreatedAt.IsZero()
 }
 
 func (vr *VerifyResult) Success() bool {
