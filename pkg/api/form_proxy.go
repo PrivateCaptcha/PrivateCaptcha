@@ -39,6 +39,7 @@ const (
 var (
 	errCaptchaVerificationFailed = errors.New("captcha verification failed")
 	errFormSubmitFailed          = errors.New("form submit failed")
+	errFormDisabled              = errors.New("form is disabled")
 )
 
 var formOutboundDialer = &net.Dialer{
@@ -320,6 +321,10 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 }
 
 func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *FormSubmission) error {
+	if !f.Enabled || !f.Active {
+		return errFormDisabled
+	}
+
 	if count, ok := s.FailingForms.Get(f.ID); ok && (count > maxFormFailures) {
 		slog.WarnContext(ctx, "Skipping form with too many submit failures", "formID", f.ID, "count", count)
 		return nil
