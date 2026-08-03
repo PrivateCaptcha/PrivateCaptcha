@@ -86,7 +86,6 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, r *http
 	if err == nil {
 		common.WriteHeaders(w, common.HtmlContentHeaders)
 		common.WriteHeaders(w, common.SecurityHeaders)
-		common.WriteHeaders(w, common.CachedHeaders)
 		w.WriteHeader(code)
 		if _, werr := out.WriteTo(w); werr != nil {
 			slog.ErrorContext(ctx, "Failed to write error page", common.ErrAttr(werr))
