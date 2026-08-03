@@ -554,7 +554,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	return nil
 }
 
-func migrate(ctx context.Context, cfg common.ConfigStore, up bool, autoClose bool) error {
+func migrate(ctx context.Context, cfg common.ConfigStore, up bool) error {
 	if len(*migrateHashFlag) == 0 {
 		return errors.New("empty migrate hash")
 	}
@@ -572,25 +572,23 @@ func migrate(ctx context.Context, cfg common.ConfigStore, up bool, autoClose boo
 	planService := billing.NewPlanService(nil)
 
 	pool, clickhouse, dberr := db.Connect(ctx, cfg, _dbConnectTimeout, true /*admin*/, nil)
+	if pool != nil {
+		defer pool.Close()
+	}
+	if clickhouse != nil {
+		defer clickhouse.Close()
+	}
 	if dberr != nil {
 		return dberr
 	}
 
 	if pool != nil {
-		if autoClose {
-			defer pool.Close()
-		}
-
 		if err := db.MigratePostgres(ctx, pool, cfg, planService, up); err != nil {
 			return err
 		}
 	}
 
 	if clickhouse != nil {
-		if autoClose {
-			defer clickhouse.Close()
-		}
-
 		if err := db.MigrateClickHouse(ctx, clickhouse, cfg, up); err != nil {
 			return err
 		}
@@ -630,13 +628,13 @@ func main() {
 		err = serve(cfg)
 	case modeMigrate:
 		mctx := common.TraceContext(context.Background(), "migration")
-		err = migrate(mctx, cfg, true /*up*/, true /*auto close*/)
+		err = migrate(mctx, cfg, true /*up*/)
 	case modeRollback:
 		rctx := common.TraceContext(context.Background(), "migration")
-		err = migrate(rctx, cfg, false /*up*/, true /*auto close*/)
+		err = migrate(rctx, cfg, false /*up*/)
 	case modeAuto:
 		mctx := common.TraceContext(context.Background(), "migration")
-		if err = migrate(mctx, cfg, true /*up*/, false /*auto close*/); err == nil {
+		if err = migrate(mctx, cfg, true /*up*/); err == nil {
 			err = serve(cfg)
 		}
 	default:

@@ -24,8 +24,12 @@ var (
 )
 
 func Connect(ctx context.Context, cfg common.ConfigStore, timeout time.Duration, admin bool, metrics common.PlatformMetrics) (*pgxpool.Pool, *sql.DB, error) {
+	if admin {
+		return connectEx(ctx, cfg, timeout, true, metrics)
+	}
+
 	connectOnce.Do(func() {
-		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, cfg, timeout, admin, metrics)
+		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, cfg, timeout, false, metrics)
 	})
 	return globalPool, globalClickhouse, globalDBErr
 }
