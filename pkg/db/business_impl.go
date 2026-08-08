@@ -3021,7 +3021,7 @@ func (impl *BusinessStoreImpl) CreateNewAccount(ctx context.Context, params *dbg
 		if existingUser, err := impl.FindUserByEmail(ctx, email); err == nil {
 			slog.InfoContext(ctx, "User with such email already exists", "userID", existingUser.ID, "subscriptionID", existingUser.SubscriptionID, "expectedUserID", expectedUserID)
 
-			if (existingUser.ID == expectedUserID) || (expectedUserID == -1) {
+			if (existingUser.ID == expectedUserID) || ((expectedUserID == -1) && !existingUser.SubscriptionID.Valid) {
 				if existingUser.SubscriptionID.Valid {
 					if existingSubscription, err := impl.RetrieveSubscription(ctx, existingUser.SubscriptionID.Int32, true /*skip cache*/); (err == nil) && !IsInternalSubscription(existingSubscription.Source) {
 						slog.ErrorContext(ctx, "Existing user already has external subscription",
