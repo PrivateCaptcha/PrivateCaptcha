@@ -94,6 +94,7 @@ func connectEx(ctx context.Context, cfg common.ConfigStore, timeout time.Duratio
 
 		clickhouse = connectClickhouse(ctx, opts)
 		if perr := clickhouse.Ping(); perr != nil {
+			clickhouse.Close()
 			return perr
 		}
 
@@ -112,6 +113,7 @@ func connectEx(ctx context.Context, cfg common.ConfigStore, timeout time.Duratio
 			return perr
 		}
 		if perr := pool.Ping(ctx); perr != nil {
+			pool.Close()
 			return perr
 		}
 
