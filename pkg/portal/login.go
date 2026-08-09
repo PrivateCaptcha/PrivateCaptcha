@@ -132,14 +132,15 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.Store.Impl().FindUserByEmail(ctx, email)
 	if err != nil {
-		if err == db.ErrDisabled {
+		switch err {
+		case db.ErrDisabled:
 			slog.WarnContext(ctx, "Disabled user attempted to login", "email", email)
 			data.EmailError = "This account has been disabled."
 			s.render(w, r, loginContentsTemplate, data, false /*new*/)
 			return
-		} else if err == db.ErrSoftDeleted {
+		case db.ErrSoftDeleted:
 			slog.WarnContext(ctx, "Soft-deleted user attempted to login", "email", email)
-		} else {
+		default:
 			slog.WarnContext(ctx, "Failed to find active user by email", "email", email, common.ErrAttr(err))
 		}
 		data.EmailError = "User with such email does not exist."
