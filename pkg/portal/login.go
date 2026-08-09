@@ -137,14 +137,11 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 			data.EmailError = "This account has been disabled."
 			s.render(w, r, loginContentsTemplate, data, false /*new*/)
 			return
-		}
-		if err == db.ErrSoftDeleted {
+		} else if err == db.ErrSoftDeleted {
 			slog.WarnContext(ctx, "Soft-deleted user attempted to login", "email", email)
-			data.EmailError = "This account has been deleted."
-			s.render(w, r, loginContentsTemplate, data, false /*new*/)
-			return
+		} else {
+			slog.WarnContext(ctx, "Failed to find active user by email", "email", email, common.ErrAttr(err))
 		}
-		slog.WarnContext(ctx, "Failed to find active user by email", "email", email, common.ErrAttr(err))
 		data.EmailError = "User with such email does not exist."
 		s.render(w, r, loginContentsTemplate, data, false /*new*/)
 		return
