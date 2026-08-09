@@ -3342,3 +3342,10 @@ func TestCompiledRulesStaleRuleDoesNotBlockRequest(t *testing.T) {
 		t.Fatal("expected stale rule to not block request")
 	}
 }
+
+func TestRuleBaseWithoutMatcherIsStale(t *testing.T) {
+	var ruleBase RuleBase
+	if !ruleBase.IsStale() {
+		t.Fatal("expected a rule without a matcher to be marked stale")
+	}
+}

@@ -256,7 +256,7 @@ func (rb *RuleBase) Matches(ri *RequestInfo) bool {
 func (rb *RuleBase) IsTerminal() bool { return rb.Terminal }
 func (rb *RuleBase) IsStale() bool {
 	if rb.Matcher == nil {
-		return false
+		return true
 	}
 	return rb.Matcher.IsStale()
 }
