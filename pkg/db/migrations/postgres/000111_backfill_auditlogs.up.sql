@@ -144,7 +144,6 @@ SELECT
     jsonb_build_object(
         'id', id,
         'name', name,
-        'external_id', replace(external_id::text, '-', ''),
         'user_id', user_id,
         'enabled', enabled,
         'requests_per_second', requests_per_second,

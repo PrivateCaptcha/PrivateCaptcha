@@ -665,7 +665,6 @@ func newAuditLogAPIKey(key *dbgen.APIKey, orgName string) *AuditLogAPIKey {
 
 	return &AuditLogAPIKey{
 		Name:              key.Name,
-		ExternalID:        UUIDToSecret(key.ExternalID),
 		Enabled:           key.Enabled.Bool,
 		RequestsPerSecond: key.RequestsPerSecond,
 		RequestsBurst:     key.RequestsBurst,

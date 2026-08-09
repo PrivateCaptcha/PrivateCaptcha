@@ -1,0 +1,1 @@
+-- API key secrets removed from audit logs cannot be restored safely.
