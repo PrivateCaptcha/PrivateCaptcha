@@ -1521,6 +1521,8 @@ func (impl *BusinessStoreImpl) MoveForm(ctx context.Context, user *dbgen.User, f
 	impl.invalidateOrgFormsCache(ctx, updatedForm.OrgID.Int32, &updatedForm.ID)
 	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(oldOrgID))
 	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(updatedForm.OrgID.Int32))
+	_ = impl.cache.Delete(ctx, userFormsCountCacheKey(form.OrgOwnerID.Int32))
+	_ = impl.cache.Delete(ctx, userFormsCountCacheKey(updatedForm.OrgOwnerID.Int32))
 	impl.invalidateOrgPropertiesCache(ctx, oldOrgID, &updatedProperty.ID)
 	impl.invalidateOrgPropertiesCache(ctx, updatedProperty.OrgID.Int32, &updatedProperty.ID)
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(oldOrgID))
