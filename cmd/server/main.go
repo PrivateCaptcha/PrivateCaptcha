@@ -65,6 +65,7 @@ const (
 	// local mode: stricter defaults
 	localLeakyBucketCap = 8
 	localLeakInterval   = 1 * time.Second
+	maxCatchAllBuckets  = 1_000
 )
 
 var (
@@ -343,8 +344,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	publicChain := alice.New(recovered, metrics.IgnoredHandler, rateLimiter)
 	portalServer.SetupCatchAll(router, portalDomain, publicChain)
 	// catch all routes with stricter limit
-	catchAllRateLimiter := ipRateLimiter.RateLimitExFunc(catchAllLeakyBucketCap, catchAllLeakInterval)
-	catchAllChain := alice.New(recovered, metrics.IgnoredHandler, catchAllRateLimiter)
+	catchAllRateLimiter := ratelimit.NewIPAddrRateLimiter(rateLimitHeader,
+		ratelimit.NewIPAddrBuckets(maxCatchAllBuckets, catchAllLeakyBucketCap, catchAllLeakInterval))
+	catchAllChain := alice.New(recovered, metrics.IgnoredHandler, catchAllRateLimiter.RateLimit)
 	router.Handle("/", catchAllChain.ThenFunc(common.CatchAll))
 
 	ongoingCtx, stopOngoingGracefully := context.WithCancel(context.Background())
