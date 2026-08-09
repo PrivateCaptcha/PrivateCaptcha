@@ -22,6 +22,7 @@ func main() {
 	env, err := common.NewEnvMap(*envFileFlag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
+		os.Exit(1)
 	}
 	cfg := config.NewEnvConfig(env.Get)
 
