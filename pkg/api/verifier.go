@@ -214,7 +214,7 @@ func (v *Verifier) Verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 	if puzzleObject != nil && !puzzleObject.IsZero() {
 		result.PuzzleID = puzzleObject.PuzzleID()
 		validityPeriod := puzzle.DefaultValidityPeriod
-		if property != nil {
+		if property != nil && !puzzleObject.IsStub() {
 			// NOTE: user could have changed property validity interval of course in between but it should be an edge-case
 			// and it does not affect verification as we rely on expiration rather than creation
 			validityPeriod = property.ValidityInterval
