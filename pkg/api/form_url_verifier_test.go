@@ -224,6 +224,10 @@ func TestFormURLSafetyCheckerImplMethods(t *testing.T) {
 	if !checker.IsSafeFormIP(netip.MustParseAddr("::ffff:93.184.216.34")) {
 		t.Fatal("expected IPv4-mapped public IP to be safe")
 	}
+	var nilChecker *FormURLSafetyCheckerImpl
+	if nilChecker.IsSafeFormIP(netip.MustParseAddr("93.184.216.34")) {
+		t.Fatal("expected nil checker to fail closed")
+	}
 }
 
 func TestFormURLVerifierRejectsDNSResolvedIPv6Loopback(t *testing.T) {
@@ -254,6 +258,8 @@ func TestFormURLSafetyCheckerRejectsUnsafeIPv6TransitionAddresses(t *testing.T) 
 		{name: "NAT64 private", ip: "64:ff9b::10.0.0.1"},
 		{name: "NAT64 loopback", ip: "64:ff9b::127.0.0.1"},
 		{name: "NAT64 link local", ip: "64:ff9b::169.254.169.254"},
+		{name: "NAT64 local use unconfigured private", ip: "64:ff9b:1:a00:0:100::"},
+		{name: "NAT64 local use unconfigured public", ip: "64:ff9b:1:5db8:d8:2200::"},
 		{name: "6to4 private", ip: "2002:0a00:0001::"},
 		{name: "6to4 loopback", ip: "2002:7f00:0001::"},
 		{name: "6to4 link local", ip: "2002:a9fe:a9fe::"},
@@ -280,6 +286,92 @@ func TestFormURLSafetyCheckerAllowsPublicIPv6TransitionAddresses(t *testing.T) {
 		t.Run(ip, func(t *testing.T) {
 			if !checker.IsSafeFormIP(netip.MustParseAddr(ip)) {
 				t.Fatalf("expected IPv6 transition address %s to be safe", ip)
+			}
+		})
+	}
+}
+
+func TestFormURLSafetyCheckerUsesConfiguredNAT64Prefix(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		prefix    string
+		privateIP string
+		publicIP  string
+	}{
+		{name: "32 bit prefix", prefix: "2001:db8::/32", privateIP: "2001:db8:a00:1::", publicIP: "2001:db8:5db8:d822::"},
+		{name: "40 bit prefix", prefix: "2001:db8:100::/40", privateIP: "2001:db8:10a:0:1::", publicIP: "2001:db8:15d:b8d8:22::"},
+		{name: "48 bit prefix", prefix: "2001:db8:122::/48", privateIP: "2001:db8:122:a00:0:100::", publicIP: "2001:db8:122:5db8:d8:2200::"},
+		{name: "48 bit local prefix", prefix: "64:ff9b:1::/48", privateIP: "64:ff9b:1:a00:0:100::", publicIP: "64:ff9b:1:5db8:d8:2200::"},
+		{name: "56 bit prefix", prefix: "2001:db8:122:300::/56", privateIP: "2001:db8:122:30a:0:1::", publicIP: "2001:db8:122:35d:b8:d822::"},
+		{name: "64 bit prefix", prefix: "2001:db8:122:344::/64", privateIP: "2001:db8:122:344:a:0:100::", publicIP: "2001:db8:122:344:5d:b8d8:2200::"},
+		{name: "96 bit local prefix", prefix: "64:ff9b:1:fffe::/96", privateIP: "64:ff9b:1:fffe::10.0.0.1", publicIP: "64:ff9b:1:fffe::93.184.216.34"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			checker, err := NewFormURLSafetyChecker(netip.MustParsePrefix(tc.prefix))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if checker.IsSafeFormIP(netip.MustParseAddr(tc.privateIP)) {
+				t.Fatal("expected configured NAT64 prefix with private embedded IPv4 to be unsafe")
+			}
+			if !checker.IsSafeFormIP(netip.MustParseAddr(tc.publicIP)) {
+				t.Fatal("expected configured NAT64 prefix with public embedded IPv4 to be safe")
+			}
+		})
+	}
+
+	checker, err := NewFormURLSafetyChecker(
+		netip.MustParsePrefix("64:ff9b:1::/48"),
+		netip.MustParsePrefix("64:ff9b:1:5db8:d8:2200::/96"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checker.IsSafeFormIP(netip.MustParseAddr("64:ff9b:1:5db8:d8:2200:a00:1")) {
+		t.Fatal("expected the most-specific NAT64 prefix to classify the embedded private IPv4")
+	}
+}
+
+func TestFormURLSafetyCheckerRejectsInvalidNAT64Prefixes(t *testing.T) {
+	for _, prefix := range []netip.Prefix{
+		{},
+		netip.MustParsePrefix("192.0.2.0/24"),
+		netip.MustParsePrefix("2001:db8:1::/65"),
+		netip.MustParsePrefix("2001:db8:1::1/96"),
+		netip.MustParsePrefix("2001:db8:1:2:100::/96"),
+	} {
+		if _, err := NewFormURLSafetyChecker(prefix); err == nil {
+			t.Fatalf("expected NAT64 prefix %s to be rejected", prefix)
+		}
+	}
+}
+
+func TestFormURLSafetyCheckerRejectsNonzeroNAT64UOctet(t *testing.T) {
+	checker, err := NewFormURLSafetyChecker(netip.MustParsePrefix("64:ff9b:1::/48"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checker.IsSafeFormIP(netip.MustParseAddr("64:ff9b:1:5db8:ffd8:2200::")) {
+		t.Fatal("expected NAT64 address with nonzero u octet to be unsafe")
+	}
+}
+
+func TestExtractRFC6052IPv4(t *testing.T) {
+	for _, tc := range []struct {
+		prefixBits int
+		ip         string
+	}{
+		{prefixBits: 32, ip: "2001:db8:a00:1::"},
+		{prefixBits: 40, ip: "2001:db8:10a:0:1::"},
+		{prefixBits: 48, ip: "2001:db8:122:a00:0:100::"},
+		{prefixBits: 56, ip: "2001:db8:122:30a:0:1::"},
+		{prefixBits: 64, ip: "2001:db8:122:344:a:0:100::"},
+		{prefixBits: 96, ip: "2001:db8:122:344::10.0.0.1"},
+	} {
+		t.Run(tc.ip, func(t *testing.T) {
+			got := extractRFC6052IPv4(netip.MustParseAddr(tc.ip).As16(), tc.prefixBits)
+			if want := netip.MustParseAddr("10.0.0.1"); got != want {
+				t.Fatalf("expected embedded IPv4 %s, got %s", want, got)
 			}
 		})
 	}

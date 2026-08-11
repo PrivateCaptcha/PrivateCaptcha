@@ -19,6 +19,7 @@ import (
 var (
 	errUnsafeFormURL         = errors.New("unsafe form URL")
 	formNAT64Prefix          = netip.MustParsePrefix("64:ff9b::/96")
+	formNAT64LocalUsePrefix  = netip.MustParsePrefix("64:ff9b:1::/48")
 	form6To4Prefix           = netip.MustParsePrefix("2002::/16")
 	formIPv4CompatiblePrefix = netip.MustParsePrefix("::/96")
 )
@@ -36,7 +37,29 @@ type FormURLSafetyChecker interface {
 	IsSafeFormHostname(host string) bool
 }
 
-type FormURLSafetyCheckerImpl struct{}
+type FormURLSafetyCheckerImpl struct {
+	nat64Prefixes []netip.Prefix
+}
+
+func NewFormURLSafetyChecker(nat64Prefixes ...netip.Prefix) (*FormURLSafetyCheckerImpl, error) {
+	for _, prefix := range nat64Prefixes {
+		if !prefix.IsValid() || !prefix.Addr().Is6() || prefix != prefix.Masked() {
+			return nil, fmt.Errorf("invalid RFC 6052 NAT64 prefix: %s", prefix)
+		}
+		if prefix.Addr().As16()[8] != 0 {
+			return nil, fmt.Errorf("RFC 6052 NAT64 prefix has nonzero u octet: %s", prefix)
+		}
+		switch prefix.Bits() {
+		case 32, 40, 48, 56, 64, 96:
+		default:
+			return nil, fmt.Errorf("unsupported RFC 6052 NAT64 prefix length: %s", prefix)
+		}
+	}
+
+	return &FormURLSafetyCheckerImpl{
+		nat64Prefixes: append([]netip.Prefix(nil), nat64Prefixes...),
+	}, nil
+}
 
 func (*FormURLSafetyCheckerImpl) IsSafeFormHostname(host string) bool {
 	return (host != "localhost") && !strings.HasSuffix(host, ".localhost") && !strings.HasSuffix(host, ".local")
@@ -52,14 +75,50 @@ func isSafeFormIP(ip netip.Addr) bool {
 		!ip.IsUnspecified()
 }
 
-func extractEmbeddedIPv4(ip netip.Addr) (netip.Addr, bool) {
+func extractRFC6052IPv4(bytes [16]byte, prefixBits int) netip.Addr {
+	switch prefixBits {
+	case 32:
+		return netip.AddrFrom4([4]byte{bytes[4], bytes[5], bytes[6], bytes[7]})
+	case 40:
+		return netip.AddrFrom4([4]byte{bytes[5], bytes[6], bytes[7], bytes[9]})
+	case 48:
+		return netip.AddrFrom4([4]byte{bytes[6], bytes[7], bytes[9], bytes[10]})
+	case 56:
+		return netip.AddrFrom4([4]byte{bytes[7], bytes[9], bytes[10], bytes[11]})
+	case 64:
+		return netip.AddrFrom4([4]byte{bytes[9], bytes[10], bytes[11], bytes[12]})
+	case 96:
+		return netip.AddrFrom4([4]byte{bytes[12], bytes[13], bytes[14], bytes[15]})
+	default:
+		return netip.Addr{}
+	}
+}
+
+func extractEmbeddedIPv4(ip netip.Addr, nat64Prefixes []netip.Prefix) (netip.Addr, bool) {
 	if !ip.Is6() {
 		return netip.Addr{}, false
 	}
 
+	nat64Prefix := netip.Prefix{}
+	if formNAT64Prefix.Contains(ip) {
+		nat64Prefix = formNAT64Prefix
+	}
+	for _, prefix := range nat64Prefixes {
+		if prefix.Contains(ip) && (!nat64Prefix.IsValid() || prefix.Bits() > nat64Prefix.Bits()) {
+			nat64Prefix = prefix
+		}
+	}
+
 	bytes := ip.As16()
+	if nat64Prefix.IsValid() {
+		if bytes[8] != 0 {
+			return netip.Addr{}, true
+		}
+		return extractRFC6052IPv4(bytes, nat64Prefix.Bits()), true
+	}
+
 	switch {
-	case formNAT64Prefix.Contains(ip), formIPv4CompatiblePrefix.Contains(ip):
+	case formIPv4CompatiblePrefix.Contains(ip):
 		return netip.AddrFrom4([4]byte{bytes[12], bytes[13], bytes[14], bytes[15]}), true
 	case form6To4Prefix.Contains(ip):
 		return netip.AddrFrom4([4]byte{bytes[2], bytes[3], bytes[4], bytes[5]}), true
@@ -68,13 +127,20 @@ func extractEmbeddedIPv4(ip netip.Addr) (netip.Addr, bool) {
 	}
 }
 
-func (*FormURLSafetyCheckerImpl) IsSafeFormIP(ip netip.Addr) bool {
+func (c *FormURLSafetyCheckerImpl) IsSafeFormIP(ip netip.Addr) bool {
+	if c == nil {
+		return false
+	}
+
 	ip = ip.Unmap()
 	if !isSafeFormIP(ip) {
 		return false
 	}
-	if embedded, ok := extractEmbeddedIPv4(ip); ok {
+	if embedded, ok := extractEmbeddedIPv4(ip, c.nat64Prefixes); ok {
 		return isSafeFormIP(embedded)
+	}
+	if formNAT64LocalUsePrefix.Contains(ip) {
+		return false
 	}
 
 	return true
