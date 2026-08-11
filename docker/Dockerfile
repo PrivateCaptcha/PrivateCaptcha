@@ -1,5 +1,5 @@
 # Stage 1: Frontend build
-FROM node:24.18.0 AS frontend-builder
+FROM node:24.19.0 AS frontend-builder
 
 #############################################
 ############# Building web ##################
