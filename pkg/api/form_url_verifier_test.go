@@ -206,7 +206,104 @@ func TestFormURLSafetyCheckerImplMethods(t *testing.T) {
 	if checker.IsSafeFormIP(netip.MustParseAddr("127.0.0.1")) {
 		t.Fatal("expected loopback IP to be unsafe")
 	}
+	if checker.IsSafeFormIP(netip.MustParseAddr("::1")) {
+		t.Fatal("expected IPv6 loopback IP to be unsafe")
+	}
+	if checker.IsSafeFormIP(netip.MustParseAddr("::ffff:127.0.0.1")) {
+		t.Fatal("expected IPv4-mapped loopback IP to be unsafe")
+	}
+	if checker.IsSafeFormIP(netip.MustParseAddr("::ffff:10.0.0.1")) {
+		t.Fatal("expected IPv4-mapped private IP to be unsafe")
+	}
+	if checker.IsSafeFormIP(netip.Addr{}) {
+		t.Fatal("expected invalid IP to be unsafe")
+	}
 	if !checker.IsSafeFormIP(netip.MustParseAddr("93.184.216.34")) {
 		t.Fatal("expected public IP to be safe")
+	}
+	if !checker.IsSafeFormIP(netip.MustParseAddr("::ffff:93.184.216.34")) {
+		t.Fatal("expected IPv4-mapped public IP to be safe")
+	}
+}
+
+func TestFormURLVerifierRejectsDNSResolvedIPv6Loopback(t *testing.T) {
+	resolver := &stubFormURLResolver{
+		addresses: map[string][]string{"example.com": {"::1"}},
+		calls:     map[string]int{},
+	}
+	verifier := newTestFormURLVerifierEx(t, &FormURLSafetyCheckerImpl{}, resolver)
+
+	if err := verifier.VerifyURL(context.Background(), "https://example.com/form"); !errors.Is(err, errUnsafeFormURL) {
+		t.Fatalf("expected DNS-resolved IPv6 loopback to be rejected as unsafe, got %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := verifier.DialContext(ctx, "tcp", "example.com:443"); !errors.Is(err, errUnsafeFormURL) {
+		t.Fatalf("expected DNS-resolved IPv6 loopback dial to be rejected as unsafe, got %v", err)
+	}
+}
+
+func TestFormURLSafetyCheckerRejectsUnsafeIPv6TransitionAddresses(t *testing.T) {
+	checker := &FormURLSafetyCheckerImpl{}
+
+	for _, tc := range []struct {
+		name string
+		ip   string
+	}{
+		{name: "NAT64 private", ip: "64:ff9b::10.0.0.1"},
+		{name: "NAT64 loopback", ip: "64:ff9b::127.0.0.1"},
+		{name: "NAT64 link local", ip: "64:ff9b::169.254.169.254"},
+		{name: "6to4 private", ip: "2002:0a00:0001::"},
+		{name: "6to4 loopback", ip: "2002:7f00:0001::"},
+		{name: "6to4 link local", ip: "2002:a9fe:a9fe::"},
+		{name: "IPv4 compatible private", ip: "::10.0.0.1"},
+		{name: "IPv4 compatible loopback", ip: "::127.0.0.1"},
+		{name: "IPv4 compatible link local", ip: "::169.254.169.254"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if checker.IsSafeFormIP(netip.MustParseAddr(tc.ip)) {
+				t.Fatalf("expected IPv6 transition address %s to be unsafe", tc.ip)
+			}
+		})
+	}
+}
+
+func TestFormURLSafetyCheckerAllowsPublicIPv6TransitionAddresses(t *testing.T) {
+	checker := &FormURLSafetyCheckerImpl{}
+
+	for _, ip := range []string{
+		"64:ff9b::93.184.216.34",
+		"2002:5db8:d822::",
+		"::93.184.216.34",
+	} {
+		t.Run(ip, func(t *testing.T) {
+			if !checker.IsSafeFormIP(netip.MustParseAddr(ip)) {
+				t.Fatalf("expected IPv6 transition address %s to be safe", ip)
+			}
+		})
+	}
+}
+
+func TestFormURLDialContextRejectsUnsafeIPv6TransitionAddresses(t *testing.T) {
+	for _, ip := range []string{
+		"64:ff9b::10.0.0.1",
+		"2002:0a00:0001::",
+		"::10.0.0.1",
+	} {
+		t.Run(ip, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			resolver := &stubFormURLResolver{
+				addresses: map[string][]string{"example.com": {ip}},
+				calls:     map[string]int{},
+			}
+			verifier := newTestFormURLVerifierEx(t, &FormURLSafetyCheckerImpl{}, resolver)
+
+			_, err := verifier.DialContext(ctx, "tcp", "example.com:443")
+			if !errors.Is(err, errUnsafeFormURL) {
+				t.Fatalf("expected IPv6 transition address %s to be rejected as unsafe, got %v", ip, err)
+			}
+		})
 	}
 }
