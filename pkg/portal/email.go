@@ -79,6 +79,7 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 
 	agent := pm.uaParser.Parse(userAgent)
 	tnow := time.Now()
+	location = validCountryCode(location)
 
 	data := &emailpkg.TwoFactorEmailContext{
 		Code:        fmt.Sprintf("%06d", code),
@@ -130,6 +131,19 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 	clog.InfoContext(ctx, "Sent two factor code")
 
 	return nil
+}
+
+func validCountryCode(value string) string {
+	if len(value) != 2 {
+		return ""
+	}
+
+	value = strings.ToUpper(value)
+	if (value[0] < 'A') || (value[0] > 'Z') || (value[1] < 'A') || (value[1] > 'Z') {
+		return ""
+	}
+
+	return value
 }
 
 func (pm *PortalMailer) SendWelcome(ctx context.Context, email, name string) error {
