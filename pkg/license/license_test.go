@@ -3,7 +3,10 @@ package license
 import (
 	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"io"
 	"testing"
 	"time"
 )
@@ -50,5 +53,27 @@ func TestLicenseActivation(t *testing.T) {
 
 	if (msg.UserID != lm.UserID) || (msg.ProductID != lm.ProductID) {
 		t.Error("userID or productID do not match in the parsed license message")
+	}
+}
+
+func TestLicenseMessageRejectsTruncatedVariableLengthFields(t *testing.T) {
+	tests := map[string][]byte{
+		"user ID":           make([]byte, 17),
+		"product ID length": make([]byte, 17),
+		"product ID":        make([]byte, 17),
+		"expiration":        make([]byte, 17),
+	}
+	binary.LittleEndian.PutUint32(tests["user ID"][5:9], 64)
+	binary.LittleEndian.PutUint32(tests["product ID length"][5:9], 8)
+	binary.LittleEndian.PutUint32(tests["product ID"][9:13], 100)
+	binary.LittleEndian.PutUint32(tests["expiration"][9:13], 1)
+
+	for name, data := range tests {
+		t.Run(name, func(t *testing.T) {
+			message := &LicenseMessage{}
+			if err := message.UnmarshalBinary(data); !errors.Is(err, io.ErrShortBuffer) {
+				t.Fatalf("expected io.ErrShortBuffer, got %v", err)
+			}
+		})
 	}
 }

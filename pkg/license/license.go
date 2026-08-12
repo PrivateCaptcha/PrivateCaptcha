@@ -119,7 +119,7 @@ func (lm *LicenseMessage) UnmarshalBinary(data []byte) error {
 	offset += 4
 
 	userIDEnd := offset + int(userIDLen)
-	if userIDEnd >= len(data) {
+	if userIDEnd > len(data) {
 		return io.ErrShortBuffer
 	}
 	userIDBytes := make([]byte, userIDLen)
@@ -130,6 +130,9 @@ func (lm *LicenseMessage) UnmarshalBinary(data []byte) error {
 	// }
 
 	// productID {
+	if len(data)-offset < 4 {
+		return io.ErrShortBuffer
+	}
 	productIDLen := binary.LittleEndian.Uint32(data[offset : offset+4])
 	if productIDLen > maxProductIDLen {
 		return errInvalidLicenseMessageFormat
@@ -137,7 +140,7 @@ func (lm *LicenseMessage) UnmarshalBinary(data []byte) error {
 	offset += 4
 
 	productIDEnd := offset + int(productIDLen)
-	if productIDEnd >= len(data) {
+	if productIDEnd > len(data) {
 		return io.ErrShortBuffer
 	}
 	productIDBytes := make([]byte, productIDLen)
@@ -147,6 +150,9 @@ func (lm *LicenseMessage) UnmarshalBinary(data []byte) error {
 	lm.ProductID = string(productIDBytes)
 	// }
 
+	if len(data)-offset < 4 {
+		return io.ErrShortBuffer
+	}
 	unixExpiration := int64(binary.LittleEndian.Uint32(data[offset : offset+4]))
 	if unixExpiration != 0 {
 		lm.Expiration = time.Unix(unixExpiration, 0)
