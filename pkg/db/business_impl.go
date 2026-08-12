@@ -1354,6 +1354,7 @@ func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams
 	impl.invalidateOrgFormsCache(ctx, org.ID, &invalidFormID)
 	impl.cacheForm(ctx, form)
 	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(property.OrgID.Int32))
+	_ = impl.cache.Delete(ctx, userFormsCountCacheKey(form.OrgOwnerID.Int32))
 
 	auditEvents := []*common.AuditLogEvent{auditEvent, newCreateFormAuditLogEvent(form, org)}
 	return form, property, auditEvents, nil
@@ -1566,6 +1567,7 @@ func (impl *BusinessStoreImpl) SoftDeleteForm(ctx context.Context, form *dbgen.F
 
 	impl.deleteCachedForm(ctx, deletedForm)
 	impl.deleteCachedProperty(ctx, deletedProperty)
+	_ = impl.cache.Delete(ctx, userFormsCountCacheKey(deletedForm.OrgOwnerID.Int32))
 
 	auditEvents := []*common.AuditLogEvent{
 		newDeleteFormAuditLogEvent(form, org, user),
