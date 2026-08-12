@@ -28,10 +28,14 @@ func (s *Server) checkUserOrgsLimit(ctx context.Context, user *dbgen.User, count
 }
 
 func MaxAuditLogsRetention(cfg common.ConfigStore) time.Duration {
+	const defaultAuditLogDays = 14
+	const day = 24 * time.Hour
+
 	daysConfigItem := cfg.Get(common.EnterpriseAuditLogDaysKey)
 	days := config.AsInt(daysConfigItem, 365)
-	if days <= 0 {
-		days = 14
+
+	if days <= 0 || int64(days) > int64(time.Duration(1<<63-1)/day) {
+		days = defaultAuditLogDays
 	}
 
 	return time.Duration(days) * 24 * time.Hour
