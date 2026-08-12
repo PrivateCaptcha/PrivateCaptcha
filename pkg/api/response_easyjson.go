@@ -888,9 +888,17 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi8(in *jlex
 		case "timestamp":
 			if in.IsNull() {
 				in.Skip()
+				out.Timestamp = nil
 			} else {
-				if data := in.Raw(); in.Ok() {
-					in.AddError((out.Timestamp).UnmarshalJSON(data))
+				if out.Timestamp == nil {
+					out.Timestamp = new(common.JSONTime)
+				}
+				if in.IsNull() {
+					in.Skip()
+				} else {
+					if data := in.Raw(); in.Ok() {
+						in.AddError((*out.Timestamp).UnmarshalJSON(data))
+					}
 				}
 			}
 		default:
@@ -922,10 +930,10 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi8(out *jwr
 		out.RawString(prefix)
 		out.String(string(in.Origin))
 	}
-	if true {
+	if in.Timestamp != nil {
 		const prefix string = ",\"timestamp\":"
 		out.RawString(prefix)
-		out.Raw((in.Timestamp).MarshalJSON())
+		out.Raw((*in.Timestamp).MarshalJSON())
 	}
 	out.RawByte('}')
 }

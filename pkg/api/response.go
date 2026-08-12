@@ -10,7 +10,7 @@ type VerificationResponse struct {
 	Success   bool               `json:"success"`
 	Code      puzzle.VerifyError `json:"code"`
 	Origin    string             `json:"origin,omitempty"`
-	Timestamp common.JSONTime    `json:"timestamp,omitempty"`
+	Timestamp *common.JSONTime   `json:"timestamp,omitempty"`
 }
 
 //easyjson:json

@@ -545,14 +545,23 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 		s.RateLimiter.UpdateRequestLimits(r, uint32(apiKey.RequestsBurst), time.Duration(interval))
 	}
 
-	response := &VerificationResponse{
-		Success:   result.Success() || ((result.Error == puzzle.TestPropertyError) && isExplicitTestSitekey),
-		Code:      result.Error,
-		Origin:    result.Domain,
-		Timestamp: common.JSONTime(result.CreatedAt),
-	}
+	response := newVerificationResponse(result, isExplicitTestSitekey)
 
 	common.SendJSONResponse(r.Context(), w, response, common.NoCacheHeaders, s.APIHeaders)
+}
+
+func newVerificationResponse(result *puzzle.VerifyResult, isExplicitTestSitekey bool) *VerificationResponse {
+	response := &VerificationResponse{
+		Success: result.Success() || ((result.Error == puzzle.TestPropertyError) && isExplicitTestSitekey),
+		Code:    result.Error,
+	}
+	if response.Success {
+		response.Origin = result.Domain
+		timestamp := common.JSONTime(result.CreatedAt)
+		response.Timestamp = &timestamp
+	}
+
+	return response
 }
 
 func (s *Server) addVerifyRecord(ctx context.Context, result *puzzle.VerifyResult) {

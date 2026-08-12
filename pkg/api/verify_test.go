@@ -1339,3 +1339,34 @@ func TestVerifyDisabledProperty(t *testing.T) {
 		t.Error("Expected verification to fail for disabled property")
 	}
 }
+
+func TestNewVerificationResponseHidesFailureMetadata(t *testing.T) {
+	result := &puzzle.VerifyResult{
+		Error:     puzzle.WrongOwnerError,
+		Domain:    "victim-tenant.example",
+		CreatedAt: time.Date(2026, time.August, 3, 15, 41, 22, 0, time.UTC),
+	}
+
+	data, err := newVerificationResponse(result, false).MarshalJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := string(data)
+	if strings.Contains(response, "origin") || strings.Contains(response, "timestamp") {
+		t.Fatalf("failure response leaks verification metadata: %s", response)
+	}
+}
+
+func TestNewVerificationResponseIncludesSuccessMetadata(t *testing.T) {
+	createdAt := time.Date(2026, time.August, 3, 15, 41, 22, 0, time.UTC)
+	result := &puzzle.VerifyResult{
+		Error:     puzzle.VerifyNoError,
+		Domain:    "tenant.example",
+		CreatedAt: createdAt,
+	}
+
+	response := newVerificationResponse(result, false)
+	if !response.Success || response.Origin != result.Domain || response.Timestamp == nil || time.Time(*response.Timestamp) != createdAt {
+		t.Fatalf("success response does not include verification metadata: %+v", response)
+	}
+}
