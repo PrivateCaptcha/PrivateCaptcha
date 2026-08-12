@@ -11,6 +11,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -147,10 +148,8 @@ func (s *BusinessStore) WithTx(ctx context.Context, fn func(*BusinessStoreImpl) 
 		return nil, err
 	}
 	defer func() {
-		if err != nil {
-			if rerr := tx.Rollback(ctx); rerr != nil {
-				slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(rerr))
-			}
+		if rerr := tx.Rollback(ctx); rerr != nil && !errors.Is(rerr, pgx.ErrTxClosed) {
+			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(rerr))
 		}
 	}()
 
