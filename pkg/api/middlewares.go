@@ -399,8 +399,8 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	for propertyID, count := range batch {
 		// because we have 2-layered cache (raw rules -> compiled rules) so when we detect that we would have wanted to
 		// reread our compiled rules ("refresh" in otter's terminology), we _actually_ want to recompile originals
-		_, needsRefresh, err := impl.GetCachedCompiledPropertyRules(ctx, propertyID)
-		if (err == db.ErrCacheMiss) || needsRefresh {
+		cached, needsRefresh, err := impl.GetCachedCompiledPropertyRules(ctx, propertyID)
+		if (err == db.ErrCacheMiss) || needsRefresh || (err == nil && cached.IsStale()) {
 			uncachedPropertyIDs[propertyID] = count
 		} else if err != nil && err != db.ErrNegativeCacheHit {
 			slog.ErrorContext(ctx, "Failed to get cached compiled property rules", "propID", propertyID, common.ErrAttr(err))
@@ -426,8 +426,8 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 		if p.OrgID.Valid {
 			if _, seen := uncachedOrgIDs[p.OrgID.Int32]; !seen {
 				// see comment for reading compiled property rules above
-				_, needsRefresh, err := impl.GetCachedCompiledOrgRules(ctx, p.OrgID.Int32)
-				if (err == db.ErrCacheMiss) || needsRefresh {
+				cached, needsRefresh, err := impl.GetCachedCompiledOrgRules(ctx, p.OrgID.Int32)
+				if (err == db.ErrCacheMiss) || needsRefresh || (err == nil && cached.IsStale()) {
 					uncachedOrgIDs[p.OrgID.Int32] = 1
 				} else if err != nil && err != db.ErrNegativeCacheHit {
 					slog.ErrorContext(ctx, "Failed to get cached compiled org rules", "orgID", p.OrgID.Int32, common.ErrAttr(err))
