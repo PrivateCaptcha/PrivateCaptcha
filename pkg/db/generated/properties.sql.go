@@ -888,7 +888,7 @@ func (q *Queries) TransferOrgProperties(ctx context.Context, arg *TransferOrgPro
 const updateProperty = `-- name: UpdateProperty :one
 WITH old AS (
     SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, show_notice FROM backend.properties p
-    WHERE p.id = $1 AND (p.creator_id = $9 OR p.org_owner_id = $9) AND (p.org_id = $10 OR $10 IS NULL) AND p.enabled = TRUE
+    WHERE p.id = $1 AND (p.creator_id = $9 OR p.org_owner_id = $9) AND (p.org_id = $10 OR $10 IS NULL) AND p.enabled = TRUE AND p.deleted_at is NULL
     FOR UPDATE
 ),
 upd AS (

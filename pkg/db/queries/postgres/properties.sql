@@ -15,7 +15,7 @@ RETURNING *;
 -- name: UpdateProperty :one
 WITH old AS (
     SELECT * FROM backend.properties p
-    WHERE p.id = $1 AND (p.creator_id = $9 OR p.org_owner_id = $9) AND (p.org_id = $10 OR $10 IS NULL) AND p.enabled = TRUE
+    WHERE p.id = $1 AND (p.creator_id = $9 OR p.org_owner_id = $9) AND (p.org_id = $10 OR $10 IS NULL) AND p.enabled = TRUE AND p.deleted_at is NULL
     FOR UPDATE
 ),
 upd AS (
