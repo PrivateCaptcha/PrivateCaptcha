@@ -155,9 +155,16 @@ func (a *apiKeyOwnerSource) OwnerID(ctx context.Context, tnow time.Time) (int32,
 		return -1, nil, errAPIKeyScope
 	}
 
-	// Track API key usage for last_used_at updates in background
-	// Only track if key was not cached (retrieved from DB) and Auth is available
 	if !a.wasCached && (a.Auth != nil) && (apiKey != nil) {
+		// Cached keys are checked by APIKey middleware. Keys retrieved through the
+		// postponed database lookup must receive the same subscription check here.
+		if allowed, err := a.Auth.Limiter.EvaluateAPIAccess(ctx, apiKey.UserID.Int32); (err == nil) && !allowed {
+			slog.WarnContext(ctx, "User is limited for API access", "userID", apiKey.UserID.Int32)
+			return -1, nil, errInvalidAPIKey
+		}
+
+		// Track API key usage for last_used_at updates in background
+		// Only track if key was not cached (retrieved from DB) and Auth is available
 		a.Auth.refreshAPIKeyLastUsed(ctx, apiKey.ID)
 	}
 
