@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -279,5 +280,25 @@ func TestIsOriginAllowed(t *testing.T) {
 					tt.origin, tt.domain, tt.allowLocal, tt.allowSubdoms, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestUserLimiterDisabledUser(t *testing.T) {
+	ctx := t.Context()
+
+	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
+	stub := &db.QuerierStub{}
+	store := db.NewBusinessWithQuerier(nil, stub, cache)
+	userLimiter := NewUserLimiter(store)
+
+	var userID int32 = 123
+
+	_ = store.Cache.SetMissing(ctx, db.UserCacheKey(userID))
+
+	if allowed, err := userLimiter.EvaluatePropertyAccess(ctx, userID); err != nil || allowed {
+		t.Fatalf("disabled user was allowed property access: %v (allowed: %v)", err, allowed)
+	}
+	if allowed, err := userLimiter.EvaluateAPIAccess(ctx, userID); err != nil || allowed {
+		t.Fatalf("disabled user was allowed API access: %v (allowed: %v)", err, allowed)
 	}
 }

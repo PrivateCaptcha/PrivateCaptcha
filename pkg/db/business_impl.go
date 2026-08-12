@@ -4757,3 +4757,23 @@ func (impl *BusinessStoreImpl) RetrievePropertyAccessViolations(ctx context.Cont
 
 	return violationSet, nil
 }
+
+func (impl *BusinessStoreImpl) GetCachedUser(ctx context.Context, userID int32) (*dbgen.User, error) {
+	cacheKey := UserCacheKey(userID)
+
+	if user, err := FetchCachedOne[dbgen.User](ctx, impl.cache, cacheKey); err == nil {
+		if user.DeletedAt.Valid {
+			return user, ErrSoftDeleted
+		}
+
+		if !user.Enabled {
+			return user, ErrDisabled
+		}
+
+		return user, nil
+	} else if err == ErrNegativeCacheHit {
+		return nil, ErrNegativeCacheHit
+	} else {
+		return nil, err
+	}
+}
