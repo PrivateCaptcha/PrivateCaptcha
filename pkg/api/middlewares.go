@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -114,10 +113,6 @@ func (ul *baseUserLimiter) CheckUsers(ctx context.Context, batch map[int32]uint)
 }
 
 func (ul *baseUserLimiter) EvaluateAPIAccess(ctx context.Context, userID int32) (bool, error) {
-	if enabled, err := ul.isUserEnabled(ctx, userID); (err == nil) && !enabled {
-		return enabled, err
-	}
-
 	_, err := ul.userLimits.Get(ctx, userID)
 	// "false" because by we only check if user has a subscription at all, we don't verify usage limits
 	return false, err
@@ -129,14 +124,6 @@ func (ul *baseUserLimiter) EvaluatePropertyAccess(ctx context.Context, userID in
 
 func (ul *baseUserLimiter) EvaluateFormAccess(ctx context.Context, userID int32) (bool, error) {
 	return ul.EvaluateAPIAccess(ctx, userID)
-}
-
-func (ul *baseUserLimiter) isUserEnabled(ctx context.Context, userID int32) (bool, error) {
-	_, err := ul.store.Impl().GetCachedUser(ctx, userID)
-	if errors.Is(err, db.ErrDisabled) || errors.Is(err, db.ErrSoftDeleted) || errors.Is(err, db.ErrNegativeCacheHit) {
-		return false, nil
-	}
-	return err == nil, err
 }
 
 func NewUserLimiter(store db.Implementor) *baseUserLimiter {

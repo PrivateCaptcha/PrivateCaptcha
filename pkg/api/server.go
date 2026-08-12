@@ -168,6 +168,12 @@ func (a *apiKeyOwnerSource) OwnerID(ctx context.Context, tnow time.Time) (int32,
 		a.Auth.refreshAPIKeyLastUsed(ctx, apiKey.ID)
 	}
 
+	if _, err := a.Store.Impl().GetCachedUser(ctx, apiKey.UserID.Int32); err != nil {
+		if errors.Is(err, db.ErrDisabled) || errors.Is(err, db.ErrSoftDeleted) || errors.Is(err, db.ErrNegativeCacheHit) {
+			return -1, nil, errInvalidAPIKey
+		}
+	}
+
 	var orgID *int32
 	if apiKey.OrgID.Valid {
 		orgID = new(int32)
