@@ -579,12 +579,7 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 		Verified:  verified,
 	}
 
-	cacheHeaders := map[string][]string{
-		common.HeaderETag:         []string{etag},
-		common.HeaderCacheControl: common.PrivateCacheControl1m,
-	}
-
-	common.SendJSONResponse(ctx, w, response, cacheHeaders)
+	common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
 }
 
 func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*propertyDashboardRenderContext, *dbgen.Property, error) {
