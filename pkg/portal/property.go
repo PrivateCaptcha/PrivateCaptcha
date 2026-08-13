@@ -544,12 +544,6 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 		period = common.TimePeriodToday
 	}
 
-	etag := common.GenerateETag(strconv.Itoa(int(user.ID)), strconv.Itoa(int(org.ID)), strconv.Itoa(int(property.ID)), period.String())
-	if etagHeader := r.Header.Get(common.HeaderIfNoneMatch); len(etagHeader) > 0 && (etagHeader == etag) {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-
 	requested := []*PropertyStatsPoint{}
 	verified := []*PropertyStatsPoint{}
 
