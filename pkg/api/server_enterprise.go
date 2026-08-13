@@ -204,9 +204,7 @@ func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Prop
 
 	var propertyRules *rules.CompiledRules
 	if cached, needsRefresh, err := impl.GetCachedCompiledPropertyRules(ctx, property.ID); err == nil {
-		if !cached.IsStale() {
-			propertyRules = cached
-		}
+		propertyRules = cached
 		if needsRefresh || cached.IsStale() {
 			needsBackfill = true
 		}
@@ -219,9 +217,7 @@ func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Prop
 	var orgRules *rules.CompiledRules
 	if property.OrgID.Valid {
 		if cached, needsRefresh, err := impl.GetCachedCompiledOrgRules(ctx, property.OrgID.Int32); err == nil {
-			if !cached.IsStale() {
-				orgRules = cached
-			}
+			orgRules = cached
 			if needsRefresh || cached.IsStale() {
 				needsBackfill = true
 			}
