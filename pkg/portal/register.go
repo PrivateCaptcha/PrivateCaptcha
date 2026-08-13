@@ -191,7 +191,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	// Validate email matches invited email if this is an invite registration
 	if inviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && inviteID > 0 {
 		if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, inviteID); err == nil {
-			if strings.ToLower(email) != strings.ToLower(invite.Email.String) {
+			if !strings.EqualFold(email, invite.Email.String) {
 				data.EmailError = fmt.Sprintf("You must register with %s to accept this organization invitation.", invite.Email.String)
 				s.render(w, r, registerContentsTemplate, data, false /*new*/)
 				return
