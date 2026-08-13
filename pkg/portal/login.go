@@ -32,12 +32,13 @@ var (
 type loginRenderContext struct {
 	CsrfRenderContext
 	CaptchaRenderContext
-	Email       string
-	EmailError  string
-	CodeError   string
-	NameError   string
-	CanRegister bool
-	IsRegister  bool
+	Email         string
+	EmailError    string
+	CodeError     string
+	NameError     string
+	CanRegister   bool
+	IsRegister    bool
+	EmailReadonly bool
 }
 
 type portalPropertyOwnerSource struct {

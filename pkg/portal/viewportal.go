@@ -720,7 +720,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			ModelFunc: func(_ AlertRenderContext) interface{} {
 				return &loginRenderContext{
 					CsrfRenderContext: token, CaptchaRenderContext: captchaCtx,
-					Email: "invited@example.com", CanRegister: true, IsRegister: true,
+					Email: "invited@example.com", CanRegister: true, IsRegister: true, EmailReadonly: true,
 				}
 			},
 		},

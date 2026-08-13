@@ -3480,3 +3480,110 @@ func TestOrgIDEmpty(t *testing.T) {
 		t.Fatal("Expected error for empty org ID, got nil")
 	}
 }
+
+func TestEmailMismatchDuringInviteRegistrationBlocksUser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	invitedEmail := strings.ToLower(t.Name()) + "_invited@example.com"
+	differentUserName := t.Name() + "_different"
+	differentEmail := differentUserName + "@privatecaptcha.com"
+	inviteRecord, _, err := store.Impl().InviteEmailToOrg(ctx, owner, org, invitedEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	invitePath := fmt.Sprintf("/%s/%s/%s", common.OrgInviteEndpoint, server.IDHasher.Encrypt(int(inviteRecord.ID)), common.RegisterEndpoint)
+	req := httptest.NewRequest(http.MethodGet, invitePath, nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected invite registration page, got status %d", w.Code)
+	}
+
+	emailInput := portal_tests.ParseHTML(t, w.Body).Find(fmt.Sprintf("input[name=%q]", common.ParamEmail))
+	if value, exists := emailInput.Attr("value"); !exists || value != invitedEmail {
+		t.Fatalf("expected invite email %q in registration form, got %q", invitedEmail, value)
+	}
+	if _, exists := emailInput.Attr("readonly"); !exists {
+		t.Fatal("expected invite email field to be readonly")
+	}
+
+	var inviteCookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == server.Sessions.CookieName {
+			inviteCookie = c
+			break
+		}
+	}
+	if inviteCookie == nil {
+		t.Fatal("expected invite registration session cookie")
+	}
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(""))
+	form.Set(common.ParamEmail, differentEmail)
+	form.Set(common.ParamName, "Different User")
+	form.Set(common.ParamTerms, "true")
+	form.Set(common.ParamPortalSolution, "captchaSolution")
+
+	req = httptest.NewRequest(http.MethodPost, "/"+common.RegisterEndpoint, strings.NewReader(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.AddCookie(inviteCookie)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected rejected registration form, got status %d", w.Code)
+	}
+	if _, err := portal_tests.TwoFactorCodeFromSession(ctx, inviteCookie.Value, server.Sessions.Store); err == nil {
+		t.Fatal("expected mismatched registration not to start two-factor verification")
+	}
+
+	differentUser, _, err := db_tests.CreateNewAccountForTest(ctx, store, differentUserName, testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authCookie, err := portal_tests.AuthenticateSuite(ctx, differentUser.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req = httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/members", server.IDHasher.Encrypt(int(org.ID))), nil)
+	req.AddCookie(authCookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(differentUser.ID))))
+
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected uninvited user to be rejected, got status %d", w.Code)
+	}
+	location, _ := w.Result().Location()
+	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
+		t.Fatalf("expected error redirect, got %q", location.String())
+	}
+
+	members, err := store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 1 {
+		t.Fatalf("expected the original email invite to remain, got %d members", len(members))
+	}
+	invite := members[0].OrganizationUser
+	if invite.ID != inviteRecord.ID || invite.UserID.Valid || !invite.Email.Valid || invite.Email.String != invitedEmail {
+		t.Fatal("expected the original invite to remain unlinked")
+	}
+}
