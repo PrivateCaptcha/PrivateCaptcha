@@ -765,6 +765,7 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 		}
 
 		model.Email = invite.Email.String
+		model.EmailReadonly = true
 
 		// Store invite ID in session so we can link it after registration
 		sess := s.Sessions.SessionStart(w, r)

@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -185,6 +186,19 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	code := twoFactorCode(ctx)
 	location := r.Header.Get(s.CountryCodeHeader.Value())
 
+	sess := s.Sessions.SessionStart(w, r)
+
+	// Validate email matches invited email if this is an invite registration
+	if inviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && inviteID > 0 {
+		if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, inviteID); err == nil {
+			if strings.ToLower(email) != strings.ToLower(invite.Email.String) {
+				data.EmailError = fmt.Sprintf("You must register with %s to accept this organization invitation.", invite.Email.String)
+				s.render(w, r, registerContentsTemplate, data, false /*new*/)
+				return
+			}
+		}
+	}
+
 	if err := s.Mailer.SendTwoFactor(ctx, email, code, r.UserAgent(), location, true); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
 		data.EmailError = "Failed to send a confirmation email. Please try again."
@@ -192,7 +206,6 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := s.Sessions.SessionStart(w, r)
 	ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.ID())
 
 	_ = sess.Set(ctx, session.KeyLoginStep, loginStepSignUpVerify)

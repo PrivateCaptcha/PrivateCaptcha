@@ -18,7 +18,7 @@
             {{- if .Params.EmailError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="email" id="emailInput" name="{{ .Const.Email }}" placeholder="Email address" {{ if .Params.Email }}value="{{.Params.Email}}"{{end}} class="w-full pc-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="email" id="emailInput" name="{{ .Const.Email }}" placeholder="Email address" {{ if .Params.Email }}value="{{.Params.Email}}"{{end}} {{ if .Params.EmailReadonly }} readonly{{end}} class="w-full pc-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }} {{ if .Params.EmailReadonly }} pc-form-input-disabled{{end}}" required />
         </div>
         {{- if .Params.EmailError -}}
         <p class="pc-form-error-text">{{ .Params.EmailError }}</p>
