@@ -194,7 +194,8 @@ func (bm *BotMatcher) GobDecode(data []byte) error {
 	return dec.Decode(&bm.ConditionOperatorNegated)
 }
 
-func (bm *BotMatcher) looksLikeBot(ua string) bool {
+func (bm *BotMatcher) looksLikeBot(ri *RequestInfo) bool {
+	ua := ri.UserAgent()
 	if len(ua) == 0 {
 		return true
 	}
@@ -203,7 +204,7 @@ func (bm *BotMatcher) looksLikeBot(ua string) bool {
 		return false
 	}
 
-	parsed := bm.UAParser.Parse(ua)
+	parsed := ri.ParsedUserAgent(bm.UAParser)
 
 	if parsed.IsBot() {
 		return true
@@ -234,7 +235,7 @@ func (bm *BotMatcher) IsStale() bool {
 }
 
 func (bm *BotMatcher) Matches(ri *RequestInfo) bool {
-	result := bm.looksLikeBot(ri.UserAgent())
+	result := bm.looksLikeBot(ri)
 
 	if bm.ConditionOperatorNegated {
 		return !result
@@ -330,8 +331,8 @@ func (m *BrowserVersionMatcher) Matches(ri *RequestInfo) bool {
 	if len(rawUserAgent) > browserVersionMaxUserAgentBytes {
 		return false
 	}
-	ua := m.UAParser.Parse(rawUserAgent)
-	key, ok := browserVersionKey(ua)
+	ua := ri.ParsedUserAgent(m.UAParser)
+	key, ok := browserVersionKey(*ua)
 	if !ok {
 		return false
 	}

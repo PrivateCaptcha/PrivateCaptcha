@@ -1349,6 +1349,11 @@ func TestRequestInfoLazyCaching(t *testing.T) {
 		t.Error("Expected same cached user agent")
 	}
 
+	parsedUA := ri.ParsedUserAgent(testCompiler.uaParser)
+	if ri.ParsedUserAgent(testCompiler.uaParser) != parsedUA {
+		t.Error("Expected same cached parsed user agent")
+	}
+
 	ip := ri.IPAddr()
 	if ip != netip.MustParseAddr("10.0.0.1") {
 		t.Errorf("Expected IP 10.0.0.1, got %v", ip)
@@ -3197,7 +3202,7 @@ func TestLooksLikeBotIOSIPod(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := bm.looksLikeBot(tc.ua)
+			got := bm.looksLikeBot(newTestRequestInfo(tc.ua, netip.MustParseAddr("1.2.3.4")))
 			if got != tc.wantBot {
 				t.Errorf("looksLikeBot(%q) = %v, want %v", tc.ua, got, tc.wantBot)
 			}

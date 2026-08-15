@@ -6,6 +6,7 @@ import (
 	"net/netip"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/medama-io/go-useragent"
 )
 
 // RequestInfo wraps http.Request and lazy-caches request attributes for rule matching
@@ -14,6 +15,7 @@ type RequestInfo struct {
 	countryCodeHeader string
 
 	userAgent   *string
+	parsedUA    *useragent.UserAgent
 	ipAddr      *netip.Addr
 	countryCode *string
 	domain      *string
@@ -32,6 +34,14 @@ func (ri *RequestInfo) UserAgent() string {
 		ri.userAgent = &ua
 	}
 	return *ri.userAgent
+}
+
+func (ri *RequestInfo) ParsedUserAgent(parser *useragent.Parser) *useragent.UserAgent {
+	if ri.parsedUA == nil {
+		ua := parser.Parse(ri.UserAgent())
+		ri.parsedUA = &ua
+	}
+	return ri.parsedUA
 }
 
 func (ri *RequestInfo) IPAddr() netip.Addr {
