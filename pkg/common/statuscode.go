@@ -80,6 +80,7 @@ const (
 	StatusRuleHTTPHeaderNameRequired        StatusCode = 1425
 	StatusRuleHTTPHeaderNameInvalid         StatusCode = 1426
 	StatusRuleNameInvalidCharsError         StatusCode = 1427
+	StatusRuleConditionValueInvalid         StatusCode = 1428
 	// forms errors
 	StatusFormNameEmptyError          StatusCode = 1500
 	StatusFormNameTooLongError        StatusCode = 1501
@@ -219,6 +220,8 @@ func (sc StatusCode) String() string {
 		return "HTTP header name is not valid."
 	case StatusRuleNameInvalidCharsError:
 		return "Rule name can only contain letters, numbers, spaces, hyphens, and dots."
+	case StatusRuleConditionValueInvalid:
+		return "Condition value is invalid."
 	default:
 		if s, ok := extraStatusCodeStrings[sc]; ok {
 			return s

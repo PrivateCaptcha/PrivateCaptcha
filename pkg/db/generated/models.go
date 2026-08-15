@@ -331,6 +331,7 @@ const (
 	RuleConditionOperatorEmpty    RuleConditionOperator = "empty"
 	RuleConditionOperatorIn       RuleConditionOperator = "in"
 	RuleConditionOperatorBot      RuleConditionOperator = "bot"
+	RuleConditionOperatorMore     RuleConditionOperator = "more"
 )
 
 func (e *RuleConditionOperator) Scan(src interface{}) error {
@@ -377,6 +378,7 @@ const (
 	RuleConditionPropertyDomain         RuleConditionProperty = "domain"
 	RuleConditionPropertyHTTPHeaderName RuleConditionProperty = "http_header_name"
 	RuleConditionPropertyAlways         RuleConditionProperty = "always"
+	RuleConditionPropertyBrowserVersion RuleConditionProperty = "browser_version"
 )
 
 func (e *RuleConditionProperty) Scan(src interface{}) error {

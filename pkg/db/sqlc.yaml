@@ -80,6 +80,7 @@ sql:
           backend_rule_condition_property_domain: RuleConditionPropertyDomain
           backend_rule_condition_property_http_header_name: RuleConditionPropertyHTTPHeaderName
           backend_rule_condition_property_always: RuleConditionPropertyAlways
+          backend_rule_condition_property_browser_version: RuleConditionPropertyBrowserVersion
           backend_rule_condition_operator: RuleConditionOperator
           backend_rule_condition_operator_equals: RuleConditionOperatorEquals
           backend_rule_condition_operator_contains: RuleConditionOperatorContains
@@ -87,6 +88,7 @@ sql:
           backend_rule_condition_operator_empty: RuleConditionOperatorEmpty
           backend_rule_condition_operator_in: RuleConditionOperatorIn
           backend_rule_condition_operator_bot: RuleConditionOperatorBot
+          backend_rule_condition_operator_more: RuleConditionOperatorMore
           backend_rule_action_property: RuleActionProperty
           backend_rule_action_property_difficulty_level_percent: RuleActionPropertyDifficultyLevelPercent
           backend_rule_action_property_http_request: RuleActionPropertyHTTPRequest

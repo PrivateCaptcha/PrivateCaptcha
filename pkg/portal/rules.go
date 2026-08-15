@@ -133,10 +133,18 @@ type ConditionFormParser func(conditionOperator, conditionValue, domain string) 
 type ActionFormParser func(actionValue string) (int32, common.StatusCode)
 type ConditionValueFormatter func(rule *dbgen.DifficultyRule) string
 
+type conditionValueType uint8
+
+const (
+	conditionValueString conditionValueType = iota
+	conditionValueInteger
+)
+
 type ConditionRegistration struct {
 	Parser         ConditionFormParser
 	DisplayName    string
 	ValueFormatter ConditionValueFormatter
+	valueType      conditionValueType
 }
 
 type RuleRegistry struct {
@@ -153,7 +161,12 @@ func (r *RuleRegistry) RegisterCondition(key string, parser ConditionFormParser,
 		r.conditions = make(map[string]ConditionRegistration)
 	}
 
-	reg := ConditionRegistration{Parser: parser, DisplayName: displayName}
+	previous := r.conditions[key]
+	reg := ConditionRegistration{
+		Parser:      parser,
+		DisplayName: displayName,
+		valueType:   previous.valueType,
+	}
 	if valueFormatter != nil {
 		reg.ValueFormatter = valueFormatter
 	}
@@ -182,6 +195,11 @@ func (r *RuleRegistry) ConditionParser(key string) (ConditionFormParser, bool) {
 		return nil, false
 	}
 	return reg.Parser, true
+}
+
+func (r *RuleRegistry) conditionRegistration(key string) (ConditionRegistration, bool) {
+	reg, ok := r.conditions[key]
+	return reg, ok
 }
 
 func (r *RuleRegistry) ActionParser(key string) (ActionFormParser, bool) {

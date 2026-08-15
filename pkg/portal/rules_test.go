@@ -160,6 +160,28 @@ func postEditOrgRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, 
 	return postRuleRequest(srv, cookie, "POST", endpoint, token, params)
 }
 
+func assertBrowserVersionRule(t *testing.T, rule *dbgen.DifficultyRule, threshold int32, negated bool) {
+	t.Helper()
+	if rule.ConditionProperty != dbgen.RuleConditionPropertyBrowserVersion {
+		t.Errorf("ConditionProperty = %q, want %q", rule.ConditionProperty, dbgen.RuleConditionPropertyBrowserVersion)
+	}
+	if rule.ConditionOperator != dbgen.RuleConditionOperatorMore {
+		t.Errorf("ConditionOperator = %q, want %q", rule.ConditionOperator, dbgen.RuleConditionOperatorMore)
+	}
+	if rule.ConditionOperatorNegated != negated {
+		t.Errorf("ConditionOperatorNegated = %v, want %v", rule.ConditionOperatorNegated, negated)
+	}
+	if !rule.ConditionValueInt.Valid || rule.ConditionValueInt.Int32 != threshold {
+		t.Errorf("ConditionValueInt = %+v, want valid %d", rule.ConditionValueInt, threshold)
+	}
+	if rule.ConditionValueStr.Valid {
+		t.Errorf("ConditionValueStr = %+v, want invalid", rule.ConditionValueStr)
+	}
+	if rule.ConditionValueSeparator.Valid {
+		t.Errorf("ConditionValueSeparator = %+v, want invalid", rule.ConditionValueSeparator)
+	}
+}
+
 func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
 
@@ -206,6 +228,50 @@ func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 	model = DifficultyRuleToDisplay(rule, true, hasher, registry)
 	if model.ConditionProperty != "My Custom Prop" {
 		t.Errorf("Expected 'My Custom Prop', got '%s'", model.ConditionProperty)
+	}
+}
+
+func TestBrowserVersionRuleToDisplay(t *testing.T) {
+	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyBrowserVersion,
+		ConditionOperator: dbgen.RuleConditionOperatorMore,
+		ConditionValueInt: db.Int(3),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       20,
+	}
+
+	model := DifficultyRuleToDisplay(rule, true, hasher, NewRuleRegistry())
+	if model.ConditionProperty != "Outdated browser version" {
+		t.Errorf("ConditionProperty = %q, want %q", model.ConditionProperty, "Outdated browser version")
+	}
+	if model.ConditionOperator != "more" {
+		t.Errorf("ConditionOperator = %q, want %q", model.ConditionOperator, "more")
+	}
+	if model.ConditionValue != "3 major versions behind" {
+		t.Errorf("ConditionValue = %q, want %q", model.ConditionValue, "3 major versions behind")
+	}
+
+	rule.ConditionOperatorNegated = true
+	model = DifficultyRuleToDisplay(rule, true, hasher, NewRuleRegistry())
+	if model.ConditionOperator != "not more" {
+		t.Errorf("ConditionOperator = %q, want %q", model.ConditionOperator, "not more")
+	}
+}
+
+func TestRegisterConditionPreservesBrowserVersionValueType(t *testing.T) {
+	registry := NewRuleRegistry()
+	err := registry.RegisterCondition(string(dbgen.RuleConditionPropertyBrowserVersion), browserVersionConditionParser, "Custom display", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	registration, ok := registry.conditionRegistration(string(dbgen.RuleConditionPropertyBrowserVersion))
+	if !ok {
+		t.Fatal("browser version condition is not registered")
+	}
+	if registration.valueType != conditionValueInteger {
+		t.Errorf("valueType = %v, want %v", registration.valueType, conditionValueInteger)
 	}
 }
 
@@ -595,6 +661,40 @@ func TestParseCountryCodeConditionInvalidOperator(t *testing.T) {
 	}
 }
 
+func TestParseBrowserVersionCondition(t *testing.T) {
+	tests := []struct {
+		name           string
+		operator       string
+		value          string
+		expectedValue  string
+		expectedStatus common.StatusCode
+	}{
+		{name: "valid", operator: string(dbgen.RuleConditionOperatorMore), value: "3", expectedValue: "3", expectedStatus: common.StatusOK},
+		{name: "maximum int32", operator: string(dbgen.RuleConditionOperatorMore), value: "2147483647", expectedValue: "2147483647", expectedStatus: common.StatusOK},
+		{name: "invalid operator", operator: string(dbgen.RuleConditionOperatorEquals), value: "3", expectedStatus: common.StatusRuleConditionOperatorInvalid},
+		{name: "empty", operator: string(dbgen.RuleConditionOperatorMore), expectedStatus: common.StatusRuleConditionValueRequired},
+		{name: "non integer", operator: string(dbgen.RuleConditionOperatorMore), value: "1.5", expectedStatus: common.StatusRuleConditionValueInvalid},
+		{name: "zero", operator: string(dbgen.RuleConditionOperatorMore), value: "0", expectedStatus: common.StatusRuleConditionValueInvalid},
+		{name: "negative", operator: string(dbgen.RuleConditionOperatorMore), value: "-1", expectedStatus: common.StatusRuleConditionValueInvalid},
+		{name: "overflow", operator: string(dbgen.RuleConditionOperatorMore), value: "2147483648", expectedStatus: common.StatusRuleConditionValueInvalid},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			value, separator, status := browserVersionConditionParser(tt.operator, tt.value, "")
+			if status != tt.expectedStatus {
+				t.Errorf("browserVersionConditionParser() status = %v, want %v", status, tt.expectedStatus)
+			}
+			if value != tt.expectedValue {
+				t.Errorf("browserVersionConditionParser() value = %q, want %q", value, tt.expectedValue)
+			}
+			if separator != "" {
+				t.Errorf("browserVersionConditionParser() separator = %q, want empty", separator)
+			}
+		})
+	}
+}
+
 func TestParseDifficultyAction(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -873,6 +973,67 @@ func TestCreateOrgRule(t *testing.T) {
 	}
 }
 
+func TestCreateBrowserVersionRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp := postCreateOrgRule(srv, cookie, user, org, "Outdated org browser",
+		string(dbgen.RuleConditionPropertyBrowserVersion), string(dbgen.RuleConditionOperatorMore)+"_negated", "4",
+		string(dbgen.RuleActionPropertyHTTPRequest), "block")
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("create org rule status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
+	}
+	orgRules, err := store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{org.ID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(orgRules[org.ID]) != 1 {
+		t.Fatalf("org rule count = %d, want 1", len(orgRules[org.ID]))
+	}
+	orgRule := orgRules[org.ID][0]
+	assertBrowserVersionRule(t, orgRule, 4, true)
+
+	resp = postEditOrgRule(srv, cookie, user, org, orgRule, "Country rule",
+		string(dbgen.RuleConditionPropertyCountryCode), string(dbgen.RuleConditionOperatorIn), "DE,FR",
+		string(dbgen.RuleActionPropertyHTTPRequest), "block")
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("edit to string rule status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
+	}
+	orgRule, err = store.Impl().RetrieveDifficultyRule(ctx, orgRule.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if orgRule.ConditionValueInt.Valid || !orgRule.ConditionValueStr.Valid || !orgRule.ConditionValueSeparator.Valid {
+		t.Errorf("string condition values = int:%+v str:%+v separator:%+v", orgRule.ConditionValueInt, orgRule.ConditionValueStr, orgRule.ConditionValueSeparator)
+	}
+
+	resp = postEditOrgRule(srv, cookie, user, org, orgRule, "Outdated org browser",
+		string(dbgen.RuleConditionPropertyBrowserVersion), string(dbgen.RuleConditionOperatorMore)+"_negated", "5",
+		string(dbgen.RuleActionPropertyHTTPRequest), "block")
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("edit to integer rule status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
+	}
+	orgRule, err = store.Impl().RetrieveDifficultyRule(ctx, orgRule.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertBrowserVersionRule(t, orgRule, 5, true)
+}
+
 func TestEditPropertyRule(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -925,6 +1086,25 @@ func TestEditPropertyRule(t *testing.T) {
 	if updatedRule.ActionValue != -30 {
 		t.Errorf("Unexpected action value: %d", updatedRule.ActionValue)
 	}
+
+	endpoint := fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID)))
+	resp = postRuleRequest(srv, cookie, http.MethodPost, endpoint, server.XSRF.Token(strconv.Itoa(int(user.ID))), map[string]string{
+		common.ParamName:              "Outdated browser",
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: string(dbgen.RuleConditionPropertyBrowserVersion),
+		common.ParamConditionOperator: string(dbgen.RuleConditionOperatorMore),
+		common.ParamConditionValue:    "4",
+		common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		common.ParamActionValue:       "50",
+	})
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("browser version edit status = %d, want %d", resp.StatusCode, http.StatusSeeOther)
+	}
+	updatedRule, err = store.Impl().RetrieveDifficultyRule(ctx, rule.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertBrowserVersionRule(t, updatedRule, 4, false)
 }
 
 func TestEditOrgRule(t *testing.T) {
@@ -3994,6 +4174,47 @@ func TestParseRuleFormNegativeCases(t *testing.T) {
 				t.Errorf("parseRuleForm() = %v, want %v", statusCode, tt.expectedCode)
 			}
 		})
+	}
+}
+
+func TestParseBrowserVersionRuleForm(t *testing.T) {
+	form := url.Values{
+		common.ParamName:              {"Outdated browser"},
+		common.ParamConditionProperty: {string(dbgen.RuleConditionPropertyBrowserVersion)},
+		common.ParamConditionOperator: {string(dbgen.RuleConditionOperatorMore)},
+		common.ParamConditionValue:    {"3"},
+		common.ParamActionProperty:    {string(dbgen.RuleActionPropertyDifficultyLevelPercent)},
+		common.ParamActionValue:       {"50"},
+	}
+	req := httptest.NewRequest("POST", "/test", strings.NewReader(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	if err := req.ParseForm(); err != nil {
+		t.Fatal(err)
+	}
+
+	params, status := (&Server{Rules: NewRuleRegistry()}).parseRuleForm(t.Context(), req, &RuleWizardRenderContext{}, "example.com")
+	if status != common.StatusOK {
+		t.Fatalf("parseRuleForm() = %v, want %v", status, common.StatusOK)
+	}
+	if !params.ConditionValueInt.Valid || params.ConditionValueInt.Int32 != 3 {
+		t.Errorf("ConditionValueInt = %+v, want valid 3", params.ConditionValueInt)
+	}
+	if params.ConditionValueStr.Valid {
+		t.Errorf("ConditionValueStr = %+v, want invalid", params.ConditionValueStr)
+	}
+	if params.ConditionValueSeparator.Valid {
+		t.Errorf("ConditionValueSeparator = %+v, want invalid", params.ConditionValueSeparator)
+	}
+}
+
+func TestBrowserVersionRuleToFormData(t *testing.T) {
+	form := ruleToFormData(&dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyBrowserVersion,
+		ConditionOperator: dbgen.RuleConditionOperatorMore,
+		ConditionValueInt: db.Int(7),
+	})
+	if form.ConditionValue != "7" {
+		t.Errorf("ConditionValue = %q, want %q", form.ConditionValue, "7")
 	}
 }
 

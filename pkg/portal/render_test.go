@@ -743,6 +743,33 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{},
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.RulesEndpoint, "browser-version", common.EditEndpoint},
+			template: ruleTemplate,
+			model: &RuleWizardRenderContext{
+				CsrfRenderContext: stubToken(),
+				RuleFormData: RuleFormData{
+					Name:              "Outdated browser",
+					ConditionProperty: string(dbgen.RuleConditionPropertyBrowserVersion),
+					ConditionOperator: string(dbgen.RuleConditionOperatorMore),
+					ConditionValue:    "7",
+					ActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+					ActionValue:       "50",
+					Enabled:           true,
+				},
+				CurrentOrg: stubOrg("123"),
+				Property:   stubProperty("my property", "123"),
+				IsEdit:     true,
+			},
+			selector: `option[value="browser_version"][selected], label[for="browserVersionInput"], input#browserVersionInput[type="number"][min="1"][step="1"][aria-describedby="browserVersionInput-description"], #browserVersionInput-description`,
+			matches: []string{
+				"Browser version",
+				"Major versions behind",
+				"",
+				"Matches Chrome or Firefox versions more than this many major versions behind the latest release.",
+			},
+			enterprise: enterpriseOnly,
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.RulesEndpoint},
 			template: orgRulesTemplate,
 			model: &OrgRulesRenderContext{

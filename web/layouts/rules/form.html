@@ -40,6 +40,7 @@
             <div class="mt-2">
                 <select name="{{ .Const.ConditionProperty }}" id="{{ .Const.ConditionProperty }}" x-model="conditionProperty" class="w-full pc-internal-form-select">
                     {{ with .Const.ConditionPropertyUserAgent }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>User Agent</option>{{ end }}
+                    {{ with .Const.ConditionPropertyBrowserVersion }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Browser version</option>{{ end }}
                     {{ with .Const.ConditionPropertyIPAddress }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>IP Address</option>{{ end }}
                     {{ with .Const.ConditionPropertyCountryCode }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Country</option>{{ end }}
                     {{ if and .Params.Property .Params.Property.HasDomain }}{{ with .Const.ConditionPropertyDomain }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Domain</option>{{ end }}{{ end }}
@@ -66,6 +67,14 @@
             <div class="mt-2">
                 <input id="userAgentInput" type="text" x-model="conditionValueUserAgent" placeholder="Enter user agent..." class="w-full pc-internal-form-input-base pc-form-input-normal" />
             </div>
+        </div>
+
+        <div x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyBrowserVersion }}' && showConditionValue">
+            <label for="browserVersionInput" class="pc-internal-form-label">Major versions behind</label>
+            <div class="mt-2">
+                <input id="browserVersionInput" type="number" min="1" step="1" x-model="conditionValueBrowserVersion" aria-describedby="browserVersionInput-description" class="w-full pc-internal-form-input-base pc-form-input-normal" />
+            </div>
+            <p id="browserVersionInput-description" class="mt-1 text-xs text-pc-grey-800">Matches Chrome or Firefox versions <span x-text="conditionOperator === '{{ .Const.OperatorMore }}_negated' ? 'no more than' : 'more than'">more than</span> <span x-text="conditionValueBrowserVersion || 'this many'">this many</span> <span x-text="Number(conditionValueBrowserVersion) === 1 ? 'major version' : 'major versions'">major versions</span> behind the latest release.</p>
         </div>
 
         <div x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyDomain }}' && showConditionValue">

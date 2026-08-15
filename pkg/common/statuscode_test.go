@@ -63,6 +63,7 @@ func TestStatusCodeString(t *testing.T) {
 		StatusRuleHTTPHeaderNameRequired,
 		StatusRuleHTTPHeaderNameInvalid,
 		StatusRuleNameInvalidCharsError,
+		StatusRuleConditionValueInvalid,
 		StatusOrgRulesLimitError,
 		StatusOrgRulesSubscriptionRequired,
 		StatusFormNameEmptyError,

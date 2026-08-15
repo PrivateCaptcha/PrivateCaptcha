@@ -24,6 +24,7 @@ var (
 	ErrIPEqualsMultipleValues       = errors.New("equals operator requires exactly one IP address value")
 	ErrIPNonSingletonPrefix         = errors.New("equals/in operator requires single IP addresses, not CIDR ranges")
 	ErrUnsupportedConditionOperator = errors.New("unsupported condition operator for rule")
+	ErrInvalidBrowserVersionRule    = errors.New("invalid browser version rule")
 )
 
 const (
@@ -380,6 +381,7 @@ func init() {
 	gob.Register(&IPMatcher{})
 	gob.Register(&HeaderMatcher{})
 	gob.Register(&BotMatcher{})
+	gob.Register(&BrowserVersionMatcher{})
 	gob.Register(&AlwaysMatcher{})
 }
 
@@ -480,19 +482,25 @@ func buildAlwaysMatcher(_ *dbgen.DifficultyRule) (Matcher, error) {
 
 // RulesCompiler compiles database rules into executable rule objects.
 type RulesCompiler struct {
-	uaParser  *useragent.Parser
-	factories map[string]MatcherFactory
+	uaParser        *useragent.Parser
+	factories       map[string]MatcherFactory
+	browserVersions *BrowserVersions
 }
 
 // NewRulesCompiler creates a new RulesCompiler with the provided user agent parser.
 // The uaParser must not be nil; it is required for compiling user-agent based rules.
 func NewRulesCompiler(uaParser *useragent.Parser) *RulesCompiler {
 	rc := &RulesCompiler{
-		uaParser:  uaParser,
-		factories: make(map[string]MatcherFactory),
+		uaParser:        uaParser,
+		factories:       make(map[string]MatcherFactory),
+		browserVersions: NewBrowserVersions(),
 	}
 	rc.registerDefaultFactories()
 	return rc
+}
+
+func (rc *RulesCompiler) BrowserVersions() *BrowserVersions {
+	return rc.browserVersions
 }
 
 func (rc *RulesCompiler) registerDefaultFactories() {
@@ -502,6 +510,7 @@ func (rc *RulesCompiler) registerDefaultFactories() {
 	rc.factories[string(dbgen.RuleConditionPropertyIPAddress)] = BuildIPMatcher
 	rc.factories[string(dbgen.RuleConditionPropertyHTTPHeaderName)] = BuildHeaderMatcher
 	rc.factories[string(dbgen.RuleConditionPropertyAlways)] = buildAlwaysMatcher
+	rc.factories[string(dbgen.RuleConditionPropertyBrowserVersion)] = rc.buildBrowserVersionMatcher
 }
 
 // RegisterMatcherFactory registers a MatcherFactory for the given condition property,
@@ -522,6 +531,22 @@ func (rc *RulesCompiler) buildUserAgentMatcher(rule *dbgen.DifficultyRule) (Matc
 		}, nil
 	}
 	return BuildStringMatcher(rule)
+}
+
+func (rc *RulesCompiler) buildBrowserVersionMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
+	if rule.ConditionOperator != dbgen.RuleConditionOperatorMore {
+		return nil, ErrUnsupportedConditionOperator
+	}
+	if !rule.ConditionValueInt.Valid || rule.ConditionValueInt.Int32 <= 0 ||
+		rule.ConditionValueStr.Valid || rule.ConditionValueSeparator.Valid {
+		return nil, ErrInvalidBrowserVersionRule
+	}
+	return &BrowserVersionMatcher{
+		UAParser:                 rc.uaParser,
+		BrowserVersions:          rc.browserVersions,
+		Threshold:                rule.ConditionValueInt.Int32,
+		ConditionOperatorNegated: rule.ConditionOperatorNegated,
+	}, nil
 }
 
 var _ Compiler = (*RulesCompiler)(nil)
