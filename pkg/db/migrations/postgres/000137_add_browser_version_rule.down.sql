@@ -1,0 +1,2 @@
+-- PostgreSQL does not support removing values from enum types.
+-- The 'browser_version' and 'more' values cannot be rolled back automatically.

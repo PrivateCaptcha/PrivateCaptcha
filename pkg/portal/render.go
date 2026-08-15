@@ -90,12 +90,14 @@ type RenderConstants struct {
 	ConditionPropertyDomain         string
 	ConditionPropertyHTTPHeaderName string
 	ConditionPropertyAlways         string
+	ConditionPropertyBrowserVersion string
 	OperatorEquals                  string
 	OperatorContains                string
 	OperatorEmpty                   string
 	OperatorMatches                 string
 	OperatorIn                      string
 	OperatorBot                     string
+	OperatorMore                    string
 	StringOperators                 []string
 	IPOperators                     []string
 	GrowthTypeConstant              string
@@ -199,6 +201,7 @@ func NewRenderConstants() *RenderConstants {
 		OperatorMatches:                 string(dbgen.RuleConditionOperatorMatches),
 		OperatorIn:                      string(dbgen.RuleConditionOperatorIn),
 		OperatorBot:                     string(dbgen.RuleConditionOperatorBot),
+		OperatorMore:                    string(dbgen.RuleConditionOperatorMore),
 		StringOperators:                 []string{string(dbgen.RuleConditionOperatorEquals), string(dbgen.RuleConditionOperatorContains), string(dbgen.RuleConditionOperatorEmpty)},
 		IPOperators:                     []string{string(dbgen.RuleConditionOperatorMatches), string(dbgen.RuleConditionOperatorEmpty)},
 		ConditionProperty:               common.ParamConditionProperty,
@@ -208,6 +211,7 @@ func NewRenderConstants() *RenderConstants {
 		ConditionPropertyDomain:         string(dbgen.RuleConditionPropertyDomain),
 		ConditionPropertyHTTPHeaderName: string(dbgen.RuleConditionPropertyHTTPHeaderName),
 		ConditionPropertyAlways:         string(dbgen.RuleConditionPropertyAlways),
+		ConditionPropertyBrowserVersion: string(dbgen.RuleConditionPropertyBrowserVersion),
 		GrowthTypeConstant:              string(dbgen.DifficultyGrowthConstant),
 		GrowthTypeSlow:                  string(dbgen.DifficultyGrowthSlow),
 		GrowthTypeMedium:                string(dbgen.DifficultyGrowthMedium),

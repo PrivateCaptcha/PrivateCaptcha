@@ -419,6 +419,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 
 	jobConcurrency := config.AsInt(cfg.Get(common.MaintenanceJobConcurrencyKey), 2)
 	jobs := maintenance.NewJobs(businessDB, jobConcurrency)
+	fetchBrowserVersions, refreshBrowserVersions := newBrowserVersionJobs(businessDB, rulesCompiler)
+	jobs.AddLocked(24*time.Hour, fetchBrowserVersions)
+	jobs.Add(refreshBrowserVersions)
 
 	jobs.Spawn(healthCheck)
 	// start maintenance jobs

@@ -40,6 +40,17 @@ function ruleFormData() {
                 { value: '{{ .Const.OperatorBot }}_negated', label: 'Is Not Known Bot' }
             ]
         },
+        '{{ .Const.ConditionPropertyBrowserVersion }}': {
+            stateField: 'conditionValueBrowserVersion',
+            emptyValue: '',
+            initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyBrowserVersion }}' ? formDataConditionValue : '',
+            getFormattedValue: (ctx) => ctx.conditionValueBrowserVersion,
+            showOperator: true,
+            operators: [
+                { value: '{{ .Const.OperatorMore }}', label: 'More' },
+                { value: '{{ .Const.OperatorMore }}_negated', label: 'Less or equal' }
+            ]
+        },
         '{{ .Const.ConditionPropertyIPAddress }}': {
             stateField: 'conditionValueIPAddress',
             emptyValue: '',

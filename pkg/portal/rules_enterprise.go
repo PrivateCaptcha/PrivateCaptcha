@@ -4,6 +4,7 @@ package portal
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/netip"
@@ -216,6 +217,29 @@ func countryCodeConditionParser(conditionOperator, conditionValue, _ string) (st
 	return conditionValue, separator, common.StatusOK
 }
 
+func browserVersionConditionParser(conditionOperator, conditionValue, _ string) (string, string, common.StatusCode) {
+	if conditionOperator != string(dbgen.RuleConditionOperatorMore) {
+		return "", "", common.StatusRuleConditionOperatorInvalid
+	}
+	if conditionValue == "" {
+		return "", "", common.StatusRuleConditionValueRequired
+	}
+
+	value, err := strconv.ParseInt(conditionValue, 10, 32)
+	if err != nil || value <= 0 {
+		return "", "", common.StatusRuleConditionValueInvalid
+	}
+
+	return strconv.FormatInt(value, 10), "", common.StatusOK
+}
+
+func browserVersionConditionValueFormatter(rule *dbgen.DifficultyRule) string {
+	if !rule.ConditionValueInt.Valid {
+		return ""
+	}
+	return fmt.Sprintf("%d major versions behind", rule.ConditionValueInt.Int32)
+}
+
 func commaSeparatedConditionValueFormatter(rule *dbgen.DifficultyRule) string {
 	if !rule.ConditionValueStr.Valid {
 		return ""
@@ -349,7 +373,10 @@ func httpHeaderNameConditionParser(conditionOperator, conditionValue, _ string) 
 	return conditionValue, separator, common.StatusOK
 }
 
-func alwaysConditionParser(_, _, _ string) (string, string, common.StatusCode) {
+func alwaysConditionParser(conditionOperator, _, _ string) (string, string, common.StatusCode) {
+	if conditionOperator != string(dbgen.RuleConditionOperatorEquals) {
+		return "", "", common.StatusRuleConditionOperatorInvalid
+	}
 	return "", "", common.StatusOK
 }
 
@@ -366,6 +393,12 @@ func NewRuleRegistry() *RuleRegistry {
 			string(dbgen.RuleConditionPropertyDomain):         ConditionRegistration{Parser: domainConditionParser, DisplayName: "Domain"},
 			string(dbgen.RuleConditionPropertyHTTPHeaderName): ConditionRegistration{Parser: httpHeaderNameConditionParser, DisplayName: "HTTP Header Name"},
 			string(dbgen.RuleConditionPropertyAlways):         ConditionRegistration{Parser: alwaysConditionParser, DisplayName: "Always"},
+			string(dbgen.RuleConditionPropertyBrowserVersion): ConditionRegistration{
+				Parser:         browserVersionConditionParser,
+				DisplayName:    "Outdated browser version",
+				ValueFormatter: browserVersionConditionValueFormatter,
+				valueType:      conditionValueInteger,
+			},
 		},
 		actions: map[string]ActionFormParser{
 			string(dbgen.RuleActionPropertyDifficultyLevelPercent): difficultyActionParser,
@@ -648,7 +681,7 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 		return nil, common.StatusRuleActionPropertyRequired
 	}
 
-	conditionParser, ok := s.Rules.ConditionParser(renderCtx.ConditionProperty)
+	condition, ok := s.Rules.conditionRegistration(renderCtx.ConditionProperty)
 	if !ok {
 		slog.WarnContext(ctx, "Invalid condition property", "condition", renderCtx.ConditionProperty)
 		return nil, common.StatusRuleConditionPropertyInvalid
@@ -673,7 +706,7 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 		renderCtx.ConditionOperator = strings.TrimSuffix(renderCtx.ConditionOperator, "_negated")
 	}
 
-	normalizedValue, separatorStr, parseStatus := conditionParser(renderCtx.ConditionOperator, renderCtx.ConditionValue, domain)
+	normalizedValue, separatorStr, parseStatus := condition.Parser(renderCtx.ConditionOperator, renderCtx.ConditionValue, domain)
 	if !parseStatus.Success() {
 		slog.WarnContext(ctx, "Failed to parse rule condition", "condition", renderCtx.ConditionProperty, "operator", renderCtx.ConditionOperator,
 			"value", renderCtx.ConditionValue, "negated", renderCtx.ConditionNegated, "status", parseStatus.String())
@@ -681,9 +714,20 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 	}
 	renderCtx.ConditionValue = normalizedValue
 
+	var conditionValueStr pgtype.Text
+	var conditionValueInt pgtype.Int4
 	var conditionValueSeparator pgtype.Text
-	if separatorStr != "" {
-		conditionValueSeparator = db.Text(separatorStr)
+	if condition.valueType == conditionValueInteger {
+		value, err := strconv.ParseInt(normalizedValue, 10, 32)
+		if err != nil {
+			return nil, common.StatusRuleConditionValueInvalid
+		}
+		conditionValueInt = db.Int(int32(value))
+	} else {
+		conditionValueStr = db.Text(normalizedValue)
+		if separatorStr != "" {
+			conditionValueSeparator = db.Text(separatorStr)
+		}
 	}
 
 	slog.DebugContext(ctx, "Parsed rule condition", "condition", renderCtx.ConditionProperty, "operator", renderCtx.ConditionOperator,
@@ -719,7 +763,8 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 		ConditionProperty:        dbgen.RuleConditionProperty(renderCtx.ConditionProperty),
 		ConditionOperator:        dbgen.RuleConditionOperator(renderCtx.ConditionOperator),
 		ConditionOperatorNegated: renderCtx.ConditionNegated,
-		ConditionValueStr:        db.Text(renderCtx.ConditionValue),
+		ConditionValueStr:        conditionValueStr,
+		ConditionValueInt:        conditionValueInt,
 		ConditionValueSeparator:  conditionValueSeparator,
 		ActionProperty:           actionPropertyEnum,
 		ActionValue:              actionValue,
@@ -735,6 +780,8 @@ func ruleToFormData(rule *dbgen.DifficultyRule) RuleFormData {
 	conditionValue := ""
 	if rule.ConditionValueStr.Valid {
 		conditionValue = rule.ConditionValueStr.String
+	} else if rule.ConditionValueInt.Valid {
+		conditionValue = strconv.Itoa(int(rule.ConditionValueInt.Int32))
 	}
 
 	return RuleFormData{

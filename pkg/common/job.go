@@ -31,6 +31,18 @@ type PeriodicJob interface {
 	Trigger() <-chan struct{}
 }
 
+type StubPeriodicJob string
+
+var _ PeriodicJob = StubPeriodicJob("")
+
+func (j StubPeriodicJob) Name() string                     { return string(j) }
+func (StubPeriodicJob) Interval() time.Duration            { return time.Hour }
+func (StubPeriodicJob) Timeout() time.Duration             { return 0 }
+func (StubPeriodicJob) Jitter() time.Duration              { return 1 }
+func (StubPeriodicJob) Trigger() <-chan struct{}           { return nil }
+func (StubPeriodicJob) NewParams() any                     { return struct{}{} }
+func (StubPeriodicJob) RunOnce(context.Context, any) error { return nil }
+
 type StubOneOffJob struct{}
 
 var _ OneOffJob = (*StubOneOffJob)(nil)

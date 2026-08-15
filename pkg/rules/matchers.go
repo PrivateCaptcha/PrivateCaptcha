@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"net/netip"
+	"strconv"
 	"strings"
 
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -236,6 +237,114 @@ func (bm *BotMatcher) Matches(ri *RequestInfo) bool {
 	result := bm.looksLikeBot(ri.UserAgent())
 
 	if bm.ConditionOperatorNegated {
+		return !result
+	}
+	return result
+}
+
+type BrowserVersionMatcher struct {
+	UAParser                 *useragent.Parser
+	BrowserVersions          *BrowserVersions
+	Threshold                int32
+	ConditionOperatorNegated bool
+}
+
+const browserVersionMaxUserAgentBytes = 4 * 1024
+
+var _ Matcher = (*BrowserVersionMatcher)(nil)
+
+func (m *BrowserVersionMatcher) GobEncode() ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(m.Threshold); err != nil {
+		return nil, err
+	}
+	if err := enc.Encode(m.ConditionOperatorNegated); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (m *BrowserVersionMatcher) GobDecode(data []byte) error {
+	m.UAParser = nil
+	m.BrowserVersions = nil
+	dec := gob.NewDecoder(bytes.NewBuffer(data))
+	if err := dec.Decode(&m.Threshold); err != nil {
+		return err
+	}
+	return dec.Decode(&m.ConditionOperatorNegated)
+}
+
+func (m *BrowserVersionMatcher) IsStale() bool {
+	return m.UAParser == nil || m.BrowserVersions == nil
+}
+
+func browserVersionKey(ua useragent.UserAgent) (BrowserVersionKey, bool) {
+	var key BrowserVersionKey
+	switch ua.Browser() {
+	case agents.BrowserChrome:
+		key.Browser = BrowserChrome
+	case agents.BrowserFirefox:
+		key.Browser = BrowserFirefox
+	default:
+		return BrowserVersionKey{}, false
+	}
+	switch ua.OS() {
+	case agents.OSWindows:
+		if ua.Device() != agents.DeviceDesktop {
+			return BrowserVersionKey{}, false
+		}
+		key.Platform = PlatformWindows
+	case agents.OSMacOS:
+		if ua.Device() != agents.DeviceDesktop {
+			return BrowserVersionKey{}, false
+		}
+		key.Platform = PlatformMacOS
+	case agents.OSLinux:
+		if ua.Device() != agents.DeviceDesktop {
+			return BrowserVersionKey{}, false
+		}
+		key.Platform = PlatformLinux
+	case agents.OSAndroid:
+		if ua.Device() != agents.DeviceMobile && ua.Device() != agents.DeviceTablet {
+			return BrowserVersionKey{}, false
+		}
+		key.Platform = PlatformAndroid
+	case agents.OSIOS:
+		if key.Browser != BrowserChrome || (ua.Device() != agents.DeviceMobile && ua.Device() != agents.DeviceTablet) {
+			return BrowserVersionKey{}, false
+		}
+		key.Platform = PlatformIOS
+	default:
+		return BrowserVersionKey{}, false
+	}
+	return key, true
+}
+
+func (m *BrowserVersionMatcher) Matches(ri *RequestInfo) bool {
+	if ri == nil || m.IsStale() || m.Threshold <= 0 {
+		return false
+	}
+
+	rawUserAgent := ri.UserAgent()
+	if len(rawUserAgent) > browserVersionMaxUserAgentBytes {
+		return false
+	}
+	ua := m.UAParser.Parse(rawUserAgent)
+	key, ok := browserVersionKey(ua)
+	if !ok {
+		return false
+	}
+	requestMajor, err := strconv.Atoi(ua.BrowserVersionMajor())
+	if err != nil || requestMajor <= 0 {
+		return false
+	}
+	currentMajor, ok := m.BrowserVersions.Major(key)
+	if !ok || currentMajor <= 0 {
+		return false
+	}
+	result := currentMajor > requestMajor && currentMajor-requestMajor > int(m.Threshold)
+	if m.ConditionOperatorNegated {
 		return !result
 	}
 	return result
