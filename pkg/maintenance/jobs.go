@@ -45,6 +45,10 @@ type jobs struct {
 // Implicit logic is that lockDuration is the actual job Interval, but it is defined by the SQL lock.
 // Job's Interval() is much smaller only for the purpose of "retrying" if the previous job execution failed
 func (j *jobs) AddLocked(lockDuration time.Duration, job common.PeriodicJob) {
+	if job == nil {
+		return
+	}
+
 	if interval := job.Interval(); interval >= lockDuration {
 		slog.Error("Periodic job interval should be less than lock duration", "job", job.Name(), "lock", lockDuration.String(), "interval", interval.String())
 	}
@@ -57,15 +61,27 @@ func (j *jobs) AddLocked(lockDuration time.Duration, job common.PeriodicJob) {
 }
 
 func (j *jobs) Add(job common.PeriodicJob) {
+	if job == nil {
+		return
+	}
+
 	j.periodicJobs = append(j.periodicJobs, job)
 }
 
 func (j *jobs) AddOneOff(job common.OneOffJob) {
+	if job == nil {
+		return
+	}
+
 	j.oneOffJobs = append(j.oneOffJobs, job)
 }
 
 // spawned jobs only share common cancellation context and are not exclusive
 func (j *jobs) Spawn(job common.PeriodicJob) {
+	if job == nil {
+		return
+	}
+
 	go common.RunPeriodicJob(j.maintenanceCtx, job)
 }
 
