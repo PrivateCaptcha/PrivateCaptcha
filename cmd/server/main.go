@@ -325,7 +325,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	updateConfigFunc(ctx)
 
 	// nolint:errcheck
-	go common.RunPeriodicJobOnce(common.TraceContext(context.Background(), "check_license"), checkLicenseJob, checkLicenseJob.NewParams())
+	go common.RunPeriodicJobOnce(common.TraceContext(context.Background(), "check_license"), checkLicenseJob, checkLicenseJob.NewParams(), 1*time.Second)
 
 	router := http.NewServeMux()
 	apiServer.Setup(apiURLConfig.Domain(), verbose, common.NoopMiddleware).Register(router)
@@ -420,9 +420,13 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 
 	jobConcurrency := config.AsInt(cfg.Get(common.MaintenanceJobConcurrencyKey), 2)
 	jobs := maintenance.NewJobs(businessDB, jobConcurrency)
-	fetchBrowserVersions, refreshBrowserVersions := newBrowserVersionJobs(businessDB, rulesCompiler)
-	jobs.AddLocked(24*time.Hour, fetchBrowserVersions)
-	jobs.Add(refreshBrowserVersions)
+
+	fetchBrowserVersions, refreshBrowserVersions := maintenance.NewBrowserVersionJobs(businessDB, rulesCompiler.BrowserVersions())
+
+	if refreshBrowserVersions != nil {
+		// nolint:errcheck
+		go common.RunPeriodicJobOnce(context.Background(), refreshBrowserVersions, refreshBrowserVersions.NewParams(), 1*time.Second)
+	}
 
 	jobs.Spawn(healthCheck)
 	// start maintenance jobs
@@ -496,6 +500,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		IDHasher:   idHasher,
 	})
 	jobs.AddLocked(10*time.Minute, asyncTasksJob)
+	jobs.AddLocked(24*time.Hour, fetchBrowserVersions)
+	jobs.Add(refreshBrowserVersions)
 
 	jobs.RunAll()
 

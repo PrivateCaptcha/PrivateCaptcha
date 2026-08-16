@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -17,93 +15,11 @@ import (
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/rs/xid"
 )
 
 type TestJob struct {
 	count int32
-}
-
-func TestBrowserVersionPipeline(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	ctx := common.TraceContext(t.Context(), t.Name())
-	compiler, ok := server.Auth.RulesCompiler.(*rules.RulesCompiler)
-	if !ok {
-		t.Fatalf("API rules compiler type = %T, want *rules.RulesCompiler", server.Auth.RulesCompiler)
-	}
-	queries := dbgen.New(store.Pool)
-	t.Cleanup(func() {
-		compiler.BrowserVersions().Replace(nil)
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if _, err := queries.DeleteCachedByKey(cleanupCtx, maintenance.BrowserVersionsCacheKey); err != nil {
-			t.Errorf("delete browser versions cache: %v", err)
-		}
-	})
-
-	records := make([]maintenance.BrowserVersionRecord, 0, 9)
-	for _, browser := range []string{rules.BrowserChrome, rules.BrowserFirefox} {
-		for _, platform := range []string{rules.PlatformWindows, rules.PlatformMacOS, rules.PlatformLinux, rules.PlatformAndroid} {
-			records = append(records, maintenance.BrowserVersionRecord{Browser: browser, Platform: platform, Version: "152.0"})
-		}
-	}
-	records = append(records, maintenance.BrowserVersionRecord{Browser: rules.BrowserChrome, Platform: rules.PlatformIOS, Version: "152.0"})
-	data, err := json.Marshal(maintenance.BrowserVersionsSnapshot{Versions: records})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := store.Impl().StoreInCache(ctx, maintenance.BrowserVersionsCacheKey, data, time.Hour); err != nil {
-		t.Fatal(err)
-	}
-
-	refreshJob := maintenance.NewRefreshBrowserVersionsJob(store, compiler.BrowserVersions())
-	if err := refreshJob.RunOnce(ctx, refreshJob.NewParams()); err != nil {
-		t.Fatal(err)
-	}
-	key := rules.BrowserVersionKey{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows}
-	if major, ok := compiler.BrowserVersions().Major(key); !ok || major != 152 {
-		t.Fatalf("compiler browser major = %d, %v, want 152, true", major, ok)
-	}
-
-	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
-	if err != nil {
-		t.Fatal(err)
-	}
-	rule, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
-		Name:              t.Name(),
-		OrgID:             db.Int(org.ID),
-		CreatorID:         db.Int(user.ID),
-		Enabled:           true,
-		ConditionProperty: dbgen.RuleConditionPropertyBrowserVersion,
-		ConditionOperator: dbgen.RuleConditionOperatorMore,
-		ConditionValueInt: db.Int(2),
-		ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
-		ActionValue:       1,
-		Terminal:          true,
-		Column15:          db.RulePositionStep,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	store.Cache.Delete(ctx, db.DifficultyRuleCacheKey(rule.ID))
-	rule, err = store.Impl().RetrieveDifficultyRule(ctx, rule.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !rule.ConditionValueInt.Valid || rule.ConditionValueInt.Int32 != 2 {
-		t.Fatalf("persisted browser version threshold = %+v, want 2", rule.ConditionValueInt)
-	}
-	compiled := compiler.Compile(ctx, []*dbgen.DifficultyRule{rule})
-
-	request := httptest.NewRequest(http.MethodGet, "https://example.com", nil)
-	request.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36")
-	if !compiled.IsRequestBlocked(rules.NewRequestInfo(request, "")) {
-		t.Fatal("browser beyond the threshold was not blocked")
-	}
 }
 
 var _ common.PeriodicJob = (*TestJob)(nil)
@@ -193,7 +109,7 @@ func TestUniqueJob(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	if err := common.RunPeriodicJobOnce(ctx, uniqueJob, uniqueJob.NewParams()); err != nil {
+	if err := common.RunPeriodicJobOnce(ctx, uniqueJob, uniqueJob.NewParams(), 0); err != nil {
 		t.Fatal(err)
 	}
 	cancel()

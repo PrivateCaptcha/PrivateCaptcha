@@ -53,6 +53,10 @@ func (StubOneOffJob) NewParams() any                     { return struct{}{} }
 func (StubOneOffJob) RunOnce(context.Context, any) error { return nil }
 
 func RunOneOffJob(ctx context.Context, j OneOffJob, params any) {
+	if j == nil {
+		return
+	}
+
 	ctx = context.WithValue(ctx, TraceIDContextKey, j.Name())
 
 	defer func() {
@@ -90,6 +94,10 @@ func RunAdHocFunc(ctx context.Context, f func(ctx context.Context) error) {
 }
 
 func RunPeriodicJob(ctx context.Context, j PeriodicJob) {
+	if j == nil {
+		return
+	}
+
 	ctx = context.WithValue(ctx, TraceIDContextKey, j.Name())
 
 	defer func() {
@@ -150,7 +158,11 @@ func RunPeriodicJob(ctx context.Context, j PeriodicJob) {
 	}
 }
 
-func RunPeriodicJobOnce(ctx context.Context, j PeriodicJob, params any) error {
+func RunPeriodicJobOnce(ctx context.Context, j PeriodicJob, params any, initialPause time.Duration) error {
+	if j == nil {
+		return nil
+	}
+
 	ctx = context.WithValue(ctx, TraceIDContextKey, j.Name())
 
 	defer func() {
@@ -158,6 +170,8 @@ func RunPeriodicJobOnce(ctx context.Context, j PeriodicJob, params any) error {
 			slog.ErrorContext(ctx, "Periodic job crashed", "panic", rvr, "stack", string(debug.Stack()))
 		}
 	}()
+
+	time.Sleep(initialPause)
 
 	slog.DebugContext(ctx, "Running periodic job once")
 

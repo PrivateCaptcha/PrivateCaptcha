@@ -17,7 +17,9 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/medama-io/go-useragent"
 )
 
 func createPropertyRuleUserAgent(ctx context.Context, user *dbgen.User, propertyID int32, name string) (*dbgen.DifficultyRule, error) {
@@ -1032,6 +1034,9 @@ func TestCreateBrowserVersionRule(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertBrowserVersionRule(t, orgRule, 5, true)
+	if _, err := rules.NewRulesCompiler(useragent.NewParser()).CompileRule(ctx, orgRule); err != nil {
+		t.Fatalf("compile browser version rule: %v", err)
+	}
 }
 
 func TestEditPropertyRule(t *testing.T) {

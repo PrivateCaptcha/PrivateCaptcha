@@ -418,3 +418,13 @@ func FormatMagnitude(value float64) string {
 		return fmt.Sprintf("%.0f", value)
 	}
 }
+
+func TriggerNonBlocking(ch chan<- struct{}) {
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
+}

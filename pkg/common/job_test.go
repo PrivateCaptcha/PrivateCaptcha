@@ -88,7 +88,7 @@ func TestRunPeriodicJobOnceRespectsTimeout(t *testing.T) {
 	ctx := context.Background()
 
 	start := time.Now()
-	RunPeriodicJobOnce(ctx, job, job.NewParams())
+	RunPeriodicJobOnce(ctx, job, job.NewParams(), 0)
 	elapsed := time.Since(start)
 
 	if !job.timedOut.Load() {

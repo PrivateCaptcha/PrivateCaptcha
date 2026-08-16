@@ -45,6 +45,7 @@ func (q *browserVersionCacheQuerier) CreateCache(_ context.Context, arg *dbgen.C
 		return 0, q.Error
 	}
 	q.arg = arg
+	q.readData = arg.Value
 	return 1, nil
 }
 
@@ -102,6 +103,37 @@ func newFetchBrowserVersionsTestJob(querier *browserVersionCacheQuerier, server 
 	job.FirefoxURL = server.URL + "/firefox"
 	job.FirefoxMobileURL = server.URL + "/firefox-mobile"
 	return job
+}
+
+func TestBrowserVersionJobsRefreshVersionsAfterFetch(t *testing.T) {
+	querier := &browserVersionCacheQuerier{QuerierStub: &db.QuerierStub{}}
+	browserVersions := rules.NewBrowserVersions()
+	fetchJob, refreshJob := NewBrowserVersionJobs(newBrowserVersionTestStore(querier), browserVersions)
+	fetchBrowserVersionsJob, ok := fetchJob.(*FetchBrowserVersionsJob)
+	if !ok {
+		t.Fatalf("fetch browser versions job type = %T, want *FetchBrowserVersionsJob", fetchJob)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go common.RunPeriodicJob(ctx, refreshJob)
+
+	snapshot := &BrowserVersionsSnapshot{Versions: validBrowserVersionRecords()}
+	if err := fetchBrowserVersionsJob.processSnapshot(ctx, snapshot); err != nil {
+		t.Fatal(err)
+	}
+
+	key := rules.BrowserVersionKey{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows}
+	var major int
+	var found bool
+	for range 10 {
+		time.Sleep(200 * time.Millisecond)
+		major, found = browserVersions.Major(key)
+		if found && major == 152 {
+			return
+		}
+	}
+	t.Fatalf("browser major = %d, %v, want 152, true", major, found)
 }
 
 func TestFetchBrowserVersionsJobStoresFullSnapshotAndTriggers(t *testing.T) {

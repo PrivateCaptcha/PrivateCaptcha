@@ -133,7 +133,7 @@ func (j *jobs) handlePeriodicJob(w http.ResponseWriter, r *http.Request) {
 			}
 
 			go func() {
-				_ = common.RunPeriodicJobOnce(common.CopyTraceID(ctx, j.maintenanceCtx), job, params)
+				_ = common.RunPeriodicJobOnce(common.CopyTraceID(ctx, j.maintenanceCtx), job, params, 1*time.Second)
 			}()
 			found = true
 			break

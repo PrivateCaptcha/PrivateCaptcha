@@ -103,7 +103,7 @@ type FetchBrowserVersionsJob struct {
 type RefreshBrowserVersionsJob struct {
 	Store           db.Implementor
 	BrowserVersions *rules.BrowserVersions
-	TriggerCh       <-chan struct{}
+	TriggerCh       chan struct{}
 }
 
 var _ common.PeriodicJob = (*FetchBrowserVersionsJob)(nil)
@@ -118,6 +118,8 @@ func NewFetchBrowserVersionsJob(store db.Implementor) *FetchBrowserVersionsJob {
 				return http.ErrUseLastResponse
 			},
 		},
+		TriggerCh:         make(chan struct{}, 1),
+		RefreshTrigger:    make(chan struct{}, 1),
 		ChromeURLTemplate: defaultChromeVersionURL,
 		FirefoxURL:        defaultFirefoxVersionURL,
 		FirefoxMobileURL:  defaultFirefoxMobileVersionURL,
@@ -125,13 +127,17 @@ func NewFetchBrowserVersionsJob(store db.Implementor) *FetchBrowserVersionsJob {
 }
 
 func NewRefreshBrowserVersionsJob(store db.Implementor, versions *rules.BrowserVersions) *RefreshBrowserVersionsJob {
-	return &RefreshBrowserVersionsJob{Store: store, BrowserVersions: versions}
+	return &RefreshBrowserVersionsJob{
+		Store:           store,
+		BrowserVersions: versions,
+		TriggerCh:       make(chan struct{}, 1),
+	}
 }
 
 func (j *FetchBrowserVersionsJob) Name() string             { return "fetch_browser_versions_job" }
-func (j *FetchBrowserVersionsJob) Interval() time.Duration  { return time.Hour }
+func (j *FetchBrowserVersionsJob) Interval() time.Duration  { return 3 * time.Hour }
 func (j *FetchBrowserVersionsJob) Timeout() time.Duration   { return 10 * time.Minute }
-func (j *FetchBrowserVersionsJob) Jitter() time.Duration    { return 10 * time.Minute }
+func (j *FetchBrowserVersionsJob) Jitter() time.Duration    { return 30 * time.Minute }
 func (j *FetchBrowserVersionsJob) Trigger() <-chan struct{} { return j.TriggerCh }
 func (j *FetchBrowserVersionsJob) NewParams() any           { return struct{}{} }
 
@@ -376,14 +382,10 @@ func (j *FetchBrowserVersionsJob) fetchSnapshot(ctx context.Context) (*BrowserVe
 	return fetchBrowserVersionSources(ctx, sources)
 }
 
-func (j *FetchBrowserVersionsJob) runOnce(ctx context.Context) error {
+func (j *FetchBrowserVersionsJob) processSnapshot(ctx context.Context, snapshot *BrowserVersionsSnapshot) error {
 	if j.Store == nil {
 		slog.ErrorContext(ctx, "Browser version store is not configured")
 		return errBrowserVersionsStorage
-	}
-	snapshot, err := j.fetchSnapshot(ctx)
-	if err != nil {
-		return err
 	}
 	majors, err := browserVersionMajors(ctx, snapshot)
 	if err != nil {
@@ -402,10 +404,8 @@ func (j *FetchBrowserVersionsJob) runOnce(ctx context.Context) error {
 		return errBrowserVersionsStorage
 	}
 
-	select {
-	case j.RefreshTrigger <- struct{}{}:
-	default:
-	}
+	common.TriggerNonBlocking(j.RefreshTrigger)
+
 	return nil
 }
 
@@ -443,7 +443,10 @@ func (j *FetchBrowserVersionsJob) validateUpdate(ctx context.Context, next map[r
 }
 
 func (j *FetchBrowserVersionsJob) RunOnce(ctx context.Context, _ any) error {
-	err := j.runOnce(ctx)
+	snapshot, err := j.fetchSnapshot(ctx)
+	if err == nil {
+		err = j.processSnapshot(ctx, snapshot)
+	}
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to fetch browser versions", common.ErrAttr(err))
 	}
@@ -530,7 +533,7 @@ func currentBrowserVersionMajors(ctx context.Context, snapshot *BrowserVersionsS
 	return browserVersionMajors(ctx, snapshot)
 }
 
-func (j *RefreshBrowserVersionsJob) runOnce(ctx context.Context) error {
+func (j *RefreshBrowserVersionsJob) RunOnce(ctx context.Context, _ any) error {
 	if j.Store == nil || j.BrowserVersions == nil {
 		slog.ErrorContext(ctx, "Browser version refresh is not configured", "hasStore", j.Store != nil, "hasBrowserVersions", j.BrowserVersions != nil)
 		return errBrowserVersionsStorage
@@ -557,12 +560,4 @@ func (j *RefreshBrowserVersionsJob) runOnce(ctx context.Context) error {
 
 	j.BrowserVersions.Replace(versions)
 	return nil
-}
-
-func (j *RefreshBrowserVersionsJob) RunOnce(ctx context.Context, _ any) error {
-	err := j.runOnce(ctx)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to refresh browser versions", common.ErrAttr(err))
-	}
-	return err
 }

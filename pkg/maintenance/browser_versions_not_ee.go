@@ -1,6 +1,6 @@
 //go:build !enterprise
 
-package main
+package maintenance
 
 import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -8,6 +8,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 )
 
-func newBrowserVersionJobs(db.Implementor, *rules.RulesCompiler) (common.PeriodicJob, common.PeriodicJob) {
+func NewBrowserVersionJobs(db.Implementor, *rules.BrowserVersions) (common.PeriodicJob, common.PeriodicJob) {
 	return nil, nil
 }
