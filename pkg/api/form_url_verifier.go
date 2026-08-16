@@ -65,6 +65,19 @@ func (*FormURLSafetyCheckerImpl) IsSafeFormHostname(host string) bool {
 	return (host != "localhost") && !strings.HasSuffix(host, ".localhost") && !strings.HasSuffix(host, ".local")
 }
 
+var unsafePrefixes = []netip.Prefix{
+	netip.MustParsePrefix("100.64.0.0/10"), // RFC 6598 CGN
+}
+
+func isKnownUnsafeIP(ip netip.Addr) bool {
+	for _, prefix := range unsafePrefixes {
+		if prefix.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 func isSafeFormIP(ip netip.Addr) bool {
 	return ip.IsValid() &&
 		ip.IsGlobalUnicast() &&
@@ -72,7 +85,8 @@ func isSafeFormIP(ip netip.Addr) bool {
 		!ip.IsLoopback() &&
 		!ip.IsLinkLocalUnicast() &&
 		!ip.IsMulticast() &&
-		!ip.IsUnspecified()
+		!ip.IsUnspecified() &&
+		!isKnownUnsafeIP(ip)
 }
 
 func extractRFC6052IPv4(bytes [16]byte, prefixBits int) netip.Addr {
