@@ -3,7 +3,14 @@ name: Clean up old Actions caches
 on:
   schedule:
     - cron: "17 3 * * */2"
+
   workflow_dispatch:
+    inputs:
+      days:
+        description: "Delete caches older than this many days"
+        required: true
+        default: 7
+        type: number
 
 permissions:
   actions: write
@@ -13,15 +20,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Delete caches older than 7 days
+      - name: Delete old caches
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          DAYS: ${{ github.event_name == 'workflow_dispatch' && inputs.days || 7 }}
         shell: bash
         run: |
           set -euo pipefail
 
-          cutoff="$(date -u -d '7 days ago' +%s)"
+          cutoff="$(date -u -d "$DAYS days ago" +%s)"
+
+          echo "Deleting caches not accessed in the last $DAYS days"
 
           gh cache list \
             --repo "$GH_REPO" \
