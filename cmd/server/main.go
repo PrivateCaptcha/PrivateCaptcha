@@ -229,6 +229,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		MaintenanceMode: cfg.Get(common.MaintenanceModeKey),
 		Metrics:         metrics,
 	}
+	var closeQuitOnce sync.Once
 	quit := make(chan struct{})
 	quitFunc := func(ctx context.Context, immediately bool) {
 		slog.DebugContext(ctx, "Server quit triggered", "immediately", immediately)
@@ -260,7 +261,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 
 		// Give time for readiness check to propagate
 		time.Sleep(healthCheckTime)
-		close(quit)
+		closeQuitOnce.Do(func() { close(quit) })
 	}
 	checkLicenseJob, err := maintenance.NewCheckLicenseJob(businessDB, cfg, GitCommit, quitFunc)
 	if err != nil {
