@@ -1,31 +1,38 @@
-name: Cleanup old Actions caches
+name: Clean up old Actions caches
 
 on:
   schedule:
-    - cron: '0 3 * * 0'
+    - cron: "17 3 * * */2"
   workflow_dispatch:
+
+permissions:
+  actions: write
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
-    permissions:
-      actions: write
 
     steps:
-      - name: Delete caches older than 30 days
+      - name: Delete caches older than 7 days
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+        shell: bash
         run: |
-          cutoff=$(date -d '30 days ago' +%s)
+          set -euo pipefail
+
+          cutoff="$(date -u -d '7 days ago' +%s)"
 
           gh cache list \
-            --limit 100 \
-            --sort last_accessed_at \
-            --order asc \
+            --repo "$GH_REPO" \
+            --limit 10000 \
             --json id,lastAccessedAt \
-            --jq '.[] | select((.lastAccessedAt | fromdateiso8601) < '"$cutoff"') | .id' |
-          while read -r id; do
-            echo "Deleting cache $id"
-            gh cache delete "$id" --confirm
+            --template '{{range .}}{{printf "%v\t%s\n" .id .lastAccessedAt}}{{end}}' |
+          while IFS=$'\t' read -r id last_accessed; do
+            accessed="$(date -u -d "$last_accessed" +%s)"
+
+            if (( accessed < cutoff )); then
+              echo "Deleting cache $id (last accessed $last_accessed)"
+              gh cache delete "$id" --repo "$GH_REPO"
+            fi
           done
