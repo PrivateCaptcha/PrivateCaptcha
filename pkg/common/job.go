@@ -105,7 +105,7 @@ func RunPeriodicJob(ctx context.Context, j PeriodicJob) {
 
 	for {
 		interval := j.Interval()
-		jitter := j.Jitter()
+		jitter := max(1, j.Jitter())
 
 		delay := interval + time.Duration(randv2.Int64N(int64(jitter)))
 		timer := time.NewTimer(delay)
