@@ -5,6 +5,7 @@ import "sync"
 const (
 	BrowserChrome  = "chrome"
 	BrowserFirefox = "firefox"
+	BrowserSafari  = "safari"
 
 	PlatformWindows = "windows"
 	PlatformMacOS   = "macos"

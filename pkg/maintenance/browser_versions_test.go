@@ -72,6 +72,7 @@ func newBrowserVersionTestServer(t *testing.T) *httptest.Server {
 		"ios":            "155.0.8100.20",
 		"firefox":        "153.0.4",
 		"firefox-mobile": "154.0.1",
+		"safari":         "26.6",
 	}
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -81,6 +82,14 @@ func newBrowserVersionTestServer(t *testing.T) *httptest.Server {
 		}
 		if r.URL.Path == "/firefox-mobile" {
 			_ = json.NewEncoder(w).Encode(map[string]string{"version": versions["firefox-mobile"]})
+			return
+		}
+		if r.URL.Path == "/safari" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"references": map[string]any{
+					"stable": map[string]string{"title": "Safari " + versions["safari"] + " Release Notes"},
+				},
+			})
 			return
 		}
 
@@ -102,6 +111,7 @@ func newFetchBrowserVersionsTestJob(querier *browserVersionCacheQuerier, server 
 	job.ChromeURLTemplate = server.URL + "/chrome/{platform}"
 	job.FirefoxURL = server.URL + "/firefox"
 	job.FirefoxMobileURL = server.URL + "/firefox-mobile"
+	job.SafariURL = server.URL + "/safari"
 	return job
 }
 
@@ -173,6 +183,63 @@ func TestFetchBrowserVersionsJobStoresFullSnapshotAndTriggers(t *testing.T) {
 	case <-trigger:
 	default:
 		t.Fatal("refresh was not triggered after storing versions")
+	}
+}
+
+func TestFetchBrowserVersionsJobStoresCoreSnapshotWhenSafariUnavailable(t *testing.T) {
+	ts := newBrowserVersionTestServer(t)
+	defer ts.Close()
+
+	querier := &browserVersionCacheQuerier{
+		QuerierStub: &db.QuerierStub{},
+		readData:    browserVersionSnapshotData(t, validBrowserVersionRecords()),
+	}
+	job := newFetchBrowserVersionsTestJob(querier, ts)
+	job.SafariURL = ts.URL + "/missing"
+
+	if err := job.RunOnce(t.Context(), job.NewParams()); err != nil {
+		t.Fatal(err)
+	}
+	var snapshot BrowserVersionsSnapshot
+	if err := json.Unmarshal(querier.arg.Value, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	want := validBrowserVersionRecords()[:9]
+	if fmt.Sprint(snapshot.Versions) != fmt.Sprint(want) {
+		t.Fatalf("stored versions = %+v, want core versions %+v", snapshot.Versions, want)
+	}
+	if strings.Contains(string(querier.arg.Value), "last_known_safari_versions") {
+		t.Fatal("stored snapshot contains Safari-specific version history")
+	}
+}
+
+func TestRefreshBrowserVersionsJobRemovesUnavailableSafariBaselines(t *testing.T) {
+	querier := &browserVersionCacheQuerier{
+		QuerierStub: &db.QuerierStub{},
+		readData:    browserVersionSnapshotData(t, validBrowserVersionRecords()),
+	}
+	store := newBrowserVersionTestStore(querier)
+	provider := rules.NewBrowserVersions()
+	refreshJob := NewRefreshBrowserVersionsJob(store, provider)
+	if err := refreshJob.RunOnce(t.Context(), refreshJob.NewParams()); err != nil {
+		t.Fatal(err)
+	}
+
+	fetchJob := NewFetchBrowserVersionsJob(store)
+	if err := fetchJob.processSnapshot(t.Context(), &BrowserVersionsSnapshot{Versions: validBrowserVersionRecords()[:9]}); err != nil {
+		t.Fatal(err)
+	}
+	if err := refreshJob.RunOnce(t.Context(), refreshJob.NewParams()); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, platform := range []string{rules.PlatformMacOS, rules.PlatformIOS} {
+		if _, ok := provider.Major(rules.BrowserVersionKey{Browser: rules.BrowserSafari, Platform: platform}); ok {
+			t.Fatalf("Safari %s baseline remained active", platform)
+		}
+	}
+	if major, ok := provider.Major(rules.BrowserVersionKey{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows}); !ok || major != 152 {
+		t.Fatalf("Chrome Windows baseline = %d, %v, want 152, true", major, ok)
 	}
 }
 
@@ -453,6 +520,31 @@ func TestFetchBrowserVersionsJobRetryPolicy(t *testing.T) {
 	})
 }
 
+func TestFetchSafariVersionSelectsLatestStableRelease(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"references": {
+				"old": {"title": "Safari 18.6 Release Notes"},
+				"current": {"title": "Safari 26.6 Release Notes"},
+				"beta": {"title": "Safari 27 Beta Release Notes"},
+				"other": {"title": "Safari Technology Preview Release Notes"}
+			}
+		}`))
+	}))
+	defer ts.Close()
+
+	job := NewFetchBrowserVersionsJob(nil)
+	job.Client = ts.Client()
+	job.SafariURL = ts.URL
+	version, err := job.fetchSafariVersion(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != "26.6" {
+		t.Fatalf("version = %q, want 26.6", version)
+	}
+}
+
 func TestBrowserVersionRetriableStatus(t *testing.T) {
 	for _, status := range []int{http.StatusTooManyRequests, http.StatusRequestTimeout, http.StatusTooEarly} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
@@ -494,6 +586,8 @@ func validBrowserVersionRecords() []BrowserVersionRecord {
 		{Browser: rules.BrowserFirefox, Platform: rules.PlatformMacOS, Version: "153.0.4"},
 		{Browser: rules.BrowserFirefox, Platform: rules.PlatformLinux, Version: "153.0.4"},
 		{Browser: rules.BrowserFirefox, Platform: rules.PlatformAndroid, Version: "154.0.1"},
+		{Browser: rules.BrowserSafari, Platform: rules.PlatformMacOS, Version: "26.6"},
+		{Browser: rules.BrowserSafari, Platform: rules.PlatformIOS, Version: "26.6"},
 	}
 }
 
@@ -530,6 +624,8 @@ func TestRefreshBrowserVersionsJobParsesAndReplacesSnapshot(t *testing.T) {
 		{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows}:  152,
 		{Browser: rules.BrowserChrome, Platform: rules.PlatformIOS}:      155,
 		{Browser: rules.BrowserFirefox, Platform: rules.PlatformAndroid}: 154,
+		{Browser: rules.BrowserSafari, Platform: rules.PlatformMacOS}:    26,
+		{Browser: rules.BrowserSafari, Platform: rules.PlatformIOS}:      26,
 	}
 	for key, wantMajor := range want {
 		major, ok := provider.Major(key)
@@ -572,7 +668,7 @@ func TestRefreshBrowserVersionsJobPreservesProviderOnFailure(t *testing.T) {
 		{name: "ImplausibleMajorVersion", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "1001.0"}}, validRecords[1:]...))},
 		{name: "DuplicateRecord", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{validRecords[0]}, validRecords[:8]...))},
 		{name: "IncompleteSnapshot", data: browserVersionSnapshotData(t, validRecords[:8])},
-		{name: "UnknownRecord", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: "safari", Platform: rules.PlatformMacOS, Version: "18.0"}}, validRecords[1:]...))},
+		{name: "UnknownRecord", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: "unknown", Platform: rules.PlatformMacOS, Version: "18.0"}}, validRecords[1:]...))},
 	}
 
 	for _, tt := range tests {
@@ -604,7 +700,7 @@ func TestRefreshBrowserVersionsJobPreservesProviderOnFailure(t *testing.T) {
 					t.Fatalf("Major(%+v) after failure = %d, %v, want %d, true", key, major, ok, wantMajor)
 				}
 			}
-			if _, ok := provider.Major(rules.BrowserVersionKey{Browser: "safari", Platform: rules.PlatformMacOS}); ok {
+			if _, ok := provider.Major(rules.BrowserVersionKey{Browser: "unknown", Platform: rules.PlatformMacOS}); ok {
 				t.Fatal("failure introduced an unsupported browser version")
 			}
 		})

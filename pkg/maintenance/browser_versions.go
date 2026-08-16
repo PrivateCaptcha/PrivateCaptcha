@@ -40,6 +40,7 @@ const (
 	defaultChromeVersionURL        = "https://versionhistory.googleapis.com/v1/chrome/platforms/{platform}/channels/stable/versions?pageSize=1&order_by=version%20desc"
 	defaultFirefoxVersionURL       = "https://product-details.mozilla.org/1.0/firefox_versions.json"
 	defaultFirefoxMobileVersionURL = "https://product-details.mozilla.org/1.0/mobile_versions.json"
+	defaultSafariVersionURL        = "https://developer.apple.com/tutorials/data/documentation/safari-release-notes.json"
 )
 
 var (
@@ -47,6 +48,18 @@ var (
 	errBrowserVersionsResponse = errors.New("browser version response error")
 	errBrowserVersionsStorage  = errors.New("browser version storage error")
 )
+
+var coreBrowserVersionKeys = map[rules.BrowserVersionKey]struct{}{
+	{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows}:  {},
+	{Browser: rules.BrowserChrome, Platform: rules.PlatformMacOS}:    {},
+	{Browser: rules.BrowserChrome, Platform: rules.PlatformLinux}:    {},
+	{Browser: rules.BrowserChrome, Platform: rules.PlatformAndroid}:  {},
+	{Browser: rules.BrowserChrome, Platform: rules.PlatformIOS}:      {},
+	{Browser: rules.BrowserFirefox, Platform: rules.PlatformWindows}: {},
+	{Browser: rules.BrowserFirefox, Platform: rules.PlatformMacOS}:   {},
+	{Browser: rules.BrowserFirefox, Platform: rules.PlatformLinux}:   {},
+	{Browser: rules.BrowserFirefox, Platform: rules.PlatformAndroid}: {},
+}
 
 var supportedBrowserVersionKeys = map[rules.BrowserVersionKey]struct{}{
 	{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows}:  {},
@@ -58,6 +71,8 @@ var supportedBrowserVersionKeys = map[rules.BrowserVersionKey]struct{}{
 	{Browser: rules.BrowserFirefox, Platform: rules.PlatformMacOS}:   {},
 	{Browser: rules.BrowserFirefox, Platform: rules.PlatformLinux}:   {},
 	{Browser: rules.BrowserFirefox, Platform: rules.PlatformAndroid}: {},
+	{Browser: rules.BrowserSafari, Platform: rules.PlatformMacOS}:    {},
+	{Browser: rules.BrowserSafari, Platform: rules.PlatformIOS}:      {},
 }
 
 var legacyBrowserVersionKeys = map[rules.BrowserVersionKey]struct{}{
@@ -79,6 +94,16 @@ type BrowserVersionsSnapshot struct {
 	Versions []BrowserVersionRecord `json:"versions"`
 }
 
+func (s *BrowserVersionsSnapshot) addBrowserVersion(browser, version string, platforms ...string) {
+	for _, platform := range platforms {
+		s.Versions = append(s.Versions, BrowserVersionRecord{
+			Browser:  browser,
+			Platform: platform,
+			Version:  version,
+		})
+	}
+}
+
 type browserVersionSource struct {
 	browser   string
 	platforms []string
@@ -96,6 +121,7 @@ type FetchBrowserVersionsJob struct {
 	ChromeURLTemplate string
 	FirefoxURL        string
 	FirefoxMobileURL  string
+	SafariURL         string
 	TriggerCh         <-chan struct{}
 	RefreshTrigger    chan<- struct{}
 }
@@ -123,6 +149,7 @@ func NewFetchBrowserVersionsJob(store db.Implementor) *FetchBrowserVersionsJob {
 		ChromeURLTemplate: defaultChromeVersionURL,
 		FirefoxURL:        defaultFirefoxVersionURL,
 		FirefoxMobileURL:  defaultFirefoxMobileVersionURL,
+		SafariURL:         defaultSafariVersionURL,
 	}
 }
 
@@ -298,6 +325,63 @@ func (j *FetchBrowserVersionsJob) fetchFirefoxMobileVersion(ctx context.Context)
 	return response.Version, nil
 }
 
+func isNewerBrowserVersion(candidate, current string) bool {
+	candidateParts := strings.Split(candidate, ".")
+	currentParts := strings.Split(current, ".")
+	for i := 0; i < max(len(candidateParts), len(currentParts)); i++ {
+		candidatePart := 0
+		if i < len(candidateParts) {
+			candidatePart, _ = strconv.Atoi(candidateParts[i])
+		}
+		currentPart := 0
+		if i < len(currentParts) {
+			currentPart, _ = strconv.Atoi(currentParts[i])
+		}
+		if candidatePart != currentPart {
+			return candidatePart > currentPart
+		}
+	}
+	return false
+}
+
+func (j *FetchBrowserVersionsJob) fetchSafariVersion(ctx context.Context) (string, error) {
+	var response struct {
+		References map[string]struct {
+			Title string `json:"title"`
+		} `json:"references"`
+	}
+	slog.DebugContext(ctx, "Fetching browser version", "browser", rules.BrowserSafari)
+	if err := fetchBrowserVersionResponse(ctx, j.Client, j.SafariURL, &response); err != nil {
+		return "", err
+	}
+
+	const titlePrefix = "Safari "
+	const titleSuffix = " Release Notes"
+	latest := ""
+	for _, reference := range response.References {
+		version, ok := strings.CutPrefix(reference.Title, titlePrefix)
+		if !ok {
+			continue
+		}
+		version, ok = strings.CutSuffix(version, titleSuffix)
+		if !ok || strings.ContainsAny(version, " \t\r\n") {
+			continue
+		}
+		if _, err := parseBrowserVersionMajor(ctx, version); err != nil {
+			continue
+		}
+		if latest == "" || isNewerBrowserVersion(version, latest) {
+			latest = version
+		}
+	}
+	if latest == "" {
+		slog.ErrorContext(ctx, "Invalid Safari version response")
+		return "", errBrowserVersionsResponse
+	}
+	slog.DebugContext(ctx, "Fetched browser version", "browser", rules.BrowserSafari, "version", latest)
+	return latest, nil
+}
+
 func fetchBrowserVersionSources(ctx context.Context, sources []browserVersionSource) (*BrowserVersionsSnapshot, error) {
 	results := make([]browserVersionResult, len(sources))
 	sem := make(chan struct{}, browserVersionMaxConcurrency)
@@ -334,13 +418,7 @@ func fetchBrowserVersionSources(ctx context.Context, sources []browserVersionSou
 		if result.err != nil {
 			return nil, result.err
 		}
-		for _, platform := range sources[i].platforms {
-			snapshot.Versions = append(snapshot.Versions, BrowserVersionRecord{
-				Browser:  sources[i].browser,
-				Platform: platform,
-				Version:  result.version,
-			})
-		}
+		snapshot.addBrowserVersion(sources[i].browser, result.version, sources[i].platforms...)
 	}
 	return snapshot, nil
 }
@@ -379,7 +457,17 @@ func (j *FetchBrowserVersionsJob) fetchSnapshot(ctx context.Context) (*BrowserVe
 			fetch:     j.fetchFirefoxMobileVersion,
 		},
 	)
-	return fetchBrowserVersionSources(ctx, sources)
+	snapshot, err := fetchBrowserVersionSources(ctx, sources)
+	if err != nil {
+		return nil, err
+	}
+	safariVersion, err := j.fetchSafariVersion(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "Safari version is unavailable", common.ErrAttr(err))
+		return snapshot, nil
+	}
+	snapshot.addBrowserVersion(rules.BrowserSafari, safariVersion, rules.PlatformMacOS, rules.PlatformIOS)
+	return snapshot, nil
 }
 
 func (j *FetchBrowserVersionsJob) processSnapshot(ctx context.Context, snapshot *BrowserVersionsSnapshot) error {
@@ -433,7 +521,10 @@ func (j *FetchBrowserVersionsJob) validateUpdate(ctx context.Context, next map[r
 		return err
 	}
 	for key, currentMajor := range current {
-		nextMajor := next[key]
+		nextMajor, ok := next[key]
+		if !ok && key.Browser == rules.BrowserSafari {
+			continue
+		}
 		if nextMajor < currentMajor || nextMajor-currentMajor > browserVersionMaxJump {
 			slog.ErrorContext(ctx, "Unsafe browser version change", "browser", key.Browser, "platform", key.Platform, "current", currentMajor, "next", nextMajor)
 			return errBrowserVersionsResponse
@@ -523,6 +614,9 @@ func browserVersionMajorsForKeys(ctx context.Context, snapshot *BrowserVersionsS
 }
 
 func browserVersionMajors(ctx context.Context, snapshot *BrowserVersionsSnapshot) (map[rules.BrowserVersionKey]int, error) {
+	if snapshot != nil && len(snapshot.Versions) == len(coreBrowserVersionKeys) {
+		return browserVersionMajorsForKeys(ctx, snapshot, coreBrowserVersionKeys)
+	}
 	return browserVersionMajorsForKeys(ctx, snapshot, supportedBrowserVersionKeys)
 }
 

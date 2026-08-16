@@ -765,7 +765,7 @@ func TestRenderHTML(t *testing.T) {
 				"Browser version",
 				"Major versions behind",
 				"",
-				"Matches Chrome or Firefox versions more than this many major versions behind the latest release.",
+				"Matches supported browser versions more than this many major versions behind the latest release.",
 			},
 			enterprise: enterpriseOnly,
 		},

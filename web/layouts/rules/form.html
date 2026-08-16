@@ -74,7 +74,7 @@
             <div class="mt-2">
                 <input id="browserVersionInput" type="number" min="1" step="1" x-model="conditionValueBrowserVersion" aria-describedby="browserVersionInput-description" class="w-full pc-internal-form-input-base pc-form-input-normal" />
             </div>
-            <p id="browserVersionInput-description" class="mt-1 text-xs text-pc-grey-800">Matches Chrome or Firefox versions <span x-text="conditionOperator === '{{ .Const.OperatorMore }}_negated' ? 'no more than' : 'more than'">more than</span> <span x-text="conditionValueBrowserVersion || 'this many'">this many</span> <span x-text="Number(conditionValueBrowserVersion) === 1 ? 'major version' : 'major versions'">major versions</span> behind the latest release.</p>
+            <p id="browserVersionInput-description" class="mt-1 text-xs text-pc-grey-800">Matches supported browser versions <span x-text="conditionOperator === '{{ .Const.OperatorMore }}_negated' ? 'no more than' : 'more than'">more than</span> <span x-text="conditionValueBrowserVersion || 'this many'">this many</span> <span x-text="Number(conditionValueBrowserVersion) === 1 ? 'major version' : 'major versions'">major versions</span> behind the latest release.</p>
         </div>
 
         <div x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyDomain }}' && showConditionValue">

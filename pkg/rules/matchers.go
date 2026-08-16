@@ -287,6 +287,8 @@ func browserVersionKey(ua useragent.UserAgent) (BrowserVersionKey, bool) {
 		key.Browser = BrowserChrome
 	case agents.BrowserFirefox:
 		key.Browser = BrowserFirefox
+	case agents.BrowserSafari:
+		key.Browser = BrowserSafari
 	default:
 		return BrowserVersionKey{}, false
 	}
@@ -312,7 +314,7 @@ func browserVersionKey(ua useragent.UserAgent) (BrowserVersionKey, bool) {
 		}
 		key.Platform = PlatformAndroid
 	case agents.OSIOS:
-		if key.Browser != BrowserChrome || (ua.Device() != agents.DeviceMobile && ua.Device() != agents.DeviceTablet) {
+		if (key.Browser != BrowserChrome && key.Browser != BrowserSafari) || (ua.Device() != agents.DeviceMobile && ua.Device() != agents.DeviceTablet) {
 			return BrowserVersionKey{}, false
 		}
 		key.Platform = PlatformIOS

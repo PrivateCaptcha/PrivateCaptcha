@@ -71,6 +71,16 @@ func browserVersionCases(major int) []browserVersionCase {
 			key:  BrowserVersionKey{Browser: BrowserChrome, Platform: PlatformAndroid},
 			ua:   fmt.Sprintf("Mozilla/5.0 (Linux; Android 14; Pixel Tablet) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/%d.0.0.0 Safari/537.36", major),
 		},
+		{
+			name: "SafariMacOS",
+			key:  BrowserVersionKey{Browser: BrowserSafari, Platform: PlatformMacOS},
+			ua:   fmt.Sprintf("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/%d.0 Safari/605.1.15", major),
+		},
+		{
+			name: "SafariIOS",
+			key:  BrowserVersionKey{Browser: BrowserSafari, Platform: PlatformIOS},
+			ua:   fmt.Sprintf("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/%d.0 Mobile/15E148 Safari/604.1", major),
+		},
 	}
 }
 
@@ -224,6 +234,35 @@ func TestBrowserVersionCompiledMatcherObservesUpdates(t *testing.T) {
 	}
 }
 
+func TestBrowserVersionDoesNotMatchWithoutBrowserBaseline(t *testing.T) {
+	compiler := NewRulesCompiler(useragent.NewParser())
+	compiler.BrowserVersions().Replace(browserVersionsSnapshot(152))
+	compiled, err := compiler.CompileRule(t.Context(), newBrowserVersionRule(2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	negatedRule := newBrowserVersionRule(2)
+	negatedRule.ConditionOperatorNegated = true
+	negated, err := compiler.CompileRule(t.Context(), negatedRule)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range browserVersionCases(149) {
+		if tt.key.Browser != BrowserSafari {
+			continue
+		}
+		t.Run(tt.name, func(t *testing.T) {
+			request := browserVersionRequest(tt.ua)
+			if compiled.Matches(request) {
+				t.Fatal("matcher without a Safari baseline matched")
+			}
+			if negated.Matches(request) {
+				t.Fatal("negated matcher without a Safari baseline matched")
+			}
+		})
+	}
+}
+
 func TestBrowserVersionFailsOpenForMalformedAndUnsupportedUserAgents(t *testing.T) {
 	compiler := NewRulesCompiler(useragent.NewParser())
 	compiler.BrowserVersions().Replace(browserVersionsSnapshot(152))
@@ -243,7 +282,6 @@ func TestBrowserVersionFailsOpenForMalformedAndUnsupportedUserAgents(t *testing.
 		ua   string
 	}{
 		{name: "Empty", ua: ""},
-		{name: "SafariMacOS", ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"},
 		{name: "EdgeWindows", ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36 Edg/149.0.0.0"},
 		{name: "FirefoxIOS", ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/149.0 Mobile/15E148 Safari/605.1.15"},
 		{name: "ChromeOS", ua: "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"},
