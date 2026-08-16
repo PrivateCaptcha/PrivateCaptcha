@@ -31,7 +31,7 @@ func newPuzzleCache(expiryTTL time.Duration) *puzzleCache {
 func (pc *puzzleCache) CheckCount(ctx context.Context, key uint64, maxCount uint32) bool {
 	if count, ok := pc.store.GetIfPresent(key); ok {
 		slog.Log(ctx, common.LevelTrace, "Puzzle is found in cache", "key", key, "count", count)
-		return *count < maxCount
+		return atomic.LoadUint32(count) < maxCount
 	}
 
 	return true
