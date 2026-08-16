@@ -37,7 +37,7 @@ jobs:
             --repo "$GH_REPO" \
             --limit 10000 \
             --json id,lastAccessedAt \
-            --template '{{range .}}{{printf "%v\t%s\n" .id .lastAccessedAt}}{{end}}' |
+            --jq '.[] | [.id, .lastAccessedAt] | @tsv' |
           while IFS=$'\t' read -r id last_accessed; do
             accessed="$(date -u -d "$last_accessed" +%s)"
 
