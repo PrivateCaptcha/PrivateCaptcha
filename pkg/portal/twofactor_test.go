@@ -2,11 +2,13 @@ package portal
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
 func TestPostTwoFactor(t *testing.T) {
@@ -200,6 +203,98 @@ func TestPostTwoFactorRotatesSession(t *testing.T) {
 	srv.ServeHTTP(newW, newReq)
 	if newW.Code != http.StatusOK {
 		t.Fatalf("rotated session cookie was not authenticated: %v", newW.Code)
+	}
+}
+
+func TestPostTwoFactorAttemptLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("failed to create new account: %v", err)
+	}
+
+	resp := loginSuite(srv, user.Email, server.XSRF.Token(""))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected login status code: %v", resp.StatusCode)
+	}
+
+	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
+	if idx == -1 {
+		t.Fatal("cannot find session cookie in response")
+	}
+	cookie := resp.Cookies()[idx]
+
+	code, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for attempt := 1; attempt <= maxFailedAttempts; attempt++ {
+		resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code+1, cookie)
+		body, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			t.Fatalf("failed to read attempt %d response: %v", attempt, readErr)
+		}
+		if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "Code is not valid.") {
+			t.Fatalf("unexpected response for failed attempt %d: status %v, body %s", attempt, resp.StatusCode, body)
+		}
+	}
+
+	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code, cookie)
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatalf("failed to read limited response: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "Too many failed attempts. Please request a new code.") {
+		t.Fatalf("expected correct code to be rejected after five failures: status %v, body %s", resp.StatusCode, body)
+	}
+
+	resp = resend2faSuite(srv, user.Email, server.XSRF.Token(user.Email), cookie)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected resend status code: %v", resp.StatusCode)
+	}
+
+	code, err = portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code+1, cookie)
+	body, err = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatalf("failed to read response after resend: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "Code is not valid.") {
+		t.Fatalf("expected resend to reset failed attempts: status %v, body %s", resp.StatusCode, body)
+	}
+
+	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code, cookie)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("unexpected post twofactor status code after resend: %v", resp.StatusCode)
+	}
+
+	idx = slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
+	if idx == -1 {
+		t.Fatal("cannot find rotated session cookie in response")
+	}
+	newSession, err := server.Sessions.Store.Read(ctx, resp.Cookies()[idx].Value, false /*skip cache*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newSession.Data().Has(session.KeyLoginAttempts) {
+		t.Fatal("failed login attempts remain after successful verification")
 	}
 }
 

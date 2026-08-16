@@ -18,6 +18,8 @@ var (
 	renderContextNothing = struct{}{}
 )
 
+const maxFailedAttempts = 5
+
 func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	tnow := time.Now().UTC()
 	ctx := r.Context()
@@ -80,13 +82,23 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		Email: common.MaskEmail(email, '*'),
 	}
 
+	loginAttempts, _ := sess.Get(ctx, session.KeyLoginAttempts).(int)
+	if loginAttempts >= maxFailedAttempts {
+		data.CodeError = "Too many failed attempts. Please request a new code."
+		s.render(w, r, "login/twofactor-form.html", data, false /*new*/)
+		return
+	}
+
 	formCode := strings.TrimSpace(r.FormValue(common.ParamVerificationCode))
 	if enteredCode, err := strconv.Atoi(formCode); (err != nil) || (enteredCode != sentCode) || (!codeTimestamp.IsZero() && tnow.After(codeTimestamp.Add(s.TwoFactorDuration))) {
+		_ = sess.Set(ctx, session.KeyLoginAttempts, loginAttempts+1)
 		data.CodeError = "Code is not valid."
 		slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "timestamp", codeTimestamp, common.ErrAttr(err))
 		s.render(w, r, "login/twofactor-form.html", data, false /*new*/)
 		return
 	}
+
+	_ = sess.Delete(ctx, session.KeyLoginAttempts)
 
 	var newRegistrationRedirectURL string
 	rootRedirectURL := s.RelURL("/")
@@ -183,6 +195,7 @@ func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_ = sess.Delete(ctx, session.KeyLoginAttempts)
 	_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
 	_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
 	s.render(w, r, "login/resend.html", renderContextNothing, false /*new*/)
