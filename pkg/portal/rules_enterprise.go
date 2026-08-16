@@ -1116,9 +1116,15 @@ func (s *Server) deletePropertyRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
@@ -1162,9 +1168,15 @@ func (s *Server) deleteOrgRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
@@ -1201,9 +1213,14 @@ func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) (*
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		return nil, db.ErrPermissions
 	}
 
 	property, err := s.Property(org, r)
@@ -1277,9 +1294,14 @@ func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		return nil, db.ErrPermissions
 	}
 
 	rule, err := s.RuleForOrg(r, org.ID)
