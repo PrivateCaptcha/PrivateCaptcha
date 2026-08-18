@@ -1,11 +1,13 @@
 package maintenance
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -253,7 +255,6 @@ func TestFetchBrowserVersionsJobRejectsUnsafeOrInvalidCurrentSnapshot(t *testing
 	}{
 		{name: "Rollback", version: "160.0.0.0", wantErr: errBrowserVersionsResponse},
 		{name: "LargeJump", version: "100.0.0.0", wantErr: errBrowserVersionsResponse},
-		{name: "IncompleteSnapshot", data: browserVersionSnapshotData(t, validBrowserVersionRecords()[:8]), wantErr: errBrowserVersionsResponse},
 		{name: "CacheReadFailure", readErr: errors.New("read failed"), wantErr: errBrowserVersionsStorage},
 	}
 
@@ -384,19 +385,6 @@ func TestFetchBrowserVersionsJobRejectsInvalidSourceData(t *testing.T) {
 			name: "MultipleChromeVersions",
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				_, _ = w.Write([]byte(`{"versions":[{"version":"152.0.1.2"},{"version":"152.0.1.2"}]}`))
-			},
-		},
-		{
-			name: "MalformedFirefoxMobileVersion",
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				switch r.URL.Path {
-				case "/firefox":
-					_, _ = w.Write([]byte(`{"LATEST_FIREFOX_VERSION":"153.0.4"}`))
-				case "/firefox-mobile":
-					_, _ = w.Write([]byte(`{"version":"not-a-version"}`))
-				default:
-					_, _ = w.Write([]byte(`{"versions":[{"version":"152.0.1.2"}]}`))
-				}
 			},
 		},
 	}
@@ -545,6 +533,170 @@ func TestFetchSafariVersionSelectsLatestStableRelease(t *testing.T) {
 	}
 }
 
+func TestFetchSafariVersionIgnoresMajorOnlyReleasesWithoutLogging(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{
+			"references": {
+				"major-only": {"title": "Safari 27 Release Notes"},
+				"current": {"title": "Safari 26.6 Release Notes"},
+				"malformed": {"title": "Safari invalid.version Release Notes"}
+			}
+		}`))
+	}))
+	defer ts.Close()
+
+	var logs bytes.Buffer
+	logger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(logger) })
+
+	job := NewFetchBrowserVersionsJob(nil)
+	job.Client = ts.Client()
+	job.SafariURL = ts.URL
+	version, err := job.fetchSafariVersion(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != "27" {
+		t.Fatalf("version = %q, want 27", version)
+	}
+	if logs.Len() != 0 {
+		t.Fatalf("fetching valid Safari releases logged an error: %s", logs.String())
+	}
+}
+
+func TestFetchBrowserVersionsJobSkipsMalformedBrowserVersions(t *testing.T) {
+	tests := []struct {
+		name            string
+		malformedSource string
+		wantRecords     int
+		missing         []rules.BrowserVersionKey
+	}{
+		{
+			name:            "Chrome",
+			malformedSource: "/chrome/win",
+			wantRecords:     10,
+			missing:         []rules.BrowserVersionKey{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows}},
+		},
+		{
+			name:            "Firefox",
+			malformedSource: "/firefox",
+			wantRecords:     8,
+			missing: []rules.BrowserVersionKey{
+				{Browser: rules.BrowserFirefox, Platform: rules.PlatformWindows},
+				{Browser: rules.BrowserFirefox, Platform: rules.PlatformMacOS},
+				{Browser: rules.BrowserFirefox, Platform: rules.PlatformLinux},
+			},
+		},
+		{
+			name:            "FirefoxMobile",
+			malformedSource: "/firefox-mobile",
+			wantRecords:     10,
+			missing:         []rules.BrowserVersionKey{{Browser: rules.BrowserFirefox, Platform: rules.PlatformAndroid}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			logger := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+			defer slog.SetDefault(logger)
+
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.URL.Path == tt.malformedSource {
+					switch r.URL.Path {
+					case "/firefox":
+						_, _ = w.Write([]byte(`{"LATEST_FIREFOX_VERSION":"not-a-version"}`))
+					case "/firefox-mobile":
+						_, _ = w.Write([]byte(`{"version":"not-a-version"}`))
+					default:
+						_, _ = w.Write([]byte(`{"versions":[{"version":"not-a-version"}]}`))
+					}
+					return
+				}
+				switch r.URL.Path {
+				case "/firefox":
+					_, _ = w.Write([]byte(`{"LATEST_FIREFOX_VERSION":"153.0.4"}`))
+				case "/firefox-mobile":
+					_, _ = w.Write([]byte(`{"version":"154.0.1"}`))
+				case "/safari":
+					_, _ = w.Write([]byte(`{"references":{"stable":{"title":"Safari 26.6 Release Notes"}}}`))
+				default:
+					_, _ = w.Write([]byte(`{"versions":[{"version":"152.0.1.2"}]}`))
+				}
+			}))
+			defer ts.Close()
+
+			querier := &browserVersionCacheQuerier{QuerierStub: &db.QuerierStub{}}
+			job := newFetchBrowserVersionsTestJob(querier, ts)
+			if err := job.RunOnce(t.Context(), job.NewParams()); err != nil {
+				t.Fatalf("RunOnce error = %v, want nil", err)
+			}
+			if querier.arg == nil {
+				t.Fatal("valid browser versions were not stored")
+			}
+
+			var snapshot BrowserVersionsSnapshot
+			if err := json.Unmarshal(querier.arg.Value, &snapshot); err != nil {
+				t.Fatal(err)
+			}
+			if len(snapshot.Versions) != tt.wantRecords {
+				t.Fatalf("stored records = %d, want %d", len(snapshot.Versions), tt.wantRecords)
+			}
+			for _, record := range snapshot.Versions {
+				if record.Version == "not-a-version" {
+					t.Fatal("malformed browser version was stored")
+				}
+			}
+
+			provider := rules.NewBrowserVersions()
+			refreshJob := NewRefreshBrowserVersionsJob(newBrowserVersionTestStore(querier), provider)
+			if err := refreshJob.RunOnce(t.Context(), refreshJob.NewParams()); err != nil {
+				t.Fatalf("refresh error = %v, want nil", err)
+			}
+			if major, ok := provider.Major(rules.BrowserVersionKey{Browser: rules.BrowserChrome, Platform: rules.PlatformMacOS}); !ok || major != 152 {
+				t.Fatalf("valid Chrome baseline = %d, %v, want 152, true", major, ok)
+			}
+			for _, key := range tt.missing {
+				if _, ok := provider.Major(key); ok {
+					t.Fatalf("malformed source baseline %+v was refreshed", key)
+				}
+			}
+			if logs.Len() != 0 {
+				t.Fatalf("ignoring a malformed browser version logged an error: %s", logs.String())
+			}
+		})
+	}
+}
+
+func TestFetchBrowserVersionsJobPreservesCacheWhenAllVersionsAreMalformed(t *testing.T) {
+	original := browserVersionSnapshotData(t, validBrowserVersionRecords())
+	querier := &browserVersionCacheQuerier{
+		QuerierStub: &db.QuerierStub{},
+		readData:    original,
+	}
+	trigger := make(chan struct{}, 1)
+	job := NewFetchBrowserVersionsJob(newBrowserVersionTestStore(querier))
+	job.RefreshTrigger = trigger
+
+	if err := job.processSnapshot(t.Context(), &BrowserVersionsSnapshot{}); err != nil {
+		t.Fatalf("processSnapshot error = %v, want nil", err)
+	}
+	if querier.arg != nil {
+		t.Fatal("empty snapshot overwrote cached browser versions")
+	}
+	if string(querier.readData) != string(original) {
+		t.Fatal("cached browser versions changed")
+	}
+	select {
+	case <-trigger:
+		t.Fatal("refresh was triggered for an empty snapshot")
+	default:
+	}
+}
+
 func TestBrowserVersionRetriableStatus(t *testing.T) {
 	for _, status := range []int{http.StatusTooManyRequests, http.StatusRequestTimeout, http.StatusTooEarly} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
@@ -660,14 +812,12 @@ func TestRefreshBrowserVersionsJobPreservesProviderOnFailure(t *testing.T) {
 		{name: "DatabaseError", err: dbErr},
 		{name: "MalformedJSON", data: []byte(`{"versions":`)},
 		{name: "EmptyVersion", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows}}, validRecords[1:]...))},
-		{name: "MajorOnlyVersion", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "152"}}, validRecords[1:]...))},
 		{name: "ZeroMajorVersion", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "0.1"}}, validRecords[1:]...))},
 		{name: "MalformedVersion", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "152.x.1"}}, validRecords[1:]...))},
 		{name: "VersionOverflow", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "999999999999999999999.0"}}, validRecords[1:]...))},
 		{name: "TooManyVersionComponents", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "152.0.1.2.3"}}, validRecords[1:]...))},
 		{name: "ImplausibleMajorVersion", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "1001.0"}}, validRecords[1:]...))},
 		{name: "DuplicateRecord", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{validRecords[0]}, validRecords[:8]...))},
-		{name: "IncompleteSnapshot", data: browserVersionSnapshotData(t, validRecords[:8])},
 		{name: "UnknownRecord", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: "unknown", Platform: rules.PlatformMacOS, Version: "18.0"}}, validRecords[1:]...))},
 	}
 

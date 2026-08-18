@@ -49,18 +49,6 @@ var (
 	errBrowserVersionsStorage  = errors.New("browser version storage error")
 )
 
-var coreBrowserVersionKeys = map[rules.BrowserVersionKey]struct{}{
-	{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows}:  {},
-	{Browser: rules.BrowserChrome, Platform: rules.PlatformMacOS}:    {},
-	{Browser: rules.BrowserChrome, Platform: rules.PlatformLinux}:    {},
-	{Browser: rules.BrowserChrome, Platform: rules.PlatformAndroid}:  {},
-	{Browser: rules.BrowserChrome, Platform: rules.PlatformIOS}:      {},
-	{Browser: rules.BrowserFirefox, Platform: rules.PlatformWindows}: {},
-	{Browser: rules.BrowserFirefox, Platform: rules.PlatformMacOS}:   {},
-	{Browser: rules.BrowserFirefox, Platform: rules.PlatformLinux}:   {},
-	{Browser: rules.BrowserFirefox, Platform: rules.PlatformAndroid}: {},
-}
-
 var supportedBrowserVersionKeys = map[rules.BrowserVersionKey]struct{}{
 	{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows}:  {},
 	{Browser: rules.BrowserChrome, Platform: rules.PlatformMacOS}:    {},
@@ -73,15 +61,6 @@ var supportedBrowserVersionKeys = map[rules.BrowserVersionKey]struct{}{
 	{Browser: rules.BrowserFirefox, Platform: rules.PlatformAndroid}: {},
 	{Browser: rules.BrowserSafari, Platform: rules.PlatformMacOS}:    {},
 	{Browser: rules.BrowserSafari, Platform: rules.PlatformIOS}:      {},
-}
-
-var legacyBrowserVersionKeys = map[rules.BrowserVersionKey]struct{}{
-	{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows}:  {},
-	{Browser: rules.BrowserChrome, Platform: rules.PlatformMacOS}:    {},
-	{Browser: rules.BrowserChrome, Platform: rules.PlatformLinux}:    {},
-	{Browser: rules.BrowserFirefox, Platform: rules.PlatformWindows}: {},
-	{Browser: rules.BrowserFirefox, Platform: rules.PlatformMacOS}:   {},
-	{Browser: rules.BrowserFirefox, Platform: rules.PlatformLinux}:   {},
 }
 
 type BrowserVersionRecord struct {
@@ -367,7 +346,7 @@ func (j *FetchBrowserVersionsJob) fetchSafariVersion(ctx context.Context) (strin
 		if !ok || strings.ContainsAny(version, " \t\r\n") {
 			continue
 		}
-		if _, err := parseBrowserVersionMajor(ctx, version); err != nil {
+		if _, err := parseBrowserVersionMajor(version); err != nil {
 			continue
 		}
 		if latest == "" || isNewerBrowserVersion(version, latest) {
@@ -417,6 +396,9 @@ func fetchBrowserVersionSources(ctx context.Context, sources []browserVersionSou
 	for i, result := range results {
 		if result.err != nil {
 			return nil, result.err
+		}
+		if _, err := parseBrowserVersionMajor(result.version); err != nil {
+			continue
 		}
 		snapshot.addBrowserVersion(sources[i].browser, result.version, sources[i].platforms...)
 	}
@@ -475,6 +457,9 @@ func (j *FetchBrowserVersionsJob) processSnapshot(ctx context.Context, snapshot 
 		slog.ErrorContext(ctx, "Browser version store is not configured")
 		return errBrowserVersionsStorage
 	}
+	if snapshot != nil && len(snapshot.Versions) == 0 {
+		return nil
+	}
 	majors, err := browserVersionMajors(ctx, snapshot)
 	if err != nil {
 		return err
@@ -522,7 +507,7 @@ func (j *FetchBrowserVersionsJob) validateUpdate(ctx context.Context, next map[r
 	}
 	for key, currentMajor := range current {
 		nextMajor, ok := next[key]
-		if !ok && key.Browser == rules.BrowserSafari {
+		if !ok {
 			continue
 		}
 		if nextMajor < currentMajor || nextMajor-currentMajor > browserVersionMaxJump {
@@ -544,32 +529,27 @@ func (j *FetchBrowserVersionsJob) RunOnce(ctx context.Context, _ any) error {
 	return err
 }
 
-func parseBrowserVersionMajor(ctx context.Context, version string) (int, error) {
+func parseBrowserVersionMajor(version string) (int, error) {
 	if len(version) == 0 || len(version) > browserVersionMaxLength {
-		slog.ErrorContext(ctx, "Browser version length is invalid", "length", len(version))
 		return 0, errBrowserVersionsResponse
 	}
 	parts := strings.Split(version, ".")
-	if len(parts) < 2 || len(parts) > browserVersionMaxParts {
-		slog.ErrorContext(ctx, "Browser version component count is invalid", "version", browserVersionResponsePrefix([]byte(version)), "components", len(parts))
+	if len(parts) > browserVersionMaxParts {
 		return 0, errBrowserVersionsResponse
 	}
 
 	major := 0
 	for i, part := range parts {
 		if part == "" {
-			slog.ErrorContext(ctx, "Browser version has an empty component", "version", browserVersionResponsePrefix([]byte(version)), "component", i)
 			return 0, errBrowserVersionsResponse
 		}
 		for _, digit := range part {
 			if digit < '0' || digit > '9' {
-				slog.ErrorContext(ctx, "Browser version has a non-numeric component", "version", browserVersionResponsePrefix([]byte(version)), "component", i)
 				return 0, errBrowserVersionsResponse
 			}
 		}
 		value, err := strconv.Atoi(part)
 		if err != nil {
-			slog.ErrorContext(ctx, "Browser version component overflow", "version", browserVersionResponsePrefix([]byte(version)), "component", i, common.ErrAttr(err))
 			return 0, errBrowserVersionsResponse
 		}
 		if i == 0 {
@@ -577,19 +557,18 @@ func parseBrowserVersionMajor(ctx context.Context, version string) (int, error) 
 		}
 	}
 	if major <= 0 || major > browserVersionMaxMajor {
-		slog.ErrorContext(ctx, "Browser version major is implausible", "version", browserVersionResponsePrefix([]byte(version)), "major", major)
 		return 0, errBrowserVersionsResponse
 	}
 	return major, nil
 }
 
 func browserVersionMajorsForKeys(ctx context.Context, snapshot *BrowserVersionsSnapshot, supportedKeys map[rules.BrowserVersionKey]struct{}) (map[rules.BrowserVersionKey]int, error) {
-	if snapshot == nil || len(snapshot.Versions) != len(supportedKeys) {
+	if snapshot == nil || len(snapshot.Versions) == 0 || len(snapshot.Versions) > len(supportedKeys) {
 		records := 0
 		if snapshot != nil {
 			records = len(snapshot.Versions)
 		}
-		slog.ErrorContext(ctx, "Browser version snapshot is incomplete", "records", records, "expected", len(supportedKeys))
+		slog.ErrorContext(ctx, "Browser version snapshot size is invalid", "records", records, "maximum", len(supportedKeys))
 		return nil, errBrowserVersionsResponse
 	}
 
@@ -604,8 +583,9 @@ func browserVersionMajorsForKeys(ctx context.Context, snapshot *BrowserVersionsS
 			slog.ErrorContext(ctx, "Browser version is duplicated", "browser", record.Browser, "platform", record.Platform)
 			return nil, errBrowserVersionsResponse
 		}
-		major, err := parseBrowserVersionMajor(ctx, record.Version)
+		major, err := parseBrowserVersionMajor(record.Version)
 		if err != nil {
+			slog.ErrorContext(ctx, "Browser version is invalid", "browser", record.Browser, "platform", record.Platform)
 			return nil, err
 		}
 		versions[key] = major
@@ -614,16 +594,10 @@ func browserVersionMajorsForKeys(ctx context.Context, snapshot *BrowserVersionsS
 }
 
 func browserVersionMajors(ctx context.Context, snapshot *BrowserVersionsSnapshot) (map[rules.BrowserVersionKey]int, error) {
-	if snapshot != nil && len(snapshot.Versions) == len(coreBrowserVersionKeys) {
-		return browserVersionMajorsForKeys(ctx, snapshot, coreBrowserVersionKeys)
-	}
 	return browserVersionMajorsForKeys(ctx, snapshot, supportedBrowserVersionKeys)
 }
 
 func currentBrowserVersionMajors(ctx context.Context, snapshot *BrowserVersionsSnapshot) (map[rules.BrowserVersionKey]int, error) {
-	if snapshot != nil && len(snapshot.Versions) == len(legacyBrowserVersionKeys) {
-		return browserVersionMajorsForKeys(ctx, snapshot, legacyBrowserVersionKeys)
-	}
 	return browserVersionMajors(ctx, snapshot)
 }
 
