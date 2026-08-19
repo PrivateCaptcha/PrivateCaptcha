@@ -57,6 +57,12 @@
             "icon": "img/integrations/wordpress.svg",
             "link": "https://docs.privatecaptcha.com/docs/integrations/wordpress/",
             "ready": true
+        },
+        {
+            "name": "Magento 2",
+            "icon": "img/integrations/magento.svg",
+            "link": "https://docs.privatecaptcha.com/docs/integrations/magento2/",
+            "ready": true
         }
     ]
 }
