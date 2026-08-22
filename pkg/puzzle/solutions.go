@@ -82,7 +82,7 @@ func (m *Metadata) UnmarshalBinary(data []byte) error {
 	offset += 1
 
 	m.elapsedMillis = binary.LittleEndian.Uint32(data[offset : offset+4])
-	offset += 4 // nolint:ineffassign
+	offset += 4 // nolint:ineffassign,staticcheck
 
 	return nil
 }

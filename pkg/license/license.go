@@ -157,7 +157,7 @@ func (lm *LicenseMessage) UnmarshalBinary(data []byte) error {
 	if unixExpiration != 0 {
 		lm.Expiration = time.Unix(unixExpiration, 0)
 	}
-	// nolint:ineffassign
+	// nolint:ineffassign,staticcheck
 	offset += 4
 
 	return nil

@@ -18,6 +18,7 @@ linters:
       - cmd/viewportal/
       - cmd/formatlogs/
       - pkg/db/generated/
+      - widget/node_modules
 
 run:
   build-tags:

@@ -421,9 +421,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	jobConcurrency := config.AsInt(cfg.Get(common.MaintenanceJobConcurrencyKey), 2)
 	jobs := maintenance.NewJobs(businessDB, jobConcurrency)
 
+	// nolint:staticcheck
 	fetchBrowserVersions, refreshBrowserVersions := maintenance.NewBrowserVersionJobs(businessDB, rulesCompiler.BrowserVersions())
-
-	if refreshBrowserVersions != nil {
+	if refreshBrowserVersions != nil { // nolint:staticcheck
 		// nolint:errcheck
 		go common.RunPeriodicJobOnce(context.Background(), refreshBrowserVersions, refreshBrowserVersions.NewParams(), 1*time.Second)
 	}
