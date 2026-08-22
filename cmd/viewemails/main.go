@@ -131,6 +131,10 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 				{Name: "Forum", Domain: "suddomain.app.forum.example.com", Link: stubPropertyURL, Count: 1300, Percent: 10.4, Change: 62.5, Alternate: true},
 				{Name: "Docs", Domain: "docs.example.com", Link: stubPropertyURL, Count: 800, Percent: 6.4, Change: 100.0},
 			},
+			ProtectionHighlights: []*email.ProtectionHighlight{
+				{Name: "Checkout protection property with a very long name", Link: stubPropertyURL + "?" + stubUTM, Date: "2026-08-14", Requests: 12800, Verifies: 120},
+				{Name: "Main Site", Link: stubPropertyURL, Date: "2026-08-15", Requests: 75, Verifies: 420, Alternate: true},
+			},
 			TopForms: []*email.FormStat{
 				{Name: "Contact", URL: "https://hooks.example.com/contact", Link: stubFormURL, Count: 520, Percent: 45.6, Change: 11.2},
 				{Name: "Support", URL: "https://hooks.example.com/support", Link: stubFormURL, Count: 380, Percent: 33.3, Change: -5.8, Alternate: true},

@@ -59,16 +59,35 @@ type UserReportPropertyStat struct {
 	OrgID           int32
 	CurrentRequests uint64
 	PrevRequests    uint64
-	CurrentVerifies uint64
-	PrevVerifies    uint64
 }
 
 type UserReportStats struct {
 	Properties           []*UserReportPropertyStat
-	TotalCurrentRequests uint64
-	TotalPrevRequests    uint64
-	TotalCurrentVerifies uint64
-	TotalPrevVerifies    uint64
+	ProtectionCandidates []*UserReportProtectionCandidate
+}
+
+type UserReportProtectionCandidate struct {
+	PropertyID     int32
+	OrgID          int32
+	Timestamp      time.Time
+	Requests       uint64
+	Verifies       uint64
+	FailedVerifies uint64
+	Ratio          float64
+}
+
+type UserReportOptions struct {
+	TopPropertiesLimit             int
+	ProtectionCandidatesLimit      int
+	ProtectionRatioThreshold       float64
+	ProtectionMinimumDominantCount uint64
+}
+
+type UserReportAccountStats struct {
+	CurrentRequests uint64
+	PrevRequests    uint64
+	CurrentVerifies uint64
+	PrevVerifies    uint64
 }
 
 type UserReportFormStat struct {

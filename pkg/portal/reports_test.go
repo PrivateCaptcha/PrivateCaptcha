@@ -197,25 +197,42 @@ func TestScheduleReportsJob(t *testing.T) {
 	}
 
 	ctx := common.TraceContext(t.Context(), t.Name())
-
-	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
-	if err != nil {
-		t.Fatalf("failed to create new account: %v", err)
+	accounts := make([]struct {
+		userID     int32
+		orgID      int32
+		propertyID int32
+	}, 2)
+	for i := range accounts {
+		user, org, err := db_tests.CreateNewAccountForTest(ctx, store, fmt.Sprintf("%s-%d", t.Name(), i), testPlan)
+		if err != nil {
+			t.Fatalf("failed to create account %d: %v", i, err)
+		}
+		property, err := db_tests.CreatePropertyForOrg(ctx, store, org)
+		if err != nil {
+			t.Fatalf("failed to create property %d: %v", i, err)
+		}
+		if _, _, err := store.Impl().UpsertUserSettings(ctx, &dbgen.UpsertUserSettingsParams{UserID: user.ID, WeeklyReport: true, MonthlyReport: true}); err != nil {
+			t.Fatalf("failed to enable reports for account %d: %v", i, err)
+		}
+		accounts[i].userID = user.ID
+		accounts[i].orgID = org.ID
+		accounts[i].propertyID = property.ID
 	}
-
-	_, _, err = store.Impl().UpsertUserSettings(ctx, &dbgen.UpsertUserSettingsParams{
-		UserID:        user.ID,
-		WeeklyReport:  true,
-		MonthlyReport: true,
-	})
-	if err != nil {
-		t.Fatalf("failed to upsert user settings: %v", err)
-	}
-
-	job := newScheduleReportsJob(5)
 
 	// 2025-09-01 is a Monday and the 1st of the month, so both weekly and monthly trigger
 	tnow := time.Date(2025, 9, 1, 10, 0, 0, 0, time.UTC)
+	ts := db.NewMemoryTimeSeries()
+	for i, account := range accounts {
+		factor := i + 1
+		seedTimeSeries(t, ts, account.userID, account.propertyID, account.orgID, tnow.AddDate(0, 0, -2), 2*factor)
+		seedTimeSeries(t, ts, account.userID, account.propertyID, account.orgID, tnow.AddDate(0, 0, -9), factor)
+		seedTimeSeries(t, ts, account.userID, account.propertyID, account.orgID, time.Date(2025, time.July, 15, 12, 0, 0, 0, time.UTC), 3*factor)
+		seedVerifyLogs(t, ts, account.userID, account.propertyID, account.orgID, tnow.AddDate(0, 0, -2), factor)
+		seedVerifyLogs(t, ts, account.userID, account.propertyID, account.orgID, tnow.AddDate(0, 0, -9), factor)
+		seedVerifyLogs(t, ts, account.userID, account.propertyID, account.orgID, time.Date(2025, time.July, 15, 12, 0, 0, 0, time.UTC), factor)
+	}
+	job := newScheduleReportsJob(1)
+	job.TimeSeries = ts
 
 	if err := job.RunOnceAt(ctx, nil, tnow); err != nil {
 		t.Fatalf("RunOnceAt failed: %v", err)
@@ -227,27 +244,273 @@ func TestScheduleReportsJob(t *testing.T) {
 	}
 
 	year, week := tnow.ISOWeek()
-	expectedWeeklyRef := fmt.Sprintf("%s%d/%d/%d", maintenance.WeeklyReferencePrefix, user.ID, year, week)
-	expectedMonthlyRef := fmt.Sprintf("%s%d/%d/%d", maintenance.MonthlyReferencePrefix, user.ID, tnow.Year(), int(tnow.Month()))
+	for i, account := range accounts {
+		factor := uint64(i + 1)
+		weeklyRef := fmt.Sprintf("%s%d/%d/%d", maintenance.WeeklyReferencePrefix, account.userID, year, week)
+		weekly := usageReportPayload(t, notifications, account.userID, weeklyRef)
+		if weekly.TotalRequests != 2*factor || weekly.PrevRequests != factor || weekly.TotalVerifies != factor || weekly.PrevVerifies != factor {
+			t.Errorf("account %d weekly totals = requests %d/%d verifies %d/%d", i, weekly.TotalRequests, weekly.PrevRequests, weekly.TotalVerifies, weekly.PrevVerifies)
+		}
 
-	var foundWeekly, foundMonthly bool
-	for _, n := range notifications {
-		if n.UserNotification.UserID.Int32 != user.ID {
-			continue
-		}
-		if n.UserNotification.ReferenceID == expectedWeeklyRef {
-			foundWeekly = true
-		}
-		if n.UserNotification.ReferenceID == expectedMonthlyRef {
-			foundMonthly = true
+		monthlyRef := fmt.Sprintf("%s%d/%d/%d", maintenance.MonthlyReferencePrefix, account.userID, tnow.Year(), int(tnow.Month()))
+		monthly := usageReportPayload(t, notifications, account.userID, monthlyRef)
+		if monthly.TotalRequests != 3*factor || monthly.PrevRequests != 3*factor || monthly.TotalVerifies != 2*factor || monthly.PrevVerifies != factor {
+			t.Errorf("account %d monthly totals = requests %d/%d verifies %d/%d", i, monthly.TotalRequests, monthly.PrevRequests, monthly.TotalVerifies, monthly.PrevVerifies)
 		}
 	}
-	if !foundWeekly {
-		t.Errorf("weekly report notification not found for user %d with reference %q", user.ID, expectedWeeklyRef)
+}
+
+func TestRetrieveAccountReportStats(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
 	}
-	if !foundMonthly {
-		t.Errorf("monthly report notification not found for user %d with reference %q", user.ID, expectedMonthlyRef)
+
+	t.Parallel()
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"-active", testPlan)
+	if err != nil {
+		t.Fatalf("failed to create active account: %v", err)
 	}
+	zeroUser, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"-zero", testPlan)
+	if err != nil {
+		t.Fatalf("failed to create zero-activity account: %v", err)
+	}
+	property, err := db_tests.CreatePropertyForOrg(ctx, store, org)
+	if err != nil {
+		t.Fatalf("failed to create property: %v", err)
+	}
+
+	to := truncateToMonth(recentMonthlyReportTime(time.Now().UTC()))
+	from := to.AddDate(0, -2, 0)
+	mid := to.AddDate(0, -1, 0)
+	if err := timeSeries.WriteAccessLogBatch(ctx, []*common.AccessRecord{
+		{UserID: user.ID, OrgID: org.ID, PropertyID: property.ID, Timestamp: from.AddDate(0, 0, 1)},
+		{UserID: user.ID, OrgID: org.ID, PropertyID: property.ID, Timestamp: mid.AddDate(0, 0, 1)},
+		{UserID: user.ID, OrgID: org.ID, PropertyID: property.ID, Timestamp: mid.AddDate(0, 0, 2)},
+	}); err != nil {
+		t.Fatalf("failed to seed access logs: %v", err)
+	}
+	if err := timeSeries.WriteVerifyLogBatch(ctx, []*common.VerifyRecord{
+		{UserID: user.ID, OrgID: org.ID, PropertyID: property.ID, Timestamp: from.AddDate(0, 0, 1), Status: 0},
+		{UserID: user.ID, OrgID: org.ID, PropertyID: property.ID, Timestamp: mid.AddDate(0, 0, 1), Status: 1},
+	}); err != nil {
+		t.Fatalf("failed to seed verification logs: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	userIDs := []int32{user.ID, zeroUser.ID}
+	dailyStats, err := timeSeries.RetrieveWeeklyAccountReportStats(ctx, userIDs, from, mid, to)
+	if err != nil {
+		t.Fatalf("failed to retrieve daily account report stats: %v", err)
+	}
+	monthlyStats, err := timeSeries.RetrieveMonthlyAccountReportStats(ctx, userIDs, from, mid, to)
+	if err != nil {
+		t.Fatalf("failed to retrieve monthly account report stats: %v", err)
+	}
+	partialStats, err := timeSeries.RetrieveMonthlyAccountReportStats(ctx, userIDs, from.AddDate(0, 0, 1), mid.AddDate(0, 0, 1), to.AddDate(0, 0, 1))
+	if err != nil {
+		t.Fatalf("failed to retrieve partial-month account report stats: %v", err)
+	}
+
+	for name, stats := range map[string]map[int32]*common.UserReportAccountStats{
+		"daily":         dailyStats,
+		"monthly":       monthlyStats,
+		"partial month": partialStats,
+	} {
+		active := stats[user.ID]
+		if active == nil {
+			t.Fatalf("%s stats omitted active user", name)
+		}
+		if active.CurrentRequests != 2 || active.PrevRequests != 1 || active.CurrentVerifies != 1 || active.PrevVerifies != 1 {
+			t.Errorf("%s active-user stats = %+v, want requests 2/1 and verifications 1/1", name, active)
+		}
+		zero := stats[zeroUser.ID]
+		if zero == nil {
+			t.Fatalf("%s stats omitted zero-activity user", name)
+		}
+		if *zero != (common.UserReportAccountStats{}) {
+			t.Errorf("%s zero-activity stats = %+v, want zero values", name, zero)
+		}
+	}
+}
+
+func TestRetrievePropertyReportCandidates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("failed to create account: %v", err)
+	}
+	properties := make([]*dbgen.Property, 3)
+	for i := range properties {
+		params := db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("property-%d.reports-test.org", i))
+		property, _, err := store.Impl().CreateNewProperty(ctx, params, org)
+		if err != nil {
+			t.Fatalf("failed to create property %d: %v", i, err)
+		}
+		properties[i] = property
+	}
+
+	to := truncateDayForTest(recentWeeklyReportTime(time.Now().UTC()))
+	mid := to.AddDate(0, 0, -7)
+	from := to.AddDate(0, 0, -14)
+	requestHeavyDay := mid.AddDate(0, 0, 1).Add(12 * time.Hour)
+	failureHeavyDay := mid.AddDate(0, 0, 2).Add(12 * time.Hour)
+	boundaryDay := mid.AddDate(0, 0, 3).Add(12 * time.Hour)
+	nonQualifyingDay := mid.AddDate(0, 0, 4).Add(12 * time.Hour)
+
+	accessLogs := make([]*common.AccessRecord, 0)
+	verifyLogs := make([]*common.VerifyRecord, 0)
+	addRequests := func(propertyID int32, at time.Time, count int) {
+		for range count {
+			accessLogs = append(accessLogs, &common.AccessRecord{UserID: user.ID, OrgID: org.ID, PropertyID: propertyID, Timestamp: at})
+		}
+	}
+	addVerifies := func(propertyID int32, at time.Time, success, failure int) {
+		for range success {
+			verifyLogs = append(verifyLogs, &common.VerifyRecord{UserID: user.ID, OrgID: org.ID, PropertyID: propertyID, Timestamp: at})
+		}
+		for range failure {
+			verifyLogs = append(verifyLogs, &common.VerifyRecord{UserID: user.ID, OrgID: org.ID, PropertyID: propertyID, Timestamp: at, Status: 1})
+		}
+	}
+
+	addRequests(properties[0].ID, requestHeavyDay, 4)
+	addVerifies(properties[0].ID, requestHeavyDay, 1, 0)
+	addRequests(properties[0].ID, nonQualifyingDay, 1)
+	addVerifies(properties[0].ID, nonQualifyingDay, 1, 0)
+	addRequests(properties[0].ID, mid.Add(-time.Hour), 2)
+	addRequests(properties[1].ID, failureHeavyDay, 1)
+	addVerifies(properties[1].ID, failureHeavyDay, 0, 5)
+	addRequests(properties[2].ID, boundaryDay, 2)
+	addVerifies(properties[2].ID, boundaryDay, 0, 6)
+	if err := timeSeries.WriteAccessLogBatch(ctx, accessLogs); err != nil {
+		t.Fatalf("failed to seed access logs: %v", err)
+	}
+	if err := timeSeries.WriteVerifyLogBatch(ctx, verifyLogs); err != nil {
+		t.Fatalf("failed to seed verification logs: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	stats, err := timeSeries.RetrieveWeeklyPropertiesReportStats(ctx, user.ID, from, mid, to, common.UserReportOptions{
+		TopPropertiesLimit:             2,
+		ProtectionCandidatesLimit:      3,
+		ProtectionRatioThreshold:       3,
+		ProtectionMinimumDominantCount: 4,
+	})
+	if err != nil {
+		t.Fatalf("failed to retrieve property report stats: %v", err)
+	}
+	if len(stats.Properties) != 2 {
+		t.Fatalf("properties count = %d, want 2", len(stats.Properties))
+	}
+	if stats.Properties[0].PropertyID != properties[0].ID || stats.Properties[0].CurrentRequests != 5 || stats.Properties[0].PrevRequests != 2 {
+		t.Errorf("first property = %+v, want request-heavy property with counts 5 and 2", stats.Properties[0])
+	}
+	if stats.Properties[1].PropertyID != properties[2].ID || stats.Properties[1].CurrentRequests != 2 {
+		t.Errorf("second property = %+v, want boundary property with 2 current requests", stats.Properties[1])
+	}
+	if len(stats.ProtectionCandidates) != 2 {
+		t.Fatalf("protection candidates count = %d, want 2", len(stats.ProtectionCandidates))
+	}
+	if candidate := stats.ProtectionCandidates[0]; candidate.PropertyID != properties[1].ID || candidate.Requests != 1 || candidate.Verifies != 5 || candidate.FailedVerifies != 5 || candidate.Ratio != 5 {
+		t.Errorf("first candidate = %+v, want failure-heavy property with ratio 5", candidate)
+	}
+	if candidate := stats.ProtectionCandidates[1]; candidate.PropertyID != properties[0].ID || candidate.Requests != 4 || candidate.Verifies != 1 || candidate.FailedVerifies != 0 || candidate.Ratio != 4 {
+		t.Errorf("second candidate = %+v, want request-heavy property with ratio 4", candidate)
+	}
+	if want := truncateDayForTest(failureHeavyDay); !stats.ProtectionCandidates[0].Timestamp.Equal(want) {
+		t.Errorf("first candidate timestamp = %v, want %v", stats.ProtectionCandidates[0].Timestamp, want)
+	}
+
+	limited, err := timeSeries.RetrieveWeeklyPropertiesReportStats(ctx, user.ID, from, mid, to, common.UserReportOptions{
+		TopPropertiesLimit:             2,
+		ProtectionCandidatesLimit:      1,
+		ProtectionRatioThreshold:       3,
+		ProtectionMinimumDominantCount: 4,
+	})
+	if err != nil {
+		t.Fatalf("failed to retrieve limited property report stats: %v", err)
+	}
+	if len(limited.ProtectionCandidates) != 1 || limited.ProtectionCandidates[0].PropertyID != properties[1].ID {
+		t.Errorf("limited candidates = %+v, want only the failure-heavy property", limited.ProtectionCandidates)
+	}
+}
+
+func TestRetrievePropertyReportCandidatesWithZeroDenominators(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("failed to create account: %v", err)
+	}
+	properties := make([]*dbgen.Property, 2)
+	for i := range properties {
+		params := db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("zero-denominator-%d.reports-test.org", i))
+		property, _, err := store.Impl().CreateNewProperty(ctx, params, org)
+		if err != nil {
+			t.Fatalf("failed to create property %d: %v", i, err)
+		}
+		properties[i] = property
+	}
+
+	to := truncateDayForTest(recentWeeklyReportTime(time.Now().UTC()))
+	mid := to.AddDate(0, 0, -7)
+	from := to.AddDate(0, 0, -14)
+	day := mid.AddDate(0, 0, 1)
+	accessLogs := make([]*common.AccessRecord, 100)
+	verifyLogs := make([]*common.VerifyRecord, 100)
+	for i := range 100 {
+		accessLogs[i] = &common.AccessRecord{UserID: user.ID, OrgID: org.ID, PropertyID: properties[0].ID, Timestamp: day}
+		verifyLogs[i] = &common.VerifyRecord{UserID: user.ID, OrgID: org.ID, PropertyID: properties[1].ID, Timestamp: day, Status: 1}
+	}
+	if err := timeSeries.WriteAccessLogBatch(ctx, accessLogs); err != nil {
+		t.Fatalf("failed to seed access logs: %v", err)
+	}
+	if err := timeSeries.WriteVerifyLogBatch(ctx, verifyLogs); err != nil {
+		t.Fatalf("failed to seed verification logs: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	stats, err := timeSeries.RetrieveWeeklyPropertiesReportStats(ctx, user.ID, from, mid, to, common.UserReportOptions{
+		TopPropertiesLimit:             2,
+		ProtectionCandidatesLimit:      2,
+		ProtectionRatioThreshold:       3,
+		ProtectionMinimumDominantCount: 100,
+	})
+	if err != nil {
+		t.Fatalf("failed to retrieve property report stats: %v", err)
+	}
+	if len(stats.ProtectionCandidates) != 2 {
+		t.Fatalf("protection candidates count = %d, want 2", len(stats.ProtectionCandidates))
+	}
+	requestHeavy := stats.ProtectionCandidates[0]
+	if requestHeavy.PropertyID != properties[0].ID || requestHeavy.Requests != 100 || requestHeavy.Verifies != 0 || requestHeavy.Ratio != 100 {
+		t.Errorf("request-heavy candidate = %+v, want ratio 100 with zero verifications", requestHeavy)
+	}
+	failureHeavy := stats.ProtectionCandidates[1]
+	if failureHeavy.PropertyID != properties[1].ID || failureHeavy.Requests != 0 || failureHeavy.Verifies != 100 || failureHeavy.FailedVerifies != 100 || failureHeavy.Ratio != 100 {
+		t.Errorf("failure-heavy candidate = %+v, want ratio 100 with zero requests", failureHeavy)
+	}
+}
+
+func truncateToMonth(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+}
+
+func truncateDayForTest(t time.Time) time.Time {
+	return time.Date(t.UTC().Year(), t.UTC().Month(), t.UTC().Day(), 0, 0, 0, 0, time.UTC)
 }
 
 func TestWeeklyReportDedup(t *testing.T) {
@@ -726,6 +989,30 @@ func TestBuildWeeklyReport(t *testing.T) {
 		}
 		if !result.TopProperties[1].Alternate {
 			t.Error("expected second property row to be striped")
+		}
+	})
+
+	t.Run("ProtectionHighlights", func(t *testing.T) {
+		ts := db.NewMemoryTimeSeries()
+		day := mid.AddDate(0, 0, 1)
+		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, day, 400)
+		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, day, 100)
+
+		result, err := newWeeklyReport(ts).BuildWeeklyReport(ctx, user.ID, from, mid, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(result.ProtectionHighlights) != 1 {
+			t.Fatalf("protection highlights count = %d, want 1", len(result.ProtectionHighlights))
+		}
+		highlight := result.ProtectionHighlights[0]
+		if highlight.Name != prop1.Name || highlight.Date != day.Format(time.DateOnly) || highlight.Requests != 400 || highlight.Verifies != 100 {
+			t.Errorf("protection highlight = %+v, want request-heavy property", highlight)
+		}
+		expectedLink := reportPortalURL + "/org/" + server.IDHasher.Encrypt(int(org.ID)) + "/property/" + server.IDHasher.Encrypt(int(prop1.ID)) + "?" + result.UTM
+		if highlight.Link != expectedLink {
+			t.Errorf("protection highlight link = %q, want %q", highlight.Link, expectedLink)
 		}
 	})
 

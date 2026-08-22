@@ -127,6 +127,266 @@ func TestMemoryTimeSeriesRetrieveAccountStats(t *testing.T) {
 	}
 }
 
+func TestMemoryTimeSeriesRetrieveWeeklyAccountReportStats(t *testing.T) {
+	ts := NewMemoryTimeSeries()
+	ctx := context.Background()
+	from := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	mid := from.AddDate(0, 0, 7)
+	to := mid.AddDate(0, 0, 7)
+
+	if err := ts.WriteAccessLogBatch(ctx, []*common.AccessRecord{
+		{UserID: 1, Timestamp: from.Add(-time.Second)},
+		{UserID: 1, Timestamp: from},
+		{UserID: 1, Timestamp: mid.Add(-time.Second)},
+		{UserID: 1, Timestamp: mid},
+		{UserID: 1, Timestamp: to.Add(-time.Second)},
+		{UserID: 1, Timestamp: to},
+		{UserID: 4, Timestamp: mid},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ts.WriteVerifyLogBatch(ctx, []*common.VerifyRecord{
+		{UserID: 1, Timestamp: from, Status: 0},
+		{UserID: 1, Timestamp: mid, Status: 1},
+		{UserID: 1, Timestamp: to, Status: 1},
+		{UserID: 2, Timestamp: mid, Status: 1},
+		{UserID: 4, Timestamp: mid, Status: 1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := ts.RetrieveWeeklyAccountReportStats(ctx, []int32{1, 2, 3}, from, mid, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats) != 3 {
+		t.Fatalf("RetrieveWeeklyAccountReportStats() returned %d users, want 3", len(stats))
+	}
+
+	user1 := stats[1]
+	if user1 == nil {
+		t.Fatal("RetrieveWeeklyAccountReportStats() omitted user 1")
+	}
+	if user1.CurrentRequests != 2 || user1.PrevRequests != 2 {
+		t.Errorf("user 1 requests = current %d previous %d, want 2 and 2", user1.CurrentRequests, user1.PrevRequests)
+	}
+	if user1.CurrentVerifies != 1 || user1.PrevVerifies != 1 {
+		t.Errorf("user 1 verifications = current %d previous %d, want 1 and 1", user1.CurrentVerifies, user1.PrevVerifies)
+	}
+
+	user2 := stats[2]
+	if user2 == nil {
+		t.Fatal("RetrieveWeeklyAccountReportStats() omitted verification-only user 2")
+	}
+	if user2.CurrentRequests != 0 || user2.PrevRequests != 0 || user2.CurrentVerifies != 1 || user2.PrevVerifies != 0 {
+		t.Errorf("user 2 stats = %+v, want one current verification only", user2)
+	}
+
+	user3 := stats[3]
+	if user3 == nil {
+		t.Fatal("RetrieveWeeklyAccountReportStats() omitted zero-activity user 3")
+	}
+	if *user3 != (common.UserReportAccountStats{}) {
+		t.Errorf("user 3 stats = %+v, want zero values", user3)
+	}
+	if _, ok := stats[4]; ok {
+		t.Error("RetrieveWeeklyAccountReportStats() included unrequested user 4")
+	}
+}
+
+func TestMemoryTimeSeriesRetrieveMonthlyAccountReportStats(t *testing.T) {
+	ts := NewMemoryTimeSeries()
+	ctx := context.Background()
+	from := time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC)
+	mid := time.Date(2026, time.February, 10, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC)
+
+	if err := ts.WriteAccessLogBatch(ctx, []*common.AccessRecord{
+		{UserID: 1, Timestamp: mid.Add(-time.Hour)},
+		{UserID: 1, Timestamp: mid},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ts.WriteVerifyLogBatch(ctx, []*common.VerifyRecord{
+		{UserID: 1, Timestamp: mid.Add(-time.Hour)},
+		{UserID: 1, Timestamp: mid},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := ts.RetrieveMonthlyAccountReportStats(ctx, []int32{1}, from, mid, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := stats[1]
+	if user == nil {
+		t.Fatal("RetrieveMonthlyAccountReportStats() omitted user 1")
+	}
+	if user.CurrentRequests != 1 || user.PrevRequests != 1 || user.CurrentVerifies != 1 || user.PrevVerifies != 1 {
+		t.Errorf("monthly account report stats = %+v, want one count in each period", user)
+	}
+}
+
+func TestMemoryTimeSeriesRetrievePropertyReportCandidates(t *testing.T) {
+	ts := NewMemoryTimeSeries()
+	ctx := context.Background()
+	from := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	mid := from.AddDate(0, 0, 7)
+	to := mid.AddDate(0, 0, 7)
+
+	accessLogs := make([]*common.AccessRecord, 0)
+	verifyLogs := make([]*common.VerifyRecord, 0)
+	addRequests := func(propertyID int32, at time.Time, count int) {
+		for range count {
+			accessLogs = append(accessLogs, &common.AccessRecord{UserID: 1, OrgID: 10, PropertyID: propertyID, Timestamp: at})
+		}
+	}
+	addVerifies := func(propertyID int32, at time.Time, success, failure int) {
+		for range success {
+			verifyLogs = append(verifyLogs, &common.VerifyRecord{UserID: 1, OrgID: 10, PropertyID: propertyID, Timestamp: at})
+		}
+		for range failure {
+			verifyLogs = append(verifyLogs, &common.VerifyRecord{UserID: 1, OrgID: 10, PropertyID: propertyID, Timestamp: at, Status: 1})
+		}
+	}
+
+	requestHeavyDay := mid.Add(36 * time.Hour)
+	failureHeavyDay := mid.Add(60 * time.Hour)
+	nonQualifyingDay := mid.Add(156 * time.Hour)
+	addRequests(1, requestHeavyDay, 400)
+	addVerifies(1, requestHeavyDay, 100, 0)
+	addRequests(1, nonQualifyingDay, 50)
+	addVerifies(1, nonQualifyingDay, 100, 0)
+	addRequests(1, mid.Add(-time.Hour), 10)
+	addRequests(2, failureHeavyDay, 50)
+	addVerifies(2, failureHeavyDay, 0, 250)
+	addRequests(3, mid.Add(84*time.Hour), 300)
+	addVerifies(3, mid.Add(84*time.Hour), 100, 0)
+	addRequests(4, mid.Add(108*time.Hour), 99)
+	addRequests(5, mid.Add(132*time.Hour), 10)
+	addVerifies(5, mid.Add(132*time.Hour), 0, 99)
+	addRequests(6, mid.Add(12*time.Hour), 1000)
+	addVerifies(6, mid.Add(12*time.Hour), 500, 0)
+	addRequests(6, mid.Add(-2*time.Hour), 20)
+	addRequests(7, from.Add(time.Hour), 2000)
+	addRequests(8, to, 3000)
+	addRequests(9, mid.Add(time.Hour), 2000)
+	addVerifies(9, mid.Add(time.Hour), 1000, 0)
+	addRequests(10, mid.Add(24*time.Hour), 100)
+	addVerifies(10, mid.Add(24*time.Hour), 25, 0)
+
+	if err := ts.WriteAccessLogBatch(ctx, accessLogs); err != nil {
+		t.Fatal(err)
+	}
+	if err := ts.WriteVerifyLogBatch(ctx, verifyLogs); err != nil {
+		t.Fatal(err)
+	}
+
+	options := common.UserReportOptions{
+		TopPropertiesLimit:             2,
+		ProtectionCandidatesLimit:      10,
+		ProtectionRatioThreshold:       3,
+		ProtectionMinimumDominantCount: 100,
+	}
+	stats, err := ts.RetrieveWeeklyPropertiesReportStats(ctx, 1, from, mid, to, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(stats.Properties) != 2 {
+		t.Fatalf("properties count = %d, want 2", len(stats.Properties))
+	}
+	if stats.Properties[0].PropertyID != 9 || stats.Properties[0].CurrentRequests != 2000 || stats.Properties[0].PrevRequests != 0 {
+		t.Errorf("first property = %+v, want property 9 with 2000 current requests", stats.Properties[0])
+	}
+	if stats.Properties[1].PropertyID != 6 || stats.Properties[1].CurrentRequests != 1000 || stats.Properties[1].PrevRequests != 20 {
+		t.Errorf("second property = %+v, want property 6 with 1000 current and 20 previous requests", stats.Properties[1])
+	}
+
+	if len(stats.ProtectionCandidates) != 3 {
+		t.Fatalf("protection candidates count = %d, want 3", len(stats.ProtectionCandidates))
+	}
+	failureHeavy := stats.ProtectionCandidates[0]
+	if failureHeavy.PropertyID != 2 || failureHeavy.Requests != 50 || failureHeavy.Verifies != 250 || failureHeavy.FailedVerifies != 250 || failureHeavy.Ratio != 5 {
+		t.Errorf("first candidate = %+v, want failure-heavy property 2 with ratio 5", failureHeavy)
+	}
+	if want := time.Date(2026, time.January, 10, 0, 0, 0, 0, time.UTC); !failureHeavy.Timestamp.Equal(want) {
+		t.Errorf("first candidate timestamp = %v, want %v", failureHeavy.Timestamp, want)
+	}
+	requestHeavy := stats.ProtectionCandidates[1]
+	if requestHeavy.PropertyID != 1 || requestHeavy.Requests != 400 || requestHeavy.Verifies != 100 || requestHeavy.FailedVerifies != 0 || requestHeavy.Ratio != 4 {
+		t.Errorf("second candidate = %+v, want request-heavy property 1 with ratio 4", requestHeavy)
+	}
+	if want := time.Date(2026, time.January, 9, 0, 0, 0, 0, time.UTC); !requestHeavy.Timestamp.Equal(want) {
+		t.Errorf("second candidate timestamp = %v, want %v", requestHeavy.Timestamp, want)
+	}
+	minimumCount := stats.ProtectionCandidates[2]
+	if minimumCount.PropertyID != 10 || minimumCount.Requests != 100 || minimumCount.Verifies != 25 || minimumCount.Ratio != 4 {
+		t.Errorf("third candidate = %+v, want property 10 qualifying at the minimum dominant count", minimumCount)
+	}
+
+	limitedOptions := options
+	limitedOptions.ProtectionCandidatesLimit = 2
+	limited, err := ts.RetrieveWeeklyPropertiesReportStats(ctx, 1, from, mid, to, limitedOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(limited.ProtectionCandidates) != 2 || limited.ProtectionCandidates[0].PropertyID != 2 || limited.ProtectionCandidates[1].PropertyID != 1 {
+		t.Errorf("limited candidates = %+v, want properties 2 and 1", limited.ProtectionCandidates)
+	}
+
+	monthly, err := ts.RetrieveMonthlyPropertiesReportStats(ctx, 1, from, mid, to, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(monthly.Properties) != 2 || len(monthly.ProtectionCandidates) != 3 {
+		t.Errorf("monthly result has %d properties and %d candidates, want 2 and 3", len(monthly.Properties), len(monthly.ProtectionCandidates))
+	}
+}
+
+func TestMemoryTimeSeriesPropertyReportCandidatesUseOneForZeroDenominators(t *testing.T) {
+	ts := NewMemoryTimeSeries()
+	ctx := context.Background()
+	from := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	mid := from.AddDate(0, 0, 7)
+	to := mid.AddDate(0, 0, 7)
+	day := mid.AddDate(0, 0, 1)
+
+	accessLogs := make([]*common.AccessRecord, 100)
+	verifyLogs := make([]*common.VerifyRecord, 100)
+	for i := range 100 {
+		accessLogs[i] = &common.AccessRecord{UserID: 1, OrgID: 10, PropertyID: 1, Timestamp: day}
+		verifyLogs[i] = &common.VerifyRecord{UserID: 1, OrgID: 10, PropertyID: 2, Timestamp: day, Status: 1}
+	}
+	if err := ts.WriteAccessLogBatch(ctx, accessLogs); err != nil {
+		t.Fatal(err)
+	}
+	if err := ts.WriteVerifyLogBatch(ctx, verifyLogs); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := ts.RetrieveWeeklyPropertiesReportStats(ctx, 1, from, mid, to, common.UserReportOptions{
+		TopPropertiesLimit:             2,
+		ProtectionCandidatesLimit:      2,
+		ProtectionRatioThreshold:       3,
+		ProtectionMinimumDominantCount: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats.ProtectionCandidates) != 2 {
+		t.Fatalf("protection candidates count = %d, want 2", len(stats.ProtectionCandidates))
+	}
+	requestHeavy := stats.ProtectionCandidates[0]
+	if requestHeavy.PropertyID != 1 || requestHeavy.Requests != 100 || requestHeavy.Verifies != 0 || requestHeavy.Ratio != 100 {
+		t.Errorf("request-heavy candidate = %+v, want ratio 100 with zero verifications", requestHeavy)
+	}
+	failureHeavy := stats.ProtectionCandidates[1]
+	if failureHeavy.PropertyID != 2 || failureHeavy.Requests != 0 || failureHeavy.Verifies != 100 || failureHeavy.FailedVerifies != 100 || failureHeavy.Ratio != 100 {
+		t.Errorf("failure-heavy candidate = %+v, want ratio 100 with zero requests", failureHeavy)
+	}
+}
+
 func TestMemoryTimeSeriesVerifyLogsAndStatsByPeriod(t *testing.T) {
 	ts := NewMemoryTimeSeries()
 	ctx := context.Background()

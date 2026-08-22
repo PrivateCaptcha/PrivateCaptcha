@@ -10,13 +10,25 @@ import (
 )
 
 const (
-	maxPaginationIterations = 100
-	topPropertiesLimit      = 5
-	floatEpsilon            = 1e-4
+	maxPaginationIterations        = 100
+	topPropertiesLimit             = 5
+	protectionHighlightsLimit      = 5
+	protectionRatioThreshold       = 3.0
+	protectionMinimumDominantCount = 100
+	floatEpsilon                   = 1e-4
 
 	WeeklyReferencePrefix  = "report/weekly/"
 	MonthlyReferencePrefix = "report/monthly/"
 )
+
+func userReportOptions() common.UserReportOptions {
+	return common.UserReportOptions{
+		TopPropertiesLimit:             topPropertiesLimit,
+		ProtectionCandidatesLimit:      protectionHighlightsLimit,
+		ProtectionRatioThreshold:       protectionRatioThreshold,
+		ProtectionMinimumDominantCount: protectionMinimumDominantCount,
+	}
+}
 
 type ScheduleReportsJob struct {
 	Store       db.Implementor

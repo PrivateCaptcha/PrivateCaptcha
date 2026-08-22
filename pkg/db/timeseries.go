@@ -387,36 +387,275 @@ ORDER BY org_id, ts`
 	return results, nil
 }
 
-func (ts *TimeSeriesDB) retrieveReportStats(ctx context.Context, userID int32, from, mid, to time.Time, accessTable, verifyTable string) (*common.UserReportStats, error) {
-	fromStr := from.Format(time.DateTime)
-	midStr := mid.Format(time.DateTime)
-	toStr := to.Format(time.DateTime)
-	userIDStr := strconv.Itoa(int(userID))
+func requestedAccountReportStats(userIDs []int32) (map[int32]*common.UserReportAccountStats, []uint32, error) {
+	stats := make(map[int32]*common.UserReportAccountStats, len(userIDs))
+	ids := make([]uint32, 0, len(userIDs))
+	for _, userID := range userIDs {
+		if userID <= 0 {
+			return nil, nil, ErrInvalidInput
+		}
+		if _, ok := stats[userID]; ok {
+			continue
+		}
+		stats[userID] = &common.UserReportAccountStats{}
+		ids = append(ids, uint32(userID))
+	}
+	return stats, ids, nil
+}
 
-	query := `SELECT property_id, org_id,
-    sumIf(req_count, timestamp >= {mid_ts:DateTime}) as current_requests,
-    sumIf(req_count, timestamp < {mid_ts:DateTime}) as prev_requests,
-    sumIf(ver_count, timestamp >= {mid_ts:DateTime}) as current_verifies,
-    sumIf(ver_count, timestamp < {mid_ts:DateTime}) as prev_verifies
-FROM (
-    SELECT property_id, org_id, sum(count) as req_count, 0 as ver_count, toStartOfDay(timestamp) as timestamp
-    FROM %s FINAL
-    WHERE user_id = {user_id:UInt32} AND timestamp >= {from_ts:DateTime} AND timestamp < {to_ts:DateTime}
-    GROUP BY property_id, org_id, timestamp
-    UNION ALL
-    SELECT property_id, org_id, 0 as req_count, sum(success_count + failure_count) as ver_count, toStartOfDay(timestamp) as timestamp
-    FROM %s FINAL
-    WHERE user_id = {user_id:UInt32} AND timestamp >= {from_ts:DateTime} AND timestamp < {to_ts:DateTime}
-    GROUP BY property_id, org_id, timestamp
+func (ts *TimeSeriesDB) retrieveAccountReportStats(ctx context.Context, userIDs []int32, from, mid, to time.Time, requestTable string) (map[int32]*common.UserReportAccountStats, error) {
+	stats, ids, err := requestedAccountReportStats(userIDs)
+	if err != nil || len(ids) == 0 {
+		return stats, err
+	}
+
+	query := `WITH requested_users AS
+(
+    SELECT arrayJoin({user_ids:Array(UInt32)}) AS user_id
+),
+account_stats AS
+(
+    SELECT
+        user_id,
+        sum(current_requests) AS current_requests,
+        sum(previous_requests) AS previous_requests,
+        sum(current_verifications) AS current_verifications,
+        sum(previous_verifications) AS previous_verifications
+    FROM
+    (
+        SELECT
+            user_id,
+            sumIf(count, timestamp >= {mid_ts:DateTime}) AS current_requests,
+            sumIf(count, timestamp < {mid_ts:DateTime}) AS previous_requests,
+            toUInt64(0) AS current_verifications,
+            toUInt64(0) AS previous_verifications
+        FROM %s
+        WHERE user_id IN {user_ids:Array(UInt32)}
+          AND timestamp >= {from_ts:DateTime}
+          AND timestamp < {to_ts:DateTime}
+        GROUP BY user_id
+
+        UNION ALL
+
+        SELECT
+            user_id,
+            toUInt64(0) AS current_requests,
+            toUInt64(0) AS previous_requests,
+            sumIf(success_count + failure_count, timestamp >= {mid_ts:DateTime}) AS current_verifications,
+            sumIf(success_count + failure_count, timestamp < {mid_ts:DateTime}) AS previous_verifications
+        FROM %s
+        WHERE user_id IN {user_ids:Array(UInt32)}
+          AND timestamp >= {from_ts:DateTime}
+          AND timestamp < {to_ts:DateTime}
+        GROUP BY user_id
+    )
+    GROUP BY user_id
 )
-GROUP BY property_id, org_id
-ORDER BY current_requests DESC`
+SELECT
+    requested_users.user_id,
+    ifNull(account_stats.current_requests, toUInt64(0)),
+    ifNull(account_stats.previous_requests, toUInt64(0)),
+    ifNull(account_stats.current_verifications, toUInt64(0)),
+    ifNull(account_stats.previous_verifications, toUInt64(0))
+FROM requested_users
+LEFT JOIN account_stats USING (user_id)
+ORDER BY requested_users.user_id`
 
-	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, accessTable, verifyTable),
-		clickhouse.Named("user_id", userIDStr),
-		clickhouse.Named("from_ts", fromStr),
-		clickhouse.Named("mid_ts", midStr),
-		clickhouse.Named("to_ts", toStr))
+	rows, err := ts.Clickhouse.QueryContext(ctx, fmt.Sprintf(query, requestTable, VerifyLogTable1d),
+		clickhouse.Named("user_ids", ids),
+		clickhouse.DateNamed("from_ts", from, clickhouse.Seconds),
+		clickhouse.DateNamed("mid_ts", mid, clickhouse.Seconds),
+		clickhouse.DateNamed("to_ts", to, clickhouse.Seconds))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to execute account report stats query", "users", len(ids), "requestTable", requestTable, common.ErrAttr(err))
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var userID int32
+		stat := &common.UserReportAccountStats{}
+		if err := rows.Scan(&userID, &stat.CurrentRequests, &stat.PrevRequests, &stat.CurrentVerifies, &stat.PrevVerifies); err != nil {
+			slog.ErrorContext(ctx, "Failed to read account report stats row", common.ErrAttr(err))
+			return nil, err
+		}
+		if _, ok := stats[userID]; ok {
+			stats[userID] = stat
+		}
+	}
+	if err := rows.Err(); err != nil {
+		slog.ErrorContext(ctx, "Row iteration error in account report stats query", common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.InfoContext(ctx, "Fetched account report stats", "users", len(stats), "requestTable", requestTable)
+	return stats, nil
+}
+
+func (ts *TimeSeriesDB) RetrieveWeeklyAccountReportStats(ctx context.Context, userIDs []int32, from, mid, to time.Time) (map[int32]*common.UserReportAccountStats, error) {
+	if !ts.IsAvailable() {
+		return nil, ErrMaintenance
+	}
+	return ts.retrieveAccountReportStats(ctx, userIDs, from, mid, to, AccessLogTableName1d)
+}
+
+func consecutiveUTCMonthStarts(from, mid, to time.Time) bool {
+	if from.Location() != time.UTC || mid.Location() != time.UTC || to.Location() != time.UTC {
+		return false
+	}
+	isMonthStart := func(t time.Time) bool {
+		return t.Day() == 1 && t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0
+	}
+	return isMonthStart(from) && isMonthStart(mid) && isMonthStart(to) &&
+		mid.Equal(from.AddDate(0, 1, 0)) && to.Equal(mid.AddDate(0, 1, 0))
+}
+
+func useMonthlyRequestTable(from, mid, to, now time.Time) bool {
+	return consecutiveUTCMonthStarts(from, mid, to) && from.AddDate(1, 0, 0).After(now.UTC())
+}
+
+func (ts *TimeSeriesDB) RetrieveMonthlyAccountReportStats(ctx context.Context, userIDs []int32, from, mid, to time.Time) (map[int32]*common.UserReportAccountStats, error) {
+	if !ts.IsAvailable() {
+		return nil, ErrMaintenance
+	}
+	requestTable := AccessLogTableName1d
+	if useMonthlyRequestTable(from, mid, to, time.Now()) {
+		requestTable = AccessLogTableName1mo
+	}
+	return ts.retrieveAccountReportStats(ctx, userIDs, from, mid, to, requestTable)
+}
+
+func (ts *TimeSeriesDB) retrieveReportStats(ctx context.Context, userID int32, from, mid, to time.Time, accessTable, verifyTable string, options common.UserReportOptions) (*common.UserReportStats, error) {
+	if userID <= 0 || options.TopPropertiesLimit < 0 || options.ProtectionCandidatesLimit < 0 || options.ProtectionRatioThreshold < 0 {
+		return nil, ErrInvalidInput
+	}
+
+	query := `WITH daily_activity AS
+(
+    SELECT
+        property_id,
+        org_id,
+        timestamp,
+        sum(requests) AS requests,
+        sum(verifications) AS verifications,
+        sum(failed_verifications) AS failed_verifications
+    FROM
+    (
+        SELECT
+            property_id,
+            org_id,
+            toStartOfDay(timestamp) AS timestamp,
+            sum(count) AS requests,
+            toUInt64(0) AS verifications,
+            toUInt64(0) AS failed_verifications
+        FROM %s
+        WHERE user_id = {user_id:UInt32}
+          AND timestamp >= {mid_ts:DateTime}
+          AND timestamp < {to_ts:DateTime}
+        GROUP BY property_id, org_id, timestamp
+
+        UNION ALL
+
+        SELECT
+            property_id,
+            org_id,
+            toStartOfDay(timestamp) AS timestamp,
+            toUInt64(0) AS requests,
+            sum(success_count + failure_count) AS verifications,
+            sum(failure_count) AS failed_verifications
+        FROM %s
+        WHERE user_id = {user_id:UInt32}
+          AND timestamp >= {mid_ts:DateTime}
+          AND timestamp < {to_ts:DateTime}
+        GROUP BY property_id, org_id, timestamp
+    )
+    GROUP BY property_id, org_id, timestamp
+),
+candidate_ratios AS
+(
+    SELECT
+        property_id,
+        org_id,
+        timestamp,
+        requests,
+        verifications,
+        failed_verifications,
+        toFloat64(requests) / greatest(toFloat64(verifications), 1.0) AS request_ratio,
+        toFloat64(failed_verifications) / greatest(toFloat64(requests), 1.0) AS failure_ratio
+    FROM daily_activity
+),
+qualified_candidates AS
+(
+    SELECT
+        property_id,
+        org_id,
+        timestamp,
+        requests,
+        verifications,
+        failed_verifications,
+        greatest(
+            if(requests >= {minimum_dominant_count:UInt64} AND request_ratio > {ratio_threshold:Float64}, request_ratio, 0.0),
+            if(failed_verifications >= {minimum_dominant_count:UInt64} AND failure_ratio > {ratio_threshold:Float64}, failure_ratio, 0.0)
+        ) AS ratio
+    FROM candidate_ratios
+)
+SELECT
+    toUInt8(1) AS row_type,
+    property_id,
+    org_id,
+    current_requests,
+    previous_requests,
+    toDateTime(0) AS timestamp,
+    toUInt64(0) AS verifications,
+    toUInt64(0) AS failed_verifications,
+    toFloat64(0) AS ratio
+FROM
+(
+    SELECT
+        property_id,
+        org_id,
+        sumIf(count, timestamp >= {mid_ts:DateTime}) AS current_requests,
+        sumIf(count, timestamp < {mid_ts:DateTime}) AS previous_requests
+    FROM %s
+    WHERE user_id = {user_id:UInt32}
+      AND timestamp >= {from_ts:DateTime}
+      AND timestamp < {to_ts:DateTime}
+    GROUP BY property_id, org_id
+    HAVING current_requests > 0
+    ORDER BY current_requests DESC, property_id, org_id
+    LIMIT {top_properties_limit:UInt64}
+)
+
+UNION ALL
+
+SELECT
+    toUInt8(2) AS row_type,
+    property_id,
+    org_id,
+    requests AS current_requests,
+    toUInt64(0) AS previous_requests,
+    timestamp,
+    verifications,
+    failed_verifications,
+    ratio
+FROM
+(
+    SELECT *
+    FROM qualified_candidates
+    WHERE ratio > 0
+    ORDER BY ratio DESC, greatest(requests, failed_verifications) DESC, property_id, org_id, timestamp
+    LIMIT {protection_candidates_limit:UInt64}
+)`
+
+	rows, err := ts.Clickhouse.QueryContext(ctx, fmt.Sprintf(query, accessTable, verifyTable, accessTable),
+		clickhouse.Named("user_id", uint32(userID)),
+		clickhouse.DateNamed("from_ts", from, clickhouse.Seconds),
+		clickhouse.DateNamed("mid_ts", mid, clickhouse.Seconds),
+		clickhouse.DateNamed("to_ts", to, clickhouse.Seconds),
+		clickhouse.Named("top_properties_limit", uint64(options.TopPropertiesLimit)),
+		clickhouse.Named("protection_candidates_limit", uint64(options.ProtectionCandidatesLimit)),
+		clickhouse.Named("ratio_threshold", options.ProtectionRatioThreshold),
+		clickhouse.Named("minimum_dominant_count", options.ProtectionMinimumDominantCount))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to execute report stats query", "userID", userID, "accessTable", accessTable, common.ErrAttr(err))
 		return nil, err
@@ -427,16 +666,36 @@ ORDER BY current_requests DESC`
 	stats := &common.UserReportStats{}
 
 	for rows.Next() {
-		ps := &common.UserReportPropertyStat{}
-		if err := rows.Scan(&ps.PropertyID, &ps.OrgID, &ps.CurrentRequests, &ps.PrevRequests, &ps.CurrentVerifies, &ps.PrevVerifies); err != nil {
+		var rowType uint8
+		var propertyID, orgID int32
+		var currentRequests, previousRequests, verifications, failedVerifications uint64
+		var timestamp time.Time
+		var ratio float64
+		if err := rows.Scan(&rowType, &propertyID, &orgID, &currentRequests, &previousRequests, &timestamp, &verifications, &failedVerifications, &ratio); err != nil {
 			slog.ErrorContext(ctx, "Failed to read row from report stats query", common.ErrAttr(err))
 			return nil, err
 		}
-		stats.Properties = append(stats.Properties, ps)
-		stats.TotalCurrentRequests += ps.CurrentRequests
-		stats.TotalPrevRequests += ps.PrevRequests
-		stats.TotalCurrentVerifies += ps.CurrentVerifies
-		stats.TotalPrevVerifies += ps.PrevVerifies
+		switch rowType {
+		case 1:
+			stats.Properties = append(stats.Properties, &common.UserReportPropertyStat{
+				PropertyID:      propertyID,
+				OrgID:           orgID,
+				CurrentRequests: currentRequests,
+				PrevRequests:    previousRequests,
+			})
+		case 2:
+			stats.ProtectionCandidates = append(stats.ProtectionCandidates, &common.UserReportProtectionCandidate{
+				PropertyID:     propertyID,
+				OrgID:          orgID,
+				Timestamp:      timestamp,
+				Requests:       currentRequests,
+				Verifies:       verifications,
+				FailedVerifies: failedVerifications,
+				Ratio:          ratio,
+			})
+		default:
+			return nil, fmt.Errorf("unknown report stats row type %d", rowType)
+		}
 	}
 
 	if err := rows.Err(); err != nil {
@@ -444,39 +703,63 @@ ORDER BY current_requests DESC`
 		return nil, err
 	}
 
+	sort.Slice(stats.Properties, func(i, j int) bool {
+		if stats.Properties[i].CurrentRequests != stats.Properties[j].CurrentRequests {
+			return stats.Properties[i].CurrentRequests > stats.Properties[j].CurrentRequests
+		}
+		if stats.Properties[i].PropertyID != stats.Properties[j].PropertyID {
+			return stats.Properties[i].PropertyID < stats.Properties[j].PropertyID
+		}
+		return stats.Properties[i].OrgID < stats.Properties[j].OrgID
+	})
+	sort.Slice(stats.ProtectionCandidates, func(i, j int) bool {
+		left, right := stats.ProtectionCandidates[i], stats.ProtectionCandidates[j]
+		if left.Ratio != right.Ratio {
+			return left.Ratio > right.Ratio
+		}
+		leftDominant := max(left.Requests, left.FailedVerifies)
+		rightDominant := max(right.Requests, right.FailedVerifies)
+		if leftDominant != rightDominant {
+			return leftDominant > rightDominant
+		}
+		if left.PropertyID != right.PropertyID {
+			return left.PropertyID < right.PropertyID
+		}
+		if left.OrgID != right.OrgID {
+			return left.OrgID < right.OrgID
+		}
+		return left.Timestamp.Before(right.Timestamp)
+	})
+
 	return stats, nil
 }
 
-func (ts *TimeSeriesDB) RetrieveWeeklyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
+func (ts *TimeSeriesDB) RetrieveWeeklyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time, options common.UserReportOptions) (*common.UserReportStats, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
 	}
 
-	stats, err := ts.retrieveReportStats(ctx, userID, from, mid, to, AccessLogTableName1d, VerifyLogTable1d)
+	stats, err := ts.retrieveReportStats(ctx, userID, from, mid, to, AccessLogTableName1d, VerifyLogTable1d, options)
 	if err != nil {
 		return nil, err
 	}
 
-	slog.InfoContext(ctx, "Fetched weekly report stats", "userID", userID, "properties", len(stats.Properties),
-		"currentReq", stats.TotalCurrentRequests, "prevReq", stats.TotalPrevRequests,
-		"currentVer", stats.TotalCurrentVerifies, "prevVer", stats.TotalPrevVerifies)
+	slog.InfoContext(ctx, "Fetched weekly report stats", "userID", userID, "properties", len(stats.Properties), "protectionCandidates", len(stats.ProtectionCandidates))
 
 	return stats, nil
 }
 
-func (ts *TimeSeriesDB) RetrieveMonthlyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
+func (ts *TimeSeriesDB) RetrieveMonthlyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time, options common.UserReportOptions) (*common.UserReportStats, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
 	}
 
-	stats, err := ts.retrieveReportStats(ctx, userID, from, mid, to, AccessLogTableName1d, VerifyLogTable1d)
+	stats, err := ts.retrieveReportStats(ctx, userID, from, mid, to, AccessLogTableName1d, VerifyLogTable1d, options)
 	if err != nil {
 		return nil, err
 	}
 
-	slog.InfoContext(ctx, "Fetched monthly report stats", "userID", userID, "properties", len(stats.Properties),
-		"currentReq", stats.TotalCurrentRequests, "prevReq", stats.TotalPrevRequests,
-		"currentVer", stats.TotalCurrentVerifies, "prevVer", stats.TotalPrevVerifies)
+	slog.InfoContext(ctx, "Fetched monthly report stats", "userID", userID, "properties", len(stats.Properties), "protectionCandidates", len(stats.ProtectionCandidates))
 
 	return stats, nil
 }
@@ -1225,7 +1508,54 @@ func (m *MemoryTimeSeries) RetrieveAccountStats(ctx context.Context, userID int3
 	return results, nil
 }
 
-func (m *MemoryTimeSeries) memoryReportStats(userID int32, from, mid, to time.Time) *common.UserReportStats {
+func (m *MemoryTimeSeries) memoryAccountReportStats(userIDs []int32, from, mid, to time.Time) (map[int32]*common.UserReportAccountStats, error) {
+	stats, _, err := requestedAccountReportStats(userIDs)
+	if err != nil || len(stats) == 0 {
+		return stats, err
+	}
+
+	for _, log := range m.accessLogs {
+		stat, ok := stats[log.UserID]
+		if !ok || log.Timestamp.Before(from) || !log.Timestamp.Before(to) {
+			continue
+		}
+		if log.Timestamp.Before(mid) {
+			stat.PrevRequests++
+		} else {
+			stat.CurrentRequests++
+		}
+	}
+	for _, log := range m.verifyLogs {
+		stat, ok := stats[log.UserID]
+		if !ok || log.Timestamp.Before(from) || !log.Timestamp.Before(to) {
+			continue
+		}
+		if log.Timestamp.Before(mid) {
+			stat.PrevVerifies++
+		} else {
+			stat.CurrentVerifies++
+		}
+	}
+	return stats, nil
+}
+
+func (m *MemoryTimeSeries) RetrieveWeeklyAccountReportStats(ctx context.Context, userIDs []int32, from, mid, to time.Time) (map[int32]*common.UserReportAccountStats, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.memoryAccountReportStats(userIDs, from, mid, to)
+}
+
+func (m *MemoryTimeSeries) RetrieveMonthlyAccountReportStats(ctx context.Context, userIDs []int32, from, mid, to time.Time) (map[int32]*common.UserReportAccountStats, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.memoryAccountReportStats(userIDs, from, mid, to)
+}
+
+func (m *MemoryTimeSeries) memoryReportStats(userID int32, from, mid, to time.Time, options common.UserReportOptions) (*common.UserReportStats, error) {
+	if userID <= 0 || options.TopPropertiesLimit < 0 || options.ProtectionCandidatesLimit < 0 || options.ProtectionRatioThreshold < 0 {
+		return nil, ErrInvalidInput
+	}
+
 	type propKey struct {
 		PropertyID int32
 		OrgID      int32
@@ -1234,11 +1564,25 @@ func (m *MemoryTimeSeries) memoryReportStats(userID int32, from, mid, to time.Ti
 	type propCounts struct {
 		CurrentRequests uint64
 		PrevRequests    uint64
-		CurrentVerifies uint64
-		PrevVerifies    uint64
+	}
+
+	type candidateKey struct {
+		propKey
+		Timestamp time.Time
+	}
+
+	type candidateCounts struct {
+		Requests       uint64
+		Verifies       uint64
+		FailedVerifies uint64
 	}
 
 	counts := make(map[propKey]*propCounts)
+	candidates := make(map[candidateKey]*candidateCounts)
+	dayStart := func(t time.Time) time.Time {
+		year, month, day := t.UTC().Date()
+		return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	}
 
 	for _, log := range m.accessLogs {
 		if log.UserID == userID && !log.Timestamp.Before(from) && log.Timestamp.Before(to) {
@@ -1248,6 +1592,11 @@ func (m *MemoryTimeSeries) memoryReportStats(userID int32, from, mid, to time.Ti
 			}
 			if !log.Timestamp.Before(mid) {
 				counts[key].CurrentRequests++
+				candidateKey := candidateKey{propKey: key, Timestamp: dayStart(log.Timestamp)}
+				if candidates[candidateKey] == nil {
+					candidates[candidateKey] = &candidateCounts{}
+				}
+				candidates[candidateKey].Requests++
 			} else {
 				counts[key].PrevRequests++
 			}
@@ -1255,52 +1604,106 @@ func (m *MemoryTimeSeries) memoryReportStats(userID int32, from, mid, to time.Ti
 	}
 
 	for _, log := range m.verifyLogs {
-		if log.UserID == userID && !log.Timestamp.Before(from) && log.Timestamp.Before(to) {
-			key := propKey{PropertyID: log.PropertyID, OrgID: log.OrgID}
-			if counts[key] == nil {
-				counts[key] = &propCounts{}
-			}
-			if !log.Timestamp.Before(mid) {
-				counts[key].CurrentVerifies++
-			} else {
-				counts[key].PrevVerifies++
-			}
+		if log.UserID != userID || log.Timestamp.Before(mid) || !log.Timestamp.Before(to) {
+			continue
+		}
+		key := candidateKey{
+			propKey:   propKey{PropertyID: log.PropertyID, OrgID: log.OrgID},
+			Timestamp: dayStart(log.Timestamp),
+		}
+		if candidates[key] == nil {
+			candidates[key] = &candidateCounts{}
+		}
+		candidates[key].Verifies++
+		if log.Status != 0 {
+			candidates[key].FailedVerifies++
 		}
 	}
 
 	stats := &common.UserReportStats{}
 	for key, c := range counts {
+		if c.CurrentRequests == 0 {
+			continue
+		}
 		stats.Properties = append(stats.Properties, &common.UserReportPropertyStat{
 			PropertyID:      key.PropertyID,
 			OrgID:           key.OrgID,
 			CurrentRequests: c.CurrentRequests,
 			PrevRequests:    c.PrevRequests,
-			CurrentVerifies: c.CurrentVerifies,
-			PrevVerifies:    c.PrevVerifies,
 		})
-		stats.TotalCurrentRequests += c.CurrentRequests
-		stats.TotalPrevRequests += c.PrevRequests
-		stats.TotalCurrentVerifies += c.CurrentVerifies
-		stats.TotalPrevVerifies += c.PrevVerifies
 	}
 
 	sort.Slice(stats.Properties, func(i, j int) bool {
-		return stats.Properties[i].CurrentRequests > stats.Properties[j].CurrentRequests
+		if stats.Properties[i].CurrentRequests != stats.Properties[j].CurrentRequests {
+			return stats.Properties[i].CurrentRequests > stats.Properties[j].CurrentRequests
+		}
+		if stats.Properties[i].PropertyID != stats.Properties[j].PropertyID {
+			return stats.Properties[i].PropertyID < stats.Properties[j].PropertyID
+		}
+		return stats.Properties[i].OrgID < stats.Properties[j].OrgID
 	})
+	if len(stats.Properties) > options.TopPropertiesLimit {
+		stats.Properties = stats.Properties[:options.TopPropertiesLimit]
+	}
 
-	return stats
+	for key, counts := range candidates {
+		requestRatio := float64(counts.Requests) / float64(max(counts.Verifies, 1))
+		failureRatio := float64(counts.FailedVerifies) / float64(max(counts.Requests, 1))
+		ratio := 0.0
+		if counts.Requests >= options.ProtectionMinimumDominantCount && requestRatio > options.ProtectionRatioThreshold {
+			ratio = requestRatio
+		}
+		if counts.FailedVerifies >= options.ProtectionMinimumDominantCount && failureRatio > options.ProtectionRatioThreshold && failureRatio > ratio {
+			ratio = failureRatio
+		}
+		if ratio == 0 {
+			continue
+		}
+		stats.ProtectionCandidates = append(stats.ProtectionCandidates, &common.UserReportProtectionCandidate{
+			PropertyID:     key.PropertyID,
+			OrgID:          key.OrgID,
+			Timestamp:      key.Timestamp,
+			Requests:       counts.Requests,
+			Verifies:       counts.Verifies,
+			FailedVerifies: counts.FailedVerifies,
+			Ratio:          ratio,
+		})
+	}
+	sort.Slice(stats.ProtectionCandidates, func(i, j int) bool {
+		left, right := stats.ProtectionCandidates[i], stats.ProtectionCandidates[j]
+		if left.Ratio != right.Ratio {
+			return left.Ratio > right.Ratio
+		}
+		leftDominant := max(left.Requests, left.FailedVerifies)
+		rightDominant := max(right.Requests, right.FailedVerifies)
+		if leftDominant != rightDominant {
+			return leftDominant > rightDominant
+		}
+		if left.PropertyID != right.PropertyID {
+			return left.PropertyID < right.PropertyID
+		}
+		if left.OrgID != right.OrgID {
+			return left.OrgID < right.OrgID
+		}
+		return left.Timestamp.Before(right.Timestamp)
+	})
+	if len(stats.ProtectionCandidates) > options.ProtectionCandidatesLimit {
+		stats.ProtectionCandidates = stats.ProtectionCandidates[:options.ProtectionCandidatesLimit]
+	}
+
+	return stats, nil
 }
 
-func (m *MemoryTimeSeries) RetrieveWeeklyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
+func (m *MemoryTimeSeries) RetrieveWeeklyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time, options common.UserReportOptions) (*common.UserReportStats, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.memoryReportStats(userID, from, mid, to), nil
+	return m.memoryReportStats(userID, from, mid, to, options)
 }
 
-func (m *MemoryTimeSeries) RetrieveMonthlyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
+func (m *MemoryTimeSeries) RetrieveMonthlyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time, options common.UserReportOptions) (*common.UserReportStats, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.memoryReportStats(userID, from, mid, to), nil
+	return m.memoryReportStats(userID, from, mid, to, options)
 }
 
 func (m *MemoryTimeSeries) memoryFormsReportStats(userID int32, from, mid, to time.Time) *common.UserFormsReportStats {

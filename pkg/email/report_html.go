@@ -12,6 +12,15 @@ type PropertyStat struct {
 	Alternate bool
 }
 
+type ProtectionHighlight struct {
+	Name      string
+	Link      string
+	Date      string
+	Requests  uint64
+	Verifies  uint64
+	Alternate bool
+}
+
 type FormStat struct {
 	Name      string
 	URL       string
@@ -36,6 +45,7 @@ type UsageReportContext struct {
 	VerificationRate       float64
 	AccountLimit           uint64
 	TopProperties          []*PropertyStat
+	ProtectionHighlights   []*ProtectionHighlight
 	TotalFormSubmissions   uint64
 	TotalFormErrors        uint64
 	PrevFormSubmissions    uint64
@@ -124,6 +134,33 @@ const (
                 <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .FormErrorRate}}%</span></td>
                 <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .FormErrorRateChange 0.0}}color:#22883e{{else if lt .FormErrorRateChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .FormErrorRateChange 0.0}}+{{end}}{{printf "%.1f" .FormErrorRateChange}}%</span></td>
               </tr>
+            </table>
+            {{- end}}
+            {{- if .ProtectionHighlights}}
+            <p style="font-size:16px;line-height:26px;margin:16px 0">Protection highlights</p>
+            <table border="0" cellpadding="0" cellspacing="0" style="margin:16px 0 24px;border-collapse:collapse;width:100%">
+              <tr>
+                <th scope="col" style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;color:#000000;font-weight:bold;text-align:left">Property</th>
+                <th scope="col" style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;color:#000000;font-weight:bold;text-align:left">Date (UTC)</th>
+                <th scope="col" style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;color:#000000;font-weight:bold;text-align:right">Puzzles requested</th>
+                <th scope="col" style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;color:#000000;font-weight:bold;text-align:right">Verification attempts</th>
+              </tr>
+              {{- range .ProtectionHighlights}}
+              <tr{{if .Alternate}} style="background-color:#f9f9f9"{{end}}>
+                <td style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;text-align:left" title="{{.Name}}">
+                  {{if .Link}}
+                  <a href="{{.Link}}" style="color:#000000;text-decoration:none">
+                    {{truncate .Name 24}} <span style="font-size:12px">&#8599;</span>
+                  </a>
+                  {{else}}
+                  {{truncate .Name 24}}
+                  {{end}}
+                </td>
+                <td style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;text-align:left;white-space:nowrap">{{.Date}}</td>
+                <td style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Requests | humanize}}</span></td>
+                <td style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Verifies | humanize}}</span></td>
+              </tr>
+              {{- end}}
             </table>
             {{- end}}
             {{- if .TopProperties}}
@@ -216,6 +253,13 @@ Account Limit: {{.AccountLimit}}
 Total Submissions: {{.TotalFormSubmissions}} ({{if gt .FormSubmissionsChange 0.0}}+{{end}}{{printf "%.1f" .FormSubmissionsChange}}%)
 Total Errors: {{.TotalFormErrors}} ({{if gt .FormErrorsChange 0.0}}+{{end}}{{printf "%.1f" .FormErrorsChange}}%)
 Error Rate: {{printf "%.1f" .FormErrorRate}}% ({{if gt .FormErrorRateChange 0.0}}+{{end}}{{printf "%.1f" .FormErrorRateChange}}%)
+{{- end}}
+{{- if .ProtectionHighlights}}
+
+Protection highlights
+{{- range .ProtectionHighlights}}
+  - {{.Name}} | {{.Date}} UTC | {{.Requests}} puzzles requested | {{.Verifies}} verification attempts{{if .Link}} | {{.Link}}{{end}}
+{{- end}}
 {{- end}}
 {{- if .TopProperties}}
 

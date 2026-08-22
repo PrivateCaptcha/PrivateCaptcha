@@ -211,6 +211,9 @@ func TestEmailTemplates(t *testing.T) {
 				{Name: "Main Site", Domain: "example.com", Count: 800, Percent: 64.8, Change: 14.3},
 				{Name: "Blog", Domain: "blog.example.com", Count: 434, Percent: 35.2, Change: 8.5, Alternate: true},
 			},
+			ProtectionHighlights: []*ProtectionHighlight{
+				{Name: "Checkout", Link: "https://portal.privatecaptcha.com/org/abc/property/def", Date: "2026-08-14", Requests: 50, Verifies: 250},
+			},
 			TopForms: []*FormStat{
 				{Name: "Contact", URL: "https://hooks.example.com/contact", Count: 80, Percent: 60.0, Change: 10.0},
 				{Name: "Support", URL: "https://hooks.example.com/support", Count: 54, Percent: 40.0, Change: -5.0, Alternate: true},
