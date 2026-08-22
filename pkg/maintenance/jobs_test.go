@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -114,6 +115,39 @@ func (j *slowOneOffJob) wasCancelled() bool {
 
 func (j *slowOneOffJob) wasStarted() bool {
 	return atomic.LoadInt32(&j.started) == 1
+}
+
+type stubOnDemandJobParams struct {
+	Value string `json:"value"`
+}
+
+type onDemandJobExecution struct {
+	service string
+	value   string
+}
+
+type stubOnDemandJob struct {
+	executed  chan onDemandJobExecution
+	cancelled chan struct{}
+}
+
+var _ common.OnDemandJob = (*stubOnDemandJob)(nil)
+
+func (j *stubOnDemandJob) Name() string {
+	return "stubOnDemandJob"
+}
+
+func (j *stubOnDemandJob) NewParams() any {
+	return &stubOnDemandJobParams{}
+}
+
+func (j *stubOnDemandJob) RunOnce(ctx context.Context, params any) error {
+	jobParams := params.(*stubOnDemandJobParams)
+	service, _ := ctx.Value(common.ServiceContextKey).(string)
+	j.executed <- onDemandJobExecution{service: service, value: jobParams.Value}
+	<-ctx.Done()
+	close(j.cancelled)
+	return ctx.Err()
 }
 
 func TestOneOffJobExecution(t *testing.T) {
@@ -329,5 +363,81 @@ func TestOnDemandOneOffJobIgnoresStop(t *testing.T) {
 
 	if !stubJob.wasCancelled() {
 		t.Error("On-demand OneOffJob ignored Stop()")
+	}
+}
+
+func TestOnDemandJobExecution(t *testing.T) {
+	jobsManager := NewJobs(nil, 2)
+	defer jobsManager.Stop()
+	stubJob := &stubOnDemandJob{
+		executed:  make(chan onDemandJobExecution, 1),
+		cancelled: make(chan struct{}),
+	}
+	jobsManager.AddOnDemand(stubJob)
+
+	jobsManager.RunAll()
+	select {
+	case <-stubJob.executed:
+		t.Fatal("OnDemandJob was executed by RunAll")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	mux := http.NewServeMux()
+	jobsManager.Setup(mux, alice.New())
+	req := httptest.NewRequest(http.MethodPost, "/maintenance/ondemand/stubOnDemandJob", strings.NewReader(`{"value":"requested"}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", w.Code)
+	}
+	if body := w.Body.String(); body != "started" {
+		t.Fatalf("Expected body 'started', got '%s'", body)
+	}
+
+	select {
+	case execution := <-stubJob.executed:
+		if execution.value != "requested" {
+			t.Errorf("Expected parameter 'requested', got %q", execution.value)
+		}
+		if execution.service != "maintenance" {
+			t.Errorf("Expected maintenance service context, got %q", execution.service)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("OnDemandJob was not executed by HTTP handler")
+	}
+
+	jobsManager.Stop()
+	select {
+	case <-stubJob.cancelled:
+	case <-time.After(time.Second):
+		t.Fatal("OnDemandJob was not cancelled by Stop")
+	}
+}
+
+func TestOnDemandJobRejectsOversizedRequest(t *testing.T) {
+	jobsManager := NewJobs(nil, 2)
+	defer jobsManager.Stop()
+	stubJob := &stubOnDemandJob{
+		executed:  make(chan onDemandJobExecution, 1),
+		cancelled: make(chan struct{}),
+	}
+	jobsManager.AddOnDemand(stubJob)
+
+	mux := http.NewServeMux()
+	jobsManager.Setup(mux, alice.New())
+	body := strings.NewReader(`{"value":"requested"}` + strings.Repeat(" ", 256*1024))
+	req := httptest.NewRequest(http.MethodPost, "/maintenance/ondemand/stubOnDemandJob", body)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("Expected status 413, got %d", w.Code)
+	}
+
+	select {
+	case <-stubJob.executed:
+		t.Fatal("OnDemandJob was executed with an oversized request")
+	case <-time.After(50 * time.Millisecond):
 	}
 }

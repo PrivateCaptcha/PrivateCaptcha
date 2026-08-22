@@ -15,6 +15,12 @@ type OneOffJob interface {
 	RunOnce(ctx context.Context, params any) error
 }
 
+type OnDemandJob interface {
+	Name() string
+	NewParams() any
+	RunOnce(ctx context.Context, params any) error
+}
+
 type PeriodicJob interface {
 	NewParams() any
 	RunOnce(ctx context.Context, params any) error
@@ -74,6 +80,28 @@ func RunOneOffJob(ctx context.Context, j OneOffJob, params any) {
 	}
 
 	slog.DebugContext(ctx, "One-off job finished")
+}
+
+func RunOnDemandJob(ctx context.Context, j OnDemandJob, params any) {
+	if j == nil {
+		return
+	}
+
+	ctx = context.WithValue(ctx, TraceIDContextKey, j.Name())
+
+	defer func() {
+		if rvr := recover(); rvr != nil {
+			slog.ErrorContext(ctx, "On-demand job crashed", "panic", rvr, "stack", string(debug.Stack()))
+		}
+	}()
+
+	slog.DebugContext(ctx, "Running on-demand job")
+
+	if err := j.RunOnce(ctx, params); err != nil {
+		slog.ErrorContext(ctx, "On-demand job failed", ErrAttr(err))
+	}
+
+	slog.DebugContext(ctx, "On-demand job finished")
 }
 
 // safe wrapper (with recover()) over `go f()`

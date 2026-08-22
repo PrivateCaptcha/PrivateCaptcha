@@ -3,6 +3,7 @@ package maintenance
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -24,6 +25,7 @@ func NewJobs(store db.Implementor, concurrency int) *jobs {
 		store:        store,
 		periodicJobs: make([]common.PeriodicJob, 0),
 		oneOffJobs:   make([]common.OneOffJob, 0),
+		onDemandJobs: make([]common.OnDemandJob, 0),
 		sem:          semaphore.NewWeighted(int64(concurrency)),
 	}
 
@@ -37,6 +39,7 @@ type jobs struct {
 	store             db.Implementor
 	periodicJobs      []common.PeriodicJob
 	oneOffJobs        []common.OneOffJob
+	onDemandJobs      []common.OnDemandJob
 	maintenanceCancel context.CancelFunc
 	maintenanceCtx    context.Context
 	sem               *semaphore.Weighted
@@ -76,6 +79,14 @@ func (j *jobs) AddOneOff(job common.OneOffJob) {
 	j.oneOffJobs = append(j.oneOffJobs, job)
 }
 
+func (j *jobs) AddOnDemand(job common.OnDemandJob) {
+	if job == nil {
+		return
+	}
+
+	j.onDemandJobs = append(j.onDemandJobs, job)
+}
+
 // spawned jobs only share common cancellation context and are not exclusive
 func (j *jobs) Spawn(job common.PeriodicJob) {
 	if job == nil {
@@ -104,6 +115,7 @@ func (j *jobs) Setup(mux *http.ServeMux, middleware alice.Chain) {
 	const maxBytes = 256 * 1024
 	mux.Handle(http.MethodPost+" /maintenance/periodic/{job}", middleware.Then(http.MaxBytesHandler(http.HandlerFunc(j.handlePeriodicJob), maxBytes)))
 	mux.Handle(http.MethodPost+" /maintenance/oneoff/{job}", middleware.Then(http.MaxBytesHandler(http.HandlerFunc(j.handleOneoffJob), maxBytes)))
+	mux.Handle(http.MethodPost+" /maintenance/ondemand/{job}", middleware.Then(http.MaxBytesHandler(http.HandlerFunc(j.handleOnDemandJob), maxBytes)))
 }
 
 func (j *jobs) handlePeriodicJob(w http.ResponseWriter, r *http.Request) {
@@ -185,6 +197,51 @@ func (j *jobs) handleOneoffJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, _ = w.Write([]byte("started"))
+}
+
+func (j *jobs) handleOnDemandJob(w http.ResponseWriter, r *http.Request) {
+	jobName, err := common.StrPathArg(r, "job")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	slog.InfoContext(ctx, "Handling on-demand job launch", "job", jobName)
+
+	for _, job := range j.onDemandJobs {
+		if job.Name() != jobName {
+			continue
+		}
+
+		params := job.NewParams()
+		if r.Body != nil {
+			buf, err := io.ReadAll(r.Body)
+			if err != nil {
+				status := http.StatusBadRequest
+				var maxBytesErr *http.MaxBytesError
+				if errors.As(err, &maxBytesErr) {
+					status = http.StatusRequestEntityTooLarge
+				}
+				slog.ErrorContext(ctx, "Failed to read params", "job", jobName, common.ErrAttr(err))
+				http.Error(w, http.StatusText(status), status)
+				return
+			}
+			if len(buf) > 0 {
+				if err := json.Unmarshal(buf, params); err != nil {
+					slog.ErrorContext(ctx, "Failed to decode params", "job", jobName, common.ErrAttr(err))
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
+			}
+		}
+
+		go common.RunOnDemandJob(common.CopyTraceID(ctx, j.maintenanceCtx), job, params)
+		_, _ = w.Write([]byte("started"))
+		return
+	}
+
+	http.Error(w, fmt.Sprintf("job %v not found", jobName), http.StatusBadRequest)
 }
 
 func (j *jobs) Stop() {
