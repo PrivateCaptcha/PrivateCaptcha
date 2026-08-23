@@ -325,12 +325,14 @@
                     {{- if eq .Params.Tab 1 -}}
                     {{template "org-forms.html" .}}
                     {{- else if eq .Params.Tab 2 -}}
-                    {{template "org-members.html" .}}
+                    {{template "org-reports.html" .}}
                     {{- else if eq .Params.Tab 3 -}}
-                    {{template "org-settings.html" .}}
+                    {{template "org-members.html" .}}
                     {{- else if eq .Params.Tab 4 -}}
-                    {{template "org-rules.html" .}}
+                    {{template "org-settings.html" .}}
                     {{- else if eq .Params.Tab 5 -}}
+                    {{template "org-rules.html" .}}
+                    {{- else if eq .Params.Tab 6 -}}
                     {{template "org-auditlogs.html" .}}
                     {{- else -}}
                     {{template "org-dashboard.html" .}}

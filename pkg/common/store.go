@@ -64,6 +64,7 @@ type TimeSeriesStore interface {
 	RetrieveMonthlyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time, options UserReportOptions) (*UserReportStats, error)
 	RetrieveWeeklyFormsReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserFormsReportStats, error)
 	RetrieveMonthlyFormsReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserFormsReportStats, error)
+	RetrieveOrgStatsByPeriod(ctx context.Context, orgID int32, period TimePeriod, topPropertiesLimit int) (*OrgTimePeriodStats, error)
 	RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period TimePeriod) ([]*TimePeriodStat, error)
 	RetrieveFormStatsByPeriod(ctx context.Context, orgID, formID int32, period TimePeriod) ([]*FormSubmitStat, error)
 	RetrieveFailingForms(ctx context.Context, threshold, limit int) ([]*FailingFormCandidate, error)

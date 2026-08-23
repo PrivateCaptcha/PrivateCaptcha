@@ -328,6 +328,7 @@ const (
 	formAuditLogsCacheKeyPrefix
 	userFormsCountCacheKeyPrefix
 	orgSearchCacheKeyPrefix
+	orgStatsCacheKeyPrefix
 	// IMPORTANT: add new fields ONLY to the end
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
@@ -383,6 +384,7 @@ func init() {
 	cachePrefixToStrings[formAuditLogsCacheKeyPrefix] = "formAuditLogs/"
 	cachePrefixToStrings[userFormsCountCacheKeyPrefix] = "userFormsCount/"
 	cachePrefixToStrings[orgSearchCacheKeyPrefix] = "orgSearch/"
+	cachePrefixToStrings[orgStatsCacheKeyPrefix] = "orgStats/"
 
 	for i, v := range cachePrefixToStrings {
 		if len(v) == 0 {
@@ -420,6 +422,7 @@ func init() {
 	gob.Register([]*common.TimeCount{})
 	gob.Register([]*common.OrgTimeCount{})
 	gob.Register([]*common.TimePeriodStat{})
+	gob.Register(&common.OrgTimePeriodStats{})
 	gob.Register([]*common.FormSubmitStat{})
 	gob.Register([]*dbgen.GetFormAuditLogsRow{})
 }
@@ -533,6 +536,9 @@ func userAccountStatsCacheKey(userID int32, key string) CacheKey {
 }
 func propertyStatsCacheKey(propertyID int32, key string) CacheKey {
 	return CacheKey{Prefix: propertyStatsCacheKeyPrefix, IntValue: propertyID, StrValue: key}
+}
+func orgStatsCacheKey(orgID int32, key string) CacheKey {
+	return CacheKey{Prefix: orgStatsCacheKeyPrefix, IntValue: orgID, StrValue: key}
 }
 func FormStatsCacheKey(formID int32, key string) CacheKey {
 	return CacheKey{Prefix: formStatsCacheKeyPrefix, IntValue: formID, StrValue: key}

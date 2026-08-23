@@ -356,6 +356,13 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{"Previous", "Next"},
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.ReportsEndpoint},
+			template: orgReportsTemplate,
+			model: &portalBaseRenderContext{
+				CurrentOrg: stubOrg("123"),
+			},
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.MembersEndpoint},
 			template: orgMembersTemplate,
 			model: &orgMemberRenderContext{

@@ -2,6 +2,8 @@ package common
 
 import "time"
 
+const OrgStatsOtherPropertyID int32 = -1
+
 type TimePeriod int
 
 const (
@@ -30,6 +32,17 @@ type TimePeriodStat struct {
 	Timestamp     time.Time
 	RequestsCount int
 	VerifiesCount int
+}
+
+type OrgPropertyTimePeriodStat struct {
+	PropertyID    int32
+	Timestamp     time.Time
+	RequestsCount int
+}
+
+type OrgTimePeriodStats struct {
+	PropertyIDs []int32
+	Points      []*OrgPropertyTimePeriodStat
 }
 
 type FormSubmitStat struct {

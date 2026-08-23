@@ -139,6 +139,40 @@ func stubPropertyStatsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func stubOrgStatsHandler(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().UTC()
+	points := 24
+	timestamp := func(i int) time.Time { return now.Add(-time.Duration(i) * time.Hour) }
+	switch r.PathValue(common.ParamPeriod) {
+	case portal.PeriodEndpointWeek:
+		points = 28
+		timestamp = func(i int) time.Time { return now.Add(-time.Duration(i) * 6 * time.Hour) }
+	case portal.PeriodEndpointMonth:
+		points = 30
+		timestamp = func(i int) time.Time { return now.AddDate(0, 0, -i) }
+	case portal.PeriodEndpointYear:
+		points = 12
+		timestamp = func(i int) time.Time { return now.AddDate(0, -i, 0) }
+	}
+
+	seriesNames := []string{"Main Site", "Checkout", "Documentation", "Blog", "Support", "Others"}
+	series := make([]*portal.OrgStatsSeries, 0, len(seriesNames))
+	for index, name := range seriesNames {
+		series = append(series, &portal.OrgStatsSeries{Name: name, Index: index})
+	}
+
+	data := make([]*portal.OrgStatsPoint, 0, points*len(series))
+	for i := points - 1; i >= 0; i-- {
+		for index := range series {
+			data = append(data, &portal.OrgStatsPoint{
+				Date: timestamp(i).Unix(), Value: (points - i) * (index + 1), Series: index,
+			})
+		}
+	}
+
+	common.SendJSONResponse(r.Context(), w, &portal.OrgStatsResponse{Series: series, Data: data})
+}
+
 func stubFormStatsHandler(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	success := make([]*portal.FormStatsPoint, 0, 24)
@@ -274,7 +308,12 @@ func main() {
 		router.HandleFunc(p.Path, servePage(p))
 	}
 
-	// mock JSON endpoints for property stats, rule stats, and account stats
+	// mock JSON endpoints for organization, property, rule, and account stats
+	orgStatsPattern := fmt.Sprintf("/portal/%s/{%s}/%s/{%s}",
+		common.OrgEndpoint, common.ParamOrg,
+		common.StatsEndpoint, common.ParamPeriod)
+	router.HandleFunc(orgStatsPattern, stubOrgStatsHandler)
+
 	statsPattern := fmt.Sprintf("/portal/%s/{%s}/%s/{%s}/%s/{%s}",
 		common.OrgEndpoint, common.ParamOrg,
 		common.PropertyEndpoint, common.ParamProperty,
