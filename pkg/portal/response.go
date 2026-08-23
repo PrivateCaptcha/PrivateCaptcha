@@ -56,3 +56,7 @@ type PropertyRuleStatsPoint struct {
 type PropertyRuleStatsResponse struct {
 	Usage []*PropertyRuleStatsPoint `json:"usage"`
 }
+
+type OrgStatsPoint = AccountStatsPoint
+type OrgStatsSeries = AccountStatsSeries
+type OrgStatsResponse = AccountStatsResponse

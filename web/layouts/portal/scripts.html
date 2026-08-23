@@ -1,4 +1,5 @@
 {{define "scripts"}}
+<script defer src="{{$.Ctx.CDN}}/portal/js/d3.v7.min.js" type="text/javascript" charset="utf-8" crossorigin="anonymous"></script>
 <script defer src="{{$.Ctx.CDN}}/portal/js/alpine.persist.min.js" crossorigin="anonymous"></script>
 {{template "default-scripts.html" .}}
 <script type="text/javascript">
@@ -26,5 +27,362 @@ document.addEventListener('alpine:init', () => {
         }
     });
 });
+
+function orgChartComponent() {
+    const yTicksCount = 7;
+    const maxBarWidth = 7;
+    const legendItemWidth = 160;
+    const legendItemHeight = 20;
+    const legendPadding = 20;
+    const xAxisLabelHeight = 45;
+    const legendTextMaxLength = 18;
+    const legendTextWidth = 7;
+    const legendItemPadding = 26;
+    const legendItemGap = 16;
+    const legendLeftMargin = 16;
+    const backgroundColor = '#ecf0e7';
+    const grayColor = '#686868';
+    const seriesColors = [
+        '#188B8B',
+        '#3B82F6',
+        '#F59E0B',
+        '#10B981',
+        '#8B5CF6',
+        '#F97316',
+    ];
+    const legendMeasureContext = document.createElement('canvas').getContext('2d');
+    if (legendMeasureContext) {
+        legendMeasureContext.font = '14px sans-serif';
+    }
+    const weekdayFormat = d3.timeFormat('%a');
+    const monthlyFormat = d3.timeFormat('%b');
+
+    const hourlyTicks = function(date) {
+        const hour = date.getHours();
+        return hour === 0 ? weekdayFormat(date) : hour;
+    };
+    const dayTicks = function(date) {
+        const day = date.getDate();
+        return day === 1 ? monthlyFormat(date) : day;
+    };
+    const monthlyTicks = function(date) {
+        if (date.getDate() === 1 && date.getMonth() === 0) {
+            return date.getFullYear();
+        }
+        return monthlyFormat(date);
+    };
+    const yTickFormat = function(value) {
+        if (value >= 1000000000) {
+            return (value / 1000000000) + 'B';
+        }
+        if (value >= 1000000) {
+            return (value / 1000000) + 'M';
+        }
+        if (value >= 1000) {
+            return (value / 1000) + 'K';
+        }
+        return value;
+    };
+
+    const periodLength = {'24h': 1, '7d': 7, '30d': 30, '1y': 365};
+    const evenTicks = function(_, index) { return index % 2; };
+    const oddTicks = function(_, index) { return !(index % 2); };
+    const tickFilter = {'24h': evenTicks, '7d': evenTicks, '30d': evenTicks, '1y': oddTicks};
+    const tickFunction = {'24h': hourlyTicks, '7d': hourlyTicks, '30d': dayTicks, '1y': monthlyTicks};
+
+    const chartDimensions = function(element, bottom) {
+        const margin = {top: 20, right: 30, bottom: bottom, left: 30};
+        const rect = element.getBoundingClientRect();
+        return {
+            margin: margin,
+            width: rect.width - margin.left - margin.right,
+            height: rect.height - margin.top - margin.bottom,
+        };
+    };
+
+    const createSVG = function(element, dimensions) {
+        const selection = d3.select(element);
+        selection.selectAll('svg').remove();
+        return selection.append('svg')
+            .attr('width', dimensions.width + dimensions.margin.left + dimensions.margin.right)
+            .attr('height', dimensions.height + dimensions.margin.top + dimensions.margin.bottom)
+            .append('g')
+            .attr('class', 'charts')
+            .attr('transform', 'translate(' + dimensions.margin.left + ',' + dimensions.margin.top + ')');
+    };
+
+    const drawNoData = function(element, days) {
+        const dimensions = chartDimensions(element, 60);
+        const chart = createSVG(element, dimensions);
+        const x = d3.scaleTime()
+            .range([0, dimensions.width])
+            .domain([d3.timeDay.offset(new Date(), -days), new Date()]);
+        const y = d3.scaleLinear().range([dimensions.height, 0]);
+
+        chart.append('g')
+            .attr('transform', 'translate(0,' + dimensions.height + ')')
+            .call(d3.axisBottom(x))
+            .style('color', backgroundColor)
+            .style('stroke-width', 2)
+            .selectAll('text')
+            .style('text-anchor', 'end')
+            .style('fill', '#0e0f0e')
+            .attr('dx', '-.8em')
+            .attr('dy', '-.55em')
+            .attr('transform', 'rotate(-90)');
+
+        chart.append('g')
+            .call(d3.axisLeft(y).ticks(yTicksCount).tickSize(-dimensions.width).tickFormat(''))
+            .style('color', backgroundColor)
+            .selectAll('.domain').remove();
+
+        chart.append('text')
+            .attr('x', dimensions.width / 2)
+            .attr('y', dimensions.height / 2)
+            .attr('text-anchor', 'middle')
+            .text('No data available')
+            .style('font-size', '20px')
+            .style('fill', grayColor);
+    };
+
+    const setLegend = function(legend, item, color) {
+        legend.append('circle')
+            .attr('cx', -16)
+            .attr('cy', 0)
+            .attr('r', 6)
+            .style('fill', color);
+        legend.append('text')
+            .attr('dy', '.35em')
+            .text(item.displayName)
+            .style('text-anchor', 'start')
+            .style('font-size', '14px');
+        legend.append('title').text(item.name);
+    };
+
+    const buildLegendLayout = function(series, width) {
+        const truncationLength = legendTextMaxLength - 3;
+        const items = series.map(function(item) {
+            const displayName = item.name.length > legendTextMaxLength
+                ? item.name.slice(0, truncationLength) + '...'
+                : item.name;
+            const textWidth = legendMeasureContext
+                ? legendMeasureContext.measureText(displayName).width
+                : displayName.length * legendTextWidth;
+            return {
+                index: item.index,
+                name: item.name,
+                displayName: displayName,
+                width: Math.min(legendItemWidth, legendItemPadding + textWidth),
+            };
+        });
+
+        const rows = [];
+        let row = [];
+        let rowWidth = 0;
+        items.forEach(function(item) {
+            const gap = row.length > 0 ? legendItemGap : 0;
+            if (rowWidth > 0 && rowWidth + gap + item.width > width) {
+                rows.push(row);
+                row = [];
+                rowWidth = 0;
+            }
+            row.push(item);
+            rowWidth += gap + item.width;
+        });
+        if (row.length > 0) {
+            rows.push(row);
+        }
+
+        const layout = [];
+        rows.forEach(function(items, rowIndex) {
+            if (items.length === 1) {
+                const item = items[0];
+                const fullTextWidth = legendMeasureContext
+                    ? legendMeasureContext.measureText(item.name).width
+                    : item.name.length * legendTextWidth;
+                const itemWidth = legendItemPadding + fullTextWidth;
+                layout.push({
+                    ...item,
+                    displayName: item.name,
+                    width: itemWidth,
+                    x: Math.max(0, (width - itemWidth) / 2),
+                    y: rowIndex * legendItemHeight,
+                });
+                return;
+            }
+
+            const totalWidth = items.reduce(function(sum, item) { return sum + item.width; }, 0) +
+                Math.max(0, items.length - 1) * legendItemGap;
+            let offset = Math.max(0, (width - totalWidth) / 2);
+            items.forEach(function(item) {
+                layout.push({...item, x: offset, y: rowIndex * legendItemHeight});
+                offset += item.width + legendItemGap;
+            });
+        });
+
+        return {
+            layout: layout,
+            height: rows.length * legendItemHeight + legendPadding + xAxisLabelHeight,
+        };
+    };
+
+    const renderLegend = function(chart, layout, height, color) {
+        const legend = chart.append('g')
+            .attr('class', 'legendParent')
+            .attr('transform', 'translate(' + legendLeftMargin + ',' + (height + xAxisLabelHeight) + ')')
+            .selectAll('.legend-item')
+            .data(layout)
+            .enter()
+            .append('g')
+            .attr('class', 'legend-item')
+            .attr('transform', function(item) { return 'translate(' + item.x + ',' + item.y + ')'; });
+        legend.each(function(item) {
+            setLegend(d3.select(this), item, color(item.index.toString()));
+        });
+    };
+
+    const drawChart = function(element, data, formatTick, filterTick) {
+        const points = data.data;
+        const series = data.series;
+        points.forEach(function(point) { point.x = new Date(point.x * 1000); });
+
+        const margin = {top: 20, right: 30, bottom: 30, left: 30};
+        const rect = element.getBoundingClientRect();
+        const width = rect.width - margin.left - margin.right;
+        const legend = buildLegendLayout(series, width);
+        const height = rect.height - legend.height - margin.top - margin.bottom;
+
+        const selection = d3.select(element);
+        selection.selectAll('svg').remove();
+        const chart = selection.append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + legend.height + margin.top + margin.bottom)
+            .append('g')
+            .attr('class', 'charts')
+            .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+        const seriesKeys = series.map(function(item) { return item.index.toString(); });
+        const grouped = d3.group(points, function(point) { return point.x.getTime(); });
+        const chartData = Array.from(grouped, function(entry) {
+            const row = {x: new Date(Number(entry[0]))};
+            seriesKeys.forEach(function(key) { row[key] = 0; });
+            entry[1].forEach(function(point) { row[point.s.toString()] += point.y; });
+            return row;
+        }).sort(function(a, b) { return a.x - b.x; });
+
+        const totals = chartData.map(function(row) {
+            return seriesKeys.reduce(function(sum, key) { return sum + row[key]; }, 0);
+        });
+        const x = d3.scaleBand().rangeRound([0, width]).padding(0.1);
+        const y = d3.scaleLinear().range([height, 0]);
+        x.domain(chartData.map(function(row) { return row.x; }));
+        y.domain([0, (d3.max(totals) || 0) * 1.2]);
+
+        const xAxis = d3.axisBottom(x)
+            .tickValues(x.domain().filter(filterTick))
+            .tickFormat(formatTick);
+        const yAxis = d3.axisLeft(y).ticks(yTicksCount).tickFormat(yTickFormat).tickPadding(5);
+        const grid = chart.append('g')
+            .attr('class', 'grid')
+            .call(yAxis.tickSize(-width))
+            .style('color', backgroundColor);
+        grid.selectAll('text').style('color', grayColor);
+        grid.selectAll('.domain').remove();
+
+        const color = d3.scaleOrdinal().domain(seriesKeys).range(seriesColors);
+        const seriesNames = new Map(series.map(function(item) { return [item.index.toString(), item.name]; }));
+        const stack = d3.stack().keys(seriesKeys)(chartData);
+        const layers = chart.selectAll('.layer')
+            .data(stack)
+            .enter()
+            .append('g')
+            .attr('class', 'layer')
+            .attr('fill', function(layer) { return color(layer.key); });
+
+        layers.each(function(layer) {
+            const name = seriesNames.get(layer.key) || 'Property';
+            const barWidth = Math.min(x.bandwidth(), maxBarWidth);
+            d3.select(this).selectAll('rect')
+                .data(layer)
+                .enter()
+                .append('rect')
+                .attr('class', 'bar')
+                .attr('x', function(point) { return x(point.data.x) + (x.bandwidth() - barWidth) / 2; })
+                .attr('width', barWidth)
+                .attr('y', function(point) { return y(point[1]); })
+                .attr('height', function(point) {
+                    return point[1] - point[0] > 1e-6 ? y(point[0]) - y(point[1]) : 0;
+                })
+                .attr('opacity', 1)
+                .on('mouseover', function() { d3.select(this).attr('opacity', 0.8); })
+                .on('mouseout', function() { d3.select(this).attr('opacity', 1); })
+                .append('title')
+                .text(function(point) { return name + ': ' + (point[1] - point[0]); });
+        });
+
+        chart.append('g')
+            .attr('class', 'x axis')
+            .attr('transform', 'translate(0,' + height + ')')
+            .call(xAxis)
+            .style('color', backgroundColor)
+            .style('stroke-width', 2)
+            .selectAll('text')
+            .style('text-anchor', 'end')
+            .style('fill', '#0e0f0e')
+            .attr('dx', '-.8em')
+            .attr('dy', '-.55em')
+            .attr('transform', 'rotate(-90)');
+
+        renderLegend(chart, legend.layout, height, color);
+    };
+
+    return {
+        isLoading: false,
+        period: '24h',
+        totalRequests: 0,
+        async init() {
+            this.updateChart();
+        },
+        async fetchChartData(period, maxRetries = 3, baseDelay = 1000) {
+            const allowedPeriods = ['24h', '7d', '30d', '1y'];
+            const normalizedPeriod = allowedPeriods.includes(period) ? period : '24h';
+            this.isLoading = true;
+            try {
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    const response = await fetch('{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.Stats }}/' + encodeURIComponent(normalizedPeriod));
+                    if (response.ok) {
+                        return await response.json();
+                    }
+                    if (response.status === 429 || response.status === 503) {
+                        await new Promise(resolve => setTimeout(resolve, baseDelay * Math.pow(2, attempt - 1)));
+                        continue;
+                    }
+                    const errorText = await response.text();
+                    throw new Error(`Request failed (${response.status}): ${errorText || response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Error fetching organization chart data:', error);
+                return null;
+            } finally {
+                this.isLoading = false;
+            }
+        },
+        async updateChart() {
+            const data = await this.fetchChartData(this.period);
+            if (data && Array.isArray(data.data) && data.data.length > 0 &&
+                Array.isArray(data.series) && data.series.length > 0) {
+                drawChart(this.$refs.chart, data, tickFunction[this.period], tickFilter[this.period]);
+                const total = data.data.reduce(function(sum, point) { return sum + point.y; }, 0);
+                this.totalRequests = new Intl.NumberFormat('en', {
+                    notation: 'compact',
+                    compactDisplay: 'short',
+                }).format(total);
+            } else {
+                drawNoData(this.$refs.chart, periodLength[this.period]);
+                this.totalRequests = 0;
+            }
+        },
+    };
+}
 </script>
 {{end}}

@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -28,6 +29,7 @@ var (
 
 const (
 	orgDashboardTemplate          = "portal/org-dashboard.html"
+	orgReportsTemplate            = "portal/org-reports.html"
 	orgFormsListTemplate          = "portal/forms.html"
 	orgFormsTemplate              = "portal/org-forms.html"
 	orgPropertiesTemplate         = "portal/properties.html"
@@ -43,10 +45,12 @@ const (
 	orgUserCreatedAtFormat        = "02 Jan 2006"
 	portalPropertiesTabIndex      = 0
 	portalFormsTabIndex           = 1
-	portalMembersTabIndex         = 2
-	portalSettingsTabIndex        = 3
-	portalRulesTabIndex           = 4
-	portalEventsTabIndex          = 5
+	portalReportsTabIndex         = 2
+	portalMembersTabIndex         = 3
+	portalSettingsTabIndex        = 4
+	portalRulesTabIndex           = 5
+	portalEventsTabIndex          = 6
+	OrgStatsTopPropertiesLimit    = 5
 )
 
 type portalBaseRenderContext struct {
@@ -491,6 +495,9 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		} else {
 			derr = err
 		}
+	case common.ReportsEndpoint:
+		baseCtx.Tab = portalReportsTabIndex
+		model = baseCtx
 	case common.MembersEndpoint:
 		if vm, ae, err := s.createOrgMembersRenderContext(ctx, baseCtx, org, user); err == nil {
 			model = vm
@@ -612,6 +619,124 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (*ViewM
 	}
 
 	return &ViewModel{Model: renderCtx, View: orgDashboardTemplate, IsNew: true}, nil
+}
+
+func (s *Server) getOrgReports(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, level, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
+	}
+
+	renderCtx := s.createPortalTabBaseContext(org, user, portalReportsTabIndex)
+	return &ViewModel{Model: renderCtx, View: orgReportsTemplate, IsNew: true}, nil
+}
+
+func (s *Server) getOrgStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	org, level, err := s.Org(user, r)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
+	}
+
+	response, err := s.buildOrgStatsResponse(ctx, org, periodFromPath(ctx, r))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve organization stats", common.ErrAttr(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
+}
+
+func (s *Server) buildOrgStatsResponse(ctx context.Context, org *dbgen.Organization, period common.TimePeriod) (*OrgStatsResponse, error) {
+	stats, err := s.TimeSeries.RetrieveOrgStatsByPeriod(ctx, org.ID, period, OrgStatsTopPropertiesLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	propertyNames := make(map[int32]string, len(stats.PropertyIDs))
+	unresolved := make(map[int32]struct{}, len(stats.PropertyIDs))
+	for _, propertyID := range stats.PropertyIDs {
+		if propertyID == common.OrgStatsOtherPropertyID {
+			continue
+		}
+
+		property, err := s.Store.Impl().GetCachedPropertyByID(ctx, propertyID)
+		if err == nil && property.OrgID.Valid && property.OrgID.Int32 == org.ID && property.Name != "" {
+			propertyNames[propertyID] = property.Name
+			continue
+		}
+		unresolved[propertyID] = struct{}{}
+	}
+
+	if len(unresolved) > 0 {
+		if properties, err := s.Store.Impl().GetCachedOrgProperties(ctx, org.ID); err == nil {
+			for _, property := range properties {
+				if _, ok := unresolved[property.ID]; !ok || !property.OrgID.Valid || property.OrgID.Int32 != org.ID || property.Name == "" {
+					continue
+				}
+				propertyNames[property.ID] = property.Name
+				delete(unresolved, property.ID)
+			}
+		}
+	}
+
+	seriesIndex := make(map[int32]int, len(stats.PropertyIDs))
+	series := make([]*OrgStatsSeries, 0, len(stats.PropertyIDs))
+	for _, propertyID := range stats.PropertyIDs {
+		name := "Others"
+		if propertyID != common.OrgStatsOtherPropertyID {
+			name = propertyNames[propertyID]
+			if name == "" {
+				name = fmt.Sprintf("Property %s", s.IDHasher.Encrypt(int(propertyID)))
+			}
+		}
+
+		index := len(series)
+		seriesIndex[propertyID] = index
+		series = append(series, &OrgStatsSeries{Name: name, Index: index})
+	}
+
+	data := make([]*OrgStatsPoint, 0, len(stats.Points))
+	anyNonZero := false
+	for _, point := range stats.Points {
+		index, ok := seriesIndex[point.PropertyID]
+		if !ok {
+			slog.WarnContext(ctx, "Skipping organization stats point without series mapping", "orgID", org.ID, "propertyID", point.PropertyID)
+			continue
+		}
+		if point.RequestsCount > 0 {
+			anyNonZero = true
+		}
+		data = append(data, &OrgStatsPoint{Date: point.Timestamp.Unix(), Value: point.RequestsCount, Series: index})
+	}
+
+	if !anyNonZero {
+		series = []*OrgStatsSeries{}
+		data = []*OrgStatsPoint{}
+	}
+
+	return &OrgStatsResponse{Series: series, Data: data}, nil
 }
 
 func (s *Server) getOrgFormsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {

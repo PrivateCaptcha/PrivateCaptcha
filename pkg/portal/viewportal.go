@@ -394,6 +394,14 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
+			Path:     p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.ReportsEndpoint),
+			Template: orgReportsTemplate,
+			ModelFunc: func(_ AlertRenderContext) interface{} {
+				ctx := baseCtx(portalReportsTabIndex)
+				return ctx
+			},
+		},
+		{
 			Path:       p(common.OrgEndpoint, orgArg, common.RulesEndpoint, common.NewEndpoint),
 			Template:   ruleTemplate,
 			ShowInList: true,

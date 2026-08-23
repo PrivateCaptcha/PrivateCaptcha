@@ -841,6 +841,188 @@ func (ts *TimeSeriesDB) RetrieveMonthlyFormsReportStats(ctx context.Context, use
 	return stats, nil
 }
 
+func (ts *TimeSeriesDB) RetrieveOrgStatsByPeriod(ctx context.Context, orgID int32, period common.TimePeriod, topPropertiesLimit int) (*common.OrgTimePeriodStats, error) {
+	if !ts.IsAvailable() {
+		return nil, ErrMaintenance
+	}
+	if topPropertiesLimit <= 0 {
+		return nil, ErrInvalidInput
+	}
+
+	tnow := time.Now().UTC()
+	var timeFrom time.Time
+	var requestsTable string
+	var verificationsTable string
+	var timeFunction string
+	var cacheKey *CacheKey
+
+	switch period {
+	case common.TimePeriodToday:
+		timeFrom = tnow.AddDate(0, 0, -1).Truncate(time.Hour)
+		requestsTable = AccessLogTableName1h
+		verificationsTable = VerifyLogTable1h
+		timeFunction = "toStartOfHour(%s)"
+		cacheKey = new(CacheKey)
+		*cacheKey = orgStatsCacheKey(orgID, fmt.Sprintf("%s/%d", timeFrom.Format(time.DateTime), topPropertiesLimit))
+	case common.TimePeriodWeek:
+		timeFrom = tnow.AddDate(0, 0, -7).Truncate(6 * time.Hour)
+		requestsTable = AccessLogTableName1d
+		verificationsTable = VerifyLogTable1d
+		timeFunction = "toStartOfInterval(%s, INTERVAL 6 HOUR)"
+	case common.TimePeriodMonth:
+		timeFrom = tnow.AddDate(0, -1, 0).Truncate(24 * time.Hour)
+		requestsTable = AccessLogTableName1d
+		verificationsTable = VerifyLogTable1d
+		timeFunction = "toStartOfDay(%s)"
+	case common.TimePeriodYear:
+		timeFrom = tnow.AddDate(-1, 0, 0).Truncate(24 * time.Hour)
+		requestsTable = AccessLogTableName1d
+		verificationsTable = VerifyLogTable1d
+		timeFunction = "toStartOfMonth(%s)"
+	default:
+		return nil, ErrUnsupportedPeriod
+	}
+
+	if cacheKey != nil {
+		if stats, err := FetchCachedOne[common.OrgTimePeriodStats](ctx, ts.Cache, *cacheKey); err == nil && len(stats.PropertyIDs) > 0 {
+			slog.DebugContext(ctx, "Organization stats were cached", "orgID", orgID, "key", *cacheKey, "series", len(stats.PropertyIDs), "points", len(stats.Points))
+			return stats, nil
+		}
+	}
+
+	query := fmt.Sprintf(`WITH property_volume AS
+(
+    SELECT property_id, sum(volume) AS volume
+    FROM
+    (
+        SELECT property_id, sum(count) AS volume
+        FROM %s FINAL
+        WHERE org_id = {org_id:UInt32} AND timestamp >= {timestamp:DateTime}
+        GROUP BY property_id
+
+        UNION ALL
+
+        SELECT property_id, sum(success_count + failure_count) AS volume
+        FROM %s FINAL
+        WHERE org_id = {org_id:UInt32} AND timestamp >= {timestamp:DateTime}
+        GROUP BY property_id
+    )
+    GROUP BY property_id
+),
+ranked_properties AS
+(
+    SELECT
+        property_id,
+        row_number() OVER (ORDER BY volume DESC, property_id ASC) AS series_rank
+    FROM property_volume
+    WHERE volume > 0
+),
+top_properties AS
+(
+    SELECT property_id, series_rank
+    FROM ranked_properties
+    WHERE series_rank <= {top_properties_limit:UInt32}
+),
+request_points AS
+(
+    SELECT
+        if(property_id IN (SELECT property_id FROM top_properties), toInt64(property_id), toInt64(-1)) AS grouped_property_id,
+        toDateTime(%s) AS agg_time,
+        sum(count) AS requests_count
+    FROM %s FINAL
+    WHERE org_id = {org_id:UInt32} AND timestamp >= {timestamp:DateTime}
+    GROUP BY grouped_property_id, agg_time
+)
+SELECT row_type, property_id, series_rank, agg_time, requests_count
+FROM
+(
+    SELECT
+        toUInt8(1) AS row_type,
+        toInt64(property_id) AS property_id,
+        toUInt64(series_rank) AS series_rank,
+        toDateTime(0) AS agg_time,
+        toUInt64(0) AS requests_count
+    FROM top_properties
+
+    UNION ALL
+
+    SELECT
+        toUInt8(1) AS row_type,
+        toInt64(-1) AS property_id,
+        toUInt64({top_properties_limit:UInt32} + 1) AS series_rank,
+        toDateTime(0) AS agg_time,
+        toUInt64(0) AS requests_count
+    FROM (SELECT count() AS property_count FROM ranked_properties)
+    WHERE property_count > {top_properties_limit:UInt32}
+
+    UNION ALL
+
+    SELECT
+        toUInt8(2) AS row_type,
+        grouped_property_id AS property_id,
+        toUInt64(0) AS series_rank,
+        agg_time,
+        requests_count
+    FROM request_points
+)
+ORDER BY row_type, series_rank, property_id, agg_time
+SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save', query_cache_tag = 'org_stats_period'`,
+		requestsTable,
+		verificationsTable,
+		fmt.Sprintf(timeFunction, "timestamp"),
+		requestsTable)
+
+	rows, err := ts.Clickhouse.Query(query,
+		clickhouse.Named("org_id", strconv.Itoa(int(orgID))),
+		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)),
+		clickhouse.Named("top_properties_limit", uint32(topPropertiesLimit)))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to query organization stats", common.ErrAttr(err))
+		return nil, err
+	}
+	defer rows.Close()
+
+	stats := &common.OrgTimePeriodStats{
+		PropertyIDs: make([]int32, 0, topPropertiesLimit+1),
+		Points:      make([]*common.OrgPropertyTimePeriodStat, 0),
+	}
+	for rows.Next() {
+		var rowType uint8
+		var propertyID int32
+		var seriesRank uint64
+		var timestamp time.Time
+		var requestsCount int
+		if err := rows.Scan(&rowType, &propertyID, &seriesRank, &timestamp, &requestsCount); err != nil {
+			slog.ErrorContext(ctx, "Failed to read organization stats row", common.ErrAttr(err))
+			return nil, err
+		}
+
+		switch rowType {
+		case 1:
+			stats.PropertyIDs = append(stats.PropertyIDs, propertyID)
+		case 2:
+			stats.Points = append(stats.Points, &common.OrgPropertyTimePeriodStat{
+				PropertyID: propertyID, Timestamp: timestamp, RequestsCount: requestsCount,
+			})
+		default:
+			return nil, fmt.Errorf("unknown organization stats row type %d", rowType)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		slog.ErrorContext(ctx, "Row iteration error in organization stats query", common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.InfoContext(ctx, "Fetched organization stats", "series", len(stats.PropertyIDs), "points", len(stats.Points), "orgID", orgID, "from", timeFrom, "period", period)
+
+	if cacheKey != nil {
+		const orgStatsCacheTTL = 5 * time.Minute
+		_ = ts.Cache.SetEx(ctx, *cacheKey, stats, orgStatsCacheTTL, statsRefresh)
+	}
+
+	return stats, nil
+}
+
 func (ts *TimeSeriesDB) RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
@@ -1803,6 +1985,109 @@ func (m *MemoryTimeSeries) RetrieveMonthlyFormsReportStats(ctx context.Context, 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.memoryFormsReportStats(userID, from, mid, to), nil
+}
+
+func (m *MemoryTimeSeries) RetrieveOrgStatsByPeriod(ctx context.Context, orgID int32, period common.TimePeriod, topPropertiesLimit int) (*common.OrgTimePeriodStats, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if topPropertiesLimit <= 0 {
+		return nil, ErrInvalidInput
+	}
+
+	from := getStartTime(period)
+	var truncate func(time.Time) time.Time
+	switch period {
+	case common.TimePeriodToday:
+		truncate = func(t time.Time) time.Time { return t.Truncate(time.Hour) }
+	case common.TimePeriodWeek, common.TimePeriodMonth:
+		truncate = func(t time.Time) time.Time {
+			year, month, day := t.Date()
+			return time.Date(year, month, day, 0, 0, 0, 0, t.Location())
+		}
+	case common.TimePeriodYear:
+		truncate = func(t time.Time) time.Time {
+			year, month, _ := t.Date()
+			return time.Date(year, month, 1, 0, 0, 0, 0, t.Location())
+		}
+	default:
+		return nil, ErrUnsupportedPeriod
+	}
+
+	propertyVolumes := make(map[int32]int)
+	for _, log := range m.accessLogs {
+		if log.OrgID == orgID && !log.Timestamp.Before(from) {
+			propertyVolumes[log.PropertyID]++
+		}
+	}
+	for _, log := range m.verifyLogs {
+		if log.OrgID == orgID && !log.Timestamp.Before(from) {
+			propertyVolumes[log.PropertyID]++
+		}
+	}
+
+	type propertyVolume struct {
+		propertyID int32
+		volume     int
+	}
+	ranked := make([]propertyVolume, 0, len(propertyVolumes))
+	for propertyID, volume := range propertyVolumes {
+		ranked = append(ranked, propertyVolume{propertyID: propertyID, volume: volume})
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].volume != ranked[j].volume {
+			return ranked[i].volume > ranked[j].volume
+		}
+		return ranked[i].propertyID < ranked[j].propertyID
+	})
+
+	stats := &common.OrgTimePeriodStats{
+		PropertyIDs: make([]int32, 0, min(len(ranked), topPropertiesLimit)+1),
+		Points:      make([]*common.OrgPropertyTimePeriodStat, 0),
+	}
+	topPropertyIDs := make(map[int32]struct{}, topPropertiesLimit)
+	for i := 0; i < min(len(ranked), topPropertiesLimit); i++ {
+		propertyID := ranked[i].propertyID
+		stats.PropertyIDs = append(stats.PropertyIDs, propertyID)
+		topPropertyIDs[propertyID] = struct{}{}
+	}
+	if len(ranked) > topPropertiesLimit {
+		stats.PropertyIDs = append(stats.PropertyIDs, common.OrgStatsOtherPropertyID)
+	}
+
+	type propertyTime struct {
+		propertyID int32
+		timestamp  time.Time
+	}
+	counts := make(map[propertyTime]int)
+	for _, log := range m.accessLogs {
+		if log.OrgID != orgID || log.Timestamp.Before(from) {
+			continue
+		}
+		propertyID := log.PropertyID
+		if _, ok := topPropertyIDs[propertyID]; !ok {
+			propertyID = common.OrgStatsOtherPropertyID
+		}
+		counts[propertyTime{propertyID: propertyID, timestamp: truncate(log.Timestamp)}]++
+	}
+
+	seriesOrder := make(map[int32]int, len(stats.PropertyIDs))
+	for index, propertyID := range stats.PropertyIDs {
+		seriesOrder[propertyID] = index
+	}
+	stats.Points = make([]*common.OrgPropertyTimePeriodStat, 0, len(counts))
+	for key, count := range counts {
+		stats.Points = append(stats.Points, &common.OrgPropertyTimePeriodStat{
+			PropertyID: key.propertyID, Timestamp: key.timestamp, RequestsCount: count,
+		})
+	}
+	sort.Slice(stats.Points, func(i, j int) bool {
+		if stats.Points[i].Timestamp.Equal(stats.Points[j].Timestamp) {
+			return seriesOrder[stats.Points[i].PropertyID] < seriesOrder[stats.Points[j].PropertyID]
+		}
+		return stats.Points[i].Timestamp.Before(stats.Points[j].Timestamp)
+	})
+
+	return stats, nil
 }
 
 func (m *MemoryTimeSeries) RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {

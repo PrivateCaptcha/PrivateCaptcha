@@ -2,6 +2,7 @@ package portal
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -19,6 +21,28 @@ import (
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/jackc/pgx/v5/pgconn"
 )
+
+func orgStatsSuite(t *testing.T, srv *http.ServeMux, cookie *http.Cookie, orgID, period string) *OrgStatsResponse {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/stats/%s", orgID, period), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Unexpected status code %v for period %s", resp.StatusCode, period)
+	}
+
+	var stats OrgStatsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+		t.Fatalf("Failed to decode response for period %s: %v", period, err)
+	}
+
+	return &stats
+}
 
 type transferOrgSubscriptionLimitsStub struct {
 	db.StubSubscriptionLimits
@@ -375,6 +399,96 @@ func TestGetOrgDashboard(t *testing.T) {
 
 	if renderCtx.CurrentOrg.Name != org.Name {
 		t.Errorf("Expected org name to be %s, got %s", org.Name, renderCtx.CurrentOrg.Name)
+	}
+}
+
+func TestGetOrgStats(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	properties := make([]*dbgen.Property, 0, OrgStatsTopPropertiesLimit+2)
+	for i := 0; i < OrgStatsTopPropertiesLimit+2; i++ {
+		params := db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("property-%d.example.com", i+1))
+		params.Name = fmt.Sprintf("Property %d", i+1)
+		property, _, err := server.Store.Impl().CreateNewProperty(ctx, params, org)
+		if err != nil {
+			t.Fatalf("Failed to create property %d: %v", i+1, err)
+		}
+		properties = append(properties, property)
+	}
+
+	now := time.Now()
+	accessRecords := make([]*common.AccessRecord, 0, 28)
+	verifyRecords := make([]*common.VerifyRecord, 0, 50)
+	var puzzleID uint64
+	for i, property := range properties {
+		for range i + 1 {
+			accessRecords = append(accessRecords, &common.AccessRecord{
+				UserID: user.ID, OrgID: org.ID, PropertyID: property.ID, Timestamp: now.Add(-time.Hour),
+			})
+		}
+		if i < OrgStatsTopPropertiesLimit {
+			for range 10 {
+				puzzleID++
+				verifyRecords = append(verifyRecords, &common.VerifyRecord{
+					UserID: user.ID, OrgID: org.ID, PropertyID: property.ID, PuzzleID: puzzleID, Timestamp: now.Add(-time.Hour),
+				})
+			}
+		}
+	}
+
+	if err := timeSeries.WriteAccessLogBatch(ctx, accessRecords); err != nil {
+		t.Fatalf("Failed to write access log batch: %v", err)
+	}
+	if err := timeSeries.WriteVerifyLogBatch(ctx, verifyRecords); err != nil {
+		t.Fatalf("Failed to write verification log batch: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	expectedNames := []string{"Property 5", "Property 4", "Property 3", "Property 2", "Property 1", "Others"}
+	expectedTotals := []int{5, 4, 3, 2, 1, 13}
+	for _, period := range []string{PeriodEndpointToday, PeriodEndpointWeek, PeriodEndpointMonth, PeriodEndpointYear} {
+		t.Run(period, func(t *testing.T) {
+			stats := orgStatsSuite(t, srv, cookie, orgID, period)
+			if len(stats.Series) != len(expectedNames) {
+				t.Fatalf("Expected %d series for period %s, got %d", len(expectedNames), period, len(stats.Series))
+			}
+
+			for i, series := range stats.Series {
+				if series.Name != expectedNames[i] || series.Index != i {
+					t.Errorf("Unexpected series %d for period %s: got %#v", i, period, series)
+				}
+			}
+
+			totals := make([]int, len(expectedTotals))
+			for _, point := range stats.Data {
+				if point.Series < 0 || point.Series >= len(totals) {
+					t.Fatalf("Unexpected series index %d for period %s", point.Series, period)
+				}
+				totals[point.Series] += point.Value
+			}
+			for i, total := range totals {
+				if total != expectedTotals[i] {
+					t.Errorf("Expected %d requests for series %q and period %s, got %d", expectedTotals[i], expectedNames[i], period, total)
+				}
+			}
+		})
 	}
 }
 

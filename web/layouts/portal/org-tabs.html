@@ -12,6 +12,7 @@
             hx-swap="innerHTML">
             <option value="{{ $root.Const.DashboardEndpoint }}" {{ if eq $active "dashboard" }}selected{{ end }}>Properties</option>
             <option value="{{ $root.Const.FormsEndpoint }}" {{ if eq $active "forms" }}selected{{ end }}>Forms</option>
+            <option value="{{ $root.Const.ReportsEndpoint }}" {{ if eq $active "reports" }}selected{{ end }}>Reports</option>
             {{ if eq $root.Params.CurrentOrg.Level $root.Const.OrgLevelOwner }}
             <option value="{{ $root.Const.MembersEndpoint }}" {{ if eq $active "members" }}selected{{ end }}>Members</option>
             {{ end }}
@@ -56,6 +57,15 @@
                     {{ end }}
                     class="pc-tab {{ if eq $active "forms" }}pc-tab-active{{ end }}"
                     {{ if eq $active "forms" }}aria-current="page"{{ end }}>Forms</a>
+                <a href="#"
+                    {{ if ne $active "reports" }}
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $root.Const.OrgEndpoint $root.Params.CurrentOrg.ID $root.Const.TabEndpoint $root.Const.ReportsEndpoint }}"
+                    hx-push-url="{{ partsURL $root.Const.OrgEndpoint $root.Params.CurrentOrg.ID }}?{{ $root.Const.Tab }}={{$root.Const.ReportsEndpoint}}"
+                    {{ end }}
+                    class="pc-tab {{ if eq $active "reports" }}pc-tab-active{{ end }}"
+                    {{ if eq $active "reports" }}aria-current="page"{{ end }}>Reports</a>
                 {{ if eq $root.Params.CurrentOrg.Level $root.Const.OrgLevelOwner }}
                 <a href="#"
                     {{ if ne $active "members" }}
