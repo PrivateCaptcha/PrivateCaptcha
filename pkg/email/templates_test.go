@@ -156,6 +156,45 @@ func TestUsageReportTemplateTopFormsAfterProperties(t *testing.T) {
 	}
 }
 
+func TestUsageReportTemplateProtectionFailureCounts(t *testing.T) {
+	ctx := t.Context()
+	data := struct {
+		UsageReportContext
+		PortalURL   string
+		CurrentYear int
+		CDNURL      string
+	}{
+		UsageReportContext: UsageReportContext{
+			Period:        "weekly",
+			DashboardPath: "settings?tab=usage",
+			SecurityEvents: []*SecurityEventStat{
+				{Name: "Request-heavy", Verifies: 100},
+				{Name: "Failure-heavy", Verifies: 250, FailedVerifies: 200},
+			},
+		},
+		PortalURL:   "https://portal.privatecaptcha.com",
+		CurrentYear: time.Now().Year(),
+		CDNURL:      "https://cdn.privatecaptcha.com",
+	}
+
+	html, err := UsageReportTemplate.RenderHTML(ctx, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err := UsageReportTemplate.RenderText(ctx, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{"html": html, "text": text} {
+		if !strings.Contains(body, "250 (200 failed)") {
+			t.Errorf("%s report does not show failure-qualified verification counts", name)
+		}
+		if strings.Contains(body, "100 (100 failed)") {
+			t.Errorf("%s report shows failed counts for request-qualified event", name)
+		}
+	}
+}
+
 func TestEmailTemplates(t *testing.T) {
 	data := struct {
 		OrgInvitationContext
@@ -210,6 +249,9 @@ func TestEmailTemplates(t *testing.T) {
 			TopProperties: []*PropertyStat{
 				{Name: "Main Site", Domain: "example.com", Count: 800, Percent: 64.8, Change: 14.3},
 				{Name: "Blog", Domain: "blog.example.com", Count: 434, Percent: 35.2, Change: 8.5, Alternate: true},
+			},
+			SecurityEvents: []*SecurityEventStat{
+				{Name: "Checkout", Link: "https://portal.privatecaptcha.com/org/abc/property/def", Date: "2026-08-14", Requests: 50, Verifies: 250, FailedVerifies: 200},
 			},
 			TopForms: []*FormStat{
 				{Name: "Contact", URL: "https://hooks.example.com/contact", Count: 80, Percent: 60.0, Change: 10.0},

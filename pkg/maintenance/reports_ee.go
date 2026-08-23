@@ -23,6 +23,10 @@ const (
 	reportEmailUTM = "utm_medium=email&utm_source=report"
 )
 
+var (
+	errAccountStats = errors.New("account level stats are missing")
+)
+
 func (j *ScheduleReportsJob) RunOnceAt(ctx context.Context, params any, tnow time.Time) error {
 	p, ok := params.(*ScheduleReportsParams)
 	if !ok || (p == nil) {
@@ -35,12 +39,12 @@ func (j *ScheduleReportsJob) RunOnceAt(ctx context.Context, params any, tnow tim
 
 		var errs []error
 		if p.Weekly {
-			if err := j.scheduleWeeklyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, 0); err != nil {
+			if err := j.scheduleWeeklyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, 0, nil); err != nil {
 				errs = append(errs, err)
 			}
 		}
 		if p.Monthly {
-			if err := j.scheduleMonthlyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, 0); err != nil {
+			if err := j.scheduleMonthlyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, 0, nil); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -88,6 +92,16 @@ func truncateDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
 
+func weeklyReportPeriod(tnow time.Time) (time.Time, time.Time, time.Time) {
+	to := truncateDay(tnow)
+	return to.AddDate(0, 0, -14), to.AddDate(0, 0, -7), to
+}
+
+func monthlyReportPeriod(tnow time.Time) (time.Time, time.Time, time.Time) {
+	to := truncateDay(tnow)
+	return to.AddDate(0, -2, 0), to.AddDate(0, -1, 0), to
+}
+
 func (j *ScheduleReportsJob) retrieveRequestLimit(ctx context.Context, productID, priceID string, status string) uint64 {
 	if (len(productID) == 0) || (len(priceID) == 0) {
 		return 0
@@ -113,10 +127,29 @@ func (j *ScheduleReportsJob) retrieveRequestLimit(ctx context.Context, productID
 	return accountLimit
 }
 
+func userWeeklyReportsRowsToIDs(rows []*dbgen.GetUsersWithPendingWeeklyReportRow) []int32 {
+	userIDs := make([]int32, len(rows))
+	for i, user := range rows {
+		userIDs[i] = user.UserID
+	}
+
+	return userIDs
+}
+
+func userMonthlyReportsRowsToIDs(rows []*dbgen.GetUsersWithPendingMonthlyReportRow) []int32 {
+	userIDs := make([]int32, len(rows))
+	for i, user := range rows {
+		userIDs[i] = user.UserID
+	}
+
+	return userIDs
+}
+
 func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow time.Time, usersLimit int32) error {
 	year, week := tnow.ISOWeek()
 	fetchLimit := usersLimit + 1
 	refSuffix := weeklyReferenceSuffix(year, week)
+	from, mid, to := weeklyReportPeriod(tnow)
 
 	b := &backoff.Backoff{
 		Min:    50 * time.Millisecond,
@@ -135,6 +168,16 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 		hasMore := int32(len(users)) > usersLimit
 		if hasMore {
 			users = users[:usersLimit]
+		}
+		var accountStats map[int32]*common.UserReportAccountStats
+		if len(users) > 0 {
+			userIDs := userWeeklyReportsRowsToIDs(users)
+			accountStats, err = j.TimeSeries.RetrieveWeeklyAccountReportStats(ctx, userIDs, from, mid, to)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to batch-retrieve weekly account report stats", "users", len(userIDs), common.ErrAttr(err))
+				accountStats = nil
+				// we don't return because we retry on per-user basis
+			}
 		}
 
 		slog.InfoContext(ctx, "Scheduling weekly reports chunk", "count", len(users), "lastSeenUserID", lastSeenUserID)
@@ -158,9 +201,14 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 			}
 
 			accountLimit := j.retrieveRequestLimit(ctx, user.ExternalProductID, user.ExternalPriceID, user.SubscriptionStatus)
+			userAccountStats := accountStats[user.UserID]
+			if userAccountStats == nil {
+				slog.ErrorContext(ctx, "User is missing from weekly account report stats batch", "userID", user.UserID)
+				continue
+			}
 
 			// single user report failure shouldn't abort this
-			_ = j.scheduleWeeklyReportForUser(ctx, user.UserID, emailTo, tnow, accountLimit)
+			_ = j.scheduleWeeklyReportForUser(ctx, user.UserID, emailTo, tnow, accountLimit, userAccountStats)
 
 			lastSeenUserID = user.UserID
 		}
@@ -173,12 +221,10 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 	return nil
 }
 
-func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, userID int32, emailTo *string, tnow time.Time, accountLimit uint64) error {
-	today := truncateDay(tnow)
-	from := today.AddDate(0, 0, -14)
-	mid := today.AddDate(0, 0, -7)
+func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, userID int32, emailTo *string, tnow time.Time, accountLimit uint64, accountStats *common.UserReportAccountStats) error {
+	from, mid, to := weeklyReportPeriod(tnow)
 
-	reportCtx, err := j.BuildWeeklyReport(ctx, userID, from, mid, today)
+	reportCtx, err := j.buildWeeklyReport(ctx, userID, from, mid, to, accountStats)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to build weekly report", "userID", userID, common.ErrAttr(err))
 		return err
@@ -217,6 +263,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow time.Time, usersLimit int32) error {
 	fetchLimit := usersLimit + 1
 	refSuffix := monthlyReferenceSuffix(tnow.Year(), tnow.Month())
+	from, mid, to := monthlyReportPeriod(tnow)
 
 	b := &backoff.Backoff{
 		Min:    50 * time.Millisecond,
@@ -235,6 +282,16 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 		hasMore := int32(len(users)) > usersLimit
 		if hasMore {
 			users = users[:usersLimit]
+		}
+		var accountStats map[int32]*common.UserReportAccountStats
+		if len(users) > 0 {
+			userIDs := userMonthlyReportsRowsToIDs(users)
+			accountStats, err = j.TimeSeries.RetrieveMonthlyAccountReportStats(ctx, userIDs, from, mid, to)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to batch-retrieve monthly account report stats", "users", len(userIDs), common.ErrAttr(err))
+				accountStats = nil
+				// we don't return because we retry on per-user basis
+			}
 		}
 
 		slog.InfoContext(ctx, "Scheduling monthly reports chunk", "count", len(users), "lastSeenUserID", lastSeenUserID)
@@ -258,9 +315,14 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 			}
 
 			accountLimit := j.retrieveRequestLimit(ctx, user.ExternalProductID, user.ExternalPriceID, user.SubscriptionStatus)
+			userAccountStats := accountStats[user.UserID]
+			if userAccountStats == nil {
+				slog.ErrorContext(ctx, "User is missing from monthly account report stats batch", "userID", user.UserID)
+				continue
+			}
 
 			// single user report failure shouldn't abort this
-			_ = j.scheduleMonthlyReportForUser(ctx, user.UserID, emailTo, tnow, accountLimit)
+			_ = j.scheduleMonthlyReportForUser(ctx, user.UserID, emailTo, tnow, accountLimit, userAccountStats)
 
 			lastSeenUserID = user.UserID
 		}
@@ -273,12 +335,10 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 	return nil
 }
 
-func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, userID int32, emailTo *string, tnow time.Time, accountLimit uint64) error {
-	today := truncateDay(tnow)
-	from := today.AddDate(0, -2, 0)
-	mid := today.AddDate(0, -1, 0)
+func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, userID int32, emailTo *string, tnow time.Time, accountLimit uint64, accountStats *common.UserReportAccountStats) error {
+	from, mid, to := monthlyReportPeriod(tnow)
 
-	reportCtx, err := j.BuildMonthlyReport(ctx, userID, from, mid, today)
+	reportCtx, err := j.buildMonthlyReport(ctx, userID, from, mid, to, accountStats)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to build monthly report", "userID", userID, common.ErrAttr(err))
 		return err
@@ -314,6 +374,10 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 }
 
 func (j *ScheduleReportsJob) BuildWeeklyReport(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
+	return j.buildWeeklyReport(ctx, userID, from, mid, to, nil)
+}
+
+func (j *ScheduleReportsJob) buildWeeklyReport(ctx context.Context, userID int32, from, mid, to time.Time, accountStats *common.UserReportAccountStats) (*email.UsageReportContext, error) {
 	utm := fmt.Sprintf("%s&utm_campaign=weekly_%s", reportEmailUTM, strings.ToLower(to.Format("02_Jan_2006")))
 
 	report := &email.UsageReportContext{
@@ -322,16 +386,28 @@ func (j *ScheduleReportsJob) BuildWeeklyReport(ctx context.Context, userID int32
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint + "&" + utm,
 		UTM:           utm,
 	}
+	if accountStats == nil {
+		statsByUser, err := j.TimeSeries.RetrieveWeeklyAccountReportStats(ctx, []int32{userID}, from, mid, to)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve weekly account report stats", "userID", userID, common.ErrAttr(err))
+			return nil, err
+		}
+		accountStats = statsByUser[userID]
+		if accountStats == nil {
+			slog.ErrorContext(ctx, "Failed to find weekly account report stats", "userID", userID)
+			return nil, errAccountStats
+		}
+	}
 
-	stats, err := j.TimeSeries.RetrieveWeeklyPropertiesReportStats(ctx, userID, from, mid, to)
+	stats, err := j.TimeSeries.RetrieveWeeklyPropertiesReportStats(ctx, userID, from, mid, to, userReportOptions(weeklySecurityEventsLimit))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve weekly report stats", "userID", userID, common.ErrAttr(err))
 		return nil, err
 	}
 
-	fillTotals(report, stats)
-	fillChanges(report, stats)
-	fillTopProperties(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
+	fillTotals(report, accountStats)
+	fillChanges(report)
+	fillPropertyReportDetails(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
 
 	if formStats, err := j.TimeSeries.RetrieveWeeklyFormsReportStats(ctx, userID, from, mid, to); err == nil {
 		fillFormTotals(report, formStats)
@@ -345,6 +421,10 @@ func (j *ScheduleReportsJob) BuildWeeklyReport(ctx context.Context, userID int32
 }
 
 func (j *ScheduleReportsJob) BuildMonthlyReport(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
+	return j.buildMonthlyReport(ctx, userID, from, mid, to, nil)
+}
+
+func (j *ScheduleReportsJob) buildMonthlyReport(ctx context.Context, userID int32, from, mid, to time.Time, accountStats *common.UserReportAccountStats) (*email.UsageReportContext, error) {
 	utm := fmt.Sprintf("%s&utm_campaign=monthly_%s", reportEmailUTM, strings.ToLower(to.Format("Jan_2006")))
 
 	report := &email.UsageReportContext{
@@ -353,16 +433,28 @@ func (j *ScheduleReportsJob) BuildMonthlyReport(ctx context.Context, userID int3
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint + "&" + utm,
 		UTM:           utm,
 	}
+	if accountStats == nil {
+		statsByUser, err := j.TimeSeries.RetrieveMonthlyAccountReportStats(ctx, []int32{userID}, from, mid, to)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve monthly account report stats", "userID", userID, common.ErrAttr(err))
+			return nil, err
+		}
+		accountStats = statsByUser[userID]
+		if accountStats == nil {
+			slog.ErrorContext(ctx, "Failed to find monthly account report stats", "userID", userID)
+			return nil, errAccountStats
+		}
+	}
 
-	stats, err := j.TimeSeries.RetrieveMonthlyPropertiesReportStats(ctx, userID, from, mid, to)
+	stats, err := j.TimeSeries.RetrieveMonthlyPropertiesReportStats(ctx, userID, from, mid, to, userReportOptions(monthlySecurityEventsLimit))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve monthly report stats", "userID", userID, common.ErrAttr(err))
 		return nil, err
 	}
 
-	fillTotals(report, stats)
-	fillChanges(report, stats)
-	fillTopProperties(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
+	fillTotals(report, accountStats)
+	fillChanges(report)
+	fillPropertyReportDetails(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
 
 	if formStats, err := j.TimeSeries.RetrieveMonthlyFormsReportStats(ctx, userID, from, mid, to); err == nil {
 		fillFormTotals(report, formStats)
@@ -375,11 +467,11 @@ func (j *ScheduleReportsJob) BuildMonthlyReport(ctx context.Context, userID int3
 	return report, nil
 }
 
-func fillTotals(report *email.UsageReportContext, stats *common.UserReportStats) {
-	report.TotalRequests = stats.TotalCurrentRequests
-	report.PrevRequests = stats.TotalPrevRequests
-	report.TotalVerifies = stats.TotalCurrentVerifies
-	report.PrevVerifies = stats.TotalPrevVerifies
+func fillTotals(report *email.UsageReportContext, stats *common.UserReportAccountStats) {
+	report.TotalRequests = stats.CurrentRequests
+	report.PrevRequests = stats.PrevRequests
+	report.TotalVerifies = stats.CurrentVerifies
+	report.PrevVerifies = stats.PrevVerifies
 	report.VerificationRate = verificationRate(report.TotalRequests, report.TotalVerifies)
 }
 
@@ -417,7 +509,7 @@ func formErrorRate(totalSubmissions, totalErrors uint64) float64 {
 	return float64(totalErrors) / float64(totalSubmissions) * 100
 }
 
-func fillChanges(report *email.UsageReportContext, stats *common.UserReportStats) {
+func fillChanges(report *email.UsageReportContext) {
 	report.RequestsChange = percentChange(report.TotalRequests, report.PrevRequests)
 	report.VerifiesChange = percentChange(report.TotalVerifies, report.PrevVerifies)
 	report.VerificationRateChange = percentChangeFloat(
@@ -502,8 +594,8 @@ func fillTopForms(ctx context.Context, store db.Implementor, report *email.Usage
 	report.TopForms = topForms
 }
 
-func fillTopProperties(ctx context.Context, store db.Implementor, report *email.UsageReportContext, stats *common.UserReportStats, portalURL string, hasher common.IdentifierHasher) {
-	if len(stats.Properties) == 0 || report.TotalRequests == 0 {
+func fillPropertyReportDetails(ctx context.Context, store db.Implementor, report *email.UsageReportContext, stats *common.UserReportStats, portalURL string, hasher common.IdentifierHasher) {
+	if stats == nil || ((len(stats.Properties) == 0 || report.TotalRequests == 0) && len(stats.SecurityEvents) == 0) {
 		return
 	}
 
@@ -512,9 +604,14 @@ func fillTopProperties(ctx context.Context, store db.Implementor, report *email.
 		props = props[:topPropertiesLimit]
 	}
 
-	batch := make(map[int32]uint, len(props))
-	for _, ps := range props {
-		batch[ps.PropertyID] = 0
+	batch := make(map[int32]uint, len(props)+len(stats.SecurityEvents))
+	if report.TotalRequests > 0 {
+		for _, ps := range props {
+			batch[ps.PropertyID] = 0
+		}
+	}
+	for _, candidate := range stats.SecurityEvents {
+		batch[candidate.PropertyID] = 0
 	}
 
 	properties, err := store.Impl().RetrievePropertiesByID(ctx, batch)
@@ -528,30 +625,51 @@ func fillTopProperties(ctx context.Context, store db.Implementor, report *email.
 		propMap[p.ID] = p
 	}
 
-	topProperties := make([]*email.PropertyStat, 0, len(props))
-	for _, ps := range props {
-		prop, ok := propMap[ps.PropertyID]
+	if report.TotalRequests > 0 {
+		topProperties := make([]*email.PropertyStat, 0, len(props))
+		for _, ps := range props {
+			prop, ok := propMap[ps.PropertyID]
+			if !ok {
+				slog.DebugContext(ctx, "Skipping unknown property in report", "propID", ps.PropertyID)
+				continue
+			}
+
+			topProperties = append(topProperties, &email.PropertyStat{
+				Name:      prop.Name,
+				Domain:    common.DisplayPropertyDomain(prop.Domain, prop.AllowSubdomains),
+				Link:      propertyDashboardURL(ctx, portalURL, hasher, prop) + "?" + report.UTM,
+				Count:     ps.CurrentRequests,
+				Percent:   float64(ps.CurrentRequests) / float64(report.TotalRequests) * 100,
+				Change:    percentChange(ps.CurrentRequests, ps.PrevRequests),
+				Alternate: len(topProperties)%2 == 1,
+			})
+		}
+		report.TopProperties = topProperties
+	}
+
+	highlights := make([]*email.SecurityEventStat, 0, len(stats.SecurityEvents))
+	for _, candidate := range stats.SecurityEvents {
+		prop, ok := propMap[candidate.PropertyID]
 		if !ok {
-			slog.DebugContext(ctx, "Skipping unknown property in report", "propID", ps.PropertyID)
+			slog.DebugContext(ctx, "Skipping unknown property protection candidate", "propID", candidate.PropertyID)
 			continue
 		}
-
-		percent := float64(ps.CurrentRequests) / float64(report.TotalRequests) * 100
-		change := percentChange(ps.CurrentRequests, ps.PrevRequests)
-
-		pStat := &email.PropertyStat{
-			Name:      prop.Name,
-			Domain:    common.DisplayPropertyDomain(prop.Domain, prop.AllowSubdomains),
-			Link:      propertyDashboardURL(ctx, portalURL, hasher, prop) + "?" + report.UTM,
-			Count:     ps.CurrentRequests,
-			Percent:   percent,
-			Change:    change,
-			Alternate: len(topProperties)%2 == 1,
+		failedVerifies := uint64(0)
+		failureRatio := float64(candidate.FailedVerifies) / float64(max(candidate.Requests, uint64(1)))
+		if candidate.FailedVerifies >= protectionMinimumDominantCount && failureRatio > protectionRatioThreshold {
+			failedVerifies = candidate.FailedVerifies
 		}
-
-		topProperties = append(topProperties, pStat)
+		highlights = append(highlights, &email.SecurityEventStat{
+			Name:           prop.Name,
+			Link:           propertyDashboardURL(ctx, portalURL, hasher, prop) + "?" + report.UTM,
+			Date:           candidate.Timestamp.UTC().Format(time.DateOnly),
+			Requests:       candidate.Requests,
+			Verifies:       candidate.Verifies,
+			FailedVerifies: failedVerifies,
+			Alternate:      len(highlights)%2 == 1,
+		})
 	}
-	report.TopProperties = topProperties
+	report.SecurityEvents = highlights
 }
 
 func propertyDashboardURL(ctx context.Context, portalURL string, hasher common.IdentifierHasher, property *dbgen.Property) string {
