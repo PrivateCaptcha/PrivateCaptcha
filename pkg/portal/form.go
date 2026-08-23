@@ -896,7 +896,7 @@ func (s *Server) deleteForm(w http.ResponseWriter, r *http.Request) {
 	canDelete := (user.ID == org.UserID.Int32) || (user.ID == form.CreatorID.Int32)
 	if !canDelete {
 		slog.ErrorContext(ctx, "Not enough permissions to delete form", "userID", user.ID, "orgUserID", org.UserID.Int32, "formUserID", form.CreatorID.Int32)
-		s.RedirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusForbidden, w, r)
 		return
 	}
 
