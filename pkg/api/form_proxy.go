@@ -293,6 +293,14 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 			}
 		}
 
+		// Keep delayed CAPTCHA verification serial because its replay check and cache update are separate operations.
+		if submission.CaptchaSolution != nil {
+			if err := s.processFormSubmission(ctx, form, submission); err != nil {
+				slog.WarnContext(ctx, "Failed to submit the form", "formID", form.ID, "submitID", submission.ID, common.ErrAttr(err))
+			}
+			continue
+		}
+
 		select {
 		case <-ctx.Done():
 			slog.WarnContext(ctx, "Batch processing aborted due to context cancellation")
