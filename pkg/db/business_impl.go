@@ -2481,7 +2481,7 @@ func (impl *BusinessStoreImpl) UpdateAPIKeysLastUsedAt(ctx context.Context, apiK
 	return nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUsersWithoutSubscription(ctx context.Context, userIDs []int32) ([]*dbgen.User, error) {
+func (impl *BusinessStoreImpl) RetrieveUsersWithoutSubscription(ctx context.Context, userIDs []int32, expiredTrialStatus string) ([]*dbgen.User, error) {
 	if len(userIDs) == 0 {
 		return []*dbgen.User{}, nil
 	}
@@ -2490,7 +2490,10 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithoutSubscription(ctx context.Cont
 		return nil, ErrMaintenance
 	}
 
-	users, err := impl.querier.GetUsersWithoutSubscription(ctx, userIDs)
+	users, err := impl.querier.GetUsersWithoutSubscription(ctx, &dbgen.GetUsersWithoutSubscriptionParams{
+		UserIds:            userIDs,
+		ExpiredTrialStatus: expiredTrialStatus,
+	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return []*dbgen.User{}, nil

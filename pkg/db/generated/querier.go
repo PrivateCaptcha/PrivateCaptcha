@@ -99,7 +99,7 @@ type Querier interface {
 	GetUserSettings(ctx context.Context, userID int32) (*UserSettings, error)
 	GetUsersWithPendingMonthlyReport(ctx context.Context, arg *GetUsersWithPendingMonthlyReportParams) ([]*GetUsersWithPendingMonthlyReportRow, error)
 	GetUsersWithPendingWeeklyReport(ctx context.Context, arg *GetUsersWithPendingWeeklyReportParams) ([]*GetUsersWithPendingWeeklyReportRow, error)
-	GetUsersWithoutSubscription(ctx context.Context, dollar_1 []int32) ([]*User, error)
+	GetUsersWithoutSubscription(ctx context.Context, arg *GetUsersWithoutSubscriptionParams) ([]*User, error)
 	InsertLock(ctx context.Context, arg *InsertLockParams) (*Lock, error)
 	InviteEmailToOrg(ctx context.Context, arg *InviteEmailToOrgParams) (*OrganizationUser, error)
 	InviteUserToOrg(ctx context.Context, arg *InviteUserToOrgParams) (*OrganizationUser, error)

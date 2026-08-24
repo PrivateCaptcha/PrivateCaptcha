@@ -136,11 +136,20 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (*User, error) {
 }
 
 const getUsersWithoutSubscription = `-- name: GetUsersWithoutSubscription :many
-SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled FROM backend.users where id = ANY($1::INT[]) AND (subscription_id IS NULL OR deleted_at IS NOT NULL)
+SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at, u.enabled
+FROM backend.users u
+LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
+WHERE u.id = ANY($1::INT[])
+  AND (u.subscription_id IS NULL OR u.deleted_at IS NOT NULL OR s.status = $2)
 `
 
-func (q *Queries) GetUsersWithoutSubscription(ctx context.Context, dollar_1 []int32) ([]*User, error) {
-	rows, err := q.db.Query(ctx, getUsersWithoutSubscription, dollar_1)
+type GetUsersWithoutSubscriptionParams struct {
+	UserIds            []int32 `db:"user_ids" json:"user_ids"`
+	ExpiredTrialStatus string  `db:"expired_trial_status" json:"expired_trial_status"`
+}
+
+func (q *Queries) GetUsersWithoutSubscription(ctx context.Context, arg *GetUsersWithoutSubscriptionParams) ([]*User, error) {
+	rows, err := q.db.Query(ctx, getUsersWithoutSubscription, arg.UserIds, arg.ExpiredTrialStatus)
 	if err != nil {
 		return nil, err
 	}

@@ -173,7 +173,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 
 	rateLimitHeader := cfg.Get(common.RateLimitHeaderKey).Value()
 	ipRateLimiter := ratelimit.NewIPAddrRateLimiter(rateLimitHeader, newIPAddrBuckets(cfg))
-	userLimiter := api.NewUserLimiter(businessDB)
+	userLimiter := api.NewUserLimiter(businessDB, planService)
 	subscriptionLimits := db.NewSubscriptionLimits(stage, businessDB, planService)
 	idHasher := common.NewIDHasher(cfg.Get(common.IDHasherSaltKey))
 

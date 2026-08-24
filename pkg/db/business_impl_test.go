@@ -1730,7 +1730,7 @@ func TestBusinessStoreImplUpdateAPIKeysLastUsedAt(t *testing.T) {
 func TestBusinessStoreImplRetrieveUsersWithoutSubscription(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
-		_, err := store.RetrieveUsersWithoutSubscription(context.Background(), []int32{1})
+		_, err := store.RetrieveUsersWithoutSubscription(context.Background(), []int32{1}, "expired")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -1739,7 +1739,7 @@ func TestBusinessStoreImplRetrieveUsersWithoutSubscription(t *testing.T) {
 	t.Run("GenericError", func(t *testing.T) {
 		expectedErr := errors.New("db error")
 		store := setupTestStore(t, expectedErr)
-		_, err := store.RetrieveUsersWithoutSubscription(context.Background(), []int32{1})
+		_, err := store.RetrieveUsersWithoutSubscription(context.Background(), []int32{1}, "expired")
 		if !errors.Is(err, expectedErr) {
 			t.Errorf("expected expectedErr, got %v", err)
 		}

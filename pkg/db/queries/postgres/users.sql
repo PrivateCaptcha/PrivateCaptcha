@@ -27,4 +27,8 @@ LIMIT $2;
 DELETE FROM backend.users WHERE id = ANY($1::INT[]);
 
 -- name: GetUsersWithoutSubscription :many
-SELECT * FROM backend.users where id = ANY($1::INT[]) AND (subscription_id IS NULL OR deleted_at IS NOT NULL);
+SELECT u.*
+FROM backend.users u
+LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
+WHERE u.id = ANY(sqlc.arg(user_ids)::INT[])
+  AND (u.subscription_id IS NULL OR u.deleted_at IS NOT NULL OR s.status = sqlc.arg(expired_trial_status));

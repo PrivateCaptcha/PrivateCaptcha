@@ -280,7 +280,7 @@ func (s *QuerierStub) GetUsersWithPendingMonthlyReport(ctx context.Context, arg 
 func (s *QuerierStub) GetUsersWithPendingWeeklyReport(ctx context.Context, arg *dbgen.GetUsersWithPendingWeeklyReportParams) ([]*dbgen.GetUsersWithPendingWeeklyReportRow, error) {
 	return nil, s.Error
 }
-func (s *QuerierStub) GetUsersWithoutSubscription(ctx context.Context, dollar_1 []int32) ([]*dbgen.User, error) {
+func (s *QuerierStub) GetUsersWithoutSubscription(ctx context.Context, arg *dbgen.GetUsersWithoutSubscriptionParams) ([]*dbgen.User, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) InsertLock(ctx context.Context, arg *dbgen.InsertLockParams) (*dbgen.Lock, error) {

@@ -55,8 +55,9 @@ type AuthMiddleware struct {
 }
 
 type baseUserLimiter struct {
-	store      db.Implementor
-	userLimits common.Cache[int32, bool]
+	store       db.Implementor
+	planService billing.PlanService
+	userLimits  common.Cache[int32, bool]
 }
 
 var _ UserLimiter = (*baseUserLimiter)(nil)
@@ -92,7 +93,7 @@ func (ul *baseUserLimiter) CheckUsers(ctx context.Context, batch map[int32]uint)
 	}
 
 	t := struct{}{}
-	users, err := ul.store.Impl().RetrieveUsersWithoutSubscription(ctx, unknownUsers)
+	users, err := ul.store.Impl().RetrieveUsersWithoutSubscription(ctx, unknownUsers, ul.planService.ExpiredTrialStatus())
 	if err == nil {
 		violatorsMap := make(map[int32]struct{}, len(users))
 		for _, u := range users {
@@ -126,7 +127,7 @@ func (ul *baseUserLimiter) EvaluateFormAccess(ctx context.Context, userID int32)
 	return ul.EvaluateAPIAccess(ctx, userID)
 }
 
-func NewUserLimiter(store db.Implementor) *baseUserLimiter {
+func NewUserLimiter(store db.Implementor, planService billing.PlanService) *baseUserLimiter {
 	const maxLimitedUsers = 10_000
 	const userLimitTTL = 30 * time.Minute
 	var userLimits common.Cache[int32, bool]
@@ -143,8 +144,9 @@ func NewUserLimiter(store db.Implementor) *baseUserLimiter {
 	}
 
 	return &baseUserLimiter{
-		userLimits: userLimits,
-		store:      store,
+		userLimits:  userLimits,
+		store:       store,
+		planService: planService,
 	}
 }
 
