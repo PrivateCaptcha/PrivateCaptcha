@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -195,7 +196,16 @@ func (s *Server) sendAPIErrorResponse(ctx context.Context, code common.StatusCod
 
 	slog.WarnContext(ctx, "Returned API error response", "code", int(code))
 
-	s.Metrics.ObserveApiError(r.URL.Path, r.Method, int(code))
+	s.Metrics.ObserveApiError(apiErrorHandlerID(r), r.Method, int(code))
+}
+
+func apiErrorHandlerID(r *http.Request) string {
+	_, path, ok := strings.Cut(r.Pattern, " ")
+	if ok {
+		return path
+	}
+
+	return r.Pattern
 }
 
 func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Property) *rules.RulesPair {
