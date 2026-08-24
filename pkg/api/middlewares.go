@@ -669,7 +669,7 @@ func (am *AuthMiddleware) Form(next http.Handler) http.Handler {
 		}
 
 		if form != nil {
-			if !form.Enabled || !form.Active {
+			if !form.Enabled || !form.Active || form.DeletedAt.Valid {
 				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 				return
 			}

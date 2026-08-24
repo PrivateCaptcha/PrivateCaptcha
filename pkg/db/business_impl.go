@@ -848,6 +848,7 @@ func (impl *BusinessStoreImpl) GetCachedFormByExternalID(ctx context.Context, ex
 		DropInvalid:  true,
 	}
 
+	// we should NOT check for soft-deleted state because soft-deleted forms are deleted from cache in the first place
 	return reader.Read(ctx)
 }
 
