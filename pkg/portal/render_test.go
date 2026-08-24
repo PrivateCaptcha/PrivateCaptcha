@@ -482,6 +482,16 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{},
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, "1", common.TabEndpoint, common.ReportsEndpoint},
+			template: formDashboardReportsTemplate,
+			model: &formDashboardRenderContext{
+				Form: stubForm("Contact", "123"),
+				Org:  stubOrg("123"),
+			},
+			selector: `#chart[data-stats-url="/org/123/form/1/stats"]`,
+			matches:  []string{""},
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
 			template: propertyDashboardTemplate,
 			model: &propertyDashboardRenderContext{
@@ -490,6 +500,18 @@ func TestRenderHTML(t *testing.T) {
 				Org:               stubOrg("123"),
 				CanEdit:           true,
 			},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "1", common.TabEndpoint, common.ReportsEndpoint},
+			template: propertyDashboardReportsTemplate,
+			model: &propertyDashboardRenderContext{
+				Property:     stubProperty("Foo", "123"),
+				Org:          stubOrg("123"),
+				IncludeRules: true,
+			},
+			selector:   `#chart[data-stats-url="/org/123/property/1/stats"], #ruleChart[data-stats-url="/org/123/property/1/rulestats"]`,
+			matches:    []string{"", ""},
+			enterprise: enterpriseOnly,
 		},
 		// same as above, but property integrations _template_
 		{
@@ -634,8 +656,8 @@ func TestRenderHTML(t *testing.T) {
 				IncludedPropertiesCount: 50,
 				Limit:                   12345,
 			},
-			selector: "",
-			matches:  []string{},
+			selector: `#usage-chart[data-stats-url="/user/stats"]`,
+			matches:  []string{""},
 		},
 		{
 			path:     []string{common.SettingsEndpoint, common.TabEndpoint, common.NotificationsEndpoint},

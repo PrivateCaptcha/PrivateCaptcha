@@ -298,7 +298,7 @@
                 this.isLoading = true;
                 try {
                     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                        const response = await fetch('{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.Stats }}/' + encodedPeriod);
+                        const response = await fetch(this.$refs.chart.dataset.statsUrl + '/' + encodedPeriod);
                         if (response.ok) {
                             return await response.json();
                         }
@@ -546,7 +546,7 @@
                 this.isLoading = true;
                 try {
                     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                        const response = await fetch('{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.RuleStatsEndpoint }}/' + encodedPeriod);
+                        const response = await fetch(this.$refs.ruleChart.dataset.statsUrl + '/' + encodedPeriod);
                         if (response.ok) {
                             return await response.json();
                         }

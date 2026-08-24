@@ -367,11 +367,11 @@
                 this.renderLegend(chartElement, legendLayout, height, color);
             }
 
-            async fetchChartData(spinnerElement, maxRetries = 3, baseDelay = 1000) {
+            async fetchChartData(chartElement, spinnerElement, maxRetries = 3, baseDelay = 1000) {
                 if (spinnerElement) { spinnerElement.style.display = 'flex'; }
                 try {
                     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                        const response = await fetch('{{ partsURL $.Const.UserEndpoint $.Const.Stats | safeJS }}');
+                        const response = await fetch(chartElement.dataset.statsUrl);
                         if (response.ok) {
                             return await response.json();
                         }
@@ -394,7 +394,7 @@
             }
 
             async updateChart(chartElement, spinnerElement) {
-                const response = await this.fetchChartData(spinnerElement);
+                const response = await this.fetchChartData(chartElement, spinnerElement);
                 const hasData = response &&
                     Array.isArray(response.data) && response.data.length > 0 &&
                     Array.isArray(response.series) && response.series.length > 0;

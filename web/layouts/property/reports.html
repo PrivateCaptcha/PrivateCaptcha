@@ -53,7 +53,8 @@
             </dl>
         </div>
 
-        <div class="mt-6 min-h-96" id="chart" x-ref="chart"></div>
+        <div class="mt-6 min-h-96" id="chart" x-ref="chart"
+            data-stats-url="{{ partsURL .Const.OrgEndpoint .Params.Property.OrgID .Const.PropertyEndpoint .Params.Property.ID .Const.Stats }}"></div>
 
         <div x-cloak x-show="isLoading" class="absolute inset-0 flex justify-center items-center z-10">
             <svg id="property-spinner" class="animate-spin h-10 w-10 text-pc-grey-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -96,7 +97,8 @@
             </dl>
         </div>
 
-        <div class="mt-6 min-h-96" id="ruleChart" x-ref="ruleChart"></div>
+        <div class="mt-6 min-h-96" id="ruleChart" x-ref="ruleChart"
+            data-stats-url="{{ partsURL .Const.OrgEndpoint .Params.Property.OrgID .Const.PropertyEndpoint .Params.Property.ID .Const.RuleStatsEndpoint }}"></div>
 
         <div x-cloak x-show="isLoading" class="absolute inset-0 flex justify-center items-center z-10">
             <svg id="rules-spinner" class="animate-spin h-10 w-10 text-pc-grey-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
