@@ -66,6 +66,20 @@ type deactivateFormsQuerierStub struct {
 	ids   []int32
 }
 
+type transferOrganizationQuerierStub struct {
+	*QuerierStub
+	members    []*dbgen.GetOrganizationUsersRow
+	properties []*dbgen.Property
+}
+
+func (s *transferOrganizationQuerierStub) GetOrganizationUsers(context.Context, int32) ([]*dbgen.GetOrganizationUsersRow, error) {
+	return s.members, nil
+}
+
+func (s *transferOrganizationQuerierStub) GetOrgPropertiesByDateAscending(context.Context, *dbgen.GetOrgPropertiesByDateAscendingParams) ([]*dbgen.Property, error) {
+	return s.properties, nil
+}
+
 func (s *dummySessionStore) Start(ctx context.Context, interval time.Duration)        {}
 func (s *dummySessionStore) Init(ctx context.Context, session *session.Session) error { return nil }
 func (s *dummySessionStore) Read(ctx context.Context, sid string, skipCache bool) (*session.Session, error) {
@@ -2599,6 +2613,44 @@ func TestBusinessStoreImplSoftDeleteForm(t *testing.T) {
 }
 
 func TestBusinessStoreImplTransferOrganization(t *testing.T) {
+	t.Run("InvalidatesAuthorizationCaches", func(t *testing.T) {
+		ctx := t.Context()
+		memberID := int32(3)
+		property := &dbgen.Property{ID: 4, ExternalID: pgtype.UUID{Bytes: [16]byte{1}, Valid: true}}
+		querier := &transferOrganizationQuerierStub{
+			QuerierStub: &QuerierStub{},
+			members: []*dbgen.GetOrganizationUsersRow{
+				{User: dbgen.User{ID: memberID}},
+			},
+			properties: []*dbgen.Property{property},
+		}
+		cache := NewStaticCache[CacheKey, any](1000, &CacheMissingValue{})
+		store := &BusinessStoreImpl{querier: querier, cache: cache}
+		_ = cache.Set(ctx, UserOrgsCacheKey(memberID), []*dbgen.GetUserOrganizationsRow{{}})
+		cache.Set(ctx, OrgPropertiesCacheKey(2, string(OrgPropertiesSortDateDescending)), querier.properties)
+		cache.Set(ctx, orgUsersCacheKey(2), querier.members)
+		store.cacheProperty(ctx, property)
+
+		_, err := store.TransferOrganization(ctx,
+			&dbgen.User{ID: 1},
+			&dbgen.Organization{ID: 2, UserID: Int(1)},
+			&dbgen.User{ID: 5},
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		for _, key := range []CacheKey{
+			UserOrgsCacheKey(memberID),
+			PropertyByIDCacheKey(property.ID),
+			PropertyBySitekeyCacheKey(UUIDToSiteKey(property.ExternalID)),
+		} {
+			if _, err := cache.Get(ctx, key); !errors.Is(err, ErrCacheMiss) {
+				t.Errorf("expected cache key %s to be invalidated, got %v", key.String(), err)
+			}
+		}
+	})
+
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
 		_, err := store.TransferOrganization(context.Background(), &dbgen.User{ID: 1}, &dbgen.Organization{ID: 1}, &dbgen.User{ID: 1})

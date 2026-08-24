@@ -3417,6 +3417,12 @@ func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *d
 		return nil, ErrInvalidInput
 	}
 
+	members, err := FetchCachedArray[dbgen.GetOrganizationUsersRow](ctx, impl.cache, orgUsersCacheKey(org.ID))
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to retrieve cached organization members before transfer", "orgID", org.ID, common.ErrAttr(err))
+		members = []*dbgen.GetOrganizationUsersRow{}
+	}
+
 	// Transfer organization ownership
 	if affected, err := impl.querier.TransferOrganization(ctx, &dbgen.TransferOrganizationParams{
 		ID:       org.ID,
@@ -3467,6 +3473,9 @@ func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *d
 	}
 
 	// Invalidate caches for both old and new users
+	for _, member := range members {
+		_ = impl.cache.Delete(ctx, UserOrgsCacheKey(member.User.ID))
+	}
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(user.ID))
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(newOwner.ID))
 	_ = impl.cache.Delete(ctx, orgCacheKey(org.ID))
