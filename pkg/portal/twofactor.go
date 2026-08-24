@@ -140,6 +140,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 
 	job := s.Jobs.LoginUser(sess)
 	jobCtx := common.CopyTraceID(ctx, context.Background())
+	jobCtx = context.WithValue(jobCtx, common.SessionIDContextKey, sess.ID())
 	if ip := ctx.Value(common.RateLimitKeyContextKey); ip != nil {
 		jobCtx = context.WithValue(jobCtx, common.RateLimitKeyContextKey, ip)
 	}
