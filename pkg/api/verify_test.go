@@ -1141,6 +1141,36 @@ func TestReportingVerifierNoReportOnError(t *testing.T) {
 	}
 }
 
+func TestBackfillVerifyAccess(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		error puzzle.VerifyError
+		want  bool
+	}{
+		{name: "successful stub", error: puzzle.VerifyNoError, want: true},
+		{name: "wrong owner", error: puzzle.WrongOwnerError, want: false},
+		{name: "invalid solution", error: puzzle.InvalidSolutionError, want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result := &puzzle.VerifyResult{
+				UserID:     1,
+				OrgID:      2,
+				PropertyID: 3,
+				PuzzleID:   0,
+				CreatedAt:  time.Now(),
+				Error:      test.error,
+			}
+			if got := shouldBackfillVerifyAccess(result); got != test.want {
+				t.Errorf("shouldBackfillVerifyAccess() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
 func TestVerifyInvalidAPIKeyLength(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

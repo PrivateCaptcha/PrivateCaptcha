@@ -592,9 +592,13 @@ func (s *Server) addVerifyRecord(ctx context.Context, result *puzzle.VerifyResul
 	s.Metrics.ObservePuzzleVerified(vr.UserID, result.Error.String(), (result.PuzzleID == 0) /*is stub*/)
 
 	// we do not record access for stub puzzles in /puzzle initially, but now they are "verified" so we can backfill
-	if (result.PuzzleID == 0) && !result.CreatedAt.IsZero() {
+	if shouldBackfillVerifyAccess(result) {
 		_ = s.Levels.BackfillAccess(ctx, result)
 	}
+}
+
+func shouldBackfillVerifyAccess(result *puzzle.VerifyResult) bool {
+	return result.Success() && (result.PuzzleID == 0) && !result.CreatedAt.IsZero()
 }
 
 func (s *Server) ReportingVerifier() puzzle.Engine {
