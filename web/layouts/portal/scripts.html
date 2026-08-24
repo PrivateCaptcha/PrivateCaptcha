@@ -349,7 +349,7 @@ function orgChartComponent() {
             this.isLoading = true;
             try {
                 for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                    const response = await fetch('{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.Stats }}/' + encodeURIComponent(normalizedPeriod));
+                    const response = await fetch(this.$refs.chart.dataset.statsUrl + '/' + encodeURIComponent(normalizedPeriod));
                     if (response.ok) {
                         return await response.json();
                     }

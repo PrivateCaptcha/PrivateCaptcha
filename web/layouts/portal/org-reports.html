@@ -43,7 +43,8 @@
             </div>
         </dl>
 
-        <div class="mt-6 min-h-96" id="orgChart" x-ref="chart"></div>
+        <div class="mt-6 min-h-96" id="orgChart" x-ref="chart"
+            data-stats-url="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.Stats }}"></div>
 
         <div x-cloak x-show="isLoading" class="absolute inset-0 flex justify-center items-center z-10">
             <svg id="org-spinner" class="animate-spin h-10 w-10 text-pc-grey-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

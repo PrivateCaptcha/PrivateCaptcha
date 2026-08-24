@@ -361,6 +361,8 @@ func TestRenderHTML(t *testing.T) {
 			model: &portalBaseRenderContext{
 				CurrentOrg: stubOrg("123"),
 			},
+			selector: `#orgChart[data-stats-url="/org/123/stats"]`,
+			matches:  []string{""},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.MembersEndpoint},
