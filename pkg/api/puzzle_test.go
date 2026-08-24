@@ -164,6 +164,39 @@ func TestGetPuzzleWithoutSubscription(t *testing.T) {
 	})
 }
 
+func TestGetPuzzleDisabledUser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	ctx := t.Context()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db_tests.DisableUserForTest(ctx, store, user.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	if found := cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey)); !found {
+		t.Fatal("property was not found in cache")
+	}
+
+	puzzleSuiteWithBackfillWait(t, ctx, sitekey, property.Domain, func() {
+		time.Sleep(5 * authBackfillDelay)
+	})
+}
+
 func parsePuzzle(resp *http.Response) (*puzzle.ComputePuzzle, string, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

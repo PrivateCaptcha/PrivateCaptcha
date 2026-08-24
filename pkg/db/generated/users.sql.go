@@ -140,7 +140,7 @@ SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.d
 FROM backend.users u
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
 WHERE u.id = ANY($1::INT[])
-  AND (u.subscription_id IS NULL OR u.deleted_at IS NOT NULL OR s.status = $2)
+  AND (u.subscription_id IS NULL OR u.deleted_at IS NOT NULL OR s.status = $2 OR u.enabled = FALSE)
 `
 
 type GetUsersWithoutSubscriptionParams struct {
