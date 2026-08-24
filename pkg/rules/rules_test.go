@@ -2112,7 +2112,7 @@ func TestBreakRuleApply(t *testing.T) {
 	}
 }
 
-func TestBreakRuleStopsPropertyToOrgFallback(t *testing.T) {
+func TestBreakRuleAllowsPropertyToOrgFallback(t *testing.T) {
 	propertyRules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
@@ -2145,12 +2145,12 @@ func TestBreakRuleStopsPropertyToOrgFallback(t *testing.T) {
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
-	// Break rule should stop processing: level unchanged, org rule NOT applied
-	if result.Level() != 50 {
-		t.Errorf("Expected break rule to preserve original level 50, got %d", result.Level())
+	expected := expectedDifficultyLevel(prop.Level(), 100)
+	if result.Level() != expected {
+		t.Errorf("Expected org rule level %d after property break rule, got %d", expected, result.Level())
 	}
-	if result.RuleID() != 1 {
-		t.Errorf("Expected break rule RuleID 1, got %d", result.RuleID())
+	if result.RuleID() != 2 {
+		t.Errorf("Expected org rule RuleID 2, got %d", result.RuleID())
 	}
 }
 
@@ -2509,7 +2509,7 @@ func TestTerminalBlockRequestStopsProcessing(t *testing.T) {
 	}
 }
 
-func TestTerminalPropertyRuleStopsOrgRules(t *testing.T) {
+func TestTerminalPropertyRuleAllowsOrgRules(t *testing.T) {
 	propertyRules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
@@ -2545,9 +2545,9 @@ func TestTerminalPropertyRuleStopsOrgRules(t *testing.T) {
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
-	expected := expectedDifficultyLevel(50, 30)
+	expected := expectedDifficultyLevel(expectedDifficultyLevel(50, 30), 100)
 	if result.Level() != expected {
-		t.Errorf("Expected level %d from terminal property rule only, got %d", expected, result.Level())
+		t.Errorf("Expected level %d from property and org rules, got %d", expected, result.Level())
 	}
 }
 
@@ -2827,9 +2827,7 @@ func TestBlockRuleAlwaysTerminalEvenIfNotSetInDB(t *testing.T) {
 	}
 }
 
-func TestBreakRuleAlwaysStopsOrgFallback(t *testing.T) {
-	// Break rules always have terminal forced to true by the compiler,
-	// regardless of the Terminal field in the DB. So they always stop org fallback.
+func TestPropertyBreakRuleAllowsOrgFallback(t *testing.T) {
 	propertyRules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
@@ -2862,9 +2860,9 @@ func TestBreakRuleAlwaysStopsOrgFallback(t *testing.T) {
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
-	// Break rule always stops org fallback (terminal is forced to true by compiler)
-	if result.Level() != prop.Level() {
-		t.Errorf("Expected org rule to be skipped when break rule matches, got level %d", result.Level())
+	expected := expectedDifficultyLevel(prop.Level(), 100)
+	if result.Level() != expected {
+		t.Errorf("Expected org rule level %d when property break rule matches, got %d", expected, result.Level())
 	}
 }
 
@@ -3131,8 +3129,7 @@ func TestBlockRuleStillWorksWithoutTerminalBefore(t *testing.T) {
 	}
 }
 
-func TestTerminalPropertyBreakPreventsOrgBlock(t *testing.T) {
-	// A terminal break rule in property rules should prevent org block rules
+func TestTerminalPropertyBreakAllowsOrgBlock(t *testing.T) {
 	propertyRules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
@@ -3165,8 +3162,8 @@ func TestTerminalPropertyBreakPreventsOrgBlock(t *testing.T) {
 	rp := &RulesPair{PropertyRules: compiledProp, OrgRules: compiledOrg}
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
-	if rp.IsRequestBlocked(ri) {
-		t.Error("Expected terminal property break rule to prevent org block rule")
+	if !rp.IsRequestBlocked(ri) {
+		t.Error("Expected org block rule despite terminal property break rule")
 	}
 }
 

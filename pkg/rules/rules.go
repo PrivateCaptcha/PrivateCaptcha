@@ -160,7 +160,8 @@ func (cr *CompiledRules) checkRequestBlocked(ri *RequestInfo) (blocked bool, ter
 }
 
 // RulesPair combines property-level and org-level compiled rules
-// without additional allocations. Property rules have higher priority.
+// without additional allocations. Property rules run first, but cannot stop
+// organization rules managed by the organization owner.
 type RulesPair struct {
 	PropertyRules *CompiledRules
 	OrgRules      *CompiledRules
@@ -172,13 +173,9 @@ func (rp *RulesPair) Apply(ri *RequestInfo, p difficulty.Property) difficulty.Pr
 	}
 
 	current := p
-	propResult, terminal := rp.PropertyRules.Apply(ri, current)
+	propResult, _ := rp.PropertyRules.Apply(ri, current)
 	if propResult != current {
 		current = propResult
-	}
-
-	if terminal {
-		return current
 	}
 
 	orgResult, _ := rp.OrgRules.Apply(ri, current)
@@ -194,13 +191,9 @@ func (rp *RulesPair) IsRequestBlocked(ri *RequestInfo) bool {
 		return false
 	}
 
-	blocked, terminal := rp.PropertyRules.checkRequestBlocked(ri)
+	blocked, _ := rp.PropertyRules.checkRequestBlocked(ri)
 	if blocked {
 		return true
-	}
-
-	if terminal {
-		return false
 	}
 
 	return rp.OrgRules.IsRequestBlocked(ri)
