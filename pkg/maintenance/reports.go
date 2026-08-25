@@ -15,7 +15,7 @@ const (
 	weeklySecurityEventsLimit      = 3
 	monthlySecurityEventsLimit     = 5
 	securityEventsPerProperty      = 2
-	protectionRatioThreshold       = 3.0
+	protectionRatioThreshold       = 1.5
 	protectionMinimumDominantCount = 100
 	floatEpsilon                   = 1e-4
 
