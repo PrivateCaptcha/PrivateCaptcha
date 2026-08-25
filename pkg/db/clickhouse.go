@@ -50,6 +50,7 @@ func connectClickhouse(ctx context.Context, opts ClickHouseConnectOpts) *sql.DB 
 		},
 		Settings: clickhouse.Settings{
 			"max_execution_time": 60,
+			"session_timezone":   "UTC",
 		},
 		ReadTimeout: 15 * time.Second,
 		DialTimeout: 30 * time.Second,
