@@ -127,6 +127,33 @@ func TestMemoryTimeSeriesRetrieveAccountStats(t *testing.T) {
 	}
 }
 
+func TestMemoryTimeSeriesRetrieveAccountStatsByPeriod(t *testing.T) {
+	ts := NewMemoryTimeSeries()
+	ctx := context.Background()
+	firstDay := time.Date(2026, time.August, 23, 12, 0, 0, 0, time.UTC)
+	secondDay := firstDay.AddDate(0, 0, 1)
+	if err := ts.WriteAccessLogBatch(ctx, []*common.AccessRecord{
+		{UserID: 1, OrgID: 10, Timestamp: firstDay},
+		{UserID: 1, OrgID: 10, Timestamp: secondDay},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := ts.RetrieveAccountStatsByPeriod(ctx, 1, firstDay.AddDate(0, 0, -1), common.TimePeriodMonth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats) != 2 {
+		t.Fatalf("RetrieveAccountStatsByPeriod() got %d stats, want 2", len(stats))
+	}
+	for index, stat := range stats {
+		expectedTimestamp := time.Date(2026, time.August, 23+index, 0, 0, 0, 0, time.UTC)
+		if !stat.Timestamp.Equal(expectedTimestamp) {
+			t.Errorf("RetrieveAccountStatsByPeriod() timestamp = %v, want %v", stat.Timestamp, expectedTimestamp)
+		}
+	}
+}
+
 func TestMemoryTimeSeriesRetrieveWeeklyAccountReportStats(t *testing.T) {
 	ts := NewMemoryTimeSeries()
 	ctx := context.Background()
