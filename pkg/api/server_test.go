@@ -22,7 +22,6 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
@@ -107,7 +106,6 @@ func TestMain(m *testing.M) {
 		Verifier:            NewVerifier(cfg, store, cfg.Get(common.FingerprintHeaderKey)),
 		FormURLVerifier:     AllowAllFormURLVerifier{},
 		Metrics:             metrics,
-		Mailer:              &email.StubMailer{},
 		Levels:              difficulty.NewLevels(timeSeries, 100 /*levelsBatchSize*/, PropertyBucketSize),
 		VerifyLogCancel:     func() {},
 		SubscriptionLimits:  db.NewSubscriptionLimits(common.StageTest, store, planService),
@@ -161,7 +159,6 @@ func TestAPIServerStoreErrors(t *testing.T) {
 		FormURLVerifier:     AllowAllFormURLVerifier{},
 		Verifier:            NewVerifier(testsConfigStore(), store, config.NewStaticValue(common.FingerprintHeaderKey, "FP")),
 		Metrics:             metrics,
-		Mailer:              &email.StubMailer{},
 		Levels:              difficulty.NewLevels(db.NewMemoryTimeSeries(), 100, PropertyBucketSize),
 		VerifyLogCancel:     func() {},
 		SubscriptionLimits:  db.NewSubscriptionLimits(common.StageTest, store, planService),
