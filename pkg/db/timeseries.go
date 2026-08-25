@@ -343,10 +343,10 @@ func (ts *TimeSeriesDB) RetrieveAccountStats(ctx context.Context, userID int32, 
 
 	query := `SELECT org_id, ts, max(count) as count
 FROM (
-    SELECT org_id, timestamp as ts, sum(count) as count
+    SELECT org_id, toStartOfMonth(timestamp) as ts, sum(count) as count
     FROM %s
     WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
-    GROUP BY org_id, timestamp
+    GROUP BY org_id, toStartOfMonth(timestamp)
     UNION ALL
     SELECT org_id, toStartOfMonth(timestamp) as ts, sum(success_count + failure_count) as count
     FROM %s
@@ -356,7 +356,7 @@ FROM (
 GROUP BY org_id, ts
 ORDER BY org_id, ts`
 	// Use max of request and verify counts per (org_id, month)
-	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, AccessLogTableName1mo, VerifyLogTable1d),
+	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, AccessLogTableName1d, VerifyLogTable1d),
 		clickhouse.Named("user_id", strconv.Itoa(int(userID))),
 		clickhouse.Named("timestamp", fromStr))
 	if err != nil {
@@ -1625,7 +1625,7 @@ func (m *MemoryTimeSeries) RetrieveAccountStats(ctx context.Context, userID int3
 	reqCounts := make(map[int32]map[time.Time]uint32)
 	for _, log := range m.accessLogs {
 		if log.UserID == userID && !log.Timestamp.Before(from) {
-			// Real DB uses request_logs_1mo which is aggregated by month
+			// Real DB aggregates matching daily rows by month
 			y, month, _ := log.Timestamp.Date()
 			ts := time.Date(y, month, 1, 0, 0, 0, 0, log.Timestamp.Location())
 			if _, ok := reqCounts[log.OrgID]; !ok {
