@@ -662,7 +662,7 @@ func (s *Server) getOrgStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := s.buildOrgStatsResponse(ctx, org, periodFromPath(ctx, r))
+	response, err := s.BuildOrgStatsResponse(ctx, org, periodFromPath(ctx, r))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve organization stats", common.ErrAttr(err))
 		status := http.StatusInternalServerError
@@ -676,7 +676,7 @@ func (s *Server) getOrgStats(w http.ResponseWriter, r *http.Request) {
 	common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
 }
 
-func (s *Server) buildOrgStatsResponse(ctx context.Context, org *dbgen.Organization, period common.TimePeriod) (*OrgStatsResponse, error) {
+func (s *Server) BuildOrgStatsResponse(ctx context.Context, org *dbgen.Organization, period common.TimePeriod) (*OrgStatsResponse, error) {
 	stats, err := s.TimeSeries.RetrieveOrgStatsByPeriod(ctx, org.ID, period, OrgStatsTopPropertiesLimit)
 	if err != nil {
 		return nil, err
