@@ -341,22 +341,52 @@ func (ts *TimeSeriesDB) RetrieveAccountStats(ctx context.Context, userID int32, 
 		return stats, nil
 	}
 
+	results, err := ts.retrieveAccountStats(ctx, userID, fromStr, "toStartOfMonth")
+	if err != nil {
+		return nil, err
+	}
+
+	_ = ts.Cache.Set(ctx, cacheKey, results)
+
+	return results, nil
+}
+
+func (ts *TimeSeriesDB) RetrieveAccountStatsByPeriod(ctx context.Context, userID int32, from time.Time, period common.TimePeriod) ([]*common.OrgTimeCount, error) {
+	if !ts.IsAvailable() {
+		return nil, ErrMaintenance
+	}
+
+	var timeFunction string
+	switch period {
+	case common.TimePeriodToday:
+		timeFunction = "toStartOfHour"
+	case common.TimePeriodWeek, common.TimePeriodMonth:
+		timeFunction = "toStartOfDay"
+	case common.TimePeriodYear:
+		timeFunction = "toStartOfMonth"
+	default:
+		return nil, ErrUnsupportedPeriod
+	}
+
+	return ts.retrieveAccountStats(ctx, userID, from.Format(time.DateTime), timeFunction)
+}
+
+func (ts *TimeSeriesDB) retrieveAccountStats(ctx context.Context, userID int32, fromStr, timeFunction string) ([]*common.OrgTimeCount, error) {
 	query := `SELECT org_id, ts, max(count) as count
 FROM (
-    SELECT org_id, toStartOfMonth(timestamp) as ts, sum(count) as count
-    FROM %s
+    SELECT org_id, %[1]s(timestamp) as ts, sum(count) as count
+    FROM %[2]s
     WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
-    GROUP BY org_id, toStartOfMonth(timestamp)
+    GROUP BY org_id, %[1]s(timestamp)
     UNION ALL
-    SELECT org_id, toStartOfMonth(timestamp) as ts, sum(success_count + failure_count) as count
-    FROM %s
+    SELECT org_id, %[1]s(timestamp) as ts, sum(success_count + failure_count) as count
+    FROM %[3]s
     WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
-    GROUP BY org_id, toStartOfMonth(timestamp)
+    GROUP BY org_id, %[1]s(timestamp)
 )
 GROUP BY org_id, ts
 ORDER BY org_id, ts`
-	// Use max of request and verify counts per (org_id, month)
-	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, AccessLogTableName1d, VerifyLogTable1d),
+	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, timeFunction, AccessLogTableName1d, VerifyLogTable1d),
 		clickhouse.Named("user_id", strconv.Itoa(int(userID))),
 		clickhouse.Named("timestamp", fromStr))
 	if err != nil {
@@ -381,8 +411,6 @@ ORDER BY org_id, ts`
 		slog.ErrorContext(ctx, "Row iteration error in account stats query", common.ErrAttr(err))
 		return nil, err
 	}
-
-	_ = ts.Cache.Set(ctx, cacheKey, results)
 
 	return results, nil
 }
@@ -1619,15 +1647,42 @@ func (m *MemoryTimeSeries) RetrievePropertyStatsSince(ctx context.Context, r *co
 }
 
 func (m *MemoryTimeSeries) RetrieveAccountStats(ctx context.Context, userID int32, from time.Time) ([]*common.OrgTimeCount, error) {
+	return m.retrieveAccountStats(userID, from, func(t time.Time) time.Time {
+		year, month, _ := t.Date()
+		return time.Date(year, month, 1, 0, 0, 0, 0, t.Location())
+	})
+}
+
+func (m *MemoryTimeSeries) RetrieveAccountStatsByPeriod(ctx context.Context, userID int32, from time.Time, period common.TimePeriod) ([]*common.OrgTimeCount, error) {
+	var truncate func(time.Time) time.Time
+	switch period {
+	case common.TimePeriodToday:
+		truncate = func(t time.Time) time.Time { return t.Truncate(time.Hour) }
+	case common.TimePeriodWeek, common.TimePeriodMonth:
+		truncate = func(t time.Time) time.Time {
+			year, month, day := t.Date()
+			return time.Date(year, month, day, 0, 0, 0, 0, t.Location())
+		}
+	case common.TimePeriodYear:
+		truncate = func(t time.Time) time.Time {
+			year, month, _ := t.Date()
+			return time.Date(year, month, 1, 0, 0, 0, 0, t.Location())
+		}
+	default:
+		return nil, ErrUnsupportedPeriod
+	}
+
+	return m.retrieveAccountStats(userID, from, truncate)
+}
+
+func (m *MemoryTimeSeries) retrieveAccountStats(userID int32, from time.Time, truncate func(time.Time) time.Time) ([]*common.OrgTimeCount, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	reqCounts := make(map[int32]map[time.Time]uint32)
 	for _, log := range m.accessLogs {
 		if log.UserID == userID && !log.Timestamp.Before(from) {
-			// Real DB aggregates matching daily rows by month
-			y, month, _ := log.Timestamp.Date()
-			ts := time.Date(y, month, 1, 0, 0, 0, 0, log.Timestamp.Location())
+			ts := truncate(log.Timestamp)
 			if _, ok := reqCounts[log.OrgID]; !ok {
 				reqCounts[log.OrgID] = make(map[time.Time]uint32)
 			}
@@ -1638,8 +1693,7 @@ func (m *MemoryTimeSeries) RetrieveAccountStats(ctx context.Context, userID int3
 	verCounts := make(map[int32]map[time.Time]uint32)
 	for _, log := range m.verifyLogs {
 		if log.UserID == userID && !log.Timestamp.Before(from) {
-			y, month, _ := log.Timestamp.Date()
-			ts := time.Date(y, month, 1, 0, 0, 0, 0, log.Timestamp.Location())
+			ts := truncate(log.Timestamp)
 			if _, ok := verCounts[log.OrgID]; !ok {
 				verCounts[log.OrgID] = make(map[time.Time]uint32)
 			}
@@ -1647,7 +1701,7 @@ func (m *MemoryTimeSeries) RetrieveAccountStats(ctx context.Context, userID int3
 		}
 	}
 
-	// For each (orgID, month) use max of request and verify counts
+	// For each organization and time bucket, use max of request and verify counts.
 	counts := make(map[int32]map[time.Time]uint32)
 	for orgID, orgCounts := range reqCounts {
 		counts[orgID] = make(map[time.Time]uint32)
