@@ -12,8 +12,6 @@ const (
 	InternalStatusExpired  = "pc-trial-expired"
 )
 
-type Prices map[string]int
-
 type basePlan struct {
 	name                 string
 	productID            string
@@ -24,9 +22,7 @@ type basePlan struct {
 	priceYearly          int
 	orgsLimit            int
 	rulesLimit           int
-	version              int
 	requestsLimit        int64
-	throttleLimit        int64
 	apiRequestsPerSecond float64
 }
 
@@ -57,13 +53,8 @@ func (p *basePlan) OrgMembersLimit(trial bool) int          { return 10 }
 func (p *basePlan) OrgRulesLimit(trial bool) int            { return p.rulesLimit }
 func (p *basePlan) PropertyRulesLimit(trial bool) int       { return p.rulesLimit }
 
-const (
-	version1 = 1
-)
-
 var (
 	ErrUnknownProductID = errors.New("unknown product ID")
-	ErrUnknownPriceID   = errors.New("unknown price ID")
 	ErrInvalidArgument  = errors.New("invalid argument")
 )
 
@@ -112,9 +103,7 @@ var (
 		priceYearly:          0,
 		orgsLimit:            1,
 		rulesLimit:           10,
-		version:              version1,
 		requestsLimit:        1_000,
-		throttleLimit:        2_000,
 		apiRequestsPerSecond: 10,
 	}
 
@@ -128,9 +117,7 @@ var (
 		priceYearly:          0,
 		orgsLimit:            adminOrgsLimit,
 		rulesLimit:           1_000,
-		version:              version1,
 		requestsLimit:        1_000_000,
-		throttleLimit:        2_000_000,
 		apiRequestsPerSecond: 100,
 	}
 )
