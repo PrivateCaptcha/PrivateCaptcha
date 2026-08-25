@@ -17,11 +17,8 @@ func RegisterStatusCodes(codes map[StatusCode]string) {
 
 const (
 	// common errors
-	StatusOK             StatusCode = 1000
-	StatusFailure        StatusCode = 1001
-	StatusUndefined      StatusCode = 1002
-	StatusNotImplemented StatusCode = 1003
-	StatusApiDeprecated  StatusCode = 1004
+	StatusOK      StatusCode = 1000
+	StatusFailure StatusCode = 1001
 	// organization errors
 	StatusOrgNameEmptyError          StatusCode = 1100
 	StatusOrgNameTooLongError        StatusCode = 1101
@@ -69,8 +66,6 @@ const (
 	StatusRuleDomainSubdomain               StatusCode = 1414
 	StatusRuleDifficultyValueInvalid        StatusCode = 1415
 	StatusRuleDifficultyGrowthInvalid       StatusCode = 1416
-	StatusRulePermissionsError              StatusCode = 1417
-	StatusRulePositionPrecisionError        StatusCode = 1418
 	StatusOrgRulesLimitError                StatusCode = 1419
 	StatusPropertyRulesLimitError           StatusCode = 1420
 	StatusOrgRulesSubscriptionRequired      StatusCode = 1421
@@ -98,12 +93,6 @@ func (sc StatusCode) String() string {
 		return "OK"
 	case StatusFailure:
 		return "Failure"
-	case StatusUndefined:
-		return "Undefined"
-	case StatusNotImplemented:
-		return "Not implemented"
-	case StatusApiDeprecated:
-		return "API is deprecated"
 	case StatusOrgNameEmptyError:
 		return "Name cannot be empty."
 	case StatusOrgNameTooLongError:
@@ -202,10 +191,6 @@ func (sc StatusCode) String() string {
 		return "Difficulty adjustment must be within the range."
 	case StatusRuleDifficultyGrowthInvalid:
 		return "Difficulty growth must be a known value."
-	case StatusRulePermissionsError:
-		return "You don't have permission to access this rule."
-	case StatusRulePositionPrecisionError:
-		return "Rules need rebalancing. Please try again in a moment."
 	case StatusOrgRulesLimitError:
 		return "Organization rules limit reached on your current plan, please upgrade to create more."
 	case StatusPropertyRulesLimitError:

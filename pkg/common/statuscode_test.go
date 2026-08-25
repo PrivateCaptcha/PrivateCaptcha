@@ -8,9 +8,6 @@ func TestStatusCodeString(t *testing.T) {
 	statusCodes := []StatusCode{
 		StatusOK,
 		StatusFailure,
-		StatusUndefined,
-		StatusNotImplemented,
-		StatusApiDeprecated,
 		StatusOrgNameEmptyError,
 		StatusOrgNameTooLongError,
 		StatusOrgNameInvalidSymbolsError,
@@ -56,8 +53,6 @@ func TestStatusCodeString(t *testing.T) {
 		StatusRuleDomainRequired,
 		StatusRuleDomainInvalid,
 		StatusRuleDomainSubdomain,
-		StatusRulePermissionsError,
-		StatusRulePositionPrecisionError,
 		StatusPropertyRulesLimitError,
 		StatusPropertyRulesSubscriptionRequired,
 		StatusRuleHTTPHeaderNameRequired,
