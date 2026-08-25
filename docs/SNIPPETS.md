@@ -37,3 +37,13 @@ SELECT
     now() - toIntervalSecond((rand() % ((3600 * 24) * 365)) + number) AS timestamp
 FROM numbers(50000);
 ```
+
+## Create new user
+
+```sql
+INSERT INTO backend.subscriptions (external_product_id, external_price_id, status, source, trial_ends_at) VALUES ('pctrial_CGK710ObXUu3hnErY87KMx4gnt3', 'pctrial_qD6rwF1UomfdkgbOjaepoDn0RxX', 'trialing', 'internal', NOW() + INTERVAL '1 year') RETURNING *;
+```
+
+```sql
+INSERT INTO backend.users (name, email, subscription_id) VALUES ('Foo Bar', 'foo.bar@privatecaptcha.local', 2);
+```
