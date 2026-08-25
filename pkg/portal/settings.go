@@ -890,7 +890,7 @@ func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 
 	timeFrom := time.Now().UTC().AddDate(-1 /*years*/, 0 /*months*/, 0 /*days*/).Truncate(24 * time.Hour)
 
-	response, err := s.buildAccountStatsResponse(ctx, user.ID, timeFrom)
+	response, err := s.BuildAccountStatsResponse(ctx, user.ID, timeFrom)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve account stats", common.ErrAttr(err))
 	}
@@ -905,7 +905,7 @@ func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 	common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
 }
 
-func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, timeFrom time.Time) (*AccountStatsResponse, error) {
+func (s *Server) BuildAccountStatsResponse(ctx context.Context, userID int32, timeFrom time.Time) (*AccountStatsResponse, error) {
 	stats, err := s.TimeSeries.RetrieveAccountStats(ctx, userID, timeFrom)
 	if err != nil {
 		return nil, err
