@@ -183,6 +183,13 @@ func (c *TxCache) SetTTL(ctx context.Context, key CacheKey, ttl time.Duration) e
 	}
 	return ErrRecordNotFound
 }
+func (c *TxCache) SetIfAbsent(ctx context.Context, key CacheKey, t any) error {
+	if _, ok := c.set[key]; !ok {
+		c.set[key] = &txCacheArg{item: t}
+		return nil
+	}
+	return ErrRecordNotFound
+}
 func (c *TxCache) SetRefresh(ctx context.Context, key CacheKey, refresh time.Duration) error {
 	if item, ok := c.set[key]; ok {
 		item.refresh = refresh

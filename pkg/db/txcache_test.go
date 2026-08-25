@@ -272,6 +272,20 @@ func (m *mockCache) SetTTL(ctx context.Context, key CacheKey, ttl time.Duration)
 func (m *mockCache) SetRefresh(ctx context.Context, key CacheKey, ttl time.Duration) error {
 	return nil
 }
+func (m *mockCache) SetIfAbsent(_ context.Context, key CacheKey, value any) error {
+	if _, exists := m.setValues[key]; exists {
+		return nil
+	}
+
+	for _, missingKey := range m.missing {
+		if missingKey == key {
+			return nil
+		}
+	}
+
+	m.setValues[key] = value
+	return nil
+}
 func (m *mockCache) Delete(ctx context.Context, key CacheKey) bool {
 	m.deleted = append(m.deleted, key)
 	return true

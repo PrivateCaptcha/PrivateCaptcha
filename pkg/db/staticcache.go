@@ -97,6 +97,13 @@ func (c *StaticCache[TKey, TValue]) SetMissing(ctx context.Context, key TKey) er
 	return nil
 }
 
+func (c *StaticCache[TKey, TValue]) SetIfAbsent(ctx context.Context, key TKey, t TValue) error {
+	c.compressIfNeeded()
+
+	c.cache.LoadOrStore(key, t)
+	return nil
+}
+
 func (c *StaticCache[TKey, TValue]) compress() {
 	toDelete := c.cache.Size() - c.lowerBound
 	if toDelete <= 0 {

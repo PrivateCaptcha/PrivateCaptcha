@@ -232,6 +232,21 @@ func (c *memcache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue) er
 	return nil
 }
 
+func (c *memcache[TKey, TValue]) SetIfAbsent(ctx context.Context, key TKey, t TValue) error {
+	_, inserted := c.store.SetIfAbsent(key, t)
+	if !inserted {
+		return nil
+	}
+
+	if t == c.missingValue {
+		slog.Log(ctx, common.LevelTrace, "Set item as missing in memory cache", "cache", c.name, "key", key)
+	} else {
+		slog.Log(ctx, common.LevelTrace, "Saved item to memory cache", "cache", c.name, "key", key)
+	}
+
+	return nil
+}
+
 func (c *memcache[TKey, TValue]) SetEx(ctx context.Context, key TKey, t TValue, ttl, refresh time.Duration) error {
 	if t == c.missingValue {
 		return ErrSetMissing

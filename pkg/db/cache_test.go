@@ -175,6 +175,48 @@ func TestMemoryCacheMissingExpiryIsNotRenewedOnRead(t *testing.T) {
 	}
 }
 
+func TestMemoryCacheSetIfAbsent(t *testing.T) {
+	ctx := context.Background()
+
+	cache, err := NewMemoryCache[string, string](
+		"test-set-if-absent",
+		100,
+		"missing",
+		time.Hour,
+		time.Hour,
+		time.Minute,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cache.SetIfAbsent(ctx, "value", "first"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetIfAbsent(ctx, "value", "second"); err != nil {
+		t.Fatal(err)
+	}
+
+	value, err := cache.Get(ctx, "value")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != "first" {
+		t.Fatalf("expected first value to remain, got %q", value)
+	}
+
+	if err := cache.SetIfAbsent(ctx, "negative", cache.Missing()); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetIfAbsent(ctx, "negative", "replacement"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := cache.Get(ctx, "negative"); err != ErrNegativeCacheHit {
+		t.Fatalf("expected ErrNegativeCacheHit, got %v", err)
+	}
+}
+
 func TestBusinessCacheMissingCompiledRulesRoundTrip(t *testing.T) {
 	t.Parallel()
 

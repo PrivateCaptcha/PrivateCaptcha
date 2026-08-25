@@ -254,3 +254,34 @@ func TestStaticCacheGetExBypassesCapacity(t *testing.T) {
 		t.Fatalf("GetEx bypassed capacity limit. Capacity=10, actual size=%d", got)
 	}
 }
+
+func TestStaticCacheSetIfAbsent(t *testing.T) {
+	ctx := context.Background()
+	cache := NewStaticCache[string, int](100, -1)
+
+	if err := cache.SetIfAbsent(ctx, "value", 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetIfAbsent(ctx, "value", 2); err != nil {
+		t.Fatal(err)
+	}
+
+	value, err := cache.Get(ctx, "value")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != 1 {
+		t.Fatalf("expected first value to remain, got %d", value)
+	}
+
+	if err := cache.SetIfAbsent(ctx, "negative", cache.Missing()); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetIfAbsent(ctx, "negative", 3); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := cache.Get(ctx, "negative"); err != ErrNegativeCacheHit {
+		t.Fatalf("expected ErrNegativeCacheHit, got %v", err)
+	}
+}
