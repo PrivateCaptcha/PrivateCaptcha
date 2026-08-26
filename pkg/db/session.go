@@ -14,25 +14,29 @@ const (
 	sessionBatchSize           = 20
 	sessionCacheTTL            = 3 * time.Hour
 	sessionBackpressureTimeout = 200 * time.Millisecond
+	sessionPersistNowInterval  = 100 * time.Millisecond
+	sessionPersistNowBatchSize = 8
 )
 
 type SessionStore struct {
-	store         Implementor
-	persistChan   chan string
-	batchSize     int
-	processCancel context.CancelFunc
-	persistKey    session.SessionKey
-	metrics       common.BaseMetrics
+	store            Implementor
+	persistDelayChan chan string
+	persistNowChan   chan string
+	batchSize        int
+	processCancel    context.CancelFunc
+	persistKey       session.SessionKey
+	metrics          common.BaseMetrics
 }
 
 func NewSessionStore(store Implementor, persistKey session.SessionKey, metrics common.BaseMetrics) *SessionStore {
 	return &SessionStore{
-		store:         store,
-		persistChan:   make(chan string, sessionBatchSize),
-		batchSize:     sessionBatchSize,
-		persistKey:    persistKey,
-		metrics:       metrics,
-		processCancel: func() {},
+		store:            store,
+		persistDelayChan: make(chan string, sessionBatchSize),
+		persistNowChan:   make(chan string, sessionPersistNowBatchSize),
+		batchSize:        sessionBatchSize,
+		persistKey:       persistKey,
+		metrics:          metrics,
+		processCancel:    func() {},
 	}
 }
 
@@ -40,7 +44,8 @@ func (ss *SessionStore) Start(ctx context.Context, interval time.Duration) {
 	var cancelCtx context.Context
 	cancelCtx, ss.processCancel = context.WithCancel(
 		context.WithValue(ctx, common.TraceIDContextKey, "persist_session"))
-	go common.ProcessBatchMap(cancelCtx, ss.persistChan, interval, ss.batchSize, ss.batchSize*100, ss.persistSessions)
+	go common.ProcessBatchMap(cancelCtx, ss.persistDelayChan, interval, ss.batchSize, ss.batchSize*100, ss.persistSessions)
+	go common.ProcessBatchArray(cancelCtx, ss.persistNowChan, sessionPersistNowInterval, sessionPersistNowBatchSize, sessionPersistNowBatchSize*100, ss.persistSessionsNow)
 }
 
 var _ session.Store = (*SessionStore)(nil)
@@ -51,7 +56,8 @@ func (ss *SessionStore) Stop() {
 
 func (ss *SessionStore) Shutdown() {
 	slog.Debug("Shutting down persisting sessions")
-	close(ss.persistChan)
+	close(ss.persistDelayChan)
+	close(ss.persistNowChan)
 }
 
 func (ss *SessionStore) Init(ctx context.Context, session *session.Session) error {
@@ -80,22 +86,30 @@ func (ss *SessionStore) Update(ctx context.Context, sd *session.Session) error {
 		return nil
 	}
 
-	return ss.enqueuePersistSession(ctx, sd.ID())
+	return ss.enqueuePersistSessionDelayed(ctx, sd.ID())
 }
 
-func (ss *SessionStore) enqueuePersistSession(ctx context.Context, sid string) error {
+func (ss *SessionStore) enqueuePersistSession(ctx context.Context, persistChan chan<- string, sid string) error {
 	timer := time.NewTimer(sessionBackpressureTimeout)
 	defer timer.Stop()
 
 	select {
-	case ss.persistChan <- sid:
+	case persistChan <- sid:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-timer.C:
 		ss.metrics.ObserveEventDropped(common.SessionEventType)
+		return common.ErrBackpressure
+	}
+}
+
+func (ss *SessionStore) enqueuePersistSessionDelayed(ctx context.Context, sid string) error {
+	err := ss.enqueuePersistSession(ctx, ss.persistDelayChan, sid)
+	if err == common.ErrBackpressure {
 		return nil
 	}
+	return err
 }
 
 func (ss *SessionStore) Renew(ctx context.Context, oldSID string, sess *session.Session) error {
@@ -103,19 +117,29 @@ func (ss *SessionStore) Renew(ctx context.Context, oldSID string, sess *session.
 		return err
 	}
 
+	persistent := sess.Data().Has(ss.persistKey)
+	if persistent {
+		if err := ss.enqueuePersistSession(ctx, ss.persistNowChan, sess.ID()); err != nil {
+			slog.ErrorContext(ctx, "Failed to queue renewed session for immediate persistence", common.SessionIDAttr(sess.ID()), common.ErrAttr(err))
+			return err
+		}
+	}
+
 	oldSession := session.NewSession(session.NewTombstoneSessionData(oldSID), ss)
 	if err := ss.Init(ctx, oldSession); err != nil {
 		return err
 	}
 
-	if err := ss.enqueuePersistSession(ctx, oldSID); err != nil {
+	if err := ss.enqueuePersistSessionDelayed(ctx, oldSID); err != nil {
 		slog.ErrorContext(ctx, "Failed to queue old session tombstone for persistence", common.SessionIDAttr(oldSID), common.ErrAttr(err))
 		return err
 	}
 
-	if err := ss.enqueuePersistSession(ctx, sess.ID()); err != nil {
-		slog.ErrorContext(ctx, "Failed to queue renewed session for persistence", common.SessionIDAttr(sess.ID()), common.ErrAttr(err))
-		return err
+	if !persistent {
+		if err := ss.enqueuePersistSessionDelayed(ctx, sess.ID()); err != nil {
+			slog.ErrorContext(ctx, "Failed to queue renewed session for persistence", common.SessionIDAttr(sess.ID()), common.ErrAttr(err))
+			return err
+		}
 	}
 
 	return nil
@@ -127,6 +151,14 @@ func (ss *SessionStore) TTL() time.Duration {
 
 func (ss *SessionStore) Destroy(ctx context.Context, sid string) error {
 	return ss.store.Impl().DeleteUserSession(ctx, sid)
+}
+
+func (ss *SessionStore) persistSessionsNow(ctx context.Context, sids []string) error {
+	batch := make(map[string]uint, len(sids))
+	for _, sid := range sids {
+		batch[sid]++
+	}
+	return ss.store.Impl().StoreUserSessions(ctx, batch, ss.persistKey, sessionCacheTTL)
 }
 
 func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]uint) error {
