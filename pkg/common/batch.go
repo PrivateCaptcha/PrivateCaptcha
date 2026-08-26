@@ -93,7 +93,7 @@ func ProcessBatchMap[T comparable](ctx context.Context, channel <-chan T, delay 
 	slog.DebugContext(ctx, "Processing batch", "interval", delay.String())
 
 	for running := true; running; {
-		if len(batch) > maxBatchSize {
+		if len(batch) > maxBatchSize || updateCount > maxBatchSize {
 			slog.ErrorContext(ctx, "Dropping pending batch due to errors", "count", len(batch))
 			batch = make(map[T]uint, triggerSize)
 			updateCount = 0
