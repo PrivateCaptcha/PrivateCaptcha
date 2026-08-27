@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/maypok86/otter/v2"
 )
 
@@ -252,5 +254,40 @@ func TestBusinessCacheMissingCompiledRulesRoundTrip(t *testing.T) {
 	}
 	if _, _, err := newImpl.GetCachedCompiledOrgRules(ctx, 456); err != ErrNegativeCacheHit {
 		t.Fatalf("expected negative cache hit for org rules after load, got %v", err)
+	}
+}
+
+func TestBusinessCachePersistenceExcludesPortalSessions(t *testing.T) {
+	ctx := t.Context()
+	const sid = "disk-persistence-session"
+	normalKey := APIKeyCacheKey("disk-persistence-value")
+	sessionKey := SessionCacheKey(sid)
+	source := NewBusiness(nil)
+	if err := source.Cache.Set(ctx, normalKey, "normal-value"); err != nil {
+		t.Fatal(err)
+	}
+	sessionData := session.NewSessionData(sid)
+	if err := source.Impl().CacheUserSession(ctx, sessionData); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshotDir := t.TempDir()
+	if err := source.SaveCache(ctx, snapshotDir); err != nil {
+		t.Fatal(err)
+	}
+	if value, err := source.Cache.Get(ctx, sessionKey); err != nil || value != sessionData {
+		t.Fatalf("saving removed the live in-memory session: value=%v err=%v", value, err)
+	}
+
+	restoredStore := NewBusiness(nil)
+	restoredCache := restoredStore.Cache.(*memcache[CacheKey, any])
+	if err := common.LoadCacheFromFile(ctx, snapshotDir, cachePersistFile, DefaultCacheTTL, restoredCache.store); err != nil {
+		t.Fatal(err)
+	}
+	if value, err := restoredStore.Cache.Get(ctx, normalKey); err != nil || value != "normal-value" {
+		t.Fatalf("non-session cache entry did not round-trip: value=%v err=%v", value, err)
+	}
+	if _, err := restoredStore.Cache.Get(ctx, sessionKey); err != ErrCacheMiss {
+		t.Fatalf("session was serialized in the snapshot: %v", err)
 	}
 }

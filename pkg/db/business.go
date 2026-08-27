@@ -11,6 +11,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -238,7 +239,7 @@ func (s *BusinessStore) SaveCache(ctx context.Context, dir string) error {
 		return nil
 	}
 
-	return common.SaveCacheToFile(ctx, dir, cachePersistFile, cachePersistSize, mc.store, nil)
+	return common.SaveCacheToFile(ctx, dir, cachePersistFile, cachePersistSize, mc.store, shouldPersistBusinessCacheValue)
 }
 
 func (s *BusinessStore) LoadCache(ctx context.Context, dir string) error {
@@ -249,6 +250,11 @@ func (s *BusinessStore) LoadCache(ctx context.Context, dir string) error {
 	}
 
 	return common.LoadCacheFromFile(ctx, dir, cachePersistFile, DefaultCacheTTL, mc.store)
+}
+
+func shouldPersistBusinessCacheValue(value any) bool {
+	_, isSession := value.(*session.SessionData)
+	return !isSession
 }
 
 func (s *BusinessStore) ClearCache() {
