@@ -11,10 +11,14 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
+	"github.com/jpillora/backoff"
 )
 
 const (
-	spammerEmail = "spammer@privatecaptcha.local"
+	spammerEmail                          = "spammer@privatecaptcha.local"
+	registrationFinalizeMaxAttempts       = 5
+	registrationFinalizeInitialRetryDelay = 100 * time.Millisecond
+	registrationFinalizeMaximumRetryDelay = 2 * time.Second
 )
 
 func (s *Server) OnboardUser(user *dbgen.User, plan billing.Plan, orgInviteID *int32) common.OneOffJob {
@@ -27,6 +31,10 @@ func (s *Server) OffboardUser(user *dbgen.User) common.OneOffJob {
 
 func (s *Server) CheckRegistration(sess *session.Session, r *http.Request) common.OneOffJob {
 	return &registrationCheckJob{Sess: sess}
+}
+
+func (s *Server) FinalizeRegistration(sess *session.Session, userID int32) common.OneOffJob {
+	return &registrationFinalizerJob{Sess: sess, UserID: userID}
 }
 
 func (s *Server) LoginUser(sess *session.Session) common.OneOffJob {
@@ -103,6 +111,57 @@ func (j *LoginUserJob) RunOnce(ctx context.Context, params any) error {
 
 type registrationCheckJob struct {
 	Sess *session.Session
+}
+
+type registrationFinalizerJob struct {
+	Sess   *session.Session
+	UserID int32
+}
+
+func (j *registrationFinalizerJob) Name() string {
+	return "RegistrationFinalizer"
+}
+
+func (j *registrationFinalizerJob) InitialPause() time.Duration {
+	return 0
+}
+
+func (j *registrationFinalizerJob) NewParams() any {
+	return struct{}{}
+}
+
+func (j *registrationFinalizerJob) RunOnce(ctx context.Context, params any) error {
+	if j.Sess == nil || j.UserID <= 0 {
+		return nil
+	}
+
+	b := &backoff.Backoff{
+		Min:    registrationFinalizeInitialRetryDelay,
+		Max:    registrationFinalizeMaximumRetryDelay,
+		Factor: 2,
+		Jitter: true,
+	}
+
+	var err error
+	for attempt := 0; attempt < registrationFinalizeMaxAttempts; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(b.Duration()):
+			}
+		}
+
+		var finalized bool
+		finalized, err = j.Sess.FinalizeRegistration(ctx, j.UserID)
+		if err == nil {
+			if !finalized {
+				slog.WarnContext(ctx, "Registration session no longer matches processing authority", common.SessionIDAttr(j.Sess.ID()))
+			}
+			return nil
+		}
+	}
+	return err
 }
 
 func (j *registrationCheckJob) Name() string {

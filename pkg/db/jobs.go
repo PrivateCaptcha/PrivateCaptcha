@@ -14,4 +14,5 @@ type UserJobs interface {
 	OffboardUser(user *dbgen.User) common.OneOffJob
 	LoginUser(sess *session.Session) common.OneOffJob
 	CheckRegistration(sess *session.Session, r *http.Request) common.OneOffJob
+	FinalizeRegistration(sess *session.Session, userID int32) common.OneOffJob
 }

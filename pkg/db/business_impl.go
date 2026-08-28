@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -36,6 +37,8 @@ const (
 	formPropertyNameSuffix   = " (form)"
 	MaxFormURLLength         = 1024
 )
+
+const sessionCreateReconcileTimeout = 2 * time.Second
 
 var (
 	invalidPropertyID int32 = -1
@@ -245,6 +248,9 @@ func (impl *BusinessStoreImpl) RetrieveFromCache(ctx context.Context, key string
 	if len(key) == 0 {
 		return nil, ErrInvalidInput
 	}
+	if strings.HasPrefix(key, sessionCachePrefix) {
+		return nil, ErrCacheMiss
+	}
 
 	if impl.querier == nil {
 		return nil, ErrMaintenance
@@ -262,7 +268,7 @@ func (impl *BusinessStoreImpl) RetrieveFromCache(ctx context.Context, key string
 }
 
 func (impl *BusinessStoreImpl) StoreInCache(ctx context.Context, key string, data []byte, ttl time.Duration) error {
-	if (len(key) == 0) || (len(data) == 0) || (ttl == 0) {
+	if (len(key) == 0) || strings.HasPrefix(key, sessionCachePrefix) || (len(data) == 0) || (ttl == 0) {
 		return ErrInvalidInput
 	}
 
@@ -311,6 +317,21 @@ func (impl *BusinessStoreImpl) DeleteExpiredCache(ctx context.Context) error {
 
 	slog.Log(ctx, common.LevelTrace, "Deleted expired cache", "affected", affected)
 
+	return nil
+}
+
+func (impl *BusinessStoreImpl) DeleteExpiredSessions(ctx context.Context) error {
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	affected, err := impl.querier.DeleteExpiredSessions(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to delete expired sessions", common.ErrAttr(err))
+		return err
+	}
+
+	slog.Log(ctx, common.LevelTrace, "Deleted expired sessions", "affected", affected)
 	return nil
 }
 
@@ -468,50 +489,107 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 
 func (impl *BusinessStoreImpl) doGetSessionbyID(ctx context.Context, sid string) (*session.SessionData, error) {
 	sslog := slog.With(common.SessionIDAttr(sid))
-	sessionID, _ := sessionIDFunc(sid)
-	data, err := impl.RetrieveFromCache(ctx, sessionID)
-	if (err == nil) && (len(data) > 0) {
-		sslog.DebugContext(ctx, "Found session data cached in DB")
-		sd := session.NewSessionData(sid)
-		if uerr := sd.UnmarshalBinary(data); uerr != nil {
-			sslog.ErrorContext(ctx, "Failed to unmarshal session data from cache", common.ErrAttr(uerr))
-			return nil, uerr
-		}
-
-		sslog.Log(ctx, common.LevelTrace, "Unmarshaled session data from binary", "fields", sd.Size())
-
-		return sd, nil
+	if impl.querier == nil {
+		return nil, ErrMaintenance
 	}
 
-	if err == ErrCacheMiss {
-		sslog.DebugContext(ctx, "Session data not found cached in DB")
-		// this will cause item to be purged from otter cache, should it still be there
+	row, err := impl.querier.GetSessionByID(ctx, sid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		sslog.DebugContext(ctx, "Session data not found in DB")
 		return nil, otter.ErrNotFound
 	}
+	if err != nil {
+		sslog.ErrorContext(ctx, "Failed to read session data from DB", common.ErrAttr(err))
+		return nil, err
+	}
 
-	sslog.ErrorContext(ctx, "Failed to read session data from DB cache", "size", len(data), common.ErrAttr(err))
-
-	return nil, err
+	sd := session.NewSessionData(sid)
+	if err := sd.UnmarshalBinary(row.Data); err != nil {
+		sslog.ErrorContext(ctx, "Failed to unmarshal session data", common.ErrAttr(err))
+		return nil, err
+	}
+	if row.UserID.Valid {
+		sd.SetAuthoritativeUserID(row.UserID.Int32)
+	} else if row.State == dbgen.SessionStateAuthenticated {
+		return nil, ErrInvalidInput
+	}
+	if !row.ExpiresAt.Valid {
+		return nil, ErrInvalidInput
+	}
+	sd.SetAuthority(session.State(row.State), row.Version, row.ExpiresAt.Time, time.Time{})
+	sslog.Log(ctx, common.LevelTrace, "Unmarshaled session data from binary", "fields", sd.Size())
+	return sd, nil
 }
 
 func (impl *BusinessStoreImpl) DeleteUserSession(ctx context.Context, sid string) error {
-	if found := impl.cache.Delete(ctx, SessionCacheKey(sid)); !found {
-		slog.WarnContext(ctx, "User session was not found in memory cache to delete")
+	sd, _ := impl.GetCachedUserSession(ctx, sid)
+	persisted := false
+	if sd != nil {
+		_, persisted = sd.Persistence()
+	}
+	if !persisted {
+		impl.DeleteCachedUserSession(ctx, sid)
+		return nil
 	}
 
 	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	sessionID, _ := sessionIDFunc(sid)
-	affected, err := impl.querier.DeleteCachedByKey(ctx, sessionID)
+	affected, err := impl.querier.DeleteSessionsByID(ctx, []string{sid})
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to delete cached session from DB", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to delete session from DB", common.ErrAttr(err))
 	} else {
-		slog.Log(ctx, common.LevelTrace, "Deleted cached session from DB", "affected", affected)
+		impl.DeleteCachedUserSession(ctx, sid)
+		slog.Log(ctx, common.LevelTrace, "Deleted session from DB", "affected", affected)
 	}
 
 	return err
+}
+
+func (impl *BusinessStoreImpl) RevokeUserSession(ctx context.Context, sid string) (session.SessionRevocationResult, error) {
+	if sid == "" {
+		return session.SessionRevocationResult{}, ErrInvalidInput
+	}
+
+	sd, _ := impl.GetCachedUserSession(ctx, sid)
+	if sd != nil {
+		if _, persisted := sd.Persistence(); !persisted {
+			sd.MarkStale()
+			impl.DeleteCachedUserSession(ctx, sid)
+			return session.SessionRevocationResult{}, nil
+		}
+	}
+	if impl.querier == nil {
+		return session.SessionRevocationResult{}, ErrMaintenance
+	}
+
+	row, err := impl.querier.RevokeSession(ctx, sid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		if sd != nil {
+			sd.MarkStale()
+		}
+		impl.DeleteCachedUserSession(ctx, sid)
+		return session.SessionRevocationResult{}, nil
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to revoke session in DB", common.ErrAttr(err))
+		return session.SessionRevocationResult{}, err
+	}
+	if row.SessionID != sid || row.State != dbgen.SessionStateRevoked || row.Version <= 0 || (row.Transitioned && row.PreviousState == dbgen.SessionStateRevoked) || (!row.Transitioned && row.PreviousState != dbgen.SessionStateRevoked) {
+		return session.SessionRevocationResult{}, ErrInvalidInput
+	}
+	result := session.SessionRevocationResult{Transitioned: row.Transitioned}
+	if row.UserID.Valid {
+		result.UserID = row.UserID.Int32
+	} else if row.Transitioned && row.PreviousState == dbgen.SessionStateRegistrationProcessing && sd != nil && sd.RegistrationFinalizing() {
+		result.UserID, _ = sd.UserID()
+	}
+	if sd != nil {
+		sd.MarkStale()
+	}
+	impl.DeleteCachedUserSession(ctx, sid)
+	return result, nil
 }
 
 func (impl *BusinessStoreImpl) DeleteUserSessions(ctx context.Context, sids []string) error {
@@ -519,24 +597,18 @@ func (impl *BusinessStoreImpl) DeleteUserSessions(ctx context.Context, sids []st
 		return nil
 	}
 
-	keys := make([]string, 0, len(sids))
-	for _, sid := range sids {
-		if found := impl.cache.Delete(ctx, SessionCacheKey(sid)); !found {
-			slog.WarnContext(ctx, "User session was not found in memory cache to delete")
-		}
-		sessionID, _ := sessionIDFunc(sid)
-		keys = append(keys, sessionID)
-	}
-
 	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	affected, err := impl.querier.DeleteCachedByKeys(ctx, keys)
+	affected, err := impl.querier.DeleteSessionsByID(ctx, sids)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to delete cached sessions from DB", "count", len(keys), common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to delete sessions from DB", "count", len(sids), common.ErrAttr(err))
 	} else {
-		slog.Log(ctx, common.LevelTrace, "Deleted cached sessions from DB", "count", len(keys), "affected", affected)
+		for _, sid := range sids {
+			impl.DeleteCachedUserSession(ctx, sid)
+		}
+		slog.Log(ctx, common.LevelTrace, "Deleted sessions from DB", "count", len(sids), "affected", affected)
 	}
 
 	return err
@@ -548,6 +620,513 @@ func (impl *BusinessStoreImpl) CacheUserSession(ctx context.Context, data *sessi
 	}
 
 	return impl.cache.Set(ctx, SessionCacheKey(data.ID()), data)
+}
+
+func (impl *BusinessStoreImpl) CreateUserSession(ctx context.Context, sd *session.SessionData, persistKey session.SessionKey, ttl time.Duration) error {
+	return impl.CreateUserSessionWithState(ctx, sd, persistKey, ttl, session.StatePending, nil)
+}
+
+func (impl *BusinessStoreImpl) CreateUserSignInChallenge(ctx context.Context, sd *session.SessionData, persistKey session.SessionKey, userID int32, encodedCode, email string, sessionTTL, challengeTTL time.Duration) error {
+	if sd == nil || !sd.Has(persistKey) || userID <= 0 || encodedCode == "" || email == "" || sessionTTL <= 0 || challengeTTL <= 0 {
+		return ErrInvalidInput
+	}
+	payload, _, persisted, err := sd.PersistenceSnapshot()
+	if err != nil {
+		return err
+	}
+	if persisted {
+		return ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	now := time.Now().UTC()
+	expiresAt := now.Add(sessionTTL)
+	challengeExpiresAt := now.Add(challengeTTL)
+	if challengeExpiresAt.After(expiresAt) {
+		challengeExpiresAt = expiresAt
+	}
+	params := &dbgen.CreateSessionParams{
+		SessionID:          sd.ID(),
+		State:              dbgen.SessionStatePending,
+		UserID:             Int(userID),
+		Data:               payload,
+		ExpiresAt:          Timestampz(expiresAt),
+		ChallengeKind:      dbgen.NullSessionChallengeKind{SessionChallengeKind: dbgen.SessionChallengeKindSignIn, Valid: true},
+		ChallengeCode:      Text(encodedCode),
+		ChallengeEmail:     Text(email),
+		ChallengeExpiresAt: Timestampz(challengeExpiresAt),
+	}
+	row, err := impl.querier.CreateSession(ctx, params)
+	if err != nil {
+		createErr := err
+		reconcileCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionCreateReconcileTimeout)
+		defer cancel()
+		row, err = impl.querier.GetSessionByID(reconcileCtx, sd.ID())
+		if err != nil || row == nil || row.State != params.State || row.UserID != params.UserID || row.Version != 1 || row.ChallengeKind != params.ChallengeKind || row.ChallengeCode != params.ChallengeCode || row.ChallengeEmail != params.ChallengeEmail || !bytes.Equal(row.Data, payload) {
+			return createErr
+		}
+	}
+	if row == nil {
+		return ErrRecordNotFound
+	}
+	sd.SetAuthority(session.StatePending, row.Version, row.ExpiresAt.Time, time.Time{})
+	return nil
+}
+
+func (impl *BusinessStoreImpl) CreateUserRegistrationChallenge(ctx context.Context, sd *session.SessionData, persistKey session.SessionKey, encodedCode, email string, sessionTTL, challengeTTL time.Duration) error {
+	if sd == nil || !sd.Has(persistKey) || encodedCode == "" || email == "" || sessionTTL <= 0 || challengeTTL <= 0 {
+		return ErrInvalidInput
+	}
+	payload, _, persisted, err := sd.PersistenceSnapshot()
+	if err != nil {
+		return err
+	}
+	if persisted {
+		return ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	now := time.Now().UTC()
+	expiresAt := now.Add(sessionTTL)
+	challengeExpiresAt := now.Add(challengeTTL)
+	if challengeExpiresAt.After(expiresAt) {
+		challengeExpiresAt = expiresAt
+	}
+	params := &dbgen.CreateSessionParams{
+		SessionID:          sd.ID(),
+		State:              dbgen.SessionStatePending,
+		Data:               payload,
+		ExpiresAt:          Timestampz(expiresAt),
+		ChallengeKind:      dbgen.NullSessionChallengeKind{SessionChallengeKind: dbgen.SessionChallengeKindRegistration, Valid: true},
+		ChallengeCode:      Text(encodedCode),
+		ChallengeEmail:     Text(email),
+		ChallengeExpiresAt: Timestampz(challengeExpiresAt),
+	}
+	row, err := impl.querier.CreateSession(ctx, params)
+	if err != nil {
+		createErr := err
+		reconcileCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionCreateReconcileTimeout)
+		defer cancel()
+		row, err = impl.querier.GetSessionByID(reconcileCtx, sd.ID())
+		if err != nil || row == nil || row.State != params.State || row.UserID.Valid || row.Version != 1 || row.ChallengeKind != params.ChallengeKind || row.ChallengeCode != params.ChallengeCode || row.ChallengeEmail != params.ChallengeEmail || !bytes.Equal(row.Data, payload) {
+			return createErr
+		}
+	}
+	if row == nil {
+		return ErrRecordNotFound
+	}
+	sd.SetAuthority(session.StatePending, row.Version, row.ExpiresAt.Time, time.Time{})
+	return nil
+}
+
+func (impl *BusinessStoreImpl) ConsumeUserSignInChallenge(ctx context.Context, oldSID string, successor *session.SessionData, persistKey session.SessionKey, expectedUserID int32, encodedCode string, maxFailedAttempts int32, ttl time.Duration) (session.SignInChallengeResult, error) {
+	if oldSID == "" || successor == nil || oldSID == successor.ID() || !successor.Has(persistKey) || expectedUserID <= 0 || maxFailedAttempts <= 0 || ttl <= 0 {
+		return session.SignInChallengeResult{}, ErrInvalidInput
+	}
+	successor.SetAuthoritativeUserID(expectedUserID)
+	payload, _, persisted, err := successor.PersistenceSnapshot()
+	if err != nil {
+		return session.SignInChallengeResult{}, err
+	}
+	if persisted {
+		return session.SignInChallengeResult{}, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return session.SignInChallengeResult{}, ErrMaintenance
+	}
+	row, err := impl.querier.ConsumeSignInChallenge(ctx, &dbgen.ConsumeSignInChallengeParams{
+		OldSessionID:      oldSID,
+		MaxFailedAttempts: maxFailedAttempts,
+		EncodedCode:       encodedCode,
+		ExpectedUserID:    expectedUserID,
+		NewSessionID:      successor.ID(),
+		SuccessorData:     payload,
+		SuccessorTtl:      ttl,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return session.SignInChallengeResult{}, nil
+	}
+	if err != nil {
+		consumeErr := err
+		reconcileCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionCreateReconcileTimeout)
+		defer cancel()
+		reconciled, reconcileErr := impl.querier.GetSessionByID(reconcileCtx, successor.ID())
+		if reconcileErr != nil || reconciled == nil || reconciled.State != dbgen.SessionStateAuthenticated || reconciled.Version != 1 || !reconciled.UserID.Valid || reconciled.UserID.Int32 != expectedUserID || !reconciled.ExpiresAt.Valid || reconciled.ChallengeKind.Valid || reconciled.ChallengeCode.Valid || reconciled.ChallengeEmail.Valid || reconciled.ChallengeExpiresAt.Valid || !bytes.Equal(reconciled.Data, payload) {
+			return session.SignInChallengeResult{}, consumeErr
+		}
+		successor.SetAuthority(session.StateAuthenticated, reconciled.Version, reconciled.ExpiresAt.Time, time.Time{})
+		return session.SignInChallengeResult{Consumed: true}, nil
+	}
+	result := session.SignInChallengeResult{
+		Consumed:          row.Consumed,
+		AttemptsExhausted: row.AttemptsExhausted,
+	}
+	if !result.Consumed {
+		return result, nil
+	}
+	if !row.SessionID.Valid || row.SessionID.String != successor.ID() || !row.State.Valid || row.State.SessionState != dbgen.SessionStateAuthenticated || !row.Version.Valid || row.Version.Int32 <= 0 || !row.UserID.Valid || row.UserID.Int32 != expectedUserID || !row.ExpiresAt.Valid {
+		return session.SignInChallengeResult{}, ErrInvalidInput
+	}
+	successor.SetAuthority(session.StateAuthenticated, row.Version.Int32, row.ExpiresAt.Time, time.Time{})
+	return result, nil
+}
+
+func (impl *BusinessStoreImpl) ConsumeUserRegistrationChallenge(ctx context.Context, oldSID string, successor *session.SessionData, persistKey session.SessionKey, encodedCode string, maxFailedAttempts int32, allowConsumption bool, ttl time.Duration) (session.RegistrationChallengeResult, error) {
+	if oldSID == "" || successor == nil || oldSID == successor.ID() || !successor.Has(persistKey) || maxFailedAttempts <= 0 || ttl <= 0 {
+		return session.RegistrationChallengeResult{}, ErrInvalidInput
+	}
+	payload, _, persisted, err := successor.PersistenceSnapshot()
+	if err != nil {
+		return session.RegistrationChallengeResult{}, err
+	}
+	if persisted {
+		return session.RegistrationChallengeResult{}, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return session.RegistrationChallengeResult{}, ErrMaintenance
+	}
+	row, err := impl.querier.ConsumeRegistrationChallenge(ctx, &dbgen.ConsumeRegistrationChallengeParams{
+		OldSessionID:      oldSID,
+		MaxFailedAttempts: maxFailedAttempts,
+		EncodedCode:       encodedCode,
+		AllowConsumption:  allowConsumption,
+		NewSessionID:      successor.ID(),
+		SuccessorData:     payload,
+		SuccessorTtl:      ttl,
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		consumeErr := err
+		reconcileCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionCreateReconcileTimeout)
+		defer cancel()
+		reconciled, reconcileErr := impl.querier.GetSessionByID(reconcileCtx, successor.ID())
+		predecessor, predecessorErr := impl.querier.GetSessionByID(reconcileCtx, oldSID)
+		if reconcileErr != nil || predecessorErr != nil || reconciled == nil || predecessor == nil || reconciled.State != dbgen.SessionStateRegistrationProcessing || reconciled.Version != 1 || reconciled.UserID.Valid || !reconciled.ExpiresAt.Valid || reconciled.ChallengeKind.Valid || reconciled.ChallengeCode.Valid || reconciled.ChallengeEmail.Valid || reconciled.ChallengeExpiresAt.Valid || !bytes.Equal(reconciled.Data, payload) || predecessor.State != dbgen.SessionStateRevoked || !predecessor.ChallengeKind.Valid || predecessor.ChallengeKind.SessionChallengeKind != dbgen.SessionChallengeKindRegistration || !predecessor.ChallengeEmail.Valid {
+			return session.RegistrationChallengeResult{}, consumeErr
+		}
+		successor.SetAuthority(session.StateRegistrationProcessing, reconciled.Version, reconciled.ExpiresAt.Time, time.Time{})
+		return session.RegistrationChallengeResult{Consumed: true, Verified: true, Email: predecessor.ChallengeEmail.String}, nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return session.RegistrationChallengeResult{}, nil
+	}
+	result := session.RegistrationChallengeResult{
+		Consumed:          row.Consumed,
+		Verified:          row.Verified.Valid && row.Verified.Bool,
+		AttemptsExhausted: row.AttemptsExhausted,
+	}
+	if !result.Consumed {
+		return result, nil
+	}
+	if !result.Verified || !row.ChallengeEmail.Valid || !row.SessionID.Valid || row.SessionID.String != successor.ID() || !row.State.Valid || row.State.SessionState != dbgen.SessionStateRegistrationProcessing || !row.Version.Valid || row.Version.Int32 <= 0 || row.UserID.Valid || !row.ExpiresAt.Valid {
+		return session.RegistrationChallengeResult{}, ErrInvalidInput
+	}
+	result.Email = row.ChallengeEmail.String
+	successor.SetAuthority(session.StateRegistrationProcessing, row.Version.Int32, row.ExpiresAt.Time, time.Time{})
+	return result, nil
+}
+
+func (impl *BusinessStoreImpl) ReissueUserSignInChallenge(ctx context.Context, sd *session.SessionData, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (session.SignInChallengeReissue, error) {
+	if sd == nil || encodedCode == "" || fallbackEncodedCode == "" || encodedCode == fallbackEncodedCode || challengeTTL <= 0 {
+		return session.SignInChallengeReissue{}, ErrInvalidInput
+	}
+	if _, persisted := sd.Persistence(); !persisted {
+		return session.SignInChallengeReissue{}, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return session.SignInChallengeReissue{}, ErrMaintenance
+	}
+	row, err := impl.querier.ReissueSignInChallenge(ctx, &dbgen.ReissueSignInChallengeParams{
+		EncodedCode:         encodedCode,
+		FallbackEncodedCode: fallbackEncodedCode,
+		ChallengeTtl:        challengeTTL,
+		SessionID:           sd.ID(),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return session.SignInChallengeReissue{}, nil
+	}
+	if err != nil {
+		return session.SignInChallengeReissue{}, err
+	}
+	if row.SessionID != sd.ID() || row.State != dbgen.SessionStatePending || row.Version <= 0 || !row.ExpiresAt.Valid || !row.ChallengeCode.Valid || !row.ChallengeEmail.Valid || !row.ChallengeExpiresAt.Valid {
+		return session.SignInChallengeReissue{}, ErrInvalidInput
+	}
+	sd.SetAuthority(session.StatePending, row.Version, row.ExpiresAt.Time, time.Time{})
+	return session.SignInChallengeReissue{EncodedCode: row.ChallengeCode.String, Email: row.ChallengeEmail.String}, nil
+}
+
+func (impl *BusinessStoreImpl) ReissueUserRegistrationChallenge(ctx context.Context, sd *session.SessionData, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (session.RegistrationChallengeReissue, error) {
+	if sd == nil || encodedCode == "" || fallbackEncodedCode == "" || encodedCode == fallbackEncodedCode || challengeTTL <= 0 {
+		return session.RegistrationChallengeReissue{}, ErrInvalidInput
+	}
+	if _, persisted := sd.Persistence(); !persisted {
+		return session.RegistrationChallengeReissue{}, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return session.RegistrationChallengeReissue{}, ErrMaintenance
+	}
+	row, err := impl.querier.ReissueRegistrationChallenge(ctx, &dbgen.ReissueRegistrationChallengeParams{
+		EncodedCode:         encodedCode,
+		FallbackEncodedCode: fallbackEncodedCode,
+		ChallengeTtl:        challengeTTL,
+		SessionID:           sd.ID(),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return session.RegistrationChallengeReissue{}, nil
+	}
+	if err != nil {
+		return session.RegistrationChallengeReissue{}, err
+	}
+	if row.SessionID != sd.ID() || row.State != dbgen.SessionStatePending || row.Version <= 0 || !row.ExpiresAt.Valid || !row.ChallengeCode.Valid || !row.ChallengeEmail.Valid || !row.ChallengeExpiresAt.Valid {
+		return session.RegistrationChallengeReissue{}, ErrInvalidInput
+	}
+	sd.SetAuthority(session.StatePending, row.Version, row.ExpiresAt.Time, time.Time{})
+	return session.RegistrationChallengeReissue{EncodedCode: row.ChallengeCode.String, Email: row.ChallengeEmail.String}, nil
+}
+
+func (impl *BusinessStoreImpl) IssueUserEmailChangeChallenge(ctx context.Context, sd *session.SessionData, expectedUserID int32, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (session.EmailChangeChallengeIssue, error) {
+	if sd == nil || expectedUserID <= 0 || encodedCode == "" || fallbackEncodedCode == "" || encodedCode == fallbackEncodedCode || challengeTTL <= 0 {
+		return session.EmailChangeChallengeIssue{}, ErrInvalidInput
+	}
+	expectedVersion, persisted := sd.Persistence()
+	if !persisted || expectedVersion <= 0 {
+		return session.EmailChangeChallengeIssue{}, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return session.EmailChangeChallengeIssue{}, ErrMaintenance
+	}
+	params := &dbgen.IssueEmailChangeChallengeParams{
+		EncodedCode:         encodedCode,
+		FallbackEncodedCode: fallbackEncodedCode,
+		ChallengeTtl:        challengeTTL,
+		SessionID:           sd.ID(),
+		ExpectedVersion:     expectedVersion,
+		ExpectedUserID:      expectedUserID,
+	}
+	row, err := impl.querier.IssueEmailChangeChallenge(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return session.EmailChangeChallengeIssue{}, nil
+	}
+	if err != nil {
+		return session.EmailChangeChallengeIssue{}, err
+	}
+	if !validIssuedEmailChangeChallengeRow(row, params) {
+		return session.EmailChangeChallengeIssue{}, ErrInvalidInput
+	}
+	_, _, validatedAt := sd.Authority()
+	sd.SetAuthority(session.StateAuthenticated, row.Version, row.ExpiresAt.Time, validatedAt)
+	return session.EmailChangeChallengeIssue{EncodedCode: row.ChallengeCode.String, Email: row.ChallengeEmail.String}, nil
+}
+
+func validIssuedEmailChangeChallengeRow(row *dbgen.Session, params *dbgen.IssueEmailChangeChallengeParams) bool {
+	return row != nil && row.SessionID == params.SessionID && row.State == dbgen.SessionStateAuthenticated && row.Version == params.ExpectedVersion+1 && row.UserID.Valid && row.UserID.Int32 == params.ExpectedUserID && row.ExpiresAt.Valid && row.ChallengeKind.Valid && row.ChallengeKind.SessionChallengeKind == dbgen.SessionChallengeKindEmailChange && row.ChallengeCode.Valid && (row.ChallengeCode.String == params.EncodedCode || row.ChallengeCode.String == params.FallbackEncodedCode) && row.ChallengeEmail.Valid && row.ChallengeEmail.String != "" && row.ChallengeExpiresAt.Valid && row.FailedAttempts == 0
+}
+
+func (impl *BusinessStoreImpl) ConsumeUserEmailChangeChallenge(ctx context.Context, sd *session.SessionData, expectedUserID int32, newEmail, encodedCode string, maxFailedAttempts int32) (session.EmailChangeChallengeResult, error) {
+	if sd == nil || expectedUserID <= 0 || newEmail == "" || maxFailedAttempts <= 0 {
+		return session.EmailChangeChallengeResult{}, ErrInvalidInput
+	}
+	expectedVersion, persisted := sd.Persistence()
+	if !persisted {
+		return session.EmailChangeChallengeResult{}, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return session.EmailChangeChallengeResult{}, ErrMaintenance
+	}
+	row, err := impl.querier.ConsumeEmailChangeChallenge(ctx, &dbgen.ConsumeEmailChangeChallengeParams{
+		SessionID:         sd.ID(),
+		ExpectedUserID:    expectedUserID,
+		NewEmail:          newEmail,
+		MaxFailedAttempts: maxFailedAttempts,
+		EncodedCode:       encodedCode,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		_ = impl.cache.Delete(ctx, UserCacheKey(expectedUserID))
+		return session.EmailChangeChallengeResult{}, nil
+	}
+	if err != nil {
+		_ = impl.cache.Delete(ctx, UserCacheKey(expectedUserID))
+		return session.EmailChangeChallengeResult{}, err
+	}
+	if row == nil || row.SessionID != sd.ID() || row.State != dbgen.SessionStateAuthenticated || row.PreviousVersion <= 0 || row.Version < row.PreviousVersion || row.Version > row.PreviousVersion+1 || !row.UserID.Valid || row.UserID.Int32 != expectedUserID || !row.ExpiresAt.Valid || row.OldUserID != expectedUserID || !row.OldUserEnabled || row.OldUserDeletedAt.Valid {
+		return session.EmailChangeChallengeResult{}, ErrInvalidInput
+	}
+	if (row.Consumed && row.Version != row.PreviousVersion+1) || (!row.Consumed && row.AttemptsExhausted && row.Version != row.PreviousVersion) || (!row.Consumed && !row.AttemptsExhausted && row.Version != row.PreviousVersion+1) {
+		return session.EmailChangeChallengeResult{}, ErrInvalidInput
+	}
+	if row.PreviousVersion != expectedVersion {
+		if err := sd.UnmarshalBinary(row.Data); err != nil {
+			return session.EmailChangeChallengeResult{}, err
+		}
+		sd.SetAuthoritativeUserID(expectedUserID)
+	}
+
+	_, _, validatedAt := sd.Authority()
+	sd.SetAuthority(session.StateAuthenticated, row.Version, row.ExpiresAt.Time, validatedAt)
+	result := session.EmailChangeChallengeResult{
+		Consumed:          row.Consumed,
+		AttemptsExhausted: row.AttemptsExhausted,
+	}
+	if !row.Consumed {
+		return result, nil
+	}
+	if !row.NewEmail.Valid || row.NewEmail.String != newEmail || !row.NewUserUpdatedAt.Valid {
+		return session.EmailChangeChallengeResult{}, ErrInvalidInput
+	}
+	oldUser := &dbgen.User{
+		ID:             row.OldUserID,
+		Name:           row.OldUserName,
+		Email:          row.OldUserEmail,
+		SubscriptionID: row.OldUserSubscriptionID,
+		CreatedAt:      row.OldUserCreatedAt,
+		UpdatedAt:      row.OldUserUpdatedAt,
+		DeletedAt:      row.OldUserDeletedAt,
+		Enabled:        row.OldUserEnabled,
+	}
+	updatedUser := *oldUser
+	updatedUser.Email = row.NewEmail.String
+	updatedUser.UpdatedAt = row.NewUserUpdatedAt
+	_ = impl.cache.Delete(ctx, UserCacheKey(updatedUser.ID))
+	result.Email = updatedUser.Email
+	result.AuditEvent = newUpdateUserAuditLogEvent(oldUser, &updatedUser)
+	return result, nil
+}
+
+func (impl *BusinessStoreImpl) FinalizeUserRegistrationSession(ctx context.Context, sd *session.SessionData, userID int32) (*dbgen.Session, error) {
+	if sd == nil || userID <= 0 || !sd.RegistrationFinalizing() {
+		return nil, ErrInvalidInput
+	}
+	payload, expectedVersion, persisted, err := sd.PersistenceSnapshot()
+	if err != nil {
+		return nil, err
+	}
+	if !persisted || expectedVersion <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+	params := &dbgen.FinalizeRegistrationSessionParams{
+		UserID:          userID,
+		Data:            payload,
+		SessionID:       sd.ID(),
+		ExpectedVersion: expectedVersion,
+	}
+	row, err := impl.querier.FinalizeRegistrationSession(ctx, params)
+	if err == nil {
+		if !validFinalizedRegistration(row, params) {
+			return nil, ErrInvalidInput
+		}
+		return row, nil
+	}
+
+	finalizeErr := err
+	reconcileCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionCreateReconcileTimeout)
+	defer cancel()
+	reconciled, reconcileErr := impl.querier.GetSessionByID(reconcileCtx, sd.ID())
+	if reconcileErr == nil && validReconciledRegistration(reconciled, params) {
+		return reconciled, nil
+	}
+	if errors.Is(finalizeErr, pgx.ErrNoRows) {
+		if reconcileErr != nil && !errors.Is(reconcileErr, pgx.ErrNoRows) {
+			return nil, reconcileErr
+		}
+		return nil, nil
+	}
+	return nil, finalizeErr
+}
+
+func validFinalizedRegistration(row *dbgen.Session, params *dbgen.FinalizeRegistrationSessionParams) bool {
+	return row != nil && row.SessionID == params.SessionID && row.State == dbgen.SessionStateAuthenticated && row.Version == params.ExpectedVersion+1 && row.UserID.Valid && row.UserID.Int32 == params.UserID && row.ExpiresAt.Valid
+}
+
+func validReconciledRegistration(row *dbgen.Session, params *dbgen.FinalizeRegistrationSessionParams) bool {
+	return row != nil && row.SessionID == params.SessionID && row.State == dbgen.SessionStateAuthenticated && row.Version == params.ExpectedVersion+1 && row.UserID.Valid && row.UserID.Int32 == params.UserID && row.ExpiresAt.Valid && !row.ChallengeKind.Valid && !row.ChallengeCode.Valid && !row.ChallengeEmail.Valid && !row.ChallengeExpiresAt.Valid && bytes.Equal(row.Data, params.Data)
+}
+
+func (impl *BusinessStoreImpl) CreateUserSessionWithState(ctx context.Context, sd *session.SessionData, persistKey session.SessionKey, ttl time.Duration, state session.State, userID *int32) error {
+	if sd == nil || !sd.Has(persistKey) || ttl <= 0 {
+		return ErrInvalidInput
+	}
+	payload, _, persisted, err := sd.PersistenceSnapshot()
+	if err != nil {
+		return err
+	}
+	if persisted {
+		return nil
+	}
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	params := &dbgen.CreateSessionParams{
+		SessionID: sd.ID(),
+		State:     dbgen.SessionState(state),
+		Data:      payload,
+		ExpiresAt: Timestampz(time.Now().UTC().Add(ttl)),
+	}
+	if userID != nil {
+		params.UserID = Int(*userID)
+	}
+	row, err := impl.querier.CreateSession(ctx, params)
+	if err != nil {
+		createErr := err
+		reconcileCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionCreateReconcileTimeout)
+		defer cancel()
+		row, err = impl.querier.GetSessionByID(reconcileCtx, sd.ID())
+		if err != nil || row == nil || row.State != params.State || row.UserID != params.UserID || row.Version != 1 || !bytes.Equal(row.Data, payload) {
+			return createErr
+		}
+	}
+	if row == nil {
+		return ErrRecordNotFound
+	}
+	sd.SetAuthority(session.State(row.State), row.Version, row.ExpiresAt.Time, time.Time{})
+	return nil
+}
+
+func (impl *BusinessStoreImpl) ExtendAuthenticatedSessionExpirations(ctx context.Context, sids []string, ttl time.Duration) ([]*dbgen.ExtendAuthenticatedSessionExpirationsRow, error) {
+	if len(sids) == 0 {
+		return nil, nil
+	}
+	if ttl <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	rows, err := impl.querier.ExtendAuthenticatedSessionExpirations(ctx, &dbgen.ExtendAuthenticatedSessionExpirationsParams{
+		Ttl:        ttl,
+		SessionIds: sids,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to extend authenticated session expirations", "count", len(sids), common.ErrAttr(err))
+		return nil, err
+	}
+	slog.Log(ctx, common.LevelTrace, "Extended authenticated session expirations", "requested", len(sids), "updated", len(rows))
+	return rows, nil
+}
+
+func (impl *BusinessStoreImpl) DeleteCachedUserSession(ctx context.Context, sid string) {
+	if found := impl.cache.Delete(ctx, SessionCacheKey(sid)); !found {
+		slog.WarnContext(ctx, "User session was not found in memory cache to delete")
+	}
+}
+
+func (impl *BusinessStoreImpl) GetCachedUserSession(ctx context.Context, sid string) (*session.SessionData, error) {
+	value, err := impl.cache.Get(ctx, SessionCacheKey(sid))
+	if err != nil {
+		return nil, err
+	}
+	sd, ok := value.(*session.SessionData)
+	if !ok || sd == nil {
+		return nil, errInvalidCacheType
+	}
+	return sd, nil
 }
 
 func (impl *BusinessStoreImpl) RetrieveUserSession(ctx context.Context, sid string, skipCache bool) (*session.SessionData, error) {
@@ -594,9 +1173,12 @@ func (impl *BusinessStoreImpl) GetCachedUserSessions(ctx context.Context, batch 
 	return cached, nil
 }
 
-func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[string]uint, persistKey session.SessionKey, ttl time.Duration) error {
+func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[string]uint, persistKey session.SessionKey) error {
 	cached, err := impl.GetCachedUserSessions(ctx, batch)
 	if err != nil {
+		if errors.Is(err, ErrNegativeCacheHit) || errors.Is(err, ErrCacheMiss) || errors.Is(err, otter.ErrNotFound) {
+			return nil
+		}
 		return err
 	}
 
@@ -607,12 +1189,16 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 
 	slog.DebugContext(ctx, "Read sessions chunk to save", "count", len(cached))
 
-	keys := make([]string, 0, len(batch))
-	values := make([][]byte, 0, len(batch))
-	intervals := make([]time.Duration, 0, len(batch))
+	type casInput struct {
+		data    *session.SessionData
+		version int32
+		payload []byte
+	}
+
+	casSessions := make(map[string]casInput, len(batch))
 
 	for _, sd := range cached {
-		if sd.Has(session.KeyTombstone) {
+		if sd.Has(session.KeyTombstone) || sd.IsStale() {
 			continue
 		}
 
@@ -621,21 +1207,22 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 			continue
 		}
 
-		data, err := sd.MarshalBinary()
+		data, version, persisted, err := sd.PersistenceSnapshot()
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to marshal session", common.SessionIDAttr(sd.ID()), common.ErrAttr(err))
-			continue
+			return err
 		}
 
 		slog.Log(ctx, common.LevelTrace, "Marshaled session data to binary", common.SessionIDAttr(sd.ID()), "fields", sd.Size())
 
-		sidKey, _ := sessionIDFunc(sd.ID())
-		keys = append(keys, sidKey)
-		values = append(values, data)
-		intervals = append(intervals, ttl)
+		if !persisted {
+			slog.Log(ctx, common.LevelTrace, "Skipping unpersisted session in background writer", common.SessionIDAttr(sd.ID()))
+			continue
+		}
+		casSessions[sd.ID()] = casInput{data: sd, version: version, payload: data}
 	}
 
-	if len(keys) == 0 {
+	if len(casSessions) == 0 {
 		slog.WarnContext(ctx, "No persistent sessions to save")
 		return nil
 	}
@@ -644,19 +1231,43 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 		return ErrMaintenance
 	}
 
-	affected, err := impl.querier.CreateCacheMany(ctx, &dbgen.CreateCacheManyParams{
-		Keys:      keys,
-		Values:    values,
-		Intervals: intervals,
-	})
-
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to cache sessions", "count", len(keys), common.ErrAttr(err))
+	params := &dbgen.UpdateSessionDataCASParams{
+		SessionIds:       make([]string, 0, len(casSessions)),
+		ExpectedVersions: make([]int32, 0, len(casSessions)),
+		Payloads:         make([][]byte, 0, len(casSessions)),
+	}
+	for sid, input := range casSessions {
+		params.SessionIds = append(params.SessionIds, sid)
+		params.ExpectedVersions = append(params.ExpectedVersions, input.version)
+		params.Payloads = append(params.Payloads, input.payload)
 	}
 
-	slog.DebugContext(ctx, "Saved persisted sessions to DB", "count", len(keys), "affected", affected)
+	updated, err := impl.querier.UpdateSessionDataCAS(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update sessions", "count", len(casSessions), common.ErrAttr(err))
+		return err
+	}
 
-	return err
+	updatedVersions := make(map[string]int32, len(updated))
+	for _, row := range updated {
+		updatedVersions[row.SessionID] = row.Version
+	}
+	for sid, input := range casSessions {
+		current, err := impl.GetCachedUserSession(ctx, sid)
+		if err != nil || current != input.data {
+			continue
+		}
+		if version, ok := updatedVersions[sid]; ok {
+			current.AdvancePersistence(input.version, version)
+			continue
+		}
+		if current.InvalidatePersistence(input.version) {
+			impl.DeleteCachedUserSession(ctx, sid)
+			slog.WarnContext(ctx, "Invalidated stale session after persistence conflict", common.SessionIDAttr(sid), "version", input.version)
+		}
+	}
+
+	return nil
 }
 
 func (impl *BusinessStoreImpl) RetrievePropertyBySitekey(ctx context.Context, sitekey string) (*dbgen.Property, error) {
@@ -2251,9 +2862,10 @@ func (impl *BusinessStoreImpl) UpdateUser(ctx context.Context, user *dbgen.User,
 	}
 
 	params := &dbgen.UpdateUserDataParams{
-		Name:  name,
-		Email: newEmail,
-		ID:    user.ID,
+		Name:     name,
+		NewEmail: newEmail,
+		ID:       user.ID,
+		OldEmail: oldEmail,
 	}
 
 	updatedUser, err := impl.querier.UpdateUserData(ctx, params)
@@ -2268,7 +2880,7 @@ func (impl *BusinessStoreImpl) UpdateUser(ctx context.Context, user *dbgen.User,
 	var auditEvent *common.AuditLogEvent
 
 	if user != nil {
-		_ = impl.cache.Set(ctx, UserCacheKey(updatedUser.ID), updatedUser)
+		_ = impl.cache.Delete(ctx, UserCacheKey(updatedUser.ID))
 
 		auditEvent = newUpdateUserAuditLogEvent(user, updatedUser)
 	}

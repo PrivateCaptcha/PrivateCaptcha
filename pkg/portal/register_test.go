@@ -3,14 +3,16 @@ package portal
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
@@ -48,19 +50,49 @@ func TestPostRegister(t *testing.T) {
 		t.Fatalf("Unexpected login status code: %v", resp.StatusCode)
 	}
 
-	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
-	if idx == -1 {
-		t.Fatal("cannot find session cookie in response")
-	}
-	cookie := resp.Cookies()[idx]
-
-	ctx := t.Context()
-	code, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
+	cookie := responseCookieForTest(t, resp, server.Sessions.CookieName)
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
+	token, err := parseCsrfToken(string(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !server.XSRF.VerifyToken(token, cookie.Value) {
+		t.Fatal("rendered registration CSRF token is not bound to pending SID")
+	}
 
-	resp = twoFactorSuite(srv, email, server.XSRF.Token(email), code, cookie)
+	ctx := t.Context()
+	code, ok := testMailer.TwoFactorCode(email)
+	if !ok {
+		t.Fatalf("registration code was not sent to %s", email)
+	}
+
+	wrongCode := invalidVerificationCode(code)
+	resp = twoFactorSuite(srv, email, token, wrongCode, cookie)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("registration invalid attempt status = %d, want 200", resp.StatusCode)
+	}
+	resp = resend2faSuite(srv, email, token, cookie)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("registration resend status = %d, want 200", resp.StatusCode)
+	}
+	newCode, ok := testMailer.TwoFactorCode(email)
+	if !ok || newCode == code {
+		t.Fatal("registration resend did not deliver a replacement code")
+	}
+	resp = twoFactorSuite(srv, email, token, code, cookie)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatal("replaced registration code did not fail")
+	}
+	code = newCode
+
+	resp = twoFactorSuite(srv, email, token, code, cookie)
 
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("unexpected post twofactor code: %v", resp.StatusCode)
@@ -86,8 +118,54 @@ func TestPostRegister(t *testing.T) {
 		t.Errorf("unexpected redirect: %v, expected: %v", path, expectedPath)
 	}
 
-	if user.Email != email {
-		t.Errorf("Unexpected user email")
+	rotatedCookie := responseCookieForTest(t, resp, server.Sessions.CookieName)
+	if rotatedCookie.Value == cookie.Value {
+		t.Fatal("registration did not rotate the pending SID")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		successor, successorErr := dbgen.New(store.Pool).GetSessionByID(ctx, rotatedCookie.Value)
+		if successorErr == nil && successor.State == dbgen.SessionStateAuthenticated && successor.UserID.Valid && successor.UserID.Int32 == user.ID {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("registration successor did not finalize: row=%+v err=%v", successor, successorErr)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestPostRegisterFlaggedRequiresVerification(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	resp := registerSuite(srv, "Flagged User", spammerEmail, server.XSRF.Token(""))
+	cookie := responseCookieForTest(t, resp, server.Sessions.CookieName)
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := parseCsrfToken(string(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	code, ok := testMailer.TwoFactorCode(spammerEmail)
+	if !ok {
+		t.Fatal("flagged registration code was not sent")
+	}
+	resp = twoFactorSuite(srv, spammerEmail, token, code, cookie)
+	resp.Body.Close()
+	location, _ := resp.Location()
+	if resp.StatusCode != http.StatusSeeOther || location.Path != "/"+common.AccountVerifyEndpoint {
+		t.Fatalf("flagged registration response = (status %d, location %v)", resp.StatusCode, location)
+	}
+	if len(resp.Cookies()) != 0 {
+		t.Fatal("flagged registration received a processing cookie")
 	}
 }
 
@@ -293,9 +371,10 @@ func TestPostRegisterMissingCaptcha(t *testing.T) {
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
 	// No captcha solution
+	email := t.Name() + "@privatecaptcha.com"
 	form := url.Values{}
 	form.Add(common.ParamCSRFToken, server.XSRF.Token(""))
-	form.Add(common.ParamEmail, t.Name()+"@privatecaptcha.com")
+	form.Add(common.ParamEmail, email)
 	form.Add(common.ParamName, "Test User")
 	form.Add(common.ParamTerms, "true")
 	// No captcha solution
@@ -309,9 +388,11 @@ func TestPostRegisterMissingCaptcha(t *testing.T) {
 		t.Errorf("Expected status code 200, got %v", w.Code)
 	}
 
-	body := w.Body.String()
-	if !strings.Contains(body, "captcha") {
-		t.Error("Expected error message about captcha")
+	if len(w.Result().Cookies()) != 0 {
+		t.Fatal("missing CAPTCHA response created a registration cookie")
+	}
+	if _, ok := testMailer.TwoFactorCode(email); ok {
+		t.Fatal("missing CAPTCHA response sent a registration code")
 	}
 }
 
@@ -464,9 +545,10 @@ func TestPostRegisterInvalidCaptcha(t *testing.T) {
 	srv := http.NewServeMux()
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
+	email := t.Name() + "@privatecaptcha.com"
 	form := url.Values{}
 	form.Add(common.ParamCSRFToken, server.XSRF.Token(""))
-	form.Add(common.ParamEmail, t.Name()+"@privatecaptcha.com")
+	form.Add(common.ParamEmail, email)
 	form.Add(common.ParamName, "Test User")
 	form.Add(common.ParamTerms, "true")
 	form.Add(common.ParamPortalSolution, "invalid-captcha-solution")
@@ -480,8 +562,10 @@ func TestPostRegisterInvalidCaptcha(t *testing.T) {
 		t.Errorf("Expected status code 200, got %v", w.Code)
 	}
 
-	body := w.Body.String()
-	if !strings.Contains(body, captchaVerificationFailed) {
-		t.Errorf("Expected captcha verification failed error message, got: %s", body)
+	if len(w.Result().Cookies()) != 0 {
+		t.Fatal("invalid CAPTCHA response created a registration cookie")
+	}
+	if _, ok := testMailer.TwoFactorCode(email); ok {
+		t.Fatal("invalid CAPTCHA response sent a registration code")
 	}
 }

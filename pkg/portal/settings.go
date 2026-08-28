@@ -329,21 +329,39 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (*ViewModel, 
 	renderCtx.TwoFactorEmail = common.MaskEmail(user.Email, '*')
 
 	code := twoFactorCode(ctx)
+	// IssueEmailChangeChallenge compares code with the stored challenge in
+	// PostgreSQL, where concurrent replicas are coordinated. If they match,
+	// PostgreSQL stores the distinct fallback so reissuing invalidates the old code.
+	fallbackCode := twoFactorCode(ctx)
+	for fallbackCode == code {
+		fallbackCode = twoFactorCode(ctx)
+	}
 	location := r.Header.Get(s.CountryCodeHeader.Value())
-
-	if err := s.Mailer.SendTwoFactor(ctx, user.Email, code, r.UserAgent(), location, false); err != nil {
+	encodedCode := s.IDHasher.Encrypt(code)
+	fallbackEncodedCode := s.IDHasher.Encrypt(fallbackCode)
+	issued, err := sess.IssueEmailChangeChallenge(ctx, encodedCode, fallbackEncodedCode, s.TwoFactorDuration)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to issue email change challenge", common.ErrAttr(err))
+		renderCtx.ErrorMessage = "Failed to send verification code. Please try again."
+		return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
+	}
+	if issued.EncodedCode == fallbackEncodedCode {
+		code = fallbackCode
+	} else if issued.EncodedCode != encodedCode {
+		slog.ErrorContext(ctx, "Issued email change code is invalid")
+		renderCtx.ErrorMessage = "Failed to send verification code. Please try again."
+		return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
+	}
+	renderCtx.TwoFactorEmail = common.MaskEmail(issued.Email, '*')
+	if err := s.Mailer.SendTwoFactor(ctx, issued.Email, code, r.UserAgent(), location, false); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to send verification code. Please try again."
-	} else {
-		_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
-		_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
 	}
 
 	return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
 }
 
 func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
-	tnow := time.Now().UTC()
 	ctx := r.Context()
 
 	user, err := s.SessionUser(ctx, s.Session(w, r))
@@ -363,8 +381,8 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 	renderCtx := s.createGeneralSettingsModel(ctx, user)
 	renderCtx.EditEmail = (len(formEmail) > 0) && (formEmail != user.Email) && ((len(formName) == 0) || (formName == user.Name))
 
-	anyChange := false
 	sess := s.Session(w, r)
+	var auditEvent *common.AuditLogEvent
 
 	if renderCtx.EditEmail {
 		renderCtx.Email = formEmail
@@ -376,26 +394,19 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
 		}
 
-		sentCode, hasSentCode := sess.Get(ctx, session.KeyTwoFactorCode).(int)
-		codeTimestamp, ok := sess.Get(ctx, session.KeyTwoFactorCodeTimestamp).(time.Time)
-		if !ok {
-			slog.ErrorContext(ctx, "Failed to get verification code timestamp")
-			renderCtx.TwoFactorError = "Code is not valid."
-			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
+		encodedCode := s.encodeVerificationCode(r.FormValue(common.ParamVerificationCode))
+		result, err := sess.ConsumeEmailChangeChallenge(ctx, formEmail, encodedCode, maxFailedAttempts)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to consume email change challenge", "userID", user.ID, common.ErrAttr(err))
+			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
+		} else if !result.Consumed {
+			renderCtx.TwoFactorError = verificationCodeError(result.AttemptsExhausted)
+		} else {
+			auditEvent = result.AuditEvent
+			renderCtx.SuccessMessage = "Settings were updated."
+			renderCtx.EditEmail = false
+			renderCtx.Email = result.Email
 		}
-		formCode := r.FormValue(common.ParamVerificationCode)
-
-		// we "used" the code now
-		_ = sess.Delete(ctx, session.KeyTwoFactorCode)
-		_ = sess.Delete(ctx, session.KeyTwoFactorCodeTimestamp)
-
-		if enteredCode, err := strconv.Atoi(formCode); !hasSentCode || (err != nil) || (enteredCode != sentCode) || (!codeTimestamp.IsZero() && tnow.After(codeTimestamp.Add(s.TwoFactorDuration))) {
-			slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "timestamp", codeTimestamp, common.ErrAttr(err))
-			renderCtx.TwoFactorError = "Code is not valid."
-			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
-		}
-
-		anyChange = (len(formEmail) > 0) && (formEmail != user.Email)
 	} else /*edit name only*/ {
 		renderCtx.Name = formName
 
@@ -411,25 +422,13 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 			}
 		}
 
-		anyChange = (len(formName) > 0) && (formName != user.Name)
-	}
-
-	var auditEvent *common.AuditLogEvent
-	if anyChange {
-		emailToUpdate := user.Email
-		if renderCtx.EditEmail {
-			emailToUpdate = formEmail
-		}
-		if auditEvent, err = s.Store.Impl().UpdateUser(ctx, user, renderCtx.Name, emailToUpdate, user.Email); err == nil {
-			renderCtx.SuccessMessage = "Settings were updated."
-			renderCtx.EditEmail = false
-			_ = sess.Set(ctx, session.KeyUserName, renderCtx.Name)
-			if emailToUpdate != user.Email {
-				_ = sess.Set(ctx, session.KeyUserEmail, emailToUpdate)
-				renderCtx.Email = emailToUpdate
+		if (len(formName) > 0) && (formName != user.Name) {
+			if auditEvent, err = s.Store.Impl().UpdateUser(ctx, user, renderCtx.Name, user.Email, user.Email); err == nil {
+				renderCtx.SuccessMessage = "Settings were updated."
+				_ = sess.Set(ctx, session.KeyUserName, renderCtx.Name)
+			} else {
+				renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 			}
-		} else {
-			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		}
 	}
 

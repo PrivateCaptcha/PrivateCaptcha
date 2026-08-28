@@ -198,17 +198,26 @@ func (q *Queries) SoftDeleteUser(ctx context.Context, id int32) (*User, error) {
 }
 
 const updateUserData = `-- name: UpdateUserData :one
-UPDATE backend.users SET name = $2, email = $3, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled
+UPDATE backend.users
+SET name = $1, email = $2, updated_at = NOW()
+WHERE id = $3 AND email = $4
+RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled
 `
 
 type UpdateUserDataParams struct {
-	ID    int32  `db:"id" json:"id"`
-	Name  string `db:"name" json:"name"`
-	Email string `db:"email" json:"email"`
+	Name     string `db:"name" json:"name"`
+	NewEmail string `db:"new_email" json:"new_email"`
+	ID       int32  `db:"id" json:"id"`
+	OldEmail string `db:"old_email" json:"old_email"`
 }
 
 func (q *Queries) UpdateUserData(ctx context.Context, arg *UpdateUserDataParams) (*User, error) {
-	row := q.db.QueryRow(ctx, updateUserData, arg.ID, arg.Name, arg.Email)
+	row := q.db.QueryRow(ctx, updateUserData,
+		arg.Name,
+		arg.NewEmail,
+		arg.ID,
+		arg.OldEmail,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,

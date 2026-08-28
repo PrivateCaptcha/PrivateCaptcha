@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -503,53 +504,6 @@ func TestGetSettingsTab(t *testing.T) {
 	}
 }
 
-func TestEditEmail(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	ctx := common.TraceContext(t.Context(), t.Name())
-	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
-	if err != nil {
-		t.Fatalf("Failed to create account: %v", err)
-	}
-
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	req := httptest.NewRequest("POST", "/settings/tab/general/email", nil)
-	req.AddCookie(cookie)
-
-	w := httptest.NewRecorder()
-
-	viewModel, err := server.editEmail(w, req)
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
-
-	if viewModel == nil {
-		t.Fatal("Expected ViewModel to be populated, got nil")
-	}
-
-	renderCtx, ok := viewModel.Model.(*settingsGeneralRenderContext)
-	if !ok {
-		t.Fatalf("Expected Model to be *settingsGeneralRenderContext, got %T", viewModel.Model)
-	}
-
-	if !renderCtx.EditEmail {
-		t.Error("Expected EditEmail to be true")
-	}
-
-	if len(renderCtx.TwoFactorEmail) == 0 {
-		t.Error("Expected TwoFactorEmail to be populated")
-	}
-}
-
 func TestPutGeneralSettings(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -568,24 +522,250 @@ func TestPutGeneralSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pendingResponse := loginSuite(srv, user.Email, server.XSRF.Token(""))
+	pendingCookie := responseCookieForTest(t, pendingResponse, server.Sessions.CookieName)
+	pendingResponse.Body.Close()
+	pendingCode := signInCodeForTest(t, user.Email)
+	code := issueEmailChangeForTest(t, server, cookie, user.Email)
+	newEmail := strings.ToLower(t.Name()) + "-new@privatecaptcha.com"
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, user.Name)
-
-	req := httptest.NewRequest("PUT", "/settings/tab/general", strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-
-	viewModel, err := server.putGeneralSettings(w, req)
+	submitEmailChangeForTest(t, server, cookie, user.Name, newEmail, code)
+	updatedUser, err := dbgen.New(store.Pool).GetUserByID(ctx, user.ID)
 	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
+		t.Fatal(err)
+	}
+	if updatedUser.Email != newEmail {
+		t.Fatalf("updated user email = %q, want %q", updatedUser.Email, newEmail)
+	}
+	pendingResult := twoFactorSuite(srv, user.Email, server.XSRF.Token(pendingCookie.Value), pendingCode, pendingCookie)
+	pendingResult.Body.Close()
+	if pendingResult.StatusCode != http.StatusOK || len(pendingResult.Cookies()) != 0 {
+		t.Fatalf("old-email sign-in response = (status %d, cookies %d)", pendingResult.StatusCode, len(pendingResult.Cookies()))
 	}
 
-	if viewModel == nil {
-		t.Fatal("Expected ViewModel to be populated, got nil")
+	replayEmail := strings.ToLower(t.Name()) + "-replay@privatecaptcha.com"
+	submitEmailChangeForTest(t, server, cookie, user.Name, replayEmail, code)
+	updatedUser, err = dbgen.New(store.Pool).GetUserByID(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedUser.Email != newEmail {
+		t.Fatalf("replay changed email to %q", updatedUser.Email)
+	}
+}
+
+func submitEmailChangeForTest(t *testing.T, srv *Server, cookie *http.Cookie, name, email string, code int) {
+	t.Helper()
+	form := url.Values{}
+	form.Set(common.ParamName, name)
+	form.Set(common.ParamEmail, email)
+	form.Set(common.ParamVerificationCode, strconv.Itoa(code))
+	req := httptest.NewRequest(http.MethodPut, "/settings/tab/general", strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	_, err := srv.putGeneralSettings(httptest.NewRecorder(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func issueEmailChangeForTest(t *testing.T, srv *Server, cookie *http.Cookie, email string) int {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/settings/tab/general/email", nil)
+	req.AddCookie(cookie)
+	if _, err := srv.editEmail(httptest.NewRecorder(), req); err != nil {
+		t.Fatal(err)
+	}
+	code, ok := testMailer.TwoFactorCode(email)
+	if !ok {
+		t.Fatal("verification code was not sent")
+	}
+	return code
+}
+
+func TestPutGeneralSettingsRejectsInvalidEmailChallenge(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	for _, test := range []struct {
+		name   string
+		mutate string
+	}{
+		{name: "Expired", mutate: "UPDATE backend.sessions SET challenge_expires_at = NOW() - INTERVAL '1 second' WHERE session_id = $1"},
+		{name: "WrongPurpose", mutate: "UPDATE backend.sessions SET challenge_kind = 'registration' WHERE session_id = $1"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := t.Context()
+			user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			srv := http.NewServeMux()
+			server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+			cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+			if err != nil {
+				t.Fatal(err)
+			}
+			code := issueEmailChangeForTest(t, server, cookie, user.Email)
+			sid, err := url.QueryUnescape(cookie.Value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := store.Pool.Exec(ctx, test.mutate, sid); err != nil {
+				t.Fatal(err)
+			}
+			newEmail := strings.ToLower(t.Name()) + "-new@privatecaptcha.com"
+			submitEmailChangeForTest(t, server, cookie, user.Name, newEmail, code)
+			updatedUser, err := dbgen.New(store.Pool).GetUserByID(ctx, user.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if updatedUser.Email != user.Email {
+				t.Fatalf("invalid challenge changed email to %q", updatedUser.Email)
+			}
+		})
+	}
+}
+
+func TestPutGeneralSettingsEmailChallengeAttemptLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := issueEmailChangeForTest(t, server, cookie, user.Email)
+	newEmail := strings.ToLower(t.Name()) + "-new@privatecaptcha.com"
+	wrongCode := invalidVerificationCode(code)
+	for attempt := 0; attempt < maxFailedAttempts; attempt++ {
+		submitEmailChangeForTest(t, server, cookie, user.Name, newEmail, wrongCode)
+	}
+	submitEmailChangeForTest(t, server, cookie, user.Name, newEmail, code)
+	updatedUser, err := dbgen.New(store.Pool).GetUserByID(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedUser.Email != user.Email {
+		t.Fatalf("attempt-limited challenge changed email to %q", updatedUser.Email)
+	}
+}
+
+func TestPutGeneralSettingsEmailChangeRollsBackOnConflict(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"Source", testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"Target", testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := issueEmailChangeForTest(t, server, cookie, user.Email)
+	submitEmailChangeForTest(t, server, cookie, user.Name, target.Email, code)
+	updatedUser, err := dbgen.New(store.Pool).GetUserByID(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedUser.Email != user.Email {
+		t.Fatalf("conflicting email changed address to %q", updatedUser.Email)
+	}
+
+	newEmail := strings.ToLower(t.Name()) + "-new@privatecaptcha.com"
+	submitEmailChangeForTest(t, server, cookie, user.Name, newEmail, code)
+	updatedUser, err = dbgen.New(store.Pool).GetUserByID(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedUser.Email != newEmail {
+		t.Fatalf("conflict consumed the challenge; email = %q", updatedUser.Email)
+	}
+}
+
+func TestPutGeneralSettingsConsumesEmailChallengeOnceAcrossReplicas(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := issueEmailChangeForTest(t, server, cookie, user.Email)
+	sid, err := url.QueryUnescape(cookie.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	emails := []string{strings.ToLower(t.Name()) + "-one@privatecaptcha.com", strings.ToLower(t.Name()) + "-two@privatecaptcha.com"}
+	replicas := make([]*Server, len(emails))
+	for i := range replicas {
+		replicas[i], _ = newChallengeReplica(t)
+		if _, err := replicas[i].Sessions.Store.Read(ctx, sid, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	start := make(chan struct{})
+	views := make([]*ViewModel, len(replicas))
+	errs := make([]error, len(replicas))
+	var wg sync.WaitGroup
+	for i := range replicas {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			<-start
+			form := url.Values{}
+			form.Set(common.ParamEmail, emails[index])
+			form.Set(common.ParamVerificationCode, strconv.Itoa(code))
+			req := httptest.NewRequest(http.MethodPut, "/settings/tab/general", strings.NewReader(form.Encode()))
+			req.AddCookie(cookie)
+			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+			views[index], errs[index] = replicas[index].putGeneralSettings(httptest.NewRecorder(), req)
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	audits := 0
+	for _, viewModel := range views {
+		audits += len(viewModel.AuditEvents)
+	}
+	if audits != 1 {
+		t.Fatalf("concurrent email changes produced %d audits, want 1", audits)
+	}
+	updatedUser, err := dbgen.New(store.Pool).GetUserByID(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedUser.Email != emails[0] && updatedUser.Email != emails[1] {
+		t.Fatalf("concurrent email = %q, want one submitted address", updatedUser.Email)
 	}
 }
 

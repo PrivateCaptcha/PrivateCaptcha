@@ -12,6 +12,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func TestSoftDeleteOrganization(t *testing.T) {
@@ -670,6 +671,25 @@ func TestCleanupDBCacheJob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to store in cache: %v", err)
 	}
+	queries := dbgen.New(store.Pool)
+	expiredSID := t.Name() + "-expired"
+	liveSID := t.Name() + "-live"
+	for sid, expiresAt := range map[string]time.Time{
+		expiredSID: time.Now().Add(-time.Minute),
+		liveSID:    time.Now().Add(time.Hour),
+	} {
+		if _, err := queries.CreateSession(ctx, &dbgen.CreateSessionParams{
+			SessionID: sid,
+			State:     dbgen.SessionStateAuthenticated,
+			Data:      []byte{1},
+			ExpiresAt: pgtype.Timestamptz{Time: expiresAt, Valid: true},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() {
+		_, _ = queries.DeleteSessionsByID(context.WithoutCancel(ctx), []string{expiredSID, liveSID})
+	})
 
 	// Wait for the TTL to expire
 	time.Sleep(10 * time.Millisecond)
@@ -687,5 +707,15 @@ func TestCleanupDBCacheJob(t *testing.T) {
 	// After cleanup, the expired record should be gone
 	if _, err = store.Impl().RetrieveFromCache(ctx, cacheKey); err == nil {
 		t.Error("Item not deleted from cache")
+	}
+	var expiredCount int
+	if err := store.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM backend.sessions WHERE session_id = $1", expiredSID).Scan(&expiredCount); err != nil {
+		t.Fatal(err)
+	}
+	if expiredCount != 0 {
+		t.Fatalf("expired session rows = %d, want 0", expiredCount)
+	}
+	if _, err := queries.GetSessionByID(ctx, liveSID); err != nil {
+		t.Fatalf("live session was deleted: %v", err)
 	}
 }

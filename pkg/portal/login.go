@@ -149,15 +149,19 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := s.Sessions.SessionStart(w, r)
-	if step, ok := sess.Get(ctx, session.KeyLoginStep).(int); ok {
+	if existing, ok := s.Sessions.SessionGet(r); ok {
+		step, _ := existing.Get(ctx, session.KeyLoginStep).(int)
 		if step == loginStepCompleted {
 			slog.DebugContext(ctx, "User seem to be already logged in", "email", email)
 			common.Redirect(s.RelURL("/"), http.StatusOK, w, r)
 			return
-		} else {
-			slog.WarnContext(ctx, "Session present, but login not finished", "step", step, "email", email)
 		}
+	}
+	sess, err := s.Sessions.SessionPrepare(r)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to prepare sign-in session", common.ErrAttr(err))
+		s.RedirectError(http.StatusServiceUnavailable, w, r)
+		return
 	}
 
 	code := twoFactorCode(ctx)
@@ -172,17 +176,20 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	_ = sess.Set(ctx, session.KeyLoginStep, loginStepSignInVerify)
 	_ = sess.Set(ctx, session.KeyUserEmail, user.Email)
 	_ = sess.Set(ctx, session.KeyUserName, user.Name)
-	_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
-	_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
 	_ = sess.Set(ctx, session.KeyUserID, user.ID)
 	// we clean this flag because at this point the user should either be registered or subscribed
 	_ = sess.Delete(ctx, session.KeyVerifyRegistration)
 	// this is needed in case we will be routed to another server that does not have our session in memory
 	// (previously we persisted ONLY logged in sessions, but if we're rerouted during login, it will break)
 	// this should be OK now because we verified that user is a registered user AND they solved captcha
-	_ = sess.Set(ctx, session.KeyPersistent, true)
+	if err := sess.PersistSignInChallenge(ctx, s.IDHasher.Encrypt(code), user.Email, s.TwoFactorDuration); err != nil {
+		slog.ErrorContext(ctx, "Failed to persist sign-in session", common.ErrAttr(err))
+		s.RedirectError(http.StatusServiceUnavailable, w, r)
+		return
+	}
+	s.Sessions.SessionCommit(w, r, sess)
 
-	data.Token = s.XSRF.Token(user.Email)
+	data.Token = s.XSRF.Token(sess.ID())
 	data.Email = common.MaskEmail(user.Email, '*')
 
 	s.render(w, r, twofactorContentsTemplate, data, true /*new*/)

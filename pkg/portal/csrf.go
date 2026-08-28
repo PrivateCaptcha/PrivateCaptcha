@@ -17,25 +17,17 @@ func (s *Server) CreateCsrfContext(user *dbgen.User) CsrfRenderContext {
 	}
 }
 
-func (s *Server) csrfUserEmailKeyFunc(w http.ResponseWriter, r *http.Request) string {
-	// we're using session Get (and not Start) because we don't save session anywhere
-	sess, ok := s.Sessions.SessionGet(r)
-	if !ok {
-		return ""
-	}
-
-	ctx := r.Context()
-	userEmail, ok := sess.Get(ctx, session.KeyUserEmail).(string)
-	if !ok {
-		slog.WarnContext(ctx, "Session does not contain a valid email")
-	}
-
-	return userEmail
+func (s *Server) csrfSessionIDKeyFunc(w http.ResponseWriter, r *http.Request) string {
+	sid, _ := s.Sessions.SessionID(r)
+	return sid
 }
 
 func (s *Server) csrfUserIDKeyFunc(w http.ResponseWriter, r *http.Request) string {
-	// we're using session Get (and not Start) because we don't save session anywhere
-	sess, ok := s.Sessions.SessionGet(r)
+	sess, ok := r.Context().Value(common.SessionContextKey).(*session.Session)
+	if !ok {
+		// Public challenge routes do not have the private middleware context.
+		sess, ok = s.Sessions.SessionGet(r)
+	}
 	if !ok {
 		return ""
 	}
@@ -72,7 +64,7 @@ func (s *Server) csrf(keyFunc CsrfKeyFunc) alice.Constructor {
 					next.ServeHTTP(w, r)
 					return
 				} else {
-					slog.WarnContext(ctx, "Failed to verify CSRF token", "path", r.URL.Path, "method", r.Method, "userID", userID)
+					slog.WarnContext(ctx, "Failed to verify CSRF token", "path", r.URL.Path, "method", r.Method)
 				}
 			} else {
 				slog.WarnContext(ctx, "CSRF token is missing", "path", r.URL.Path, "method", r.Method)

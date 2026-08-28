@@ -37,15 +37,54 @@ func (s *stubSessionStore) Start(_ context.Context, _ time.Duration) {}
 func (s *stubSessionStore) Init(_ context.Context, _ *session.Session) error {
 	return nil
 }
+func (s *stubSessionStore) Create(_ context.Context, sess *session.Session) error {
+	sess.Data().SetPersistence(1)
+	return nil
+}
+func (s *stubSessionStore) CreateSignInChallenge(_ context.Context, _ *session.Session, _, _ string, _ time.Duration) error {
+	return nil
+}
+func (s *stubSessionStore) CreateRegistrationChallenge(_ context.Context, _ *session.Session, _, _ string, _ time.Duration) error {
+	return nil
+}
+func (s *stubSessionStore) ConsumeSignInChallenge(_ context.Context, _, _ *session.Session, _ string, _ int32) (session.SignInChallengeResult, error) {
+	return session.SignInChallengeResult{}, nil
+}
+func (s *stubSessionStore) ConsumeRegistrationChallenge(_ context.Context, _, _ *session.Session, _ string, _ int32, _ bool) (session.RegistrationChallengeResult, error) {
+	return session.RegistrationChallengeResult{}, nil
+}
+func (s *stubSessionStore) ReissueSignInChallenge(_ context.Context, _ *session.Session, encodedCode, _ string, _ time.Duration) (session.SignInChallengeReissue, error) {
+	return session.SignInChallengeReissue{EncodedCode: encodedCode}, nil
+}
+func (s *stubSessionStore) ReissueRegistrationChallenge(_ context.Context, _ *session.Session, encodedCode, _ string, _ time.Duration) (session.RegistrationChallengeReissue, error) {
+	return session.RegistrationChallengeReissue{EncodedCode: encodedCode}, nil
+}
+func (s *stubSessionStore) FinalizeRegistration(_ context.Context, _ *session.Session, _ int32) (bool, error) {
+	return true, nil
+}
+func (s *stubSessionStore) IssueEmailChangeChallenge(_ context.Context, _ *session.Session, encodedCode, _ string, _ time.Duration) (session.EmailChangeChallengeIssue, error) {
+	return session.EmailChangeChallengeIssue{EncodedCode: encodedCode}, nil
+}
+func (s *stubSessionStore) ConsumeEmailChangeChallenge(_ context.Context, _ *session.Session, newEmail, _ string, _ int32) (session.EmailChangeChallengeResult, error) {
+	return session.EmailChangeChallengeResult{Consumed: true, Email: newEmail}, nil
+}
 func (s *stubSessionStore) Read(_ context.Context, _ string, _ bool) (*session.Session, error) {
 	return nil, fmt.Errorf("not found")
+}
+func (s *stubSessionStore) Recover(_ context.Context, _ *session.Session) error {
+	return fmt.Errorf("not found")
 }
 func (s *stubSessionStore) Update(_ context.Context, _ *session.Session) error { return nil }
 func (s *stubSessionStore) Renew(_ context.Context, _ string, _ *session.Session) error {
 	return nil
 }
+func (s *stubSessionStore) RenewExpiration(_ context.Context, _ *session.Session) bool {
+	return false
+}
 func (s *stubSessionStore) RollbackRenew(ctx context.Context, oldSID string) {}
-func (s *stubSessionStore) Destroy(_ context.Context, _ string) error        { return nil }
+func (s *stubSessionStore) Destroy(_ context.Context, _ string) (session.SessionRevocationResult, error) {
+	return session.SessionRevocationResult{}, nil
+}
 
 var (
 	srv          *portal.Server
