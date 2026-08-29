@@ -21,7 +21,7 @@ const testDomain = "example.com"
 
 var testAPIKeyUUID = pgtype.UUID{Bytes: [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}, Valid: true}
 var testAPIKeySecret = UUIDToSecret(testAPIKeyUUID)
-var testCacheKeyStr = SessionCacheKey("valid-sid").String()
+var testCacheKeyStr = "valid-cache-key"
 var testCacheKey = SessionCacheKey("valid-sid")
 
 type dummySessionStore struct{}
@@ -66,6 +66,15 @@ type deactivateFormsQuerierStub struct {
 	ids   []int32
 }
 
+type cacheQuerierStub struct {
+	*QuerierStub
+}
+
+type deleteSessionsQuerierStub struct {
+	*QuerierStub
+	deleted []string
+}
+
 type transferOrganizationQuerierStub struct {
 	*QuerierStub
 	members    []*dbgen.GetOrganizationUsersRow
@@ -80,17 +89,72 @@ func (s *transferOrganizationQuerierStub) GetOrgPropertiesByDateAscending(contex
 	return s.properties, nil
 }
 
+func (s *cacheQuerierStub) GetCachedByKey(context.Context, string) ([]byte, error) {
+	return nil, nil
+}
+
+func (s *cacheQuerierStub) CreateCache(context.Context, *dbgen.CreateCacheParams) (int64, error) {
+	return 1, nil
+}
+
+func (s *deleteSessionsQuerierStub) DeleteSessionsByID(_ context.Context, sessionIDs []string) (int64, error) {
+	s.deleted = append(s.deleted, sessionIDs...)
+	return int64(len(sessionIDs)), s.Error
+}
+
 func (s *dummySessionStore) Start(ctx context.Context, interval time.Duration)        {}
 func (s *dummySessionStore) Init(ctx context.Context, session *session.Session) error { return nil }
+func (s *dummySessionStore) Create(ctx context.Context, sess *session.Session) error {
+	sess.Data().SetPersistence(1)
+	return nil
+}
+func (s *dummySessionStore) CreateSignInChallenge(ctx context.Context, sess *session.Session, encodedCode, email string, challengeTTL time.Duration) error {
+	return nil
+}
+func (s *dummySessionStore) CreateRegistrationChallenge(ctx context.Context, sess *session.Session, encodedCode, email string, challengeTTL time.Duration) error {
+	return nil
+}
+func (s *dummySessionStore) ConsumeSignInChallenge(ctx context.Context, current, successor *session.Session, prepareSuccessor func(), encodedCode string, maxFailedAttempts int32) (session.SignInChallengeResult, error) {
+	prepareSuccessor()
+	return session.SignInChallengeResult{}, nil
+}
+func (s *dummySessionStore) ConsumeRegistrationChallenge(ctx context.Context, current, successor *session.Session, prepareSuccessor func(), encodedCode string, maxFailedAttempts int32, allowConsumption bool) (session.RegistrationChallengeResult, error) {
+	prepareSuccessor()
+	return session.RegistrationChallengeResult{}, nil
+}
+func (s *dummySessionStore) ReissueSignInChallenge(ctx context.Context, sess *session.Session, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (session.SignInChallengeReissue, error) {
+	return session.SignInChallengeReissue{EncodedCode: encodedCode}, nil
+}
+func (s *dummySessionStore) ReissueRegistrationChallenge(ctx context.Context, sess *session.Session, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (session.RegistrationChallengeReissue, error) {
+	return session.RegistrationChallengeReissue{EncodedCode: encodedCode}, nil
+}
+func (s *dummySessionStore) FinalizeRegistration(ctx context.Context, sess *session.Session, userID int32) (bool, error) {
+	return true, nil
+}
+func (s *dummySessionStore) IssueEmailChangeChallenge(ctx context.Context, sess *session.Session, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (session.EmailChangeChallengeIssue, error) {
+	return session.EmailChangeChallengeIssue{EncodedCode: encodedCode}, nil
+}
+func (s *dummySessionStore) ConsumeEmailChangeChallenge(ctx context.Context, sess *session.Session, newEmail, encodedCode string, maxFailedAttempts int32) (session.EmailChangeChallengeResult, error) {
+	return session.EmailChangeChallengeResult{Consumed: true, Email: newEmail}, nil
+}
 func (s *dummySessionStore) Read(ctx context.Context, sid string, skipCache bool) (*session.Session, error) {
 	return nil, nil
 }
-func (s *dummySessionStore) Update(ctx context.Context, session *session.Session) error { return nil }
-func (s *dummySessionStore) Renew(ctx context.Context, oldSID string, session *session.Session) error {
+func (s *dummySessionStore) Recover(ctx context.Context, sess *session.Session) error { return nil }
+func (s *dummySessionStore) Update(ctx context.Context, session *session.Session, update func()) error {
+	update()
 	return nil
 }
-func (s *dummySessionStore) RollbackRenew(ctx context.Context, oldSID string) {}
-func (s *dummySessionStore) Destroy(ctx context.Context, sid string) error    { return nil }
+func (s *dummySessionStore) Renew(ctx context.Context, current, successor *session.Session, prepareSuccessor func()) error {
+	prepareSuccessor()
+	return nil
+}
+func (s *dummySessionStore) RenewExpiration(ctx context.Context, session *session.Session) bool {
+	return false
+}
+func (s *dummySessionStore) Destroy(ctx context.Context, sid string) (session.SessionRevocationResult, error) {
+	return session.SessionRevocationResult{}, nil
+}
 
 func (s *createPropertyQuerierStub) CreateProperty(ctx context.Context, arg *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
 	return s.property, s.Error
@@ -413,6 +477,15 @@ func TestBusinessStoreImplRetrieveFromCache(t *testing.T) {
 			t.Errorf("expected ErrInvalidInput, got %v", err)
 		}
 	})
+
+	t.Run("LegacySessionKey", func(t *testing.T) {
+		querier := &cacheQuerierStub{QuerierStub: &QuerierStub{}}
+		store := &BusinessStoreImpl{querier: querier}
+		_, err := store.RetrieveFromCache(context.Background(), "session/legacy-sid")
+		if !errors.Is(err, ErrCacheMiss) {
+			t.Errorf("expected ErrCacheMiss, got %v", err)
+		}
+	})
 }
 
 func TestBusinessStoreImplStoreInCache(t *testing.T) {
@@ -436,6 +509,15 @@ func TestBusinessStoreImplStoreInCache(t *testing.T) {
 	t.Run("InvalidInput", func(t *testing.T) {
 		store := setupTestStore(t, nil)
 		err := store.StoreInCache(context.Background(), "", nil, 0)
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("expected ErrInvalidInput, got %v", err)
+		}
+	})
+
+	t.Run("LegacySessionKey", func(t *testing.T) {
+		querier := &cacheQuerierStub{QuerierStub: &QuerierStub{}}
+		store := &BusinessStoreImpl{querier: querier}
+		err := store.StoreInCache(context.Background(), "session/legacy-sid", []byte("value"), time.Minute)
 		if !errors.Is(err, ErrInvalidInput) {
 			t.Errorf("expected ErrInvalidInput, got %v", err)
 		}
@@ -519,8 +601,46 @@ func TestBusinessStoreImplSoftDeleteUser(t *testing.T) {
 }
 
 func TestBusinessStoreImplDeleteUserSession(t *testing.T) {
+	t.Run("CacheMissDeletesPersistentRow", func(t *testing.T) {
+		querier := &deleteSessionsQuerierStub{QuerierStub: &QuerierStub{}}
+		store := &BusinessStoreImpl{
+			querier: querier,
+			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
+		}
+
+		if err := store.DeleteUserSession(t.Context(), "valid-sid"); err != nil {
+			t.Fatal(err)
+		}
+		if len(querier.deleted) != 1 || querier.deleted[0] != "valid-sid" {
+			t.Fatalf("deleted sessions = %v, want [valid-sid]", querier.deleted)
+		}
+	})
+
+	t.Run("CachedUnpersistedSessionSkipsDatabase", func(t *testing.T) {
+		querier := &deleteSessionsQuerierStub{QuerierStub: &QuerierStub{}}
+		store := &BusinessStoreImpl{
+			querier: querier,
+			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
+		}
+		if err := store.CacheUserSession(t.Context(), session.NewSessionData("local-sid")); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := store.DeleteUserSession(t.Context(), "local-sid"); err != nil {
+			t.Fatal(err)
+		}
+		if len(querier.deleted) != 0 {
+			t.Fatalf("deleted sessions = %v, want no database deletion", querier.deleted)
+		}
+	})
+
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
+		sd := session.NewSessionData("valid-sid")
+		sd.SetPersistence(1)
+		if err := store.CacheUserSession(t.Context(), sd); err != nil {
+			t.Fatal(err)
+		}
 		err := store.DeleteUserSession(context.Background(), "valid-sid")
 		if err == nil {
 			t.Errorf("expected error, got nil")
@@ -530,6 +650,11 @@ func TestBusinessStoreImplDeleteUserSession(t *testing.T) {
 	t.Run("GenericError", func(t *testing.T) {
 		expectedErr := errors.New("db error")
 		store := setupTestStore(t, expectedErr)
+		sd := session.NewSessionData("valid-sid")
+		sd.SetPersistence(1)
+		if err := store.CacheUserSession(t.Context(), sd); err != nil {
+			t.Fatal(err)
+		}
 		err := store.DeleteUserSession(context.Background(), "valid-sid")
 		if err == nil {
 			t.Errorf("expected error, got nil")
@@ -581,9 +706,10 @@ func TestBusinessStoreImplStoreUserSessions(t *testing.T) {
 		sd := session.NewSessionData("valid-sid")
 		sess := session.NewSession(sd, &dummySessionStore{})
 		_ = sess.Set(context.Background(), session.KeyPersistent, "true")
+		sd.SetPersistence(1)
 		store.cache.Set(context.Background(), testCacheKey, sd)
 
-		err := store.StoreUserSessions(context.Background(), map[string]uint{"valid-sid": 1}, session.KeyPersistent, time.Minute)
+		err := store.StoreUserSessions(context.Background(), map[string]uint{"valid-sid": 1}, session.KeyPersistent)
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}
@@ -595,9 +721,10 @@ func TestBusinessStoreImplStoreUserSessions(t *testing.T) {
 		sd := session.NewSessionData("valid-sid")
 		sess := session.NewSession(sd, &dummySessionStore{})
 		_ = sess.Set(context.Background(), session.KeyPersistent, "true")
+		sd.SetPersistence(1)
 		store.cache.Set(context.Background(), testCacheKey, sd)
 
-		err := store.StoreUserSessions(context.Background(), map[string]uint{"valid-sid": 1}, session.KeyPersistent, time.Minute)
+		err := store.StoreUserSessions(context.Background(), map[string]uint{"valid-sid": 1}, session.KeyPersistent)
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}

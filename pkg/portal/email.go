@@ -123,7 +123,7 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 			err = nil
 		}
 
-		clog.Log(ctx, level, "Failed to send two factor code", "code", data.Code, common.ErrAttr(err))
+		clog.Log(ctx, level, "Failed to send two factor code", common.ErrAttr(err))
 
 		return err
 	}

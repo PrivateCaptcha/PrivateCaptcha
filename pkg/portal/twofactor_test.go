@@ -2,22 +2,115 @@ package portal
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
+
+func signInCodeForTest(t *testing.T, email string) int {
+	t.Helper()
+	code, ok := testMailer.TwoFactorCode(email)
+	if !ok {
+		t.Fatalf("2FA code was not sent to %s", email)
+	}
+	return code
+}
+
+func signInChallengeForTest(t *testing.T, srv *http.ServeMux, email string) (*http.Cookie, int) {
+	t.Helper()
+	resp := loginSuite(srv, email, server.XSRF.Token(""))
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("login status = %d, want 200", resp.StatusCode)
+	}
+	return responseCookieForTest(t, resp, server.Sessions.CookieName), signInCodeForTest(t, email)
+}
+
+func newChallengeReplica(t *testing.T) (*Server, *http.ServeMux) {
+	t.Helper()
+	replicaCache, err := db.NewMemoryCache[db.CacheKey, any](t.Name(), 1000, &struct{}{}, time.Minute, 3*time.Minute, 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replicaStore := db.NewBusinessEx(store.Pool, replicaCache)
+	sessionStore := db.NewSessionStore(replicaStore, session.KeyPersistent, monitoring.NewStub())
+	replica := &Server{
+		Store:    replicaStore,
+		APIURL:   server.APIURL,
+		CDNURL:   server.CDNURL,
+		IDHasher: server.IDHasher,
+		template: server.template,
+		XSRF:     server.XSRF,
+		Sessions: &session.Manager{
+			CookieName:  server.Sessions.CookieName,
+			Store:       sessionStore,
+			MaxLifetime: sessionStore.TTL(),
+		},
+		Mailer:          server.Mailer,
+		PlanService:     server.PlanService,
+		RateLimiter:     server.RateLimiter,
+		RenderConstants: server.RenderConstants,
+		PlatformCtx:     server.PlatformCtx,
+		DataCtx:         server.DataCtx,
+	}
+	replica.SettingsTabs = replica.createSettingsTabs()
+	replica.Jobs = replica
+	mux := http.NewServeMux()
+	mux.Handle("POST /"+common.TwoFactorEndpoint, replica.csrf(replica.csrfSessionIDKeyFunc)(http.HandlerFunc(replica.postTwoFactor)))
+	return replica, mux
+}
+
+func concurrentTwoFactorResponses(t *testing.T, count int, email, token string, code int, cookie *http.Cookie) []*http.Response {
+	t.Helper()
+	muxes := make([]*http.ServeMux, count)
+	for i := range muxes {
+		replica, mux := newChallengeReplica(t)
+		muxes[i] = mux
+		if _, err := replica.Sessions.Store.Read(t.Context(), cookie.Value, false /*skip cache*/); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	start := make(chan struct{})
+	responses := make([]*http.Response, count)
+	var wg sync.WaitGroup
+	for i := range responses {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			<-start
+			responses[index] = twoFactorSuite(muxes[index], email, token, code, cookie)
+		}(i)
+	}
+	close(start)
+	wg.Wait()
+	return responses
+}
+
+type failingConsumeStore struct {
+	session.Store
+	err error
+}
+
+func (s *failingConsumeStore) ConsumeSignInChallenge(context.Context, *session.Session, *session.Session, func(), string, int32) (session.SignInChallengeResult, error) {
+	return session.SignInChallengeResult{}, s.err
+}
 
 func TestPostTwoFactor(t *testing.T) {
 	if testing.Short() {
@@ -66,10 +159,14 @@ func loginSuite(srv *http.ServeMux, email, token string) *http.Response {
 }
 
 func twoFactorSuite(srv *http.ServeMux, email, token string, code int, cookie *http.Cookie) *http.Response {
+	return twoFactorValueSuite(srv, email, token, strconv.Itoa(code), cookie)
+}
+
+func twoFactorValueSuite(srv *http.ServeMux, email, token, code string, cookie *http.Cookie) *http.Response {
 	form := url.Values{}
 	form.Add(common.ParamCSRFToken, token)
 	form.Add(common.ParamEmail, email)
-	form.Add(common.ParamVerificationCode, strconv.Itoa(code))
+	form.Add(common.ParamVerificationCode, code)
 
 	// now send the 2fa request
 	req := httptest.NewRequest("POST", "/"+common.TwoFactorEndpoint, bytes.NewBufferString(form.Encode()))
@@ -78,6 +175,22 @@ func twoFactorSuite(srv *http.ServeMux, email, token string, code int, cookie *h
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 	return w.Result()
+}
+
+func registrationChallengeForTest(t *testing.T, srv *http.ServeMux, email string) (*http.Cookie, string, int) {
+	t.Helper()
+	resp := registerSuite(srv, "Registration User", email, server.XSRF.Token(""))
+	cookie := responseCookieForTest(t, resp, server.Sessions.CookieName)
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := parseCsrfToken(string(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cookie, token, signInCodeForTest(t, email)
 }
 
 // technically it's close to TestPersistentSession, but it's more "end-to-end"
@@ -96,41 +209,13 @@ func TestPostTwoFactorOtherServer(t *testing.T) {
 		t.Fatalf("failed to create new account: %v", err)
 	}
 
-	resp := loginSuite(srv, user.Email, server.XSRF.Token(""))
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Unexpected login status code: %v", resp.StatusCode)
-	}
-
-	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
-	if idx == -1 {
-		t.Fatal("cannot find session cookie in response")
-	}
-	cookie := resp.Cookies()[idx]
-
-	// wait until the session is persisted to DB
-	for attempt := 0; attempt < 5; attempt++ {
-		time.Sleep(400 * time.Millisecond)
-
-		_, err = store.Impl().RetrieveFromCache(ctx, "session/"+cookie.Value)
-		if err == nil {
-			break
-		}
-	}
-
-	if err != nil {
-		t.Fatal(err)
-	}
+	cookie, code := signInChallengeForTest(t, srv, user.Email)
 
 	if deleted := cache.Delete(ctx, db.SessionCacheKey(cookie.Value)); !deleted {
 		t.Fatal("Didn't delete cached session")
 	}
 
-	code, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code, cookie)
+	resp := twoFactorSuite(srv, user.Email, server.XSRF.Token(cookie.Value), code, cookie)
 
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("unexpected post twofactor code: %v", resp.StatusCode)
@@ -140,21 +225,6 @@ func TestPostTwoFactorOtherServer(t *testing.T) {
 		t.Errorf("unexpected redirect: %v", location)
 	}
 
-	idx = slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
-	if idx == -1 {
-		t.Fatal("cannot find rotated session cookie in response")
-	}
-	rotatedCookie := resp.Cookies()[idx]
-	deadline := time.Now().Add(time.Second)
-	for {
-		if _, err = server.Sessions.Store.Read(ctx, rotatedCookie.Value, true /*skip cache*/); err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("rotated session was not persisted within the low-latency batch window: %v", err)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
 }
 
 func TestPostTwoFactorRotatesSession(t *testing.T) {
@@ -172,37 +242,16 @@ func TestPostTwoFactorRotatesSession(t *testing.T) {
 		t.Fatalf("failed to create new account: %v", err)
 	}
 
-	resp := loginSuite(srv, user.Email, server.XSRF.Token(""))
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Unexpected login status code: %v", resp.StatusCode)
-	}
+	oldCookie, code := signInChallengeForTest(t, srv, user.Email)
 
-	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
-	if idx == -1 {
-		t.Fatal("cannot find session cookie in response")
-	}
-	oldCookie := resp.Cookies()[idx]
-
-	code, err := portal_tests.TwoFactorCodeFromSession(ctx, oldCookie.Value, server.Sessions.Store)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code, oldCookie)
+	resp := twoFactorSuite(srv, user.Email, server.XSRF.Token(oldCookie.Value), code, oldCookie)
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Fatalf("unexpected post twofactor code: %v", resp.StatusCode)
 	}
 
-	idx = slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
-	if idx == -1 {
-		t.Fatal("cannot find rotated session cookie in response")
-	}
-	newCookie := resp.Cookies()[idx]
+	newCookie := responseCookieForTest(t, resp, server.Sessions.CookieName)
 	if newCookie.Value == oldCookie.Value {
 		t.Fatal("session ID was not rotated after successful 2FA")
-	}
-	if newCookie.SameSite != http.SameSiteLaxMode {
-		t.Fatalf("expected SameSite=Lax, got %v", newCookie.SameSite)
 	}
 
 	oldReq := httptest.NewRequest("GET", "/", nil)
@@ -236,81 +285,423 @@ func TestPostTwoFactorAttemptLimit(t *testing.T) {
 		t.Fatalf("failed to create new account: %v", err)
 	}
 
-	resp := loginSuite(srv, user.Email, server.XSRF.Token(""))
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("unexpected login status code: %v", resp.StatusCode)
-	}
-
-	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
-	if idx == -1 {
-		t.Fatal("cannot find session cookie in response")
-	}
-	cookie := resp.Cookies()[idx]
-
-	code, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
-	if err != nil {
-		t.Fatal(err)
-	}
+	cookie, code := signInChallengeForTest(t, srv, user.Email)
 
 	for attempt := 1; attempt <= maxFailedAttempts; attempt++ {
-		resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code+1, cookie)
-		body, readErr := io.ReadAll(resp.Body)
+		resp := twoFactorSuite(srv, user.Email, server.XSRF.Token(cookie.Value), invalidVerificationCode(code), cookie)
+		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		if readErr != nil {
-			t.Fatalf("failed to read attempt %d response: %v", attempt, readErr)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "Code is not valid.") {
-			t.Fatalf("unexpected response for failed attempt %d: status %v, body %s", attempt, resp.StatusCode, body)
+		if resp.StatusCode != http.StatusOK || len(resp.Cookies()) != 0 {
+			t.Fatalf("failed attempt %d response = (status %d, cookies %d)", attempt, resp.StatusCode, len(resp.Cookies()))
+		}
+		if attempt == maxFailedAttempts && !strings.Contains(string(body), "Too many failed attempts") {
+			t.Fatalf("final failed attempt body did not report exhaustion: %s", body)
 		}
 	}
 
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code, cookie)
-	body, err := io.ReadAll(resp.Body)
+	resp := twoFactorSuite(srv, user.Email, server.XSRF.Token(cookie.Value), code, cookie)
 	resp.Body.Close()
-	if err != nil {
-		t.Fatalf("failed to read limited response: %v", err)
+	if resp.StatusCode != http.StatusOK || len(resp.Cookies()) != 0 {
+		t.Fatalf("attempt-limited response = (status %d, cookies %d)", resp.StatusCode, len(resp.Cookies()))
 	}
-	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "Too many failed attempts. Please request a new code.") {
-		t.Fatalf("expected correct code to be rejected after five failures: status %v, body %s", resp.StatusCode, body)
+	var authenticated int
+	if err := store.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM backend.sessions WHERE user_id = $1 AND state = 'authenticated'", user.ID).Scan(&authenticated); err != nil {
+		t.Fatal(err)
+	}
+	if authenticated != 0 {
+		t.Fatalf("authenticated successors after attempt limit = %d, want 0", authenticated)
+	}
+}
+
+func TestPostRegistrationTwoFactorReportsAttemptLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
 	}
 
-	resp = resend2faSuite(srv, user.Email, server.XSRF.Token(user.Email), cookie)
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("unexpected resend status code: %v", resp.StatusCode)
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	email := strings.ToLower(t.Name()) + "@privatecaptcha.com"
+	cookie, token, code := registrationChallengeForTest(t, srv, email)
+	for attempt := 1; attempt <= maxFailedAttempts; attempt++ {
+		resp := twoFactorSuite(srv, email, token, invalidVerificationCode(code), cookie)
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != http.StatusOK || len(resp.Cookies()) != 0 {
+			t.Fatalf("failed attempt %d response = (status %d, cookies %d)", attempt, resp.StatusCode, len(resp.Cookies()))
+		}
+		if attempt == maxFailedAttempts && !strings.Contains(string(body), "Too many failed attempts") {
+			t.Fatalf("final failed attempt body did not report exhaustion: %s", body)
+		}
+	}
+}
+
+func TestPostTwoFactorMalformedCodeDoesNotRecordAttempt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
 	}
 
-	code, err = portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	user, _, err := db_tests.CreateNewAccountForTest(t.Context(), store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
+	cookie, code := signInChallengeForTest(t, srv, user.Email)
+	token := server.XSRF.Token(cookie.Value)
+	for _, malformed := range []string{"", "not-a-code", "-12345", "+12345", "12345", "1234567"} {
+		resp := twoFactorValueSuite(srv, user.Email, token, malformed, cookie)
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "Code is not valid") {
+			t.Fatalf("malformed code %q response = (status %d, body %q)", malformed, resp.StatusCode, body)
+		}
+	}
 
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code+1, cookie)
-	body, err = io.ReadAll(resp.Body)
+	var attempts int32
+	if err := store.Pool.QueryRow(t.Context(), "SELECT failed_attempts FROM backend.sessions WHERE session_id = $1", cookie.Value).Scan(&attempts); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 0 {
+		t.Fatalf("malformed codes recorded %d failed attempts, want 0", attempts)
+	}
+	response := twoFactorSuite(srv, user.Email, token, code, cookie)
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusSeeOther {
+		t.Fatalf("valid code after malformed input status = %d, want %d", response.StatusCode, http.StatusSeeOther)
+	}
+}
+
+func TestEncodeVerificationCodeValidatesSixASCIIDigits(t *testing.T) {
+	for _, malformed := range []string{"", "not-a-code", "-12345", "+12345", "12345", "1234567", "１２３４５６"} {
+		if encoded := server.encodeVerificationCode(malformed); encoded != "" {
+			t.Fatalf("encodeVerificationCode(%q) = %q, want empty", malformed, encoded)
+		}
+	}
+	if encoded := server.encodeVerificationCode(" 123456 "); encoded == "" {
+		t.Fatal("valid verification code was rejected")
+	}
+}
+
+func concurrentAttemptLimitSuite(t *testing.T, kind dbgen.SessionChallengeKind) {
+	t.Helper()
+	ctx := t.Context()
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	email := strings.ToLower(t.Name()) + "@privatecaptcha.com"
+	var userID int32
+	var cookie *http.Cookie
+	var token string
+	var correctCode int
+
+	switch kind {
+	case dbgen.SessionChallengeKindSignIn:
+		user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		email = user.Email
+		userID = user.ID
+		cookie, correctCode = signInChallengeForTest(t, srv, email)
+		token = server.XSRF.Token(cookie.Value)
+	case dbgen.SessionChallengeKindRegistration:
+		cookie, token, correctCode = registrationChallengeForTest(t, srv, email)
+	default:
+		t.Fatalf("unsupported challenge kind %q", kind)
+	}
+
+	const requests = maxFailedAttempts + 2
+	responses := concurrentTwoFactorResponses(t, requests, email, token, invalidVerificationCode(correctCode), cookie)
+	for _, response := range responses {
+		response.Body.Close()
+		if response.StatusCode != http.StatusOK || len(response.Cookies()) != 0 {
+			t.Fatalf("invalid attempt response = (status %d, cookies %d), want (200, 0)", response.StatusCode, len(response.Cookies()))
+		}
+	}
+
+	resp := twoFactorSuite(srv, email, token, correctCode, cookie)
 	resp.Body.Close()
-	if err != nil {
-		t.Fatalf("failed to read response after resend: %v", err)
-	}
-	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "Code is not valid.") {
-		t.Fatalf("expected resend to reset failed attempts: status %v, body %s", resp.StatusCode, body)
+	if resp.StatusCode != http.StatusOK || len(resp.Cookies()) != 0 {
+		t.Fatalf("attempt-limited response = (status %d, cookies %d), want (200, 0)", resp.StatusCode, len(resp.Cookies()))
 	}
 
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code, cookie)
+	if kind == dbgen.SessionChallengeKindRegistration {
+		if _, err := store.Impl().FindUserByEmail(ctx, email); !errors.Is(err, db.ErrRecordNotFound) {
+			t.Fatalf("attempt-limited registration user lookup error = %v, want record not found", err)
+		}
+		return
+	}
+	var authenticated int
+	if err := store.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM backend.sessions WHERE user_id = $1 AND state = 'authenticated'", userID).Scan(&authenticated); err != nil {
+		t.Fatal(err)
+	}
+	if authenticated != 0 {
+		t.Fatal("attempt-limited sign-in authenticated the user")
+	}
+}
+
+func invalidTwoFactorChallengeSuite(t *testing.T, kind dbgen.SessionChallengeKind, update string) {
+	t.Helper()
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	ctx := t.Context()
+	email := strings.ToLower(t.Name()) + "@privatecaptcha.com"
+	var userID int32
+	var cookie *http.Cookie
+	var token string
+	var code int
+
+	switch kind {
+	case dbgen.SessionChallengeKindSignIn:
+		user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		email = user.Email
+		userID = user.ID
+		cookie, code = signInChallengeForTest(t, srv, email)
+		token = server.XSRF.Token(cookie.Value)
+	case dbgen.SessionChallengeKindRegistration:
+		cookie, token, code = registrationChallengeForTest(t, srv, email)
+	default:
+		t.Fatalf("unsupported challenge kind %q", kind)
+	}
+
+	if _, err := store.Pool.Exec(ctx, update, cookie.Value); err != nil {
+		t.Fatal(err)
+	}
+	resp := twoFactorSuite(srv, email, token, code, cookie)
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("unexpected post twofactor status code after resend: %v", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK || len(resp.Cookies()) != 0 {
+		t.Fatalf("invalid challenge response = (status %d, cookies %d), want (200, 0)", resp.StatusCode, len(resp.Cookies()))
 	}
 
-	idx = slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
-	if idx == -1 {
-		t.Fatal("cannot find rotated session cookie in response")
+	if kind == dbgen.SessionChallengeKindRegistration {
+		if _, err := store.Impl().FindUserByEmail(ctx, email); !errors.Is(err, db.ErrRecordNotFound) {
+			t.Fatalf("invalid registration user lookup error = %v, want record not found", err)
+		}
+		return
 	}
-	newSession, err := server.Sessions.Store.Read(ctx, resp.Cookies()[idx].Value, false /*skip cache*/)
+	var authenticated int
+	if err := store.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM backend.sessions WHERE user_id = $1 AND state = 'authenticated'", userID).Scan(&authenticated); err != nil {
+		t.Fatal(err)
+	}
+	if authenticated != 0 {
+		t.Fatal("invalid sign-in challenge authenticated the user")
+	}
+}
+
+func TestPostTwoFactorRejectsInvalidChallenge(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	for _, test := range []struct {
+		name   string
+		kind   dbgen.SessionChallengeKind
+		update string
+	}{
+		{name: "SignInExpired", kind: dbgen.SessionChallengeKindSignIn, update: "UPDATE backend.sessions SET challenge_expires_at = NOW() - INTERVAL '1 second' WHERE session_id = $1"},
+		{name: "SignInWrongPurpose", kind: dbgen.SessionChallengeKindSignIn, update: "UPDATE backend.sessions SET challenge_kind = 'registration' WHERE session_id = $1"},
+		{name: "RegistrationExpired", kind: dbgen.SessionChallengeKindRegistration, update: "UPDATE backend.sessions SET challenge_expires_at = NOW() - INTERVAL '1 second' WHERE session_id = $1"},
+		{name: "RegistrationWrongPurpose", kind: dbgen.SessionChallengeKindRegistration, update: "UPDATE backend.sessions SET challenge_kind = 'email_change' WHERE session_id = $1"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			invalidTwoFactorChallengeSuite(t, test.kind, test.update)
+		})
+	}
+
+	t.Run("SignInMismatchedPayloadUser", func(t *testing.T) {
+		ctx := t.Context()
+		challengeUser, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"Challenge", testPlan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		otherUser, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"Other", testPlan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		srv := http.NewServeMux()
+		server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+		cookie, code := signInChallengeForTest(t, srv, challengeUser.Email)
+		pendingSession, err := server.Sessions.Store.Read(ctx, cookie.Value, false /*skip cache*/)
+		if err != nil {
+			t.Fatal(err)
+		}
+		pendingSession.Data().SetAuthoritativeUserID(otherUser.ID)
+
+		resp := twoFactorSuite(srv, challengeUser.Email, server.XSRF.Token(cookie.Value), code, cookie)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || len(resp.Cookies()) != 0 {
+			t.Fatalf("mismatched-user response = (status %d, cookies %d), want (200, 0)", resp.StatusCode, len(resp.Cookies()))
+		}
+		var authenticated int
+		if err := store.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM backend.sessions WHERE user_id IN ($1, $2) AND state = 'authenticated'", challengeUser.ID, otherUser.ID).Scan(&authenticated); err != nil {
+			t.Fatal(err)
+		}
+		if authenticated != 0 {
+			t.Fatal("mismatched payload user authenticated an account")
+		}
+	})
+}
+
+func TestPostTwoFactorConcurrentAttemptsRespectLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	for name, kind := range map[string]dbgen.SessionChallengeKind{
+		"SignIn":       dbgen.SessionChallengeKindSignIn,
+		"Registration": dbgen.SessionChallengeKindRegistration,
+	} {
+		t.Run(name, func(t *testing.T) {
+			concurrentAttemptLimitSuite(t, kind)
+		})
+	}
+}
+
+func TestPostTwoFactorConsumesChallengeOnce(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if newSession.Data().Has(session.KeyLoginAttempts) {
-		t.Fatal("failed login attempts remain after successful verification")
+	pendingCookie, code := signInChallengeForTest(t, srv, user.Email)
+	token := server.XSRF.Token(pendingCookie.Value)
+
+	responses := concurrentTwoFactorResponses(t, 2, user.Email, token, code, pendingCookie)
+
+	successes := 0
+	losers := 0
+	for _, response := range responses {
+		location, _ := response.Location()
+		if response.StatusCode == http.StatusSeeOther && location.Path == "/" {
+			successes++
+			if len(response.Cookies()) != 1 || response.Cookies()[0].Value == pendingCookie.Value {
+				t.Fatal("winning response did not contain only the rotated cookie")
+			}
+		} else {
+			losers++
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("losing response status = %d, want 200", response.StatusCode)
+			}
+			if len(response.Cookies()) != 0 {
+				t.Fatal("losing response replaced the pending cookie")
+			}
+		}
+		response.Body.Close()
+	}
+	if successes != 1 || losers != 1 {
+		t.Fatalf("concurrent submissions = (%d winners, %d losers), want (1, 1)", successes, losers)
+	}
+	var authenticated int
+	replay := twoFactorSuite(srv, user.Email, token, code, pendingCookie)
+	replay.Body.Close()
+	replayLocation, _ := replay.Location()
+	if replay.StatusCode == http.StatusSeeOther && replayLocation.Path == "/" {
+		t.Fatal("consumed challenge replay succeeded")
+	}
+	if err := store.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM backend.sessions WHERE user_id = $1 AND state = 'authenticated'", user.ID).Scan(&authenticated); err != nil {
+		t.Fatal(err)
+	}
+	if authenticated != 1 {
+		t.Fatalf("authenticated successors after replay = %d, want 1", authenticated)
+	}
+
+	registrationEmail := t.Name() + "-registration@privatecaptcha.com"
+	registrationCookie, registrationToken, registrationCode := registrationChallengeForTest(t, srv, registrationEmail)
+
+	registrationResponses := concurrentTwoFactorResponses(t, 2, registrationEmail, registrationToken, registrationCode, registrationCookie)
+
+	registrationSuccesses := 0
+	registrationLosers := 0
+	var registrationSuccessorID string
+	for _, response := range registrationResponses {
+		if response.StatusCode == http.StatusSeeOther {
+			registrationSuccesses++
+			if len(response.Cookies()) != 1 || response.Cookies()[0].Value == registrationCookie.Value {
+				t.Fatal("winning registration response did not rotate the cookie")
+			}
+			registrationSuccessorID = response.Cookies()[0].Value
+		} else {
+			registrationLosers++
+			if response.StatusCode != http.StatusOK || len(response.Cookies()) != 0 {
+				t.Fatalf("losing registration response = (status %d, cookies %d)", response.StatusCode, len(response.Cookies()))
+			}
+		}
+		response.Body.Close()
+	}
+	if registrationSuccesses != 1 || registrationLosers != 1 {
+		t.Fatalf("concurrent registrations = (%d winners, %d losers), want (1, 1)", registrationSuccesses, registrationLosers)
+	}
+	registrationUser, err := store.Impl().FindUserByEmail(ctx, registrationEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		row, rowErr := dbgen.New(store.Pool).GetSessionByID(ctx, registrationSuccessorID)
+		if rowErr == nil && row.State == dbgen.SessionStateAuthenticated && row.UserID.Valid && row.UserID.Int32 == registrationUser.ID {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("registration successor did not finalize: row=%+v err=%v", row, rowErr)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestPostTwoFactorFailsClosedWhenSignInRenewalFails(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pendingCookie, code := signInChallengeForTest(t, srv, user.Email)
+
+	originalStore := server.Sessions.Store
+	server.Sessions.Store = &failingConsumeStore{Store: originalStore, err: errors.New("consume unavailable")}
+	defer func() { server.Sessions.Store = originalStore }()
+	form := url.Values{}
+	form.Add(common.ParamVerificationCode, strconv.Itoa(code))
+	req := httptest.NewRequest(http.MethodPost, "/"+common.TwoFactorEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(pendingCookie.Value))
+	req.Header.Set(common.HeaderHtmxRequest, "true")
+	req.AddCookie(pendingCookie)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("consume failure status = %d, want 503", w.Code)
+	}
+	if len(w.Result().Cookies()) != 0 {
+		t.Fatal("consume failure replaced the pending cookie")
+	}
+	var authenticated int
+	if err := store.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM backend.sessions WHERE user_id = $1 AND state = 'authenticated'", user.ID).Scan(&authenticated); err != nil {
+		t.Fatal(err)
+	}
+	if authenticated != 0 {
+		t.Fatalf("authenticated successors after consume failure = %d, want 0", authenticated)
 	}
 }
 
@@ -341,52 +732,76 @@ func TestResend2FA(t *testing.T) {
 		t.Fatalf("failed to create new account: %v", err)
 	}
 
-	// Login to get into 2FA verification state (this sends the original 2FA code)
-	resp := loginSuite(srv, user.Email, server.XSRF.Token(""))
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Unexpected login status code: %v", resp.StatusCode)
-	}
-
-	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
-	if idx == -1 {
-		t.Fatal("cannot find session cookie in response")
-	}
-	cookie := resp.Cookies()[idx]
-
-	originalCode, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Try to use a wrong code first (but don't complete login)
-	// This simulates a user who received the code but wants to resend
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), 999999, cookie)
-	// Using wrong code should fail
+	cookie, originalCode := signInChallengeForTest(t, srv, user.Email)
+	wrongCode := invalidVerificationCode(originalCode)
+	resp := twoFactorSuite(srv, user.Email, server.XSRF.Token(cookie.Value), wrongCode, cookie)
 	if resp.StatusCode == http.StatusSeeOther {
-		t.Fatal("Should not have succeeded with wrong code")
+		t.Fatal("wrong code succeeded")
 	}
-
-	// Now call resend 2FA to get a new code - note: CSRF token uses email as key
-	resp = resend2faSuite(srv, user.Email, server.XSRF.Token(user.Email), cookie)
+	resp.Body.Close()
+	resp = resend2faSuite(srv, user.Email, server.XSRF.Token(cookie.Value), cookie)
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Unexpected resend2fa status code: %v", resp.StatusCode)
+		t.Fatalf("unexpected resend2fa status code: %v", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	newCode := signInCodeForTest(t, user.Email)
+	if newCode == originalCode {
+		t.Fatalf("new 2FA code equals old code: %d", newCode)
 	}
 
-	// The code should have been reissued and should be different
-	newCode, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
+	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(cookie.Value), originalCode, cookie)
+	if resp.StatusCode == http.StatusSeeOther {
+		t.Fatal("old code succeeded after resend")
+	}
+	resp.Body.Close()
+	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(cookie.Value), newCode, cookie)
+	location, _ := resp.Location()
+	if resp.StatusCode != http.StatusSeeOther || location.Path != "/" {
+		t.Fatalf("unexpected post twofactor response with reissued code: status %v, location %v", resp.StatusCode, location)
+	}
+	resp.Body.Close()
+}
+
+func TestResend2FAUsesAuthoritativeEmail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// Verify that the new code is different from the original
-	if newCode == originalCode {
-		t.Errorf("New 2FA code should be different from original code (both were %d)", newCode)
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	pendingCookie, _ := signInChallengeForTest(t, srv, user.Email)
+	pendingSession, err := server.Sessions.Store.Read(ctx, pendingCookie.Value, false /*skip cache*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tamperedEmail := t.Name() + "@attacker.example"
+	if err := pendingSession.Set(ctx, session.KeyUserEmail, tamperedEmail); err != nil {
+		t.Fatal(err)
 	}
 
-	// Verify we can use the new code to complete login
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), newCode, cookie)
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("Unexpected post twofactor status code with reissued code: %v", resp.StatusCode)
+	resp := resend2faSuite(srv, user.Email, server.XSRF.Token(pendingCookie.Value), pendingCookie)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("resend status = %d, want 200", resp.StatusCode)
+	}
+	mailedCode, ok := testMailer.TwoFactorCode(user.Email)
+	if !ok {
+		t.Fatal("resend did not deliver to the authoritative email")
+	}
+	if _, ok := testMailer.TwoFactorCode(tamperedEmail); ok {
+		t.Fatal("resend delivered to tampered payload email")
+	}
+	authenticated := twoFactorSuite(srv, user.Email, server.XSRF.Token(pendingCookie.Value), mailedCode, pendingCookie)
+	location, _ := authenticated.Location()
+	authenticated.Body.Close()
+	if authenticated.StatusCode != http.StatusSeeOther || location.Path != "/" {
+		t.Fatalf("authoritative resend code did not authenticate: status %d, location %v", authenticated.StatusCode, location)
 	}
 }
 
@@ -448,7 +863,7 @@ func TestResend2FAWithCompletedSession(t *testing.T) {
 
 	// Try to resend 2FA with an already completed session
 	// After authentication, the session no longer has the email key, so CSRF will fail
-	resp := resend2faSuite(srv, user.Email, server.XSRF.Token(user.Email), cookie)
+	resp := resend2faSuite(srv, user.Email, server.XSRF.Token(cookie.Value), cookie)
 
 	// Should redirect to expired since session is already completed (no email in session)
 	if resp.StatusCode != http.StatusSeeOther {

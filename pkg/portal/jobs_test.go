@@ -1,12 +1,92 @@
 package portal
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
+
+type registrationFinalizerStore struct {
+	session.Store
+	errors         []error
+	retrySucceeded bool
+	calls          int
+	onCall         func()
+}
+
+func (s *registrationFinalizerStore) FinalizeRegistration(context.Context, *session.Session, int32) (bool, error) {
+	s.calls++
+	if s.onCall != nil {
+		s.onCall()
+	}
+	if len(s.errors) > 0 {
+		err := s.errors[0]
+		s.errors = s.errors[1:]
+		return false, err
+	}
+	s.retrySucceeded = true
+	return true, nil
+}
+
+func TestRegistrationFinalizerRetriesTransientFailure(t *testing.T) {
+	store := &registrationFinalizerStore{
+		errors: []error{errors.New("temporary database failure")},
+	}
+	sess := session.NewSession(session.NewSessionData("processing-sid"), store)
+	job := &registrationFinalizerJob{Sess: sess, UserID: 42}
+
+	if err := job.RunOnce(t.Context(), job.NewParams()); err != nil {
+		t.Fatal(err)
+	}
+	if !store.retrySucceeded {
+		t.Fatal("registration finalization did not succeed after the transient failure")
+	}
+}
+
+func TestRegistrationFinalizerReturnsLastFailure(t *testing.T) {
+	errs := []error{
+		errors.New("database unavailable 1"),
+		errors.New("database unavailable 2"),
+		errors.New("database unavailable 3"),
+		errors.New("database unavailable 4"),
+		errors.New("database unavailable 5"),
+	}
+	lastErr := errs[len(errs)-1]
+	store := &registrationFinalizerStore{
+		errors: errs,
+	}
+	sess := session.NewSession(session.NewSessionData("processing-sid"), store)
+	job := &registrationFinalizerJob{Sess: sess, UserID: 42}
+
+	if err := job.RunOnce(t.Context(), job.NewParams()); !errors.Is(err, lastErr) {
+		t.Fatalf("RunOnce() error = %v, want %v", err, lastErr)
+	}
+	if store.calls != registrationFinalizeMaxAttempts {
+		t.Fatalf("FinalizeRegistration() calls = %d, want %d", store.calls, registrationFinalizeMaxAttempts)
+	}
+}
+
+func TestRegistrationFinalizerStopsDuringBackoff(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	store := &registrationFinalizerStore{
+		errors: []error{errors.New("temporary database failure")},
+		onCall: cancel,
+	}
+	sess := session.NewSession(session.NewSessionData("processing-sid"), store)
+	job := &registrationFinalizerJob{Sess: sess, UserID: 42}
+
+	if err := job.RunOnce(ctx, job.NewParams()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("RunOnce() error = %v, want %v", err, context.Canceled)
+	}
+	if store.calls != 1 {
+		t.Fatalf("FinalizeRegistration() calls = %d, want 1", store.calls)
+	}
+}
 
 func TestCleanupAuditLogJob(t *testing.T) {
 	if testing.Short() {

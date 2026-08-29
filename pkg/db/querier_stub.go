@@ -13,6 +13,33 @@ type QuerierStub struct {
 
 var _ dbgen.Querier = (*QuerierStub)(nil)
 
+func (s *QuerierStub) ConsumeSignInChallenge(ctx context.Context, arg *dbgen.ConsumeSignInChallengeParams) (*dbgen.ConsumeSignInChallengeRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) ConsumeEmailChangeChallenge(ctx context.Context, arg *dbgen.ConsumeEmailChangeChallengeParams) (*dbgen.ConsumeEmailChangeChallengeRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) ConsumeRegistrationChallenge(ctx context.Context, arg *dbgen.ConsumeRegistrationChallengeParams) (*dbgen.ConsumeRegistrationChallengeRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) FinalizeRegistrationSession(ctx context.Context, arg *dbgen.FinalizeRegistrationSessionParams) (*dbgen.Session, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) ReissueRegistrationChallenge(ctx context.Context, arg *dbgen.ReissueRegistrationChallengeParams) (*dbgen.Session, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) ReissueSignInChallenge(ctx context.Context, arg *dbgen.ReissueSignInChallengeParams) (*dbgen.Session, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) RevokeSession(ctx context.Context, sessionID string) (*dbgen.RevokeSessionRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) RotateSession(ctx context.Context, arg *dbgen.RotateSessionParams) (*dbgen.RotateSessionRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) IssueEmailChangeChallenge(ctx context.Context, arg *dbgen.IssueEmailChangeChallengeParams) (*dbgen.Session, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) CreateAPIKey(ctx context.Context, arg *dbgen.CreateAPIKeyParams) (*dbgen.APIKey, error) {
 	return nil, s.Error
 }
@@ -41,6 +68,9 @@ func (s *QuerierStub) CreateOrganization(ctx context.Context, arg *dbgen.CreateO
 	return nil, s.Error
 }
 func (s *QuerierStub) CreateProperty(ctx context.Context, arg *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) CreateSession(ctx context.Context, arg *dbgen.CreateSessionParams) (*dbgen.Session, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) CreateSubscription(ctx context.Context, arg *dbgen.CreateSubscriptionParams) (*dbgen.Subscription, error) {
@@ -76,6 +106,9 @@ func (s *QuerierStub) DeleteDifficultyRule(ctx context.Context, arg *dbgen.Delet
 func (s *QuerierStub) DeleteExpiredCache(ctx context.Context) (int64, error) {
 	return 0, s.Error
 }
+func (s *QuerierStub) DeleteExpiredSessions(ctx context.Context) (int64, error) {
+	return 0, s.Error
+}
 func (s *QuerierStub) DeleteForms(ctx context.Context, dollar_1 []int32) (int64, error) {
 	return 0, s.Error
 }
@@ -100,6 +133,9 @@ func (s *QuerierStub) DeleteProcessedUserNotifications(ctx context.Context, proc
 func (s *QuerierStub) DeleteProperties(ctx context.Context, dollar_1 []int32) (int64, error) {
 	return 0, s.Error
 }
+func (s *QuerierStub) DeleteSessionsByID(ctx context.Context, sessionIds []string) (int64, error) {
+	return 0, s.Error
+}
 func (s *QuerierStub) DeleteUnprocessedUserNotifications(ctx context.Context, scheduledAt pgtype.Timestamptz) (int64, error) {
 	return 0, s.Error
 }
@@ -107,6 +143,9 @@ func (s *QuerierStub) DeleteUnusedNotificationTemplates(ctx context.Context, arg
 	return 0, s.Error
 }
 func (s *QuerierStub) DeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]pgtype.UUID, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) ExtendAuthenticatedSessionExpirations(ctx context.Context, arg *dbgen.ExtendAuthenticatedSessionExpirationsParams) ([]*dbgen.ExtendAuthenticatedSessionExpirationsRow, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) DeleteUsers(ctx context.Context, dollar_1 []int32) (int64, error) {
@@ -403,6 +442,15 @@ func (s *QuerierStub) UpsertUserSettings(ctx context.Context, arg *dbgen.UpsertU
 func (s *QuerierStub) GetPropertyEditViolations(ctx context.Context, arg *dbgen.GetPropertyAccessViolationsParams) ([]int32, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) GetSessionByID(ctx context.Context, sessionID string) (*dbgen.Session, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetSessionByIDUnfiltered(ctx context.Context, sessionID string) (*dbgen.Session, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) GetUserFormsCount(ctx context.Context, userID pgtype.Int4) (int64, error) {
 	return 0, s.Error
+}
+func (s *QuerierStub) UpdateSessionDataCAS(ctx context.Context, arg *dbgen.UpdateSessionDataCASParams) ([]*dbgen.UpdateSessionDataCASRow, error) {
+	return nil, s.Error
 }

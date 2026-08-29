@@ -2189,6 +2189,68 @@ func TestOrgInviteRegisterValidEmailInvite(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected 200 OK for valid email invite, got status code %v", resp.StatusCode)
 	}
+	inviteCookie := responseCookieForTest(t, resp, server.Sessions.CookieName)
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(""))
+	form.Set(common.ParamEmail, testEmail)
+	form.Set(common.ParamName, "Invited User")
+	form.Set(common.ParamTerms, "true")
+	form.Set(common.ParamPortalSolution, "captchaSolution")
+	registerReq := httptest.NewRequest(http.MethodPost, "/"+common.RegisterEndpoint, strings.NewReader(form.Encode()))
+	registerReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	registerReq.AddCookie(inviteCookie)
+	registerW := httptest.NewRecorder()
+	srv.ServeHTTP(registerW, registerReq)
+	registerResp := registerW.Result()
+	if registerResp.StatusCode != http.StatusOK {
+		t.Fatalf("invite registration status = %d, want 200", registerResp.StatusCode)
+	}
+	var pendingCookie *http.Cookie
+	for _, cookie := range registerResp.Cookies() {
+		if cookie.Name == server.Sessions.CookieName {
+			pendingCookie = cookie
+			break
+		}
+	}
+	if pendingCookie == nil || pendingCookie.Value == inviteCookie.Value {
+		t.Fatal("invite registration did not create a fresh pending session")
+	}
+	token, err := parseCsrfToken(registerW.Body.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := signInCodeForTest(t, testEmail)
+	twoFactorResp := twoFactorSuite(srv, testEmail, token, code, pendingCookie)
+	twoFactorResp.Body.Close()
+	location, _ := twoFactorResp.Location()
+	wantLocation := server.PartsURL(common.OrgEndpoint, server.IDHasher.Encrypt(int(org1.ID)))
+	if twoFactorResp.StatusCode != http.StatusSeeOther || location.String() != wantLocation {
+		t.Fatalf("invite registration redirect = (status %d, location %q), want %q", twoFactorResp.StatusCode, location.String(), wantLocation)
+	}
+
+	invitedUser, err := store.Impl().FindUserByEmail(ctx, testEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		orgs, orgErr := store.Impl().RetrieveUserOrganizations(ctx, invitedUser.ID)
+		linked := false
+		for _, org := range orgs {
+			if org.Organization.ID == org1.ID {
+				linked = true
+				break
+			}
+		}
+		if orgErr == nil && linked {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("invite was not linked after registration: %v", orgErr)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // TestOrgMembersShowsEmailInvites tests that after inviting someone by email,
@@ -3661,8 +3723,21 @@ func TestEmailMismatchDuringInviteRegistrationBlocksUser(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected rejected registration form, got status %d", w.Code)
 	}
-	if _, err := portal_tests.TwoFactorCodeFromSession(ctx, inviteCookie.Value, server.Sessions.Store); err == nil {
-		t.Fatal("expected mismatched registration not to start two-factor verification")
+	if len(w.Result().Cookies()) != 0 {
+		t.Fatal("mismatched registration returned a new session cookie")
+	}
+	if _, ok := testMailer.TwoFactorCode(differentEmail); ok {
+		t.Fatal("mismatched registration sent a two-factor code")
+	}
+	if _, ok := testMailer.TwoFactorCode(invitedEmail); ok {
+		t.Fatal("mismatched registration sent a code to the invited email")
+	}
+	var challenges int
+	if err := store.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM backend.sessions WHERE challenge_kind = 'registration' AND (session_id = $1 OR challenge_email = $2)", inviteCookie.Value, differentEmail).Scan(&challenges); err != nil {
+		t.Fatal(err)
+	}
+	if challenges != 0 {
+		t.Fatalf("mismatched registration persisted %d challenges", challenges)
 	}
 
 	differentUser, _, err := db_tests.CreateNewAccountForTest(ctx, store, differentUserName, testPlan)

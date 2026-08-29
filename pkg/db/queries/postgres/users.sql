@@ -8,7 +8,10 @@ SELECT * FROM backend.users WHERE LOWER(email) = LOWER($1);
 INSERT INTO backend.users (name, email, subscription_id) VALUES ($1, $2, $3) RETURNING *;
 
 -- name: UpdateUserData :one
-UPDATE backend.users SET name = $2, email = $3, updated_at = NOW() WHERE id = $1 RETURNING *;
+UPDATE backend.users
+SET name = @name, email = @new_email, updated_at = NOW()
+WHERE id = @id AND email = @old_email
+RETURNING *;
 
 -- name: UpdateUserSubscription :one
 UPDATE backend.users SET subscription_id = $2, updated_at = NOW() WHERE id = $1 RETURNING *;

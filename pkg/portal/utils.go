@@ -7,6 +7,8 @@ import (
 	"math/big"
 	randv2 "math/rand/v2"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -26,6 +28,30 @@ func twoFactorCode(ctx context.Context) int {
 	}
 
 	return int(n.Int64()) + start
+}
+
+func (s *Server) encodeVerificationCode(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) != 6 {
+		return ""
+	}
+	for _, digit := range value {
+		if digit < '0' || digit > '9' {
+			return ""
+		}
+	}
+	code, err := strconv.Atoi(value)
+	if err != nil {
+		return ""
+	}
+	return s.IDHasher.Encrypt(code)
+}
+
+func verificationCodeError(attemptsExhausted bool) string {
+	if attemptsExhausted {
+		return "Too many failed attempts. Please request a new code."
+	}
+	return "Code is not valid."
 }
 
 func (s *Server) Org(user *dbgen.User, r *http.Request) (*dbgen.Organization, dbgen.NullAccessLevel, error) {
@@ -149,13 +175,16 @@ func (s *Server) SessionUser(ctx context.Context, sess *session.Session) (*dbgen
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session(w, r)
-	if userID, ok := sess.Get(ctx, session.KeyUserID).(int32); ok {
-		s.Store.AuditLog().RecordEvent(ctx, newUserAuthAuditLogEvent(userID, common.AuditLogActionLogout), common.AuditLogSourcePortal)
-		s.Store.Impl().CleanupUserCache(ctx, userID)
+	revocation, err := s.Sessions.SessionDestroy(w, r)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return
+	}
+	if revocation.Transitioned && revocation.UserID > 0 {
+		s.Store.AuditLog().RecordEvent(ctx, newUserAuthAuditLogEvent(revocation.UserID, common.AuditLogActionLogout), common.AuditLogSourcePortal)
+		s.Store.Impl().CleanupUserCache(ctx, revocation.UserID)
 	}
 
-	s.Sessions.SessionDestroy(w, r)
 	common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusOK, w, r)
 }
 

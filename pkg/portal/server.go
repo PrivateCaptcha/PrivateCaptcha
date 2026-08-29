@@ -317,11 +317,11 @@ func (s *Server) MiddlewarePublicChain(rg *common.RouteGenerator, security alice
 }
 
 func (s *Server) MiddlewarePrivateRead(public alice.Chain, timeout alice.Constructor) alice.Chain {
-	return public.Append(s.Maintenance, timeout, s.private)
+	return public.Append(s.Maintenance, timeout, s.private, s.refreshSessionExpiration)
 }
 
 func (s *Server) MiddlewarePrivateWrite(public alice.Chain, timeout alice.Constructor) alice.Chain {
-	return public.Append(s.Maintenance, defaultMaxBytesHandler, timeout, s.csrf(s.csrfUserIDKeyFunc), s.private)
+	return public.Append(s.Maintenance, defaultMaxBytesHandler, timeout, s.private, s.csrf(s.csrfUserIDKeyFunc), s.refreshSessionExpiration)
 }
 
 func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Constructor) {
@@ -347,15 +347,15 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	// larger write timeout is mostly due to emails / external APIs
 	publicWriteTimeout := common.SoftTimeoutHandler(5 * time.Second)
 	openWrite := public.Append(s.Maintenance, defaultMaxBytesHandler, publicWriteTimeout)
-	csrfEmail := openWrite.Append(s.csrf(s.csrfUserEmailKeyFunc))
+	csrfSession := openWrite.Append(s.csrf(s.csrfSessionIDKeyFunc))
 	internalTimeout := common.HardTimeoutHandler(10 * time.Second)
 	privateWrite := s.MiddlewarePrivateWrite(public, internalTimeout)
 	privateRead := s.MiddlewarePrivateRead(public, internalTimeout)
 
 	rg.Handle(rg.Post(common.LoginEndpoint), openWrite, http.HandlerFunc(s.postLogin))
 	rg.Handle(rg.Post(common.RegisterEndpoint), openWrite, http.HandlerFunc(s.postRegister))
-	rg.Handle(rg.Post(common.TwoFactorEndpoint), csrfEmail, http.HandlerFunc(s.postTwoFactor))
-	rg.Handle(rg.Post(common.ResendEndpoint), csrfEmail, http.HandlerFunc(s.resend2fa))
+	rg.Handle(rg.Post(common.TwoFactorEndpoint), csrfSession, http.HandlerFunc(s.postTwoFactor))
+	rg.Handle(rg.Post(common.ResendEndpoint), csrfSession, http.HandlerFunc(s.resend2fa))
 	rg.Handle(rg.Get(common.OrgEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrg))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg)), privateRead, http.HandlerFunc(s.getPortal))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.DashboardEndpoint), privateRead, s.Handler(s.getOrgDashboard))
@@ -409,7 +409,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Post(common.APIKeysEndpoint, arg(common.ParamKey)), privateWrite, s.Handler(s.rotateAPIKey))
 	rg.Handle(rg.Delete(common.APIKeysEndpoint, arg(common.ParamKey)), privateWrite, http.HandlerFunc(s.deleteAPIKey))
 	rg.Handle(rg.Delete(common.UserEndpoint), privateWrite, http.HandlerFunc(s.deleteAccount))
-	rg.Handle(rg.Delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Append(s.private), http.HandlerFunc(s.dismissNotification))
+	rg.Handle(rg.Delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Append(s.private, s.refreshSessionExpiration), http.HandlerFunc(s.dismissNotification))
 	rg.Handle(rg.Post(common.ErrorEndpoint), privateRead, http.HandlerFunc(s.postClientSideError))
 	rg.Handle(rg.Get(common.EchoPuzzleEndpoint, arg(common.ParamDifficulty)), privateRead, http.HandlerFunc(s.echoPuzzle))
 
@@ -503,7 +503,11 @@ func (s *Server) private(next http.Handler) http.Handler {
 	)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sess := s.Sessions.SessionStart(w, r)
+		sess, err := s.Sessions.SessionStartChecked(w, r)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
+		}
 
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.ID())
@@ -512,11 +516,12 @@ func (s *Server) private(next http.Handler) http.Handler {
 			// this is a sign it could be a local stale session in case user finished login on another node
 			if (step == loginStepSignInVerify) || (step == loginStepSignUpVerify) {
 				slog.WarnContext(ctx, "About to recover potential stale session from DB")
-				s.Sessions.RecoverSession(ctx, sess)
+				s.Sessions.RecoverSessionBlocking(ctx, sess)
 				step, _ = sess.Get(ctx, session.KeyLoginStep).(int)
 			}
 
-			if step == loginStepCompleted {
+			state, _, _ := sess.Data().Authority()
+			if step == loginStepCompleted && state == session.StateAuthenticated {
 				// update limits each time as rate limiting gets cleaned up frequently (impact shouldn't be much in portal)
 				s.RateLimiter.UpdateRequestLimits(r, authenticatedBucketCap, authenticatedLeakInterval)
 
@@ -524,6 +529,10 @@ func (s *Server) private(next http.Handler) http.Handler {
 				ctx = context.WithValue(ctx, common.SessionContextKey, sess)
 
 				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			} else if step == loginStepCompleted {
+				slog.ErrorContext(ctx, "Completed session is not authenticated", "state", state)
+				http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 				return
 			} else {
 				slog.WarnContext(ctx, "Session present, but login not finished", "step", step)
@@ -536,5 +545,14 @@ func (s *Server) private(next http.Handler) http.Handler {
 		}
 
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
+	})
+}
+
+func (s *Server) refreshSessionExpiration(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if sess, ok := r.Context().Value(common.SessionContextKey).(*session.Session); ok {
+			s.Sessions.SessionRefreshExpiration(w, r, sess)
+		}
+		next.ServeHTTP(w, r)
 	})
 }

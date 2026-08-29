@@ -14,6 +14,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/maypok86/otter/v2"
 )
 
 var (
@@ -249,7 +250,28 @@ func (s *BusinessStore) LoadCache(ctx context.Context, dir string) error {
 		return nil
 	}
 
-	return common.LoadCacheFromFile(ctx, dir, cachePersistFile, DefaultCacheTTL, mc.store)
+	snapshotCache, err := NewMemoryCacheEx[CacheKey, any]("business_snapshot", int(mc.store.GetMaximum()), &CacheMissingValue{}, negativeCacheTTL,
+		func(options *otter.Options[CacheKey, any]) {
+			options.ExpiryCalculator = otter.ExpiryCreating[CacheKey, any](DefaultCacheTTL)
+			options.RefreshCalculator = otter.RefreshCreating[CacheKey, any](defaultCacheRefresh)
+		})
+	if err != nil {
+		return err
+	}
+	if err := common.LoadCacheFromFile(ctx, dir, cachePersistFile, DefaultCacheTTL, snapshotCache.store); err != nil {
+		return err
+	}
+
+	for entry := range snapshotCache.store.Hottest() {
+		if entry.Key.Prefix == sessionCacheKeyPrefix || !shouldPersistBusinessCacheValue(entry.Value) {
+			continue
+		}
+		mc.store.Set(entry.Key, entry.Value)
+		mc.store.SetExpiresAfter(entry.Key, max(time.Nanosecond, time.Until(entry.ExpiresAt())))
+		mc.store.SetRefreshableAfter(entry.Key, max(time.Nanosecond, time.Until(entry.RefreshableAt())))
+	}
+
+	return nil
 }
 
 func shouldPersistBusinessCacheValue(value any) bool {

@@ -3,6 +3,7 @@ package email
 import (
 	"context"
 	"log/slog"
+	"sync"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
@@ -11,6 +12,7 @@ type StubMailer struct {
 	LastCode  int
 	LastEmail string
 	Mailer    common.Mailer
+	codes     sync.Map
 }
 
 var _ common.Mailer = (*StubMailer)(nil)
@@ -18,6 +20,7 @@ var _ common.Mailer = (*StubMailer)(nil)
 func (sm *StubMailer) SendTwoFactor(ctx context.Context, email string, code int, ua string, location string, isRegistration bool) error {
 	sm.LastCode = code
 	sm.LastEmail = email
+	sm.codes.Store(email, code)
 
 	if sm.Mailer != nil {
 		return sm.Mailer.SendTwoFactor(ctx, email, code, ua, location, isRegistration)
@@ -25,6 +28,14 @@ func (sm *StubMailer) SendTwoFactor(ctx context.Context, email string, code int,
 
 	slog.InfoContext(ctx, "Sent two factor code via email", "code", code, "email", email)
 	return nil
+}
+
+func (sm *StubMailer) TwoFactorCode(email string) (int, bool) {
+	code, ok := sm.codes.Load(email)
+	if !ok {
+		return 0, false
+	}
+	return code.(int), true
 }
 
 func (sm *StubMailer) SendWelcome(ctx context.Context, email, name string) error {

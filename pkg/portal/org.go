@@ -432,7 +432,10 @@ func (s *Server) handlePortalError(orgID int32, err error, w http.ResponseWriter
 		common.Redirect(s.PartsURL(common.OrgEndpoint, common.NewEndpoint), http.StatusOK, w, r)
 	} else if err == ErrInvalidSession {
 		slog.WarnContext(r.Context(), "Inconsistent user session found")
-		s.Sessions.SessionDestroy(w, r)
+		if _, destroyErr := s.Sessions.SessionDestroy(w, r); destroyErr != nil {
+			http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
+		}
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 	} else if err == ErrInvalidPathArg {
 		s.RedirectError(http.StatusBadRequest, w, r)

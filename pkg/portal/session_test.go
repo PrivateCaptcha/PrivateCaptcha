@@ -2,17 +2,32 @@ package portal
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"testing"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
+	"github.com/jackc/pgx/v5"
 )
+
+func waitForPersistedSession(ctx context.Context, store session.Store, sid string) (*session.Session, error) {
+	var sess *session.Session
+	var err error
+	for attempt := 0; attempt < 5; attempt++ {
+		time.Sleep(400 * time.Millisecond)
+		sess, err = store.Read(ctx, sid, true)
+		if err == nil {
+			return sess, nil
+		}
+	}
+	return nil, err
+}
 
 func setupSessionSuite(ctx context.Context, manager *session.Manager, t *testing.T) (*session.Session, *http.Cookie) {
 	t.Helper()
@@ -24,33 +39,48 @@ func setupSessionSuite(ctx context.Context, manager *session.Manager, t *testing
 	if sess == nil {
 		t.Fatal("session was not started")
 	}
-	sess.Set(ctx, session.KeyUserName, t.Name())
-	sess.Set(ctx, session.KeyPersistent, true)
-
-	resp1 := w.Result()
-	idx := slices.IndexFunc(resp1.Cookies(), func(c *http.Cookie) bool { return c.Name == manager.CookieName })
-	if idx == -1 {
-		t.Error("cannot find session cookie in response")
+	if err := sess.Set(ctx, session.KeyUserName, t.Name()); err != nil {
+		t.Fatal(err)
 	}
-	cookie := resp1.Cookies()[idx]
-
-	var data []byte
-	var err error
-
-	for attempt := 0; attempt < 5; attempt++ {
-		time.Sleep(400 * time.Millisecond)
-
-		data, err = store.Impl().RetrieveFromCache(ctx, "session/"+sess.ID())
-		if err == nil {
-			break
-		}
+	if err := sess.Set(ctx, session.KeyUserID, int32(1)); err != nil {
+		t.Fatal(err)
 	}
-
+	if err := sess.Set(ctx, session.KeyLoginStep, loginStepCompleted); err != nil {
+		t.Fatal(err)
+	}
+	if err := sess.Set(ctx, session.KeyPersistent, true); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := sess.Data().MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
+	row, err := dbgen.New(store.Pool).CreateSession(ctx, &dbgen.CreateSessionParams{
+		SessionID: sess.ID(),
+		State:     dbgen.SessionStateAuthenticated,
+		UserID:    db.Int(1),
+		Data:      payload,
+		ExpiresAt: db.Timestampz(time.Now().Add(manager.MaxLifetime)),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess.Data().SetAuthority(session.StateAuthenticated, row.Version, row.ExpiresAt.Time, time.Now())
 
-	if len(data) == 0 {
+	resp1 := w.Result()
+	cookie := responseCookieForTest(t, resp1, manager.CookieName)
+
+	renewReq := httptest.NewRequest(http.MethodPost, "/twofactor", nil)
+	renewReq.AddCookie(cookie)
+	renewW := httptest.NewRecorder()
+	sess = manager.SessionRenew(renewW, renewReq, sess)
+	cookie = responseCookieForTest(t, renewW.Result(), manager.CookieName)
+
+	persisted, err := waitForPersistedSession(ctx, manager.Store, sess.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persisted.Data().Size() == 0 {
 		t.Errorf("Empty data was saved to DB")
 	}
 
@@ -67,7 +97,7 @@ func TestPersistentSession(t *testing.T) {
 	manager := &session.Manager{
 		CookieName:  "pcsid",
 		Store:       sessionStore,
-		MaxLifetime: 10 * time.Minute,
+		MaxLifetime: sessionStore.TTL(),
 	}
 
 	manager.Init("test", "/", 400*time.Millisecond)
@@ -106,7 +136,7 @@ func TestDeleteSession(t *testing.T) {
 	manager := &session.Manager{
 		CookieName:  "pcsid",
 		Store:       sessionStore,
-		MaxLifetime: 10 * time.Minute,
+		MaxLifetime: sessionStore.TTL(),
 	}
 
 	manager.Init("test", "/", 400*time.Millisecond)
@@ -118,7 +148,9 @@ func TestDeleteSession(t *testing.T) {
 
 	req2 := httptest.NewRequest("GET", "/support", nil)
 	req2.AddCookie(cookie)
-	manager.SessionDestroy(httptest.NewRecorder(), req2)
+	if _, err := manager.SessionDestroy(httptest.NewRecorder(), req2); err != nil {
+		t.Fatal(err)
+	}
 
 	req3 := httptest.NewRequest("GET", "/about", nil)
 	req3.AddCookie(cookie)
@@ -134,6 +166,41 @@ func TestDeleteSession(t *testing.T) {
 	}
 }
 
+func TestSessionRenewRejectsRemoteRevocation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	sessionStore := db.NewSessionStore(store, session.KeyPersistent, monitoring.NewStub())
+	defer sessionStore.Shutdown()
+	predecessor := session.NewSession(session.NewSessionData(t.Name()+"-old"), sessionStore)
+	if err := sessionStore.Init(ctx, predecessor); err != nil {
+		t.Fatal(err)
+	}
+	if err := predecessor.Set(ctx, session.KeyUserID, int32(1)); err != nil {
+		t.Fatal(err)
+	}
+	if err := predecessor.Set(ctx, session.KeyPersistent, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := sessionStore.Create(ctx, predecessor); err != nil {
+		t.Fatal(err)
+	}
+	queries := dbgen.New(store.Pool)
+	if _, err := queries.RevokeSession(ctx, predecessor.ID()); err != nil {
+		t.Fatal(err)
+	}
+
+	successor := session.NewSession(session.NewSessionData(t.Name()+"-new"), sessionStore)
+	if err := sessionStore.Renew(ctx, predecessor, successor, func() { successor.Merge(predecessor) }); !errors.Is(err, session.ErrSessionMissing) {
+		t.Fatalf("Renew error = %v, want session missing", err)
+	}
+	if _, err := queries.GetSessionByID(ctx, successor.ID()); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("successor lookup error = %v, want no rows", err)
+	}
+}
+
 func TestSessionRecoveryOverwritesStaleValues(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -145,7 +212,7 @@ func TestSessionRecoveryOverwritesStaleValues(t *testing.T) {
 	manager := &session.Manager{
 		CookieName:  "pcsid",
 		Store:       sessionStore,
-		MaxLifetime: 10 * time.Minute,
+		MaxLifetime: sessionStore.TTL(),
 	}
 	manager.Init("test", "/", 400*time.Millisecond)
 	defer sessionStore.Shutdown()
@@ -154,39 +221,60 @@ func TestSessionRecoveryOverwritesStaleValues(t *testing.T) {
 	w1 := httptest.NewRecorder()
 	// Step 1: Create session with stale values (Node A's cache)
 	sess := manager.SessionStart(w1, req1)
-	sess.Set(ctx, session.KeyLoginStep, loginStepSignInVerify) // STALE
-	sess.Set(ctx, session.KeyUserEmail, "stale@example.com")
-	sess.Set(ctx, session.KeyPersistent, true)
+	if err := sess.Set(ctx, session.KeyLoginStep, loginStepSignInVerify); err != nil { // STALE
+		t.Fatal(err)
+	}
+	if err := sess.Set(ctx, session.KeyUserEmail, "stale@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := sess.Set(ctx, session.KeyTwoFactorCode, 123456); err != nil {
+		t.Fatal(err)
+	}
+	if err := sess.Persist(ctx); err != nil {
+		t.Fatal(err)
+	}
 
 	resp1 := w1.Result()
-	idx := slices.IndexFunc(resp1.Cookies(), func(c *http.Cookie) bool { return c.Name == manager.CookieName })
-	if idx == -1 {
-		t.Error("cannot find session cookie in response")
-	}
-	cookie := resp1.Cookies()[idx]
+	cookie := responseCookieForTest(t, resp1, manager.CookieName)
 
 	// Step 2: Wait for session to be persisted to DB
-	var err error
-
-	for attempt := 0; attempt < 5; attempt++ {
-		time.Sleep(400 * time.Millisecond)
-
-		_, err = store.Impl().RetrieveFromCache(ctx, "session/"+sess.ID())
-		if err == nil {
-			break
-		}
-	}
+	persisted, err := waitForPersistedSession(ctx, manager.Store, sess.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Step 3: Simulate Node B completing login - update DB directly
-	freshSess := session.NewSession(session.NewSessionData(sess.ID()), sessionStore)
-	freshSess.Set(ctx, session.KeyLoginStep, loginStepCompleted) // FRESH
-	freshSess.Set(ctx, session.KeyUserEmail, "fresh@example.com")
-	freshSess.Set(ctx, session.KeyPersistent, true)
-	freshData, _ := freshSess.Data().MarshalBinary()
-	_ = store.Impl().StoreInCache(ctx, db.SessionCacheKey(sess.ID()).String(), freshData, 3*time.Hour)
+	freshCache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
+	freshStore := db.NewSessionStore(db.NewBusinessEx(store.Pool, freshCache), session.KeyPersistent, monitoring.NewStub())
+	freshSess := session.NewSession(session.NewSessionData(sess.ID()), freshStore)
+	if err := freshStore.Init(ctx, freshSess); err != nil {
+		t.Fatal(err)
+	}
+	if err := freshSess.Set(ctx, session.KeyLoginStep, loginStepCompleted); err != nil { // FRESH
+		t.Fatal(err)
+	}
+	if err := freshSess.Set(ctx, session.KeyUserEmail, "fresh@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := freshSess.Set(ctx, session.KeyPersistent, true); err != nil {
+		t.Fatal(err)
+	}
+	freshData, err := freshSess.Data().MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	version, _ := persisted.Data().Persistence()
+	updated, err := dbgen.New(store.Pool).UpdateSessionDataCAS(ctx, &dbgen.UpdateSessionDataCASParams{
+		SessionIds:       []string{sess.ID()},
+		ExpectedVersions: []int32{version},
+		Payloads:         [][]byte{freshData},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated) != 1 {
+		t.Fatal("authoritative session update was rejected")
+	}
 
 	req2 := httptest.NewRequest("GET", "/settings", nil)
 	w2 := httptest.NewRecorder()
@@ -195,7 +283,7 @@ func TestSessionRecoveryOverwritesStaleValues(t *testing.T) {
 	staleSess := manager.SessionStart(w2, req2) // Returns cached stale values
 
 	// Step 5: Attempt to recover from DB
-	manager.RecoverSession(ctx, staleSess)
+	manager.RecoverSessionBlocking(ctx, staleSess)
 
 	// Step 6: Assert values were updated
 	step, _ := staleSess.Get(ctx, session.KeyLoginStep).(int)
@@ -206,5 +294,8 @@ func TestSessionRecoveryOverwritesStaleValues(t *testing.T) {
 	email, _ := staleSess.Get(ctx, session.KeyUserEmail).(string)
 	if email != "fresh@example.com" {
 		t.Errorf("KeyUserEmail not updated. Expected %s, got %s", "fresh@example.com", email)
+	}
+	if staleSess.Data().Has(session.KeyTwoFactorCode) {
+		t.Error("stale-only session field was not removed")
 	}
 }

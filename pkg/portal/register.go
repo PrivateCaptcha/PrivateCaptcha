@@ -186,7 +186,19 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	code := twoFactorCode(ctx)
 	location := r.Header.Get(s.CountryCodeHeader.Value())
 
-	sess := s.Sessions.SessionStart(w, r)
+	var existing *session.Session
+	if current, ok := s.Sessions.SessionGet(r); ok {
+		existing = current
+	}
+	sess, err := s.Sessions.SessionPrepare(r)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to prepare registration session", common.ErrAttr(err))
+		s.RedirectError(http.StatusServiceUnavailable, w, r)
+		return
+	}
+	if existing != nil {
+		sess.Merge(existing)
+	}
 
 	// Validate email matches invited email if this is an invite registration
 	if inviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && inviteID > 0 {
@@ -200,6 +212,17 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.ID())
+	_ = sess.Set(ctx, session.KeyLoginStep, loginStepSignUpVerify)
+	_ = sess.Set(ctx, session.KeyUserEmail, email)
+	_ = sess.Set(ctx, session.KeyUserName, name)
+	_ = sess.Delete(ctx, session.KeyVerifyRegistration)
+	checkJob := s.Jobs.CheckRegistration(sess, r)
+	if err := checkJob.RunOnce(ctx, checkJob.NewParams()); err != nil {
+		slog.ErrorContext(ctx, "Failed to check registration", common.ErrAttr(err))
+		s.RedirectError(http.StatusServiceUnavailable, w, r)
+		return
+	}
 
 	if err := s.Mailer.SendTwoFactor(ctx, email, code, r.UserAgent(), location, true); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
@@ -208,25 +231,14 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.ID())
-
-	_ = sess.Set(ctx, session.KeyLoginStep, loginStepSignUpVerify)
-	_ = sess.Set(ctx, session.KeyUserEmail, email)
-	_ = sess.Set(ctx, session.KeyUserName, name)
-	_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
-	_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
-	_ = sess.Delete(ctx, session.KeyVerifyRegistration)
-	// see comment in postLogin() why we have to use persistent here (although "registered user" argument does not apply)
-	_ = sess.Set(ctx, session.KeyPersistent, true)
-
-	job := s.Jobs.CheckRegistration(sess, r)
-	jobCtx := common.CopyTraceID(ctx, context.Background())
-	if ip := ctx.Value(common.RateLimitKeyContextKey); ip != nil {
-		jobCtx = context.WithValue(jobCtx, common.RateLimitKeyContextKey, ip)
+	if err := sess.PersistRegistrationChallenge(ctx, s.IDHasher.Encrypt(code), email, s.TwoFactorDuration); err != nil {
+		slog.ErrorContext(ctx, "Failed to persist registration session", common.ErrAttr(err))
+		s.RedirectError(http.StatusServiceUnavailable, w, r)
+		return
 	}
-	go common.RunOneOffJob(jobCtx, job, job.NewParams())
+	s.Sessions.SessionCommit(w, r, sess)
 
-	data.Token = s.XSRF.Token(email)
+	data.Token = s.XSRF.Token(sess.ID())
 	data.Email = common.MaskEmail(email, '*')
 
 	slog.DebugContext(ctx, "Started 2FA registration flow", "email", email)

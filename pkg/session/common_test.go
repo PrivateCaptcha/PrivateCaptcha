@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -15,15 +16,55 @@ type stubStore struct{}
 
 func (s *stubStore) Start(ctx context.Context, interval time.Duration) {}
 func (s *stubStore) Init(ctx context.Context, session *Session) error  { return nil }
+func (s *stubStore) Create(ctx context.Context, session *Session) error {
+	session.Data().SetPersistence(1)
+	return nil
+}
+func (s *stubStore) CreateSignInChallenge(ctx context.Context, session *Session, encodedCode, email string, challengeTTL time.Duration) error {
+	return nil
+}
+func (s *stubStore) CreateRegistrationChallenge(ctx context.Context, session *Session, encodedCode, email string, challengeTTL time.Duration) error {
+	return nil
+}
+func (s *stubStore) ConsumeSignInChallenge(ctx context.Context, current, successor *Session, prepareSuccessor func(), encodedCode string, maxFailedAttempts int32) (SignInChallengeResult, error) {
+	prepareSuccessor()
+	return SignInChallengeResult{}, nil
+}
+func (s *stubStore) ConsumeRegistrationChallenge(ctx context.Context, current, successor *Session, prepareSuccessor func(), encodedCode string, maxFailedAttempts int32, allowConsumption bool) (RegistrationChallengeResult, error) {
+	prepareSuccessor()
+	return RegistrationChallengeResult{}, nil
+}
+func (s *stubStore) ReissueSignInChallenge(ctx context.Context, session *Session, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (SignInChallengeReissue, error) {
+	return SignInChallengeReissue{EncodedCode: encodedCode}, nil
+}
+func (s *stubStore) ReissueRegistrationChallenge(ctx context.Context, session *Session, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (RegistrationChallengeReissue, error) {
+	return RegistrationChallengeReissue{EncodedCode: encodedCode}, nil
+}
+func (s *stubStore) FinalizeRegistration(ctx context.Context, session *Session, userID int32) (bool, error) {
+	return true, nil
+}
+func (s *stubStore) IssueEmailChangeChallenge(ctx context.Context, session *Session, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (EmailChangeChallengeIssue, error) {
+	return EmailChangeChallengeIssue{EncodedCode: encodedCode}, nil
+}
+func (s *stubStore) ConsumeEmailChangeChallenge(ctx context.Context, session *Session, newEmail, encodedCode string, maxFailedAttempts int32) (EmailChangeChallengeResult, error) {
+	return EmailChangeChallengeResult{Consumed: true, Email: newEmail}, nil
+}
 func (s *stubStore) Read(ctx context.Context, sid string, skipCache bool) (*Session, error) {
 	return nil, ErrSessionMissing
 }
-func (s *stubStore) Update(ctx context.Context, session *Session) error { return nil }
-func (s *stubStore) Renew(ctx context.Context, oldSID string, session *Session) error {
+func (s *stubStore) Recover(ctx context.Context, session *Session) error { return ErrSessionMissing }
+func (s *stubStore) Update(ctx context.Context, session *Session, update func()) error {
+	update()
 	return nil
 }
-func (s *stubStore) RollbackRenew(ctx context.Context, oldSID string) {}
-func (s *stubStore) Destroy(ctx context.Context, sid string) error    { return nil }
+func (s *stubStore) Renew(ctx context.Context, current, successor *Session, prepareSuccessor func()) error {
+	prepareSuccessor()
+	return nil
+}
+func (s *stubStore) RenewExpiration(ctx context.Context, session *Session) bool { return false }
+func (s *stubStore) Destroy(ctx context.Context, sid string) (SessionRevocationResult, error) {
+	return SessionRevocationResult{}, nil
+}
 
 type memoryStore struct {
 	sessions map[string]*Session
@@ -38,6 +79,39 @@ func (s *memoryStore) Init(ctx context.Context, session *Session) error {
 	s.sessions[session.ID()] = session
 	return nil
 }
+func (s *memoryStore) Create(ctx context.Context, session *Session) error {
+	session.Data().SetPersistence(1)
+	return s.Init(ctx, session)
+}
+func (s *memoryStore) CreateSignInChallenge(ctx context.Context, session *Session, encodedCode, email string, challengeTTL time.Duration) error {
+	return s.Create(ctx, session)
+}
+func (s *memoryStore) CreateRegistrationChallenge(ctx context.Context, session *Session, encodedCode, email string, challengeTTL time.Duration) error {
+	return s.Create(ctx, session)
+}
+func (s *memoryStore) ConsumeSignInChallenge(ctx context.Context, current, successor *Session, prepareSuccessor func(), encodedCode string, maxFailedAttempts int32) (SignInChallengeResult, error) {
+	prepareSuccessor()
+	return SignInChallengeResult{Consumed: true}, s.Create(ctx, successor)
+}
+func (s *memoryStore) ConsumeRegistrationChallenge(ctx context.Context, current, successor *Session, prepareSuccessor func(), encodedCode string, maxFailedAttempts int32, allowConsumption bool) (RegistrationChallengeResult, error) {
+	prepareSuccessor()
+	return RegistrationChallengeResult{Consumed: true}, s.Create(ctx, successor)
+}
+func (s *memoryStore) ReissueSignInChallenge(ctx context.Context, session *Session, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (SignInChallengeReissue, error) {
+	return SignInChallengeReissue{EncodedCode: encodedCode}, nil
+}
+func (s *memoryStore) ReissueRegistrationChallenge(ctx context.Context, session *Session, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (RegistrationChallengeReissue, error) {
+	return RegistrationChallengeReissue{EncodedCode: encodedCode}, nil
+}
+func (s *memoryStore) FinalizeRegistration(ctx context.Context, session *Session, userID int32) (bool, error) {
+	return true, nil
+}
+func (s *memoryStore) IssueEmailChangeChallenge(ctx context.Context, session *Session, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (EmailChangeChallengeIssue, error) {
+	return EmailChangeChallengeIssue{EncodedCode: encodedCode}, nil
+}
+func (s *memoryStore) ConsumeEmailChangeChallenge(ctx context.Context, session *Session, newEmail, encodedCode string, maxFailedAttempts int32) (EmailChangeChallengeResult, error) {
+	return EmailChangeChallengeResult{Consumed: true, Email: newEmail}, nil
+}
 func (s *memoryStore) Read(ctx context.Context, sid string, skipCache bool) (*Session, error) {
 	sess, ok := s.sessions[sid]
 	if !ok {
@@ -45,29 +119,62 @@ func (s *memoryStore) Read(ctx context.Context, sid string, skipCache bool) (*Se
 	}
 	return sess, nil
 }
-func (s *memoryStore) Update(ctx context.Context, session *Session) error {
+func (s *memoryStore) Recover(ctx context.Context, session *Session) error {
+	stored, err := s.Read(ctx, session.ID(), true)
+	if err != nil {
+		return err
+	}
+	session.Refresh(stored)
+	return nil
+}
+func (s *memoryStore) Update(ctx context.Context, session *Session, update func()) error {
+	update()
 	s.sessions[session.ID()] = session
 	return nil
 }
-func (s *memoryStore) Renew(ctx context.Context, oldSID string, session *Session) error {
-	if err := s.Init(ctx, session); err != nil {
+func (s *memoryStore) Renew(ctx context.Context, current, successor *Session, prepareSuccessor func()) error {
+	prepareSuccessor()
+	if err := s.Init(ctx, successor); err != nil {
 		return err
 	}
-	s.sessions[oldSID] = NewSession(NewTombstoneSessionData(oldSID), s)
+	s.sessions[current.ID()] = NewSession(NewTombstoneSessionData(current.ID()), s)
 	return nil
 }
-func (s *memoryStore) RollbackRenew(ctx context.Context, oldSID string) {}
-func (s *memoryStore) Destroy(ctx context.Context, sid string) error {
+func (s *memoryStore) Destroy(ctx context.Context, sid string) (SessionRevocationResult, error) {
 	delete(s.sessions, sid)
-	return nil
+	return SessionRevocationResult{Transitioned: true}, nil
 }
+
+func (s *memoryStore) RenewExpiration(ctx context.Context, sess *Session) bool { return false }
 
 type failingRenewStore struct {
 	*memoryStore
 }
 
-func (s *failingRenewStore) Renew(ctx context.Context, oldSID string, session *Session) error {
+type invalidatingRenewStore struct {
+	*memoryStore
+}
+
+type countingReadStore struct {
+	stubStore
+	reads int
+}
+
+func (s *countingReadStore) Read(context.Context, string, bool) (*Session, error) {
+	s.reads++
+	return nil, errors.New("store must not be called")
+}
+
+func (s *failingRenewStore) Renew(ctx context.Context, current, successor *Session, prepareSuccessor func()) error {
+	prepareSuccessor()
 	return errors.New("renew failed")
+}
+
+func (s *invalidatingRenewStore) Renew(ctx context.Context, current, successor *Session, prepareSuccessor func()) error {
+	prepareSuccessor()
+	current.Data().MarkStale()
+	delete(s.sessions, current.ID())
+	return errors.New("renew outcome is ambiguous")
 }
 
 func TestSessionStartRejectsUnknownCookieID(t *testing.T) {
@@ -107,6 +214,39 @@ func TestSessionStartRejectsUnknownCookieID(t *testing.T) {
 	}
 	if cookie.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("expected SameSite=Lax, got %v", cookie.SameSite)
+	}
+}
+
+func TestSessionStartCheckedReplacesMalformedCookie(t *testing.T) {
+	for name, value := range map[string]string{
+		"InvalidEscape": "%",
+		"NUL":           "%00",
+		"InvalidUTF8":   "%FF",
+		"Oversized":     strings.Repeat("a", 129),
+	} {
+		t.Run(name, func(t *testing.T) {
+			store := &countingReadStore{}
+			manager := &Manager{
+				CookieName:  "pcsid",
+				Store:       store,
+				MaxLifetime: 10 * time.Minute,
+				Path:        "/",
+			}
+			req := httptest.NewRequest(http.MethodGet, "/private", nil)
+			req.AddCookie(&http.Cookie{Name: manager.CookieName, Value: value})
+			w := httptest.NewRecorder()
+
+			sess, err := manager.SessionStartChecked(w, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if sess == nil || store.reads != 0 {
+				t.Fatalf("malformed-cookie start = (session %v, reads %d), want replacement without read", sess != nil, store.reads)
+			}
+			if len(w.Result().Cookies()) != 1 || w.Result().Cookies()[0].Value == value {
+				t.Fatal("malformed cookie was not replaced")
+			}
+		})
 	}
 }
 
@@ -201,6 +341,33 @@ func TestSessionRenewFallsBackWhenStoreRenewFails(t *testing.T) {
 	}
 	if len(renewW.Result().Cookies()) != 0 {
 		t.Fatal("fallback renewal should not replace the session cookie")
+	}
+}
+
+func TestSessionRenewReplacesInvalidatedPredecessor(t *testing.T) {
+	store := &invalidatingRenewStore{memoryStore: newMemoryStore()}
+	manager := &Manager{
+		CookieName:  "pcsid",
+		Store:       store,
+		MaxLifetime: 10 * time.Minute,
+		Path:        "/",
+	}
+	req := httptest.NewRequest(http.MethodPost, "/portal/twofactor", nil)
+	sess := manager.SessionStart(httptest.NewRecorder(), req)
+	if err := sess.Set(req.Context(), KeyUserID, int32(123)); err != nil {
+		t.Fatal(err)
+	}
+
+	renewW := httptest.NewRecorder()
+	renewed := manager.SessionRenew(renewW, req, sess)
+	if renewed.ID() == sess.ID() {
+		t.Fatal("ambiguous renewal kept the invalidated predecessor")
+	}
+	if _, ok := renewed.Get(req.Context(), KeyUserID).(int32); ok {
+		t.Fatal("replacement session inherited authenticated state")
+	}
+	if len(renewW.Result().Cookies()) != 1 {
+		t.Fatal("replacement session cookie was not returned")
 	}
 }
 
@@ -429,6 +596,7 @@ func TestSessionRefresh(t *testing.T) {
 	if val, ok := s1.Data().get(KeyUserName); !ok || val != "newuser" {
 		t.Errorf("New key should be added, got %v, %v", val, ok)
 	}
+
 }
 
 func TestSessionBool(t *testing.T) {

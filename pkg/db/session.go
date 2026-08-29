@@ -3,6 +3,8 @@ package db
 import (
 	"context"
 	"log/slog"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -11,32 +13,40 @@ import (
 )
 
 const (
-	sessionBatchSize           = 20
-	sessionCacheTTL            = 3 * time.Hour
-	sessionBackpressureTimeout = 200 * time.Millisecond
-	sessionPersistNowInterval  = 100 * time.Millisecond
-	sessionPersistNowBatchSize = 8
+	sessionBatchSize                  = 20
+	sessionCacheTTL                   = 3 * time.Hour
+	sessionValidationLease            = 10 * time.Minute
+	sessionExpirationRenewalThreshold = 2*time.Hour + 30*time.Minute
+	sessionBackpressureTimeout        = 200 * time.Millisecond
+	sessionCleanupTimeout             = 2 * time.Second
 )
 
 type SessionStore struct {
 	store            Implementor
 	persistDelayChan chan string
-	persistNowChan   chan string
+	expirationChan   chan string
 	batchSize        int
 	processCancel    context.CancelFunc
 	persistKey       session.SessionKey
 	metrics          common.BaseMetrics
+	operations       *sessionOperationGate
+	pendingDeletesMu sync.Mutex
+	pendingDeletes   map[string]struct{}
+	now              func() time.Time
 }
 
 func NewSessionStore(store Implementor, persistKey session.SessionKey, metrics common.BaseMetrics) *SessionStore {
 	return &SessionStore{
 		store:            store,
 		persistDelayChan: make(chan string, sessionBatchSize),
-		persistNowChan:   make(chan string, sessionPersistNowBatchSize),
+		expirationChan:   make(chan string, sessionBatchSize),
 		batchSize:        sessionBatchSize,
 		persistKey:       persistKey,
 		metrics:          metrics,
 		processCancel:    func() {},
+		operations:       newSessionOperationGate(),
+		pendingDeletes:   make(map[string]struct{}),
+		now:              time.Now,
 	}
 }
 
@@ -45,7 +55,7 @@ func (ss *SessionStore) Start(ctx context.Context, interval time.Duration) {
 	cancelCtx, ss.processCancel = context.WithCancel(
 		context.WithValue(ctx, common.TraceIDContextKey, "persist_session"))
 	go common.ProcessBatchMap(cancelCtx, ss.persistDelayChan, interval, ss.batchSize, ss.batchSize*100, ss.persistSessions)
-	go common.ProcessBatchArray(cancelCtx, ss.persistNowChan, sessionPersistNowInterval, sessionPersistNowBatchSize, sessionPersistNowBatchSize*100, ss.persistSessionsNow)
+	go common.ProcessBatchMap(cancelCtx, ss.expirationChan, interval, ss.batchSize, ss.batchSize*100, ss.heartbeatSessions)
 }
 
 var _ session.Store = (*SessionStore)(nil)
@@ -57,39 +67,443 @@ func (ss *SessionStore) Stop() {
 func (ss *SessionStore) Shutdown() {
 	slog.Debug("Shutting down persisting sessions")
 	close(ss.persistDelayChan)
-	close(ss.persistNowChan)
+	close(ss.expirationChan)
 }
 
+// Init registers a local-only session without creating PostgreSQL authority.
 func (ss *SessionStore) Init(ctx context.Context, session *session.Session) error {
 	return ss.store.Impl().CacheUserSession(ctx, session.Data())
 }
 
-func (ss *SessionStore) Read(ctx context.Context, sid string, skipCache bool) (*session.Session, error) {
-	sd, err := ss.store.Impl().RetrieveUserSession(ctx, sid, skipCache)
+// Create synchronously turns a cached session into a persistent pending session.
+func (ss *SessionStore) Create(ctx context.Context, sess *session.Session) error {
+	if sess == nil {
+		return ErrInvalidInput
+	}
+	release, err := ss.operations.acquireSession(ctx, sess.ID())
 	if err != nil {
-		if (err == ErrNegativeCacheHit) || (err == ErrCacheMiss) || (err == otter.ErrNotFound) {
+		return err
+	}
+	defer release()
+	impl := ss.store.Impl()
+	cached, err := impl.GetCachedUserSession(ctx, sess.ID())
+	if err != nil || cached != sess.Data() {
+		return session.ErrSessionMissing
+	}
+	var userID *int32
+	if value, ok := sess.Get(ctx, session.KeyUserID).(int32); ok {
+		userID = &value
+	}
+	if err := impl.CreateUserSessionWithState(ctx, sess.Data(), ss.persistKey, sessionCacheTTL, session.StatePending, userID); err != nil {
+		return err
+	}
+	sess.Data().MarkValidated(ss.now())
+	return nil
+}
+
+// CreateSignInChallenge persists a user-bound pending challenge before its cookie is committed.
+func (ss *SessionStore) CreateSignInChallenge(ctx context.Context, sess *session.Session, encodedCode, email string, challengeTTL time.Duration) error {
+	if sess == nil {
+		return ErrInvalidInput
+	}
+	release, err := ss.operations.acquireSession(ctx, sess.ID())
+	if err != nil {
+		return err
+	}
+	defer release()
+	impl := ss.store.Impl()
+	cached, err := impl.GetCachedUserSession(ctx, sess.ID())
+	if err != nil || cached != sess.Data() {
+		return session.ErrSessionMissing
+	}
+	userID, ok := sess.Get(ctx, session.KeyUserID).(int32)
+	if !ok {
+		return ErrInvalidInput
+	}
+	if err := impl.CreateUserSignInChallenge(ctx, sess.Data(), ss.persistKey, userID, encodedCode, email, sessionCacheTTL, challengeTTL); err != nil {
+		return err
+	}
+	sess.Data().MarkValidated(ss.now())
+	return nil
+}
+
+// CreateRegistrationChallenge persists a pending registration challenge before its cookie is committed.
+func (ss *SessionStore) CreateRegistrationChallenge(ctx context.Context, sess *session.Session, encodedCode, email string, challengeTTL time.Duration) error {
+	if sess == nil {
+		return ErrInvalidInput
+	}
+	release, err := ss.operations.acquireSession(ctx, sess.ID())
+	if err != nil {
+		return err
+	}
+	defer release()
+	impl := ss.store.Impl()
+	cached, err := impl.GetCachedUserSession(ctx, sess.ID())
+	if err != nil || cached != sess.Data() {
+		return session.ErrSessionMissing
+	}
+	if err := impl.CreateUserRegistrationChallenge(ctx, sess.Data(), ss.persistKey, encodedCode, email, sessionCacheTTL, challengeTTL); err != nil {
+		return err
+	}
+	sess.Data().MarkValidated(ss.now())
+	return nil
+}
+
+// ConsumeSignInChallenge atomically rotates a valid challenge; invalid codes only increment shared attempts.
+func (ss *SessionStore) ConsumeSignInChallenge(ctx context.Context, current, successor *session.Session, prepareSuccessor func(), encodedCode string, maxFailedAttempts int32) (session.SignInChallengeResult, error) {
+	if current == nil || successor == nil || prepareSuccessor == nil || current.ID() == successor.ID() || maxFailedAttempts <= 0 {
+		return session.SignInChallengeResult{}, ErrInvalidInput
+	}
+	release, err := ss.operations.acquireBatch(ctx, []string{current.ID(), successor.ID()})
+	if err != nil {
+		return session.SignInChallengeResult{}, err
+	}
+	defer release()
+	impl := ss.store.Impl()
+	if _, ok := currentSessionData(ctx, impl, current); !ok {
+		return session.SignInChallengeResult{}, session.ErrSessionMissing
+	}
+	prepareSuccessor()
+	if err := ss.flushDirtySession(ctx, current); err != nil {
+		return session.SignInChallengeResult{}, err
+	}
+	expectedUserID, ok := current.Get(ctx, session.KeyUserID).(int32)
+	if !ok || expectedUserID <= 0 {
+		return session.SignInChallengeResult{}, ErrInvalidInput
+	}
+	result, err := impl.ConsumeUserSignInChallenge(ctx, current.ID(), successor.Data(), ss.persistKey, expectedUserID, encodedCode, maxFailedAttempts, sessionCacheTTL)
+	ss.invalidateCachedSession(ctx, current)
+	if err != nil || !result.Consumed {
+		return result, err
+	}
+	successor.Data().MarkValidated(ss.now())
+	if err := impl.CacheUserSession(ctx, successor.Data()); err != nil {
+		slog.WarnContext(ctx, "Failed to cache consumed sign-in successor", common.ErrAttr(err))
+	}
+	return result, nil
+}
+
+// ConsumeRegistrationChallenge creates one processing successor, or leaves a verification-only challenge pending.
+func (ss *SessionStore) ConsumeRegistrationChallenge(ctx context.Context, current, successor *session.Session, prepareSuccessor func(), encodedCode string, maxFailedAttempts int32, allowConsumption bool) (session.RegistrationChallengeResult, error) {
+	if current == nil || successor == nil || prepareSuccessor == nil || current.ID() == successor.ID() || maxFailedAttempts <= 0 {
+		return session.RegistrationChallengeResult{}, ErrInvalidInput
+	}
+	release, err := ss.operations.acquireBatch(ctx, []string{current.ID(), successor.ID()})
+	if err != nil {
+		return session.RegistrationChallengeResult{}, err
+	}
+	defer release()
+	impl := ss.store.Impl()
+	if _, ok := currentSessionData(ctx, impl, current); !ok {
+		return session.RegistrationChallengeResult{}, session.ErrSessionMissing
+	}
+	prepareSuccessor()
+	if err := ss.flushDirtySession(ctx, current); err != nil {
+		return session.RegistrationChallengeResult{}, err
+	}
+	result, err := impl.ConsumeUserRegistrationChallenge(ctx, current.ID(), successor.Data(), ss.persistKey, encodedCode, maxFailedAttempts, allowConsumption, sessionCacheTTL)
+	ss.invalidateCachedSession(ctx, current)
+	if err != nil || !result.Consumed {
+		return result, err
+	}
+	if err := impl.CacheUserSession(ctx, successor.Data()); err != nil {
+		slog.WarnContext(ctx, "Failed to cache registration processing successor", common.ErrAttr(err))
+	}
+	return result, nil
+}
+
+// ReissueSignInChallenge replaces the shared code and resets its attempt count.
+func (ss *SessionStore) ReissueSignInChallenge(ctx context.Context, sess *session.Session, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (session.SignInChallengeReissue, error) {
+	if sess == nil {
+		return session.SignInChallengeReissue{}, ErrInvalidInput
+	}
+	release, err := ss.operations.acquireSession(ctx, sess.ID())
+	if err != nil {
+		return session.SignInChallengeReissue{}, err
+	}
+	defer release()
+	if err := ss.flushDirtySession(ctx, sess); err != nil {
+		return session.SignInChallengeReissue{}, err
+	}
+	result, err := ss.store.Impl().ReissueUserSignInChallenge(ctx, sess.Data(), encodedCode, fallbackEncodedCode, challengeTTL)
+	ss.invalidateCachedSession(ctx, sess)
+	return result, err
+}
+
+// ReissueRegistrationChallenge replaces the shared code and resets its attempt count.
+func (ss *SessionStore) ReissueRegistrationChallenge(ctx context.Context, sess *session.Session, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (session.RegistrationChallengeReissue, error) {
+	if sess == nil {
+		return session.RegistrationChallengeReissue{}, ErrInvalidInput
+	}
+	release, err := ss.operations.acquireSession(ctx, sess.ID())
+	if err != nil {
+		return session.RegistrationChallengeReissue{}, err
+	}
+	defer release()
+	if err := ss.flushDirtySession(ctx, sess); err != nil {
+		return session.RegistrationChallengeReissue{}, err
+	}
+	result, err := ss.store.Impl().ReissueUserRegistrationChallenge(ctx, sess.Data(), encodedCode, fallbackEncodedCode, challengeTTL)
+	ss.invalidateCachedSession(ctx, sess)
+	return result, err
+}
+
+// IssueEmailChangeChallenge adds a version-guarded challenge to a live authenticated session.
+func (ss *SessionStore) IssueEmailChangeChallenge(ctx context.Context, sess *session.Session, encodedCode, fallbackEncodedCode string, challengeTTL time.Duration) (session.EmailChangeChallengeIssue, error) {
+	if sess == nil {
+		return session.EmailChangeChallengeIssue{}, ErrInvalidInput
+	}
+	release, err := ss.operations.acquireSession(ctx, sess.ID())
+	if err != nil {
+		return session.EmailChangeChallengeIssue{}, err
+	}
+	defer release()
+	if err := ss.flushDirtySession(ctx, sess); err != nil {
+		return session.EmailChangeChallengeIssue{}, err
+	}
+	expectedUserID, ok := sess.Get(ctx, session.KeyUserID).(int32)
+	if !ok || expectedUserID <= 0 {
+		return session.EmailChangeChallengeIssue{}, ErrInvalidInput
+	}
+	issued, err := ss.store.Impl().IssueUserEmailChangeChallenge(ctx, sess.Data(), expectedUserID, encodedCode, fallbackEncodedCode, challengeTTL)
+	ss.invalidateCachedSession(ctx, sess)
+	if err != nil || issued.EncodedCode != "" {
+		return issued, err
+	}
+	return session.EmailChangeChallengeIssue{}, session.ErrSessionMissing
+}
+
+// ConsumeEmailChangeChallenge atomically updates the email, or records the failed shared attempt.
+func (ss *SessionStore) ConsumeEmailChangeChallenge(ctx context.Context, sess *session.Session, newEmail, encodedCode string, maxFailedAttempts int32) (session.EmailChangeChallengeResult, error) {
+	if sess == nil || newEmail == "" || maxFailedAttempts <= 0 {
+		return session.EmailChangeChallengeResult{}, ErrInvalidInput
+	}
+	release, err := ss.operations.acquireSession(ctx, sess.ID())
+	if err != nil {
+		return session.EmailChangeChallengeResult{}, err
+	}
+	defer release()
+	if err := ss.flushDirtySession(ctx, sess); err != nil {
+		return session.EmailChangeChallengeResult{}, err
+	}
+	expectedUserID, ok := sess.Get(ctx, session.KeyUserID).(int32)
+	if !ok || expectedUserID <= 0 {
+		return session.EmailChangeChallengeResult{}, ErrInvalidInput
+	}
+	impl := ss.store.Impl()
+	result, err := impl.ConsumeUserEmailChangeChallenge(ctx, sess.Data(), expectedUserID, newEmail, encodedCode, maxFailedAttempts)
+	ss.invalidateCachedSession(ctx, sess)
+	if err != nil {
+		return session.EmailChangeChallengeResult{}, err
+	}
+	return result, nil
+}
+
+// FinalizeRegistration promotes the matching processing successor after account creation.
+func (ss *SessionStore) FinalizeRegistration(ctx context.Context, sess *session.Session, userID int32) (bool, error) {
+	if sess == nil || userID <= 0 {
+		return false, ErrInvalidInput
+	}
+	release, err := ss.operations.acquireSession(ctx, sess.ID())
+	if err != nil {
+		return false, err
+	}
+	defer release()
+	impl := ss.store.Impl()
+	row, err := impl.FinalizeUserRegistrationSession(ctx, sess.Data(), userID)
+	if err != nil {
+		return false, err
+	}
+	if row == nil {
+		ss.invalidateCachedSession(ctx, sess)
+		return false, nil
+	}
+	sess.Data().SetAuthority(session.StateAuthenticated, row.Version, row.ExpiresAt.Time, ss.now())
+	if err := impl.CacheUserSession(ctx, sess.Data()); err != nil {
+		slog.WarnContext(ctx, "Failed to cache finalized registration session", common.ErrAttr(err))
+	}
+	// Reconciliation may adopt authority written before a later local payload mutation.
+	ss.persistDelayChan <- sess.ID()
+	return true, nil
+}
+
+func (ss *SessionStore) invalidateCachedSession(ctx context.Context, sess *session.Session) {
+	data := sess.Data()
+	data.MarkStale()
+	impl := ss.store.Impl()
+	if cached, err := impl.GetCachedUserSession(ctx, sess.ID()); err == nil {
+		cached.MarkStale()
+		impl.DeleteCachedUserSession(ctx, sess.ID())
+	}
+}
+
+func currentSessionData(ctx context.Context, impl *BusinessStoreImpl, sess *session.Session) (*session.SessionData, bool) {
+	cached, err := impl.GetCachedUserSession(ctx, sess.ID())
+	if err != nil || cached != sess.Data() || cached.IsStale() || cached.Has(session.KeyTombstone) {
+		sess.Data().MarkStale()
+		return nil, false
+	}
+	return cached, true
+}
+
+func (ss *SessionStore) flushDirtySession(ctx context.Context, sess *session.Session) error {
+	if !sess.Data().IsDirty() {
+		return nil
+	}
+	impl := ss.store.Impl()
+	if err := impl.StoreUserSessions(ctx, map[string]uint{sess.ID(): 1}, ss.persistKey); err != nil {
+		return err
+	}
+	cached, err := impl.GetCachedUserSession(ctx, sess.ID())
+	if err != nil || cached != sess.Data() || cached.IsStale() || cached.IsDirty() {
+		sess.Data().MarkStale()
+		return session.ErrSessionMissing
+	}
+	return nil
+}
+
+// Read trusts cached authority within its lease; skipCache forces PostgreSQL.
+func (ss *SessionStore) Read(ctx context.Context, sid string, skipCache bool) (*session.Session, error) {
+	if !skipCache {
+		if sess, done, err := ss.readCached(ctx, sid); done {
+			return sess, err
+		}
+	}
+
+	release, err := ss.operations.acquireSession(ctx, sid)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return ss.read(ctx, sid, skipCache)
+}
+
+func (ss *SessionStore) readCached(ctx context.Context, sid string) (*session.Session, bool, error) {
+	sd, err := ss.store.Impl().GetCachedUserSession(ctx, sid)
+	if err != nil {
+		if isSessionCacheMiss(err) {
+			return nil, false, nil
+		}
+		return nil, true, err
+	}
+	if sd.Has(session.KeyTombstone) || sd.IsStale() {
+		return nil, true, session.ErrSessionMissing
+	}
+	if sd.NeedsValidation(ss.now(), sessionValidationLease) {
+		return nil, false, nil
+	}
+	return session.NewSession(sd, ss), true, nil
+}
+
+func (ss *SessionStore) read(ctx context.Context, sid string, skipCache bool) (*session.Session, error) {
+	impl := ss.store.Impl()
+	if !skipCache {
+		sd, err := impl.GetCachedUserSession(ctx, sid)
+		if err == nil {
+			if sd.Has(session.KeyTombstone) || sd.IsStale() {
+				return nil, session.ErrSessionMissing
+			}
+			if !sd.NeedsValidation(ss.now(), sessionValidationLease) {
+				return session.NewSession(sd, ss), nil
+			}
+		} else if !isSessionCacheMiss(err) {
+			return nil, err
+		}
+	}
+
+	sd, err := impl.RetrieveUserSession(ctx, sid, true /*skip cache*/)
+	if err != nil {
+		if isSessionCacheMiss(err) {
+			if cached, cacheErr := impl.GetCachedUserSession(ctx, sid); cacheErr == nil {
+				cached.MarkStale()
+				impl.DeleteCachedUserSession(ctx, sid)
+			}
 			return nil, session.ErrSessionMissing
 		}
 
 		return nil, err
 	}
 
-	if sd.Has(session.KeyTombstone) {
+	state, _, _ := sd.Authority()
+	if sd.Has(session.KeyTombstone) || sd.IsStale() || state == session.StateRevoked {
+		if cached, cacheErr := impl.GetCachedUserSession(ctx, sid); cacheErr == nil {
+			cached.MarkStale()
+		}
+		impl.DeleteCachedUserSession(ctx, sid)
 		return nil, session.ErrSessionMissing
+	}
+	sd.MarkValidated(ss.now())
+	if cached, cacheErr := impl.GetCachedUserSession(ctx, sid); cacheErr == nil {
+		cachedState, _, _ := cached.Authority()
+		if cachedState == session.StateAuthenticated && state != session.StateAuthenticated {
+			cached.MarkStale()
+			impl.DeleteCachedUserSession(ctx, sid)
+			return nil, session.ErrSessionMissing
+		}
+		if !cached.AdoptAuthorityIfDirty(sd) {
+			cached.Replace(sd)
+		}
+		sd = cached
+	} else if isSessionCacheMiss(cacheErr) {
+		if err := impl.CacheUserSession(ctx, sd); err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, cacheErr
 	}
 
 	return session.NewSession(sd, ss), nil
 }
 
-func (ss *SessionStore) Update(ctx context.Context, sd *session.Session) error {
-	if sd == nil {
+func isSessionCacheMiss(err error) bool {
+	return err == ErrNegativeCacheHit || err == ErrCacheMiss || err == otter.ErrNotFound
+}
+
+// Recover forces an authoritative read while preserving same-generation local mutations.
+func (ss *SessionStore) Recover(ctx context.Context, sess *session.Session) error {
+	if sess == nil {
+		return ErrInvalidInput
+	}
+	release, err := ss.operations.acquireSession(ctx, sess.ID())
+	if err != nil {
+		return err
+	}
+	defer release()
+	dbSession, err := ss.read(ctx, sess.ID(), true)
+	if err != nil {
+		return err
+	}
+	sess.Refresh(dbSession)
+	return nil
+}
+
+// Update queues a best-effort, version-guarded payload write without changing authority.
+func (ss *SessionStore) Update(ctx context.Context, sess *session.Session, update func()) error {
+	if sess == nil || update == nil {
+		return ErrInvalidInput
+	}
+	release, err := ss.operations.acquireSession(ctx, sess.ID())
+	if err != nil {
+		return err
+	}
+	defer release()
+	impl := ss.store.Impl()
+	if _, ok := currentSessionData(ctx, impl, sess); !ok {
+		return session.ErrSessionMissing
+	}
+	update()
+	sess.Data().MarkDirty()
+	if sess.Data().RegistrationFinalizing() {
 		return nil
 	}
 
-	return ss.enqueuePersistSessionDelayed(ctx, sd.ID())
+	return ss.enqueuePersistSessionDelayed(ctx, sess.ID())
 }
 
 func (ss *SessionStore) enqueuePersistSession(ctx context.Context, persistChan chan<- string, sid string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	timer := time.NewTimer(sessionBackpressureTimeout)
 	defer timer.Stop()
 
@@ -112,86 +526,250 @@ func (ss *SessionStore) enqueuePersistSessionDelayed(ctx context.Context, sid st
 	return err
 }
 
-func (ss *SessionStore) Renew(ctx context.Context, oldSID string, sess *session.Session) error {
-	if err := ss.Init(ctx, sess); err != nil {
+// Renew atomically rotates persistent authority before cleaning up the previous SID.
+func (ss *SessionStore) Renew(ctx context.Context, current, successor *session.Session, prepareSuccessor func()) error {
+	if current == nil || successor == nil || prepareSuccessor == nil || current.ID() == successor.ID() {
+		return ErrInvalidInput
+	}
+	oldSID := current.ID()
+	release, err := ss.operations.acquireBatch(ctx, []string{oldSID, successor.ID()})
+	if err != nil {
 		return err
 	}
+	defer release()
 
-	persistent := sess.Data().Has(ss.persistKey)
+	impl := ss.store.Impl()
+	oldData, ok := currentSessionData(ctx, impl, current)
+	if !ok {
+		return session.ErrSessionMissing
+	}
+	prepareSuccessor()
+
+	_, persistent := oldData.Persistence()
 	if persistent {
-		if err := ss.enqueuePersistSession(ctx, ss.persistNowChan, sess.ID()); err != nil {
-			slog.ErrorContext(ctx, "Failed to queue renewed session for immediate persistence", common.SessionIDAttr(sess.ID()), common.ErrAttr(err))
+		rotation, err := impl.RotateUserSession(ctx, oldData, successor.Data(), sessionCacheTTL)
+		if err != nil {
+			if !rotation.predecessorUsable {
+				oldData.MarkStale()
+				impl.DeleteCachedUserSession(ctx, oldSID)
+				impl.DeleteCachedUserSession(ctx, successor.ID())
+			}
+			slog.ErrorContext(ctx, "Failed to rotate persistent session", common.SessionIDAttr(successor.ID()), common.ErrAttr(err))
 			return err
 		}
+		if !rotation.rotated {
+			oldData.MarkStale()
+			impl.DeleteCachedUserSession(ctx, oldSID)
+			return session.ErrSessionMissing
+		}
+		successor.Data().MarkValidated(ss.now())
+		if err := impl.CacheUserSession(ctx, successor.Data()); err != nil {
+			slog.WarnContext(ctx, "Failed to cache renewed session", common.SessionIDAttr(successor.ID()), common.ErrAttr(err))
+		}
+	} else if err := ss.Init(ctx, successor); err != nil {
+		return err
 	}
 
-	oldSession := session.NewSession(session.NewTombstoneSessionData(oldSID), ss)
+	tombstone := session.NewTombstoneSessionData(oldSID)
+	if persistent {
+		tombstone.CopyPersistence(oldData)
+	}
+	oldSession := session.NewSession(tombstone, ss)
 	if err := ss.Init(ctx, oldSession); err != nil {
-		return err
-	}
-
-	if err := ss.enqueuePersistSessionDelayed(ctx, oldSID); err != nil {
-		slog.ErrorContext(ctx, "Failed to queue old session tombstone for persistence", common.SessionIDAttr(oldSID), common.ErrAttr(err))
-		return err
-	}
-
-	if !persistent {
-		if err := ss.enqueuePersistSessionDelayed(ctx, sess.ID()); err != nil {
-			slog.ErrorContext(ctx, "Failed to queue renewed session for persistence", common.SessionIDAttr(sess.ID()), common.ErrAttr(err))
+		if !persistent {
+			ss.rollbackLocalRenew(ctx, oldData, successor.ID())
 			return err
+		}
+		oldData.MarkStale()
+		slog.WarnContext(ctx, "Failed to cache old session tombstone", common.SessionIDAttr(oldSID), common.ErrAttr(err))
+	} else {
+		oldData.MarkStale()
+	}
+
+	if persistent {
+		ss.pendingDeletesMu.Lock()
+		ss.pendingDeletes[oldSID] = struct{}{}
+		ss.pendingDeletesMu.Unlock()
+		queueCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionBackpressureTimeout)
+		err := ss.enqueuePersistSession(queueCtx, ss.persistDelayChan, oldSID)
+		cancel()
+		if err != nil {
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), sessionCleanupTimeout)
+			deleteErr := impl.DeleteUserSessions(cleanupCtx, []string{oldSID})
+			cleanupCancel()
+			ss.pendingDeletesMu.Lock()
+			delete(ss.pendingDeletes, oldSID)
+			ss.pendingDeletesMu.Unlock()
+			if deleteErr != nil {
+				slog.ErrorContext(ctx, "Failed to delete rotated session", common.SessionIDAttr(oldSID), common.ErrAttr(deleteErr))
+			}
 		}
 	}
 
 	return nil
+}
+
+// RenewExpiration queues one heartbeat; callers refresh the cookie only when it returns true.
+func (ss *SessionStore) RenewExpiration(ctx context.Context, sess *session.Session) bool {
+	if sess == nil || !sess.Data().ClaimExpirationRenewal(ss.now(), sessionExpirationRenewalThreshold) {
+		return false
+	}
+	if err := ss.enqueuePersistSession(ctx, ss.expirationChan, sess.ID()); err != nil {
+		sess.Data().RollbackExpirationRenewal()
+		return false
+	}
+	return true
+}
+
+func (ss *SessionStore) heartbeatSessions(ctx context.Context, batch map[string]uint) error {
+	if len(batch) == 0 {
+		return nil
+	}
+
+	sids := make([]string, 0, len(batch))
+	for sid := range batch {
+		sids = append(sids, sid)
+	}
+	sort.Strings(sids)
+	impl := ss.store.Impl()
+	release, err := ss.operations.acquireBatch(ctx, sids)
+	if err != nil {
+		rollbackExpirationRenewals(ctx, impl, sids)
+		return err
+	}
+	defer release()
+	updated, err := impl.ExtendAuthenticatedSessionExpirations(ctx, sids, sessionCacheTTL)
+	if err != nil {
+		rollbackExpirationRenewals(ctx, impl, sids)
+		return err
+	}
+
+	expirations := make(map[string]time.Time, len(updated))
+	for _, row := range updated {
+		if row.ExpiresAt.Valid {
+			expirations[row.SessionID] = row.ExpiresAt.Time
+		}
+	}
+	for _, sid := range sids {
+		sd, err := impl.GetCachedUserSession(ctx, sid)
+		if err != nil {
+			continue
+		}
+		if expiresAt, ok := expirations[sid]; ok {
+			sd.CompleteExpirationRenewal(expiresAt)
+			continue
+		}
+		sd.MarkStale()
+		impl.DeleteCachedUserSession(ctx, sid)
+	}
+	return nil
+}
+
+func rollbackExpirationRenewals(ctx context.Context, impl *BusinessStoreImpl, sids []string) {
+	for _, sid := range sids {
+		if sd, err := impl.GetCachedUserSession(ctx, sid); err == nil {
+			sd.RollbackExpirationRenewal()
+		}
+	}
+}
+
+func (ss *SessionStore) rollbackLocalRenew(ctx context.Context, oldData *session.SessionData, newSID string) {
+	rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionCleanupTimeout)
+	defer cancel()
+	impl := ss.store.Impl()
+	impl.DeleteCachedUserSession(rollbackCtx, newSID)
+	if oldData != nil {
+		if err := impl.CacheUserSession(rollbackCtx, oldData); err != nil {
+			slog.ErrorContext(rollbackCtx, "Failed to restore old session after renewal rollback", common.SessionIDAttr(oldData.ID()), common.ErrAttr(err))
+		}
+	}
 }
 
 func (ss *SessionStore) TTL() time.Duration {
 	return sessionCacheTTL
 }
 
-func (ss *SessionStore) Destroy(ctx context.Context, sid string) error {
-	return ss.store.Impl().DeleteUserSession(ctx, sid)
-}
-
-func (ss *SessionStore) persistSessionsNow(ctx context.Context, sids []string) error {
-	batch := make(map[string]uint, len(sids))
-	for _, sid := range sids {
-		batch[sid]++
+// Destroy synchronously revokes one persistent SID, then discards its local copy.
+func (ss *SessionStore) Destroy(ctx context.Context, sid string) (session.SessionRevocationResult, error) {
+	release, err := ss.operations.acquireSession(ctx, sid)
+	if err != nil {
+		return session.SessionRevocationResult{}, err
 	}
-	return ss.store.Impl().StoreUserSessions(ctx, batch, ss.persistKey, sessionCacheTTL)
+	defer release()
+	impl := ss.store.Impl()
+	result, err := impl.RevokeUserSession(ctx, sid)
+	if err != nil {
+		if data, cacheErr := impl.GetCachedUserSession(ctx, sid); cacheErr == nil {
+			data.MarkStale()
+			impl.DeleteCachedUserSession(ctx, sid)
+		}
+	}
+	return result, err
 }
 
 func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]uint) error {
+	if len(batch) == 0 {
+		return nil
+	}
+	sids := make([]string, 0, len(batch))
+	for sid := range batch {
+		sids = append(sids, sid)
+	}
+	release, err := ss.operations.acquireBatch(ctx, sids)
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	toStore := make(map[string]uint, len(batch))
-	toDelete := make([]string, 0)
+	toDeleteSet := make(map[string]struct{})
+	ss.pendingDeletesMu.Lock()
+	for sid := range batch {
+		if _, pending := ss.pendingDeletes[sid]; pending {
+			toDeleteSet[sid] = struct{}{}
+		}
+	}
+	ss.pendingDeletesMu.Unlock()
 
 	impl := ss.store.Impl()
-	if cached, err := impl.GetCachedUserSessions(ctx, batch); err == nil {
+	cached, err := impl.GetCachedUserSessions(ctx, batch)
+	if err == nil {
 		for _, sd := range cached {
 			sid := sd.ID()
 			if sd.Has(session.KeyTombstone) {
-				toDelete = append(toDelete, sid)
+				if _, persisted := sd.Persistence(); persisted {
+					toDeleteSet[sid] = struct{}{}
+					ss.pendingDeletesMu.Lock()
+					ss.pendingDeletes[sid] = struct{}{}
+					ss.pendingDeletesMu.Unlock()
+				}
+				continue
+			}
+			if _, pending := toDeleteSet[sid]; pending {
 				continue
 			}
 			toStore[sid] = batch[sid]
 		}
-
-		// we actually do not care if we failed to save or delete sessions in the DB cache
-		_ = impl.StoreUserSessions(ctx, toStore, ss.persistKey, sessionCacheTTL)
-		_ = impl.DeleteUserSessions(ctx, toDelete)
-	} else {
+	}
+	toDelete := make([]string, 0, len(toDeleteSet))
+	for sid := range toDeleteSet {
+		toDelete = append(toDelete, sid)
+	}
+	if err := impl.DeleteUserSessions(ctx, toDelete); err != nil {
+		return err
+	}
+	ss.pendingDeletesMu.Lock()
+	for _, sid := range toDelete {
+		delete(ss.pendingDeletes, sid)
+	}
+	ss.pendingDeletesMu.Unlock()
+	if err != nil && len(toDeleteSet) != len(batch) {
 		slog.ErrorContext(ctx, "Failed to read cached sessions for persistence", common.ErrAttr(err))
+		return err
+	}
+	if err := impl.StoreUserSessions(ctx, toStore, ss.persistKey); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-// rollback tombstone when renew fails
-func (ss *SessionStore) RollbackRenew(ctx context.Context, oldSID string) {
-	impl := ss.store.Impl()
-	impl.cache.Delete(ctx, SessionCacheKey(oldSID))
-	// Do NOT delete from database - only remove tombstone from local cache so
-	// the next read can fall through to the DB and recover the original session.
-	// _ = impl.DeleteUserSession(ctx, oldSID)
 }

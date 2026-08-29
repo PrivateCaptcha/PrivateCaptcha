@@ -1,8 +1,9 @@
 package db
 
 import (
-	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -222,8 +223,6 @@ func TestMemoryCacheSetIfAbsent(t *testing.T) {
 func TestBusinessCacheMissingCompiledRulesRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	const maxEntries = 100
-
 	ctx := context.Background()
 	store := NewBusiness(nil)
 	impl := store.Impl()
@@ -238,13 +237,13 @@ func TestBusinessCacheMissingCompiledRulesRoundTrip(t *testing.T) {
 		t.Fatalf("expected negative cache hit for org rules before save, got %v", err)
 	}
 
-	var buf bytes.Buffer
-	if err := store.Cache.SaveTo(ctx, &buf, maxEntries); err != nil {
+	snapshotDir := t.TempDir()
+	if err := store.SaveCache(ctx, snapshotDir); err != nil {
 		t.Fatalf("failed to save business cache: %v", err)
 	}
 
 	newStore := NewBusiness(nil)
-	if err := newStore.Cache.LoadFrom(ctx, &buf, 24*time.Hour); err != nil {
+	if err := newStore.LoadCache(ctx, snapshotDir); err != nil {
 		t.Fatalf("failed to load business cache: %v", err)
 	}
 
@@ -263,7 +262,7 @@ func TestBusinessCachePersistenceExcludesPortalSessions(t *testing.T) {
 	normalKey := APIKeyCacheKey("disk-persistence-value")
 	sessionKey := SessionCacheKey(sid)
 	source := NewBusiness(nil)
-	if err := source.Cache.Set(ctx, normalKey, "normal-value"); err != nil {
+	if err := source.Cache.SetEx(ctx, normalKey, "normal-value", 2*time.Hour, time.Hour); err != nil {
 		t.Fatal(err)
 	}
 	sessionData := session.NewSessionData(sid)
@@ -289,5 +288,102 @@ func TestBusinessCachePersistenceExcludesPortalSessions(t *testing.T) {
 	}
 	if _, err := restoredStore.Cache.Get(ctx, sessionKey); err != ErrCacheMiss {
 		t.Fatalf("session was serialized in the snapshot: %v", err)
+	}
+
+	legacySessionValueKey := APIKeyCacheKey("legacy-session-value")
+	if err := source.Cache.Set(ctx, sessionKey, "legacy-session-key"); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Cache.Set(ctx, legacySessionValueKey, sessionData); err != nil {
+		t.Fatal(err)
+	}
+	legacySnapshotDir := t.TempDir()
+	sourceCache := source.Cache.(*memcache[CacheKey, any])
+	if err := common.SaveCacheToFile(ctx, legacySnapshotDir, cachePersistFile, cachePersistSize, sourceCache.store, nil); err != nil {
+		t.Fatal(err)
+	}
+	sourceEntry, ok := sourceCache.store.GetEntryQuietly(normalKey)
+	if !ok {
+		t.Fatal("source cache entry is missing")
+	}
+	legacyRestoredStore := NewBusiness(nil)
+	preexistingKey := APIKeyCacheKey("preexisting-value")
+	if err := legacyRestoredStore.Cache.Set(ctx, preexistingKey, "preexisting"); err != nil {
+		t.Fatal(err)
+	}
+	if err := legacyRestoredStore.LoadCache(ctx, legacySnapshotDir); err != nil {
+		t.Fatal(err)
+	}
+	legacyRestoredCache := legacyRestoredStore.Cache.(*memcache[CacheKey, any])
+	restoredEntry, ok := legacyRestoredCache.store.GetEntryQuietly(normalKey)
+	if !ok || restoredEntry.Value != "normal-value" {
+		t.Fatalf("legacy snapshot lost non-session entry: value=%v found=%t", restoredEntry.Value, ok)
+	}
+	if _, err := legacyRestoredStore.Cache.Get(ctx, sessionKey); err != ErrCacheMiss {
+		t.Fatalf("legacy snapshot restored a session-prefixed entry: %v", err)
+	}
+	if _, err := legacyRestoredStore.Cache.Get(ctx, legacySessionValueKey); err != ErrCacheMiss {
+		t.Fatalf("legacy snapshot restored portal session data under a non-session key: %v", err)
+	}
+	if value, err := legacyRestoredStore.Cache.Get(ctx, preexistingKey); err != nil || value != "preexisting" {
+		t.Fatalf("legacy snapshot replaced a preexisting entry: value=%v err=%v", value, err)
+	}
+
+	if delta := restoredEntry.ExpiresAt().Sub(sourceEntry.ExpiresAt()).Abs(); delta > time.Second {
+		t.Fatalf("expiration deadline changed by %v", delta)
+	}
+	if delta := restoredEntry.RefreshableAt().Sub(sourceEntry.RefreshableAt()).Abs(); delta > time.Second {
+		t.Fatalf("refresh deadline changed by %v", delta)
+	}
+}
+
+func TestBusinessCacheCorruptLegacySnapshotDoesNotRestorePortalSessions(t *testing.T) {
+	ctx := t.Context()
+	const sid = "corrupt-disk-persistence-session"
+	sessionKey := SessionCacheKey(sid)
+	source := NewBusiness(nil)
+	if err := source.Impl().CacheUserSession(ctx, session.NewSessionData(sid)); err != nil {
+		t.Fatal(err)
+	}
+	snapshotOnlyKey := APIKeyCacheKey("snapshot-only-value")
+	collidingKey := APIKeyCacheKey("colliding-value")
+	if err := source.Cache.Set(ctx, snapshotOnlyKey, "snapshot-only"); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Cache.Set(ctx, collidingKey, "snapshot-value"); err != nil {
+		t.Fatal(err)
+	}
+	snapshotDir := t.TempDir()
+	sourceCache := source.Cache.(*memcache[CacheKey, any])
+	if err := common.SaveCacheToFile(ctx, snapshotDir, cachePersistFile, cachePersistSize, sourceCache.store, nil); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.OpenFile(filepath.Join(snapshotDir, cachePersistFile), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.Write([]byte{1, 2, 3}); err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	restored := NewBusiness(nil)
+	if err := restored.Cache.Set(ctx, collidingKey, "live-value"); err != nil {
+		t.Fatal(err)
+	}
+	if err := restored.LoadCache(ctx, snapshotDir); err == nil {
+		t.Fatal("corrupt legacy snapshot was accepted")
+	}
+	if _, err := restored.Cache.Get(ctx, sessionKey); err != ErrCacheMiss {
+		t.Fatalf("corrupt legacy snapshot restored a portal session: %v", err)
+	}
+	if _, err := restored.Cache.Get(ctx, snapshotOnlyKey); err != ErrCacheMiss {
+		t.Fatalf("corrupt snapshot partially restored a non-session entry: %v", err)
+	}
+	if value, err := restored.Cache.Get(ctx, collidingKey); err != nil || value != "live-value" {
+		t.Fatalf("failed snapshot load changed live cache: value=%v err=%v", value, err)
 	}
 }
