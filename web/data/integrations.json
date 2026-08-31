@@ -63,6 +63,12 @@
             "icon": "img/integrations/magento.svg",
             "link": "https://docs.privatecaptcha.com/docs/integrations/magento2/",
             "ready": true
+        },
+        {
+            "name": "TYPO3",
+            "icon": "img/integrations/typo3.svg",
+            "link": "https://docs.privatecaptcha.com/docs/integrations/typo3/",
+            "ready": true
         }
     ]
 }
