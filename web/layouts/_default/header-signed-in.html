@@ -49,7 +49,7 @@
                                     <div {{if not $.Platform.Registered }}class="py-1"{{end}}>
                                         <a href="{{ relURL .Const.AuditLogsEndpoint }}" class="pc-header-dropdown-link" role="menuitem" tabindex="-1" id="user-menu-item-1">Audit logs</a>
                                         <a href="{{ relURL .Const.SettingsEndpoint }}" class="pc-header-dropdown-link" role="menuitem" tabindex="-1" id="user-menu-item-2">Settings</a>
-                                        <a href="{{ relURL .Const.LogoutEndpoint }}" class="pc-header-dropdown-link" role="menuitem" tabindex="-1" id="user-menu-item-3">Sign out</a>
+                                        <button type="button" hx-post="{{ relURL .Const.LogoutEndpoint }}" hx-swap="none" class="pc-header-dropdown-link w-full text-left" role="menuitem" tabindex="-1" id="user-menu-item-3">Sign out</button>
                                     </div>
                                 </div>
                             </div>
@@ -90,7 +90,7 @@
                 <div class="mt-3 space-y-1 px-2">
                     <a href="{{ relURL .Const.AuditLogsEndpoint }}" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile">Audit logs</a>
                     <a href="{{ relURL .Const.SettingsEndpoint }}" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile">Settings</a>
-                    <a href="{{ relURL .Const.LogoutEndpoint }}" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile">Sign out</a>
+                    <button type="button" hx-post="{{ relURL .Const.LogoutEndpoint }}" hx-swap="none" class="pc-dashboard-menu-button pc-dashboard-menu-button-mobile w-full text-left">Sign out</button>
                 </div>
             </div>
         </div>

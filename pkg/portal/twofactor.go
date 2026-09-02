@@ -4,11 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -20,8 +17,33 @@ var (
 
 const maxFailedAttempts = 5
 
+func challengeResultAuthority(result *session.ChallengeResult, kind session.ChallengeKind) (session.Authority, bool) {
+	if result == nil || result.Outcome != session.TransitionSucceeded || result.Session == nil {
+		return session.Authority{}, false
+	}
+	return result.Authority, result.Authority.ChallengeKind == kind && result.Authority.ChallengeEmail != ""
+}
+
+func (s *Server) handleChallengeOutcome(w http.ResponseWriter, r *http.Request, data *loginRenderContext, outcome session.TransitionOutcome) bool {
+	switch outcome {
+	case session.TransitionSucceeded:
+		return false
+	case session.TransitionInvalidCode:
+		data.CodeError = "Code is not valid."
+	case session.TransitionAttemptsExhausted:
+		data.CodeError = "Too many failed attempts. Please start again."
+	case session.TransitionVerificationRequired:
+		common.Redirect(s.RelURL(common.AccountVerifyEndpoint), http.StatusUnauthorized, w, r)
+		return true
+	default:
+		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
+		return true
+	}
+	s.render(w, r, "login/twofactor-form.html", data, false /*new*/)
+	return true
+}
+
 func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
-	tnow := time.Now().UTC()
 	ctx := r.Context()
 
 	err := r.ParseForm()
@@ -31,122 +53,112 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := s.Sessions.SessionStart(w, r)
-	ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.ID())
-
-	// "random" POST request to /twofactor with valid cookie might mean we access it from another node without this session
-	// BUT if we have a local "weird" cached session, something is wrong and if it's not cached, it will be pulled from DB
-	step, ok := sess.Get(ctx, session.KeyLoginStep).(int)
-	if !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
-		slog.WarnContext(ctx, "User session is not valid", "step", step)
+	sess, err := s.Sessions.Get(r)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to resolve pending session", common.ErrAttr(err))
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
-
-	// During HTMX flow, the browser URL stays at the org invite URL even when we POST to 2FA
-	// If org invite ID is not in session, check the Referer header to extract it
-	if _, hasOrgInvite := sess.Get(ctx, session.KeyOrgInviteID).(int32); !hasOrgInvite {
-		if referer := r.Header.Get(common.HeaderReferer); len(referer) > 0 {
-			if inviteID := s.parseOrgInviteIDFromURL(referer); inviteID > 0 {
-				slog.DebugContext(ctx, "Parsed org invite ID from Referer header", "inviteID", inviteID)
-				_ = sess.Set(ctx, session.KeyOrgInviteID, inviteID)
-			}
-		}
-	}
-
-	email, ok := sess.Get(ctx, session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
-		return
-	}
-
-	sentCode, ok := sess.Get(ctx, session.KeyTwoFactorCode).(int)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get verification code from session")
-		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
-		return
-	}
-
-	codeTimestamp, ok := sess.Get(ctx, session.KeyTwoFactorCodeTimestamp).(time.Time)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get verification code timestamp")
+	ctx = context.WithValue(ctx, common.SessionHashContextKey, sess.Hash())
+	authority, ok := sess.Authority()
+	if !ok || authority.State != session.StatePending || authority.ChallengeEmail == "" {
+		slog.WarnContext(ctx, "User session is not pending")
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
 
 	data := &loginRenderContext{
 		CsrfRenderContext: CsrfRenderContext{
-			Token: s.XSRF.Token(email),
+			Token: s.XSRF.Token(authority.ChallengeEmail),
 		},
-		Email: common.MaskEmail(email, '*'),
+		Email: common.MaskEmail(authority.ChallengeEmail, '*'),
 	}
-
-	loginAttempts, _ := sess.Get(ctx, session.KeyLoginAttempts).(int)
-	if loginAttempts >= maxFailedAttempts {
-		data.CodeError = "Too many failed attempts. Please request a new code."
-		s.render(w, r, "login/twofactor-form.html", data, false /*new*/)
-		return
-	}
-
 	formCode := strings.TrimSpace(r.FormValue(common.ParamVerificationCode))
-	if enteredCode, err := strconv.Atoi(formCode); (err != nil) || (enteredCode != sentCode) || (!codeTimestamp.IsZero() && tnow.After(codeTimestamp.Add(s.TwoFactorDuration))) {
-		_ = sess.Set(ctx, session.KeyLoginAttempts, loginAttempts+1)
-		data.CodeError = "Code is not valid."
-		slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "timestamp", codeTimestamp, common.ErrAttr(err))
-		s.render(w, r, "login/twofactor-form.html", data, false /*new*/)
-		return
-	}
-
-	_ = sess.Delete(ctx, session.KeyLoginAttempts)
-
 	var newRegistrationRedirectURL string
+	var orgInviteID int32
 	rootRedirectURL := s.RelURL("/")
 
-	if step == loginStepSignUpVerify {
-		if value, ok := sess.Get(ctx, session.KeyVerifyRegistration).(bool); ok {
-			slog.WarnContext(ctx, "Account requires an additional verification", "email", email, "value", value)
-			common.Redirect(s.RelURL(common.AccountVerifyEndpoint), http.StatusUnauthorized, w, r)
+	switch authority.ChallengeKind {
+	case session.ChallengeKindSignIn:
+		result, err := s.Sessions.ConsumeSignInChallenge(w, r, sess, formCode, maxFailedAttempts)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to consume sign-in challenge", common.ErrAttr(err))
+			s.RedirectError(http.StatusInternalServerError, w, r)
 			return
 		}
-
-		slog.DebugContext(ctx, "Proceeding with the user registration flow after 2FA")
-		if user, _, err := s.doRegister(ctx, sess); err == nil {
-			_ = sess.Set(ctx, session.KeyUserID, user.ID)
-			_ = sess.Set(ctx, session.KeyFirstSession, true)
-			_, hasOrgInvite := sess.Get(ctx, session.KeyOrgInviteID).(int32)
-			returnURL, hasReturnURL := sess.Get(ctx, session.KeyReturnURL).(string)
-			if !hasOrgInvite && (!hasReturnURL || (len(returnURL) == 0) || (returnURL == "/") || (returnURL == rootRedirectURL)) {
-				// we could redirect to create first widget on non-EE codepath, but non-EE is designed for only 1 user in mind
-				newRegistrationRedirectURL = fmt.Sprintf("%s?%s=true", rootRedirectURL, common.ParamOnboarding)
-			}
-		} else {
+		if result != nil && result.Outcome == session.TransitionAttemptsExhausted {
+			s.Sessions.ClearCookie(w, r)
+		}
+		if result == nil || s.handleChallengeOutcome(w, r, data, result.Outcome) {
+			return
+		}
+		sess = result.Session
+	case session.ChallengeKindRegistration:
+		result, err := s.Sessions.ConsumeRegistrationChallenge(ctx, sess, formCode, maxFailedAttempts)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to consume registration challenge", common.ErrAttr(err))
+			s.RedirectError(http.StatusInternalServerError, w, r)
+			return
+		}
+		if result != nil && result.Outcome == session.TransitionAttemptsExhausted {
+			s.Sessions.ClearCookie(w, r)
+		}
+		csrfEmail := authority.ChallengeEmail
+		if result != nil && result.Email != "" {
+			csrfEmail = result.Email
+		}
+		if !s.verifyCSRF(w, r, csrfEmail) {
+			return
+		}
+		if result == nil || s.handleChallengeOutcome(w, r, data, result.Outcome) {
+			return
+		}
+		user, _, err := s.doRegister(ctx, result.Email, result.Name, result.InviteID)
+		if err != nil {
 			slog.ErrorContext(ctx, "Failed to complete registration", common.ErrAttr(err))
 			s.RedirectError(http.StatusInternalServerError, w, r)
 			return
 		}
+		if err := sess.Set(ctx, session.KeyFirstSession, true); err != nil {
+			slog.ErrorContext(ctx, "Failed to set registration successor Payload", common.ErrAttr(err))
+			s.RedirectError(http.StatusInternalServerError, w, r)
+			return
+		}
+		successor, err := s.Sessions.CreateRegistrationSuccessor(w, r, sess, user.ID)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to create registration successor", common.ErrAttr(err))
+			s.RedirectError(http.StatusInternalServerError, w, r)
+			return
+		}
+		if successor == nil || successor.Outcome != session.TransitionSucceeded || successor.Session == nil {
+			common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
+			return
+		}
+		sess = successor.Session
+		orgInviteID = result.InviteID
+		returnURL, hasReturnURL := sess.Get(ctx, session.KeyReturnURL).(string)
+		if orgInviteID <= 0 && (!hasReturnURL || returnURL == "" || returnURL == "/" || returnURL == rootRedirectURL) {
+			newRegistrationRedirectURL = fmt.Sprintf("%s?%s=true", rootRedirectURL, common.ParamOnboarding)
+		}
+	default:
+		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
+		return
 	}
 
-	_ = sess.Set(ctx, session.KeyLoginStep, loginStepCompleted)
-	_ = sess.Delete(ctx, session.KeyTwoFactorCode)
-	_ = sess.Delete(ctx, session.KeyTwoFactorCodeTimestamp)
-	_ = sess.Delete(ctx, session.KeyUserEmail)
-	// at this point it's safe to remove because we check that session does not have the flag prior to this
-	_ = sess.Delete(ctx, session.KeyVerifyRegistration)
-	_ = sess.Set(ctx, session.KeyPersistent, true)
-
-	sess = s.Sessions.SessionRenew(w, r, sess)
-	ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.ID())
+	ctx = context.WithValue(ctx, common.SessionHashContextKey, sess.Hash())
 
 	job := s.Jobs.LoginUser(sess)
 	jobCtx := common.CopyTraceID(ctx, context.Background())
-	jobCtx = context.WithValue(jobCtx, common.SessionIDContextKey, sess.ID())
+	jobCtx = context.WithValue(jobCtx, common.SessionHashContextKey, sess.Hash())
 	if ip := ctx.Value(common.RateLimitKeyContextKey); ip != nil {
 		jobCtx = context.WithValue(jobCtx, common.RateLimitKeyContextKey, ip)
 	}
 	go common.RunOneOffJob(jobCtx, job, job.NewParams())
 
-	if orgInviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && (orgInviteID > 0) {
+	if orgInviteID <= 0 {
+		orgInviteID, _ = sess.Get(ctx, session.KeyOrgInviteID).(int32)
+	}
+	if orgInviteID > 0 {
 		slog.DebugContext(ctx, "Found org invite ID in session, redirecting to org", "inviteID", orgInviteID)
 		_ = sess.Delete(ctx, session.KeyOrgInviteID)
 		// we can only rely on cache because if the user is redirected to portal root, they still can join the org later
@@ -173,64 +185,39 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	sess := s.Sessions.SessionStart(w, r)
-	if step, ok := sess.Get(ctx, session.KeyLoginStep).(int); !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
-		slog.WarnContext(ctx, "User session is not valid", "step", step)
+	sess, err := s.Sessions.Get(r)
+	if err != nil {
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
-
-	email, ok := sess.Get(ctx, session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
+	authority, ok := sess.Authority()
+	if !ok || authority.State != session.StatePending || authority.ChallengeEmail == "" {
+		slog.WarnContext(ctx, "User session is not pending")
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
 
 	code := twoFactorCode(ctx)
 	location := r.Header.Get(s.CountryCodeHeader.Value())
-
-	if err := s.Mailer.SendTwoFactor(ctx, email, code, r.UserAgent(), location, false); err != nil {
+	result, err := s.Sessions.ResendPendingChallenge(ctx, sess, fmt.Sprintf("%06d", code), s.TwoFactorDuration, maxFailedAttempts)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to resend pending challenge", common.ErrAttr(err))
+		s.render(w, r, "login/resend-error.html", renderContextNothing, false /*new*/)
+		return
+	}
+	if result != nil && result.Outcome == session.TransitionAttemptsExhausted {
+		s.Sessions.ClearCookie(w, r)
+	}
+	resentAuthority, ok := challengeResultAuthority(result, authority.ChallengeKind)
+	if !ok {
+		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
+		return
+	}
+	if err := s.Mailer.SendTwoFactor(ctx, resentAuthority.ChallengeEmail, code, r.UserAgent(), location, resentAuthority.ChallengeKind == session.ChallengeKindRegistration); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
 		s.render(w, r, "login/resend-error.html", renderContextNothing, false /*new*/)
 		return
 	}
 
-	_ = sess.Delete(ctx, session.KeyLoginAttempts)
-	_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
-	_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
 	s.render(w, r, "login/resend.html", renderContextNothing, false /*new*/)
-}
-
-// parseOrgInviteIDFromURL extracts org invite ID from a URL path like /orginvite/{id}/signup
-func (s *Server) parseOrgInviteIDFromURL(rawURL string) int32 {
-	// URL pattern: /orginvite/{encoded_id}/signup
-	prefix := "/" + common.OrgInviteEndpoint + "/"
-	suffix := "/" + common.RegisterEndpoint
-
-	idx := strings.Index(rawURL, prefix)
-	if idx < 0 {
-		return -1
-	}
-
-	// Extract the path after the prefix
-	path := rawURL[idx+len(prefix):]
-
-	// Find where the path segment ends
-	endIdx := strings.Index(path, suffix)
-	if endIdx <= 0 {
-		return -1
-	}
-
-	idStr := path[:endIdx]
-	inviteID, err := s.IDHasher.Decrypt(idStr)
-	if err != nil || inviteID <= 0 {
-		return -1
-	}
-
-	if inviteID > math.MaxInt32 {
-		return -1
-	}
-
-	return int32(inviteID)
 }

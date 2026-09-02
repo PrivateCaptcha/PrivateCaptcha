@@ -13,6 +13,15 @@ type QuerierStub struct {
 
 var _ dbgen.Querier = (*QuerierStub)(nil)
 
+func (s *QuerierStub) ConsumeEmailChangeChallenge(ctx context.Context, arg *dbgen.ConsumeEmailChangeChallengeParams) (*dbgen.ConsumeEmailChangeChallengeRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) ConsumeRegistrationChallenge(ctx context.Context, arg *dbgen.ConsumeRegistrationChallengeParams) (*dbgen.ConsumeRegistrationChallengeRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) ConsumeSignInChallenge(ctx context.Context, arg *dbgen.ConsumeSignInChallengeParams) (*dbgen.ConsumeSignInChallengeRow, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) CreateAPIKey(ctx context.Context, arg *dbgen.CreateAPIKeyParams) (*dbgen.APIKey, error) {
 	return nil, s.Error
 }
@@ -23,9 +32,6 @@ func (s *QuerierStub) CreateAuditLogs(ctx context.Context, arg []*dbgen.CreateAu
 	return 0, s.Error
 }
 func (s *QuerierStub) CreateCache(ctx context.Context, arg *dbgen.CreateCacheParams) (int64, error) {
-	return 0, s.Error
-}
-func (s *QuerierStub) CreateCacheMany(ctx context.Context, arg *dbgen.CreateCacheManyParams) (int64, error) {
 	return 0, s.Error
 }
 func (s *QuerierStub) CreateDifficultyRule(ctx context.Context, arg *dbgen.CreateDifficultyRuleParams) (*dbgen.DifficultyRule, error) {
@@ -41,6 +47,9 @@ func (s *QuerierStub) CreateOrganization(ctx context.Context, arg *dbgen.CreateO
 	return nil, s.Error
 }
 func (s *QuerierStub) CreateProperty(ctx context.Context, arg *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) CreateRegistrationSuccessor(ctx context.Context, arg *dbgen.CreateRegistrationSuccessorParams) (*dbgen.Session, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) CreateSubscription(ctx context.Context, arg *dbgen.CreateSubscriptionParams) (*dbgen.Subscription, error) {
@@ -61,12 +70,6 @@ func (s *QuerierStub) DeactivateForms(ctx context.Context, dollar_1 []int32) ([]
 func (s *QuerierStub) DeleteAPIKey(ctx context.Context, arg *dbgen.DeleteAPIKeyParams) (*dbgen.APIKey, error) {
 	return nil, s.Error
 }
-func (s *QuerierStub) DeleteCachedByKey(ctx context.Context, key string) (int64, error) {
-	return 0, s.Error
-}
-func (s *QuerierStub) DeleteCachedByKeys(ctx context.Context, keys []string) (int64, error) {
-	return 0, s.Error
-}
 func (s *QuerierStub) DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) (int64, error) {
 	return 0, s.Error
 }
@@ -74,6 +77,9 @@ func (s *QuerierStub) DeleteDifficultyRule(ctx context.Context, arg *dbgen.Delet
 	return 0, s.Error
 }
 func (s *QuerierStub) DeleteExpiredCache(ctx context.Context) (int64, error) {
+	return 0, s.Error
+}
+func (s *QuerierStub) DeleteExpiredSessions(ctx context.Context) (int64, error) {
 	return 0, s.Error
 }
 func (s *QuerierStub) DeleteForms(ctx context.Context, dollar_1 []int32) (int64, error) {
@@ -158,6 +164,9 @@ func (s *QuerierStub) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtyp
 	return nil, s.Error
 }
 func (s *QuerierStub) GetLastActiveSystemNotification(ctx context.Context, arg *dbgen.GetLastActiveSystemNotificationParams) (*dbgen.SystemNotification, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetLiveSession(ctx context.Context, sessionID string) (*dbgen.GetLiveSessionRow, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) GetLock(ctx context.Context, name string) (*dbgen.Lock, error) {
@@ -286,10 +295,22 @@ func (s *QuerierStub) GetUsersWithoutSubscription(ctx context.Context, arg *dbge
 func (s *QuerierStub) InsertLock(ctx context.Context, arg *dbgen.InsertLockParams) (*dbgen.Lock, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) InspectSessionChallenge(ctx context.Context, sessionID string) (*dbgen.InspectSessionChallengeRow, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) InviteEmailToOrg(ctx context.Context, arg *dbgen.InviteEmailToOrgParams) (*dbgen.OrganizationUser, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) InviteUserToOrg(ctx context.Context, arg *dbgen.InviteUserToOrgParams) (*dbgen.OrganizationUser, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) IssueEmailChangeChallenge(ctx context.Context, arg *dbgen.IssueEmailChangeChallengeParams) (*dbgen.Session, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) IssueRegistrationChallenge(ctx context.Context, arg *dbgen.IssueRegistrationChallengeParams) (*dbgen.Session, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) IssueSignInChallenge(ctx context.Context, arg *dbgen.IssueSignInChallengeParams) (*dbgen.Session, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) LinkOrgInviteToUser(ctx context.Context, arg *dbgen.LinkOrgInviteToUserParams) (*dbgen.OrganizationUser, error) {
@@ -321,6 +342,18 @@ func (s *QuerierStub) RemoveUnlinkedOrgInviteByID(ctx context.Context, arg *dbge
 }
 func (s *QuerierStub) RemoveUserFromOrg(ctx context.Context, arg *dbgen.RemoveUserFromOrgParams) (int64, error) {
 	return 0, s.Error
+}
+func (s *QuerierStub) RenewSessionExpirations(ctx context.Context, arg *dbgen.RenewSessionExpirationsParams) ([]*dbgen.RenewSessionExpirationsRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) ResendPendingChallenge(ctx context.Context, arg *dbgen.ResendPendingChallengeParams) (*dbgen.Session, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) RevokeSession(ctx context.Context, sessionID string) (*dbgen.RevokeSessionRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) RevokeUserSessions(ctx context.Context, userID pgtype.Int4) ([]*dbgen.RevokeUserSessionsRow, error) {
+	return nil, s.Error
 }
 func (s *QuerierStub) RotateAPIKey(ctx context.Context, arg *dbgen.RotateAPIKeyParams) (*dbgen.APIKey, error) {
 	return nil, s.Error
@@ -367,9 +400,6 @@ func (s *QuerierStub) UpdateAsyncTask(ctx context.Context, arg *dbgen.UpdateAsyn
 func (s *QuerierStub) UpdateAttemptedUserNotifications(ctx context.Context, dollar_1 []int32) (int64, error) {
 	return 0, s.Error
 }
-func (s *QuerierStub) UpdateCacheExpiration(ctx context.Context, arg *dbgen.UpdateCacheExpirationParams) (int64, error) {
-	return 0, s.Error
-}
 func (s *QuerierStub) UpdateDifficultyRule(ctx context.Context, arg *dbgen.UpdateDifficultyRuleParams) (*dbgen.UpdateDifficultyRuleRow, error) {
 	return nil, s.Error
 }
@@ -389,6 +419,9 @@ func (s *QuerierStub) UpdateProcessedUserNotifications(ctx context.Context, arg 
 	return 0, s.Error
 }
 func (s *QuerierStub) UpdateProperty(ctx context.Context, arg *dbgen.UpdatePropertyParams) (*dbgen.UpdatePropertyRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) UpdateSessionPayloads(ctx context.Context, arg *dbgen.UpdateSessionPayloadsParams) ([]*dbgen.UpdateSessionPayloadsRow, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) UpdateUserData(ctx context.Context, arg *dbgen.UpdateUserDataParams) (*dbgen.User, error) {

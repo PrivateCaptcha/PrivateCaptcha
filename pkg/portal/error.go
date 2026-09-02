@@ -43,12 +43,15 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, r *http
 	}
 
 	if r != nil {
-		if sess, found := s.Sessions.SessionGet(r); found {
+		if sess, err := s.Sessions.Get(r); err == nil {
 			if username, ok := sess.Get(ctx, session.KeyUserName).(string); ok {
 				reqCtx.UserName = username
 			}
 
 			if reqCtx.LoggedIn {
+				if authority, ok := sess.Authority(); ok && authority.State == session.StateAuthenticated && authority.UserID > 0 {
+					data.Token = s.XSRF.Token(strconv.Itoa(int(authority.UserID)))
+				}
 				if _, ok := sess.Get(ctx, session.KeyFirstSession).(bool); ok {
 					reqCtx.FirstSession = true
 				}

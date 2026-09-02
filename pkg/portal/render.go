@@ -291,7 +291,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		reqCtx.Pattern = common.RelURL(s.Prefix, pathPattern)
 	}
 
-	if sess, found := s.Sessions.SessionGet(r); found {
+	if sess, err := s.Sessions.Get(r); err == nil {
 		if username, ok := sess.Get(ctx, session.KeyUserName).(string); ok {
 			reqCtx.UserName = username
 		}

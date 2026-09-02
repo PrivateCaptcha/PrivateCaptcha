@@ -16,8 +16,9 @@ import (
 )
 
 var (
-	errInvalidEmail       = errors.New("email is not valid")
-	errInvalidEmailDomain = errors.New("email domain is unlikely valid")
+	errInvalidEmail           = errors.New("email is not valid")
+	errInvalidEmailDomain     = errors.New("email domain is unlikely valid")
+	errTwoFactorEmailDelivery = errors.New("failed to deliver two-factor email")
 )
 
 type PortalEmailVerifier struct{}
@@ -125,7 +126,7 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 
 		clog.Log(ctx, level, "Failed to send two factor code", "code", data.Code, common.ErrAttr(err))
 
-		return err
+		return errTwoFactorEmailDelivery
 	}
 
 	clog.InfoContext(ctx, "Sent two factor code")

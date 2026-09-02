@@ -3,13 +3,15 @@ package session
 import (
 	"context"
 	"crypto/rand"
-	"log/slog"
+	"errors"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
+
+const sessionExpirationRenewalWindow = 2*time.Hour + 30*time.Minute
 
 type Manager struct {
 	CookieName   string
@@ -28,6 +30,7 @@ func (m *Manager) setSessionCookie(w http.ResponseWriter, r *http.Request, sid s
 		Name:     m.CookieName,
 		Value:    url.QueryEscape(sid),
 		Path:     m.Path,
+		Expires:  time.Now().Add(m.MaxLifetime),
 		HttpOnly: true,
 		Secure:   m.SecureCookie || (r.TLS != nil) || (r.Header.Get("X-Forwarded-Proto") == "https"),
 		SameSite: http.SameSiteLaxMode,
@@ -37,17 +40,191 @@ func (m *Manager) setSessionCookie(w http.ResponseWriter, r *http.Request, sid s
 	w.Header().Add("Cache-Control", `no-cache="Set-Cookie"`)
 }
 
-func (m *Manager) newSession(w http.ResponseWriter, r *http.Request) *Session {
-	ctx := r.Context()
-	sid := m.sessionID()
-	sslog := slog.With(common.SessionIDAttr(sid))
-	session := NewSession(NewSessionData(sid), m.Store)
-	sslog.DebugContext(ctx, "Registering new session", "path", r.URL.Path, "method", r.Method)
-	if err := m.Store.Init(ctx, session); err != nil {
-		sslog.ErrorContext(ctx, "Failed to register session", common.ErrAttr(err))
+func (m *Manager) requestSessionID(r *http.Request) (string, error) {
+	cookie, err := r.Cookie(m.CookieName)
+	if err != nil || cookie.Value == "" {
+		return "", ErrSessionMissing
 	}
+	sid, err := url.QueryUnescape(cookie.Value)
+	if err != nil || sid == "" {
+		return "", ErrSessionMissing
+	}
+	return sid, nil
+}
+
+// Get resolves the presented SID through the dedicated session cache.
+func (m *Manager) Get(r *http.Request) (*Session, error) {
+	sid, err := m.requestSessionID(r)
+	if err != nil {
+		return nil, err
+	}
+	return m.Store.Resolve(r.Context(), sid)
+}
+
+// Start returns the presented session or creates a process-local anonymous one.
+func (m *Manager) Start(w http.ResponseWriter, r *http.Request) (*Session, error) {
+	sess, err := m.Get(r)
+	if err == nil {
+		return sess, nil
+	}
+	if !errors.Is(err, ErrSessionMissing) {
+		return nil, err
+	}
+
+	sid := m.sessionID()
+	sess = m.Store.StartAnonymousSession(sid)
 	m.setSessionCookie(w, r, sid, int(m.MaxLifetime.Seconds()))
-	return session
+	return sess, nil
+}
+
+func (m *Manager) IssueSignInChallenge(w http.ResponseWriter, r *http.Request, sess *Session, userID int32, code string, challengeTTL time.Duration, maxAttempts int32) (*ChallengeResult, error) {
+	payload, err := sess.Payload().Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	result, err := m.Store.IssueSignInChallenge(sessionContext(r.Context(), sess), SignInChallengeIssue{
+		SessionID:     sess.ID(),
+		UserID:        userID,
+		ChallengeCode: code,
+		Payload:       payload,
+		SessionTTL:    m.MaxLifetime,
+		ChallengeTTL:  challengeTTL,
+		MaxAttempts:   maxAttempts,
+	})
+	if err == nil && result != nil && result.Outcome == TransitionSucceeded && result.Session != nil {
+		m.setSessionCookie(w, r, result.Session.ID(), int(m.MaxLifetime.Seconds()))
+	}
+	return result, err
+}
+
+func (m *Manager) IssueRegistrationChallenge(w http.ResponseWriter, r *http.Request, sess *Session, email, code string, requiresVerification bool, challengeTTL time.Duration, maxAttempts int32) (*ChallengeResult, error) {
+	payload, err := sess.Payload().Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	inviteID, _ := sess.Payload().Get(KeyOrgInviteID).(int32)
+	result, err := m.Store.IssueRegistrationChallenge(sessionContext(r.Context(), sess), RegistrationChallengeIssue{
+		SessionID:            sess.ID(),
+		ChallengeEmail:       email,
+		ChallengeCode:        code,
+		Payload:              payload,
+		RequiresVerification: requiresVerification,
+		InviteID:             inviteID,
+		SessionTTL:           m.MaxLifetime,
+		ChallengeTTL:         challengeTTL,
+		MaxAttempts:          maxAttempts,
+	})
+	if err == nil && result != nil && result.Outcome == TransitionSucceeded && result.Session != nil {
+		m.setSessionCookie(w, r, result.Session.ID(), int(m.MaxLifetime.Seconds()))
+	}
+	return result, err
+}
+
+func (m *Manager) ResendPendingChallenge(ctx context.Context, sess *Session, code string, challengeTTL time.Duration, maxAttempts int32) (*ChallengeResult, error) {
+	return m.Store.ResendPendingChallenge(sessionContext(ctx, sess), PendingChallengeResend{
+		SessionID:     sess.ID(),
+		ChallengeCode: code,
+		ChallengeTTL:  challengeTTL,
+		MaxAttempts:   maxAttempts,
+	})
+}
+
+func (m *Manager) ConsumeSignInChallenge(w http.ResponseWriter, r *http.Request, sess *Session, code string, maxAttempts int32) (*ChallengeResult, error) {
+	payload, err := sess.Payload().Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	result, err := m.Store.ConsumeSignInChallenge(sessionContext(r.Context(), sess), SignInChallengeConsume{
+		SessionID:          sess.ID(),
+		SuccessorSessionID: m.sessionID(),
+		ChallengeCode:      code,
+		SuccessorPayload:   payload,
+		SuccessorTTL:       m.MaxLifetime,
+		MaxAttempts:        maxAttempts,
+	})
+	if err == nil && result != nil && result.Outcome == TransitionSucceeded && result.Session != nil {
+		m.setSessionCookie(w, r, result.Session.ID(), int(m.MaxLifetime.Seconds()))
+	}
+	return result, err
+}
+
+func (m *Manager) ConsumeRegistrationChallenge(ctx context.Context, sess *Session, code string, maxAttempts int32) (*RegistrationConsumeResult, error) {
+	return m.Store.ConsumeRegistrationChallenge(sessionContext(ctx, sess), RegistrationChallengeConsume{
+		SessionID:     sess.ID(),
+		ChallengeCode: code,
+		MaxAttempts:   maxAttempts,
+	})
+}
+
+func (m *Manager) CreateRegistrationSuccessor(w http.ResponseWriter, r *http.Request, predecessor *Session, userID int32) (*ChallengeResult, error) {
+	payload, err := predecessor.Payload().Snapshot()
+	if err != nil {
+		return nil, err
+	}
+	result, err := m.Store.CreateRegistrationSuccessor(sessionContext(r.Context(), predecessor), RegistrationSuccessorCreate{
+		SessionID: m.sessionID(),
+		UserID:    userID,
+		Payload:   payload,
+		TTL:       m.MaxLifetime,
+	})
+	if err == nil && result != nil && result.Outcome == TransitionSucceeded && result.Session != nil {
+		m.setSessionCookie(w, r, result.Session.ID(), int(m.MaxLifetime.Seconds()))
+	}
+	return result, err
+}
+
+func (m *Manager) IssueEmailChangeChallenge(ctx context.Context, sess *Session, code string, challengeTTL time.Duration) (*ChallengeResult, error) {
+	return m.Store.IssueEmailChangeChallenge(sessionContext(ctx, sess), EmailChangeChallengeIssue{
+		SessionID:     sess.ID(),
+		ChallengeCode: code,
+		ChallengeTTL:  challengeTTL,
+	})
+}
+
+func (m *Manager) ConsumeEmailChangeChallenge(ctx context.Context, sess *Session, code string, maxAttempts int32) (*ChallengeResult, error) {
+	return m.Store.ConsumeEmailChangeChallenge(sessionContext(ctx, sess), EmailChangeChallengeConsume{
+		SessionID:     sess.ID(),
+		ChallengeCode: code,
+		MaxAttempts:   maxAttempts,
+	})
+}
+
+func (m *Manager) Revoke(w http.ResponseWriter, r *http.Request) (*RevocationResult, error) {
+	sid, err := m.requestSessionID(r)
+	if errors.Is(err, ErrSessionMissing) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	hash := common.HashSessionID(sid)
+	ctx := context.WithValue(r.Context(), common.SessionHashContextKey, hash)
+	result, err := m.Store.RevokeSession(ctx, sid)
+	if err != nil {
+		return nil, err
+	}
+	if result != nil {
+		result.SessionHash = hash
+	}
+	m.ClearCookie(w, r)
+	return result, nil
+}
+
+func (m *Manager) RevokeUserSessions(ctx context.Context, userID int32) error {
+	return m.Store.RevokeUserSessions(ctx, userID)
+}
+
+func (m *Manager) ClearCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     m.CookieName,
+		Path:     m.Path,
+		Expires:  time.Unix(1, 0),
+		HttpOnly: true,
+		Secure:   m.SecureCookie || r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+	})
+	w.Header().Add("Cache-Control", `no-cache="Set-Cookie"`)
 }
 
 func (m *Manager) Init(svc string, path string, interval time.Duration) {
@@ -55,102 +232,21 @@ func (m *Manager) Init(svc string, path string, interval time.Duration) {
 	m.Store.Start(context.WithValue(context.Background(), common.ServiceContextKey, svc), interval)
 }
 
-func (m *Manager) SessionGet(r *http.Request) (*Session, bool) {
-	cookie, err := r.Cookie(m.CookieName)
-	if err != nil || cookie.Value == "" {
-		return nil, false
-	}
-
-	sid, _ := url.QueryUnescape(cookie.Value)
-	sslog := slog.With(common.SessionIDAttr(sid))
-
-	ctx := r.Context()
-	sslog.Log(ctx, common.LevelTrace, "Session cookie found in the request for start", "path", r.URL.Path, "method", r.Method)
-	session, err := m.Store.Read(ctx, sid, false /*skip cache*/)
-	if err != nil {
-		level := slog.LevelWarn
-		if err != ErrSessionMissing {
-			level = slog.LevelError
-		}
-		sslog.Log(ctx, level, "Failed to read session from store", common.ErrAttr(err))
-
-		return nil, false
-	}
-
-	return session, true
-}
-
-func (m *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session *Session) {
-	cookie, err := r.Cookie(m.CookieName)
-	ctx := r.Context()
-	if err != nil || cookie.Value == "" {
-		slog.Log(ctx, common.LevelTrace, "Session cookie not found in the request for start", "path", r.URL.Path, "method", r.Method)
-		session = m.newSession(w, r)
-	} else {
-		sid, _ := url.QueryUnescape(cookie.Value)
-		sslog := slog.With(common.SessionIDAttr(sid))
-		sslog.Log(ctx, common.LevelTrace, "Session cookie found in the request for start", "path", r.URL.Path, "method", r.Method)
-		session, err = m.Store.Read(ctx, sid, false /*skip cache*/)
-		if err != nil {
-			level := slog.LevelWarn
-			if err != ErrSessionMissing {
-				level = slog.LevelError
-			}
-			sslog.Log(ctx, level, "Failed to read session from store", common.ErrAttr(err))
-			session = m.newSession(w, r)
-		}
-	}
-	return
-}
-
-func (m *Manager) SessionRenew(w http.ResponseWriter, r *http.Request, sess *Session) *Session {
-	ctx := r.Context()
-	sid := m.sessionID()
-	sslog := slog.With(common.SessionIDAttr(sid))
-	renewed := NewSession(NewSessionData(sid), m.Store)
-	renewed.Merge(sess)
-
-	sslog.DebugContext(ctx, "Renewing session", "oldSessionID", sess.ID(), "path", r.URL.Path, "method", r.Method)
-	if err := m.Store.Renew(ctx, sess.ID(), renewed); err != nil {
-		sslog.ErrorContext(ctx, "Failed to register renewed session, continuing with current session", common.ErrAttr(err))
-		m.Store.RollbackRenew(ctx, sess.ID())
-		return sess
-	}
-	m.setSessionCookie(w, r, sid, int(m.MaxLifetime.Seconds()))
-	return renewed
-}
-
-func (m *Manager) RecoverSession(ctx context.Context, sess *Session) {
-	if dbSess, err := m.Store.Read(ctx, sess.ID(), true /*skip cache*/); err == nil {
-		sess.Refresh(dbSess)
-	}
-}
-
-func (m *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(m.CookieName)
-	if err != nil || cookie.Value == "" {
-		slog.Log(r.Context(), common.LevelTrace, "Session cookie not found in the request for destroy", "path", r.URL.Path, "method", r.Method)
+// ScheduleExpirationRenewal refreshes the cookie and queues persistence without request-time I/O.
+func (m *Manager) ScheduleExpirationRenewal(w http.ResponseWriter, r *http.Request, sess *Session) {
+	authority, ok := sess.Authority()
+	if !ok || !shouldScheduleExpirationRenewal(authority, time.Now()) {
 		return
-	} else {
-		ctx := r.Context()
-		slog.Log(ctx, common.LevelTrace, "Session cookie found in the request for destroy", common.SessionIDAttr(cookie.Value), "path", r.URL.Path, "method", r.Method)
-
-		// NOTE: we can possibly do it in the background, but it's a rare action (only on logout) so it's not worth the complexity
-		if err := m.Store.Destroy(ctx, cookie.Value); err != nil {
-			slog.ErrorContext(ctx, "Failed to delete session from storage", common.ErrAttr(err))
-		}
-
-		expiration := time.Now()
-		cookie := http.Cookie{
-			Name:     m.CookieName,
-			Path:     m.Path,
-			HttpOnly: true,
-			Expires:  expiration,
-			Secure:   m.SecureCookie || (r.TLS != nil) || (r.Header.Get("X-Forwarded-Proto") == "https"),
-			SameSite: http.SameSiteLaxMode,
-			MaxAge:   -1,
-		}
-		http.SetCookie(w, &cookie)
-		w.Header().Add("Cache-Control", `no-cache="Set-Cookie"`)
 	}
+
+	m.Store.EnqueueExpirationRenewal(r.Context(), sess.ID())
+	m.setSessionCookie(w, r, sess.ID(), int(m.MaxLifetime.Seconds()))
+}
+
+func shouldScheduleExpirationRenewal(authority Authority, now time.Time) bool {
+	return authority.State == StateAuthenticated && now.Before(authority.ExpiresAt) && !authority.ExpiresAt.After(now.Add(sessionExpirationRenewalWindow))
+}
+
+func sessionContext(ctx context.Context, sess *Session) context.Context {
+	return context.WithValue(ctx, common.SessionHashContextKey, sess.Hash())
 }

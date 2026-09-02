@@ -74,33 +74,6 @@ type LoginUserJob struct {
 	Store db.Implementor
 }
 
-func (j *LoginUserJob) Name() string {
-	return "LoginUser"
-}
-func (j *LoginUserJob) InitialPause() time.Duration {
-	return 0
-}
-func (j *LoginUserJob) NewParams() any {
-	return struct{}{}
-}
-func (j *LoginUserJob) RunOnce(ctx context.Context, params any) error {
-	userID, hasUserID := j.Sess.Get(ctx, session.KeyUserID).(int32)
-	if hasUserID {
-		j.Store.AuditLog().RecordEvent(ctx, newUserAuthAuditLogEvent(userID, common.AuditLogActionLogin), common.AuditLogSourcePortal)
-
-		slog.DebugContext(ctx, "Fetching system notification for user", "userID", userID)
-		if n, err := j.Store.Impl().RetrieveSystemUserNotification(ctx, time.Now().UTC(), userID); err == nil {
-			if serr := j.Sess.Set(ctx, session.KeyNotificationID, n.ID); serr != nil {
-				slog.WarnContext(ctx, "Failed to set session value", common.ErrAttr(serr))
-			}
-		}
-	} else {
-		slog.ErrorContext(ctx, "UserID not found in session")
-	}
-
-	return nil
-}
-
 type registrationCheckJob struct {
 	Sess *session.Session
 }
@@ -125,10 +98,37 @@ func (j *registrationCheckJob) RunOnce(ctx context.Context, params any) error {
 	}
 
 	if email == spammerEmail {
-		slog.WarnContext(ctx, "Requiring verification for registration", "reason", "email", common.SessionIDAttr(j.Sess.ID()))
-		if serr := j.Sess.Set(ctx, session.KeyVerifyRegistration, true); serr != nil {
-			slog.WarnContext(ctx, "Failed to set session value", common.ErrAttr(serr))
+		slog.WarnContext(ctx, "Requiring verification for registration", "reason", "email", common.SessionHashAttr(j.Sess.Hash()))
+		if err := j.Sess.Set(ctx, session.KeyVerifyRegistration, true); err != nil {
+			slog.WarnContext(ctx, "Failed to set session value", common.ErrAttr(err))
 		}
+	}
+
+	return nil
+}
+
+func (j *LoginUserJob) Name() string {
+	return "LoginUser"
+}
+func (j *LoginUserJob) InitialPause() time.Duration {
+	return 0
+}
+func (j *LoginUserJob) NewParams() any {
+	return struct{}{}
+}
+func (j *LoginUserJob) RunOnce(ctx context.Context, params any) error {
+	authority, ok := j.Sess.Authority()
+	if ok && authority.State == session.StateAuthenticated && authority.UserID > 0 {
+		j.Store.AuditLog().RecordEvent(ctx, newUserAuthAuditLogEvent(authority.UserID, common.AuditLogActionLogin), common.AuditLogSourcePortal)
+
+		slog.DebugContext(ctx, "Fetching system notification for user", "userID", authority.UserID)
+		if n, err := j.Store.Impl().RetrieveSystemUserNotification(ctx, time.Now().UTC(), authority.UserID); err == nil {
+			if serr := j.Sess.Set(ctx, session.KeyNotificationID, n.ID); serr != nil {
+				slog.WarnContext(ctx, "Failed to set session value", common.ErrAttr(serr))
+			}
+		}
+	} else {
+		slog.ErrorContext(ctx, "Authenticated Authority not found in session")
 	}
 
 	return nil

@@ -21,8 +21,8 @@ func (h *contextHandler) Handle(ctx context.Context, r slog.Record) error {
 			r.AddAttrs(TraceIDAttr(tid))
 		}
 
-		if sid, ok := ctx.Value(SessionIDContextKey).(string); ok && (len(sid) > 0) {
-			r.AddAttrs(SessionIDAttr(sid))
+		if hash, ok := ctx.Value(SessionHashContextKey).(SessionHash); ok && !hash.IsZero() {
+			r.AddAttrs(SessionHashAttr(hash))
 		}
 
 		if svc, ok := ctx.Value(ServiceContextKey).(string); ok && (len(svc) > 0) {
@@ -112,10 +112,10 @@ func TraceIDAttr(tid string) slog.Attr {
 	}
 }
 
-func SessionIDAttr(sid string) slog.Attr {
+func SessionHashAttr(hash SessionHash) slog.Attr {
 	return slog.Attr{
-		Key:   "sessID",
-		Value: slog.StringValue(sid),
+		Key:   "sessHash",
+		Value: slog.StringValue(hash.String()),
 	}
 }
 

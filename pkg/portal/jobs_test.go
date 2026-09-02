@@ -1,12 +1,33 @@
 package portal
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
+
+func TestCheckRegistrationJob(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/register", nil)
+	sess, err := server.Sessions.Start(httptest.NewRecorder(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sess.Set(t.Context(), session.KeyUserEmail, spammerEmail); err != nil {
+		t.Fatal(err)
+	}
+	job := server.CheckRegistration(sess, req)
+	if err := job.RunOnce(t.Context(), job.NewParams()); err != nil {
+		t.Fatal(err)
+	}
+	if required, ok := sess.Get(t.Context(), session.KeyVerifyRegistration).(bool); !ok || !required {
+		t.Fatal("hardcoded email did not require registration verification")
+	}
+}
 
 func TestCleanupAuditLogJob(t *testing.T) {
 	if testing.Short() {
