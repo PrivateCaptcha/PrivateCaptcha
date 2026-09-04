@@ -147,7 +147,7 @@ const (
                 <th scope="col" style="padding:10px 12px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:right;border-radius:0 2px 0 0">Verifications</th>
               </tr>
               {{- range $i, $event := .SecurityEvents}}
-              <tr{{if .Alternate}} style="background-color:#f5f7f0"{{end}}>
+              <tr{{if .Alternate}} style="background-color:#f9faf5"{{end}}>
                 <td style="padding:10px 12px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:13px;text-align:left;{{if eq $i (sub (len $.SecurityEvents) 1)}}border-radius:0 0 0 2px{{end}}" title="{{.Name}}">
                   {{if .Link}}
                   <a href="{{.Link}}" style="color:#000000;text-decoration:none">
@@ -175,7 +175,7 @@ const (
                 <td style="padding:12px 16px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:right;border-radius:0 2px 0 0">Change</td>
               </tr>
               {{- range $i, $property := .TopProperties}}
-              <tr{{if .Alternate}} style="background-color:#f5f7f0"{{end}}>
+              <tr{{if .Alternate}} style="background-color:#f9faf5"{{end}}>
                 <td style="padding:12px 16px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:left;{{if eq $i (sub (len $.TopProperties) 1)}}border-radius:0 0 0 2px{{end}}" title="{{.Name}}">
                   {{if .Link}}
                   <a href="{{.Link}}" style="color:#000000;text-decoration:none">
@@ -204,7 +204,7 @@ const (
                 <td style="padding:12px 16px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:right;border-radius:0 2px 0 0">Change</td>
               </tr>
               {{- range $i, $form := .TopForms}}
-              <tr{{if .Alternate}} style="background-color:#f5f7f0"{{end}}>
+              <tr{{if .Alternate}} style="background-color:#f9faf5"{{end}}>
                 <td style="padding:12px 16px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:left;{{if eq $i (sub (len $.TopForms) 1)}}border-radius:0 0 0 2px{{end}}" title="{{.Name}}">
                   {{if .Link}}
                   <a href="{{.Link}}" style="color:#000000;text-decoration:none">
