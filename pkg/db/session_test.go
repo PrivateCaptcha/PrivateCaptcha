@@ -2,12 +2,15 @@ package db
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
+	"github.com/jackc/pgx/v5"
 )
 
 type sessionMetricsStub struct{}
@@ -15,27 +18,89 @@ type sessionMetricsStub struct{}
 func (s *sessionMetricsStub) ObserveEventDropped(eventType common.MetricEventType) {}
 func (s *sessionMetricsStub) ObservePanic()                                        {}
 
-type countingSessionQuerier struct {
+type memorySessionQuerier struct {
 	*QuerierStub
-	createCacheManyCalls    int
-	deleteCachedByKeysCalls int
-	deletedKeys             []string
+	mu               sync.RWMutex
+	values           map[string][]byte
+	createCacheError error
+	createManyError  error
 }
 
-func (q *countingSessionQuerier) CreateCacheMany(ctx context.Context, arg *dbgen.CreateCacheManyParams) (int64, error) {
-	q.createCacheManyCalls++
-	return 0, nil
+func newMemorySessionQuerier() *memorySessionQuerier {
+	return &memorySessionQuerier{
+		QuerierStub: &QuerierStub{},
+		values:      make(map[string][]byte),
+	}
 }
 
-func (q *countingSessionQuerier) DeleteCachedByKeys(ctx context.Context, keys []string) (int64, error) {
-	q.deleteCachedByKeysCalls++
-	q.deletedKeys = append(q.deletedKeys, keys...)
-	return 0, nil
+func (q *memorySessionQuerier) CreateCache(ctx context.Context, arg *dbgen.CreateCacheParams) (int64, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.createCacheError != nil {
+		return 0, q.createCacheError
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	q.values[arg.Key] = append([]byte(nil), arg.Value...)
+	return 1, nil
 }
 
-func TestSessionStoreRenewDoesNotCallDBInline(t *testing.T) {
-	ctx := context.Background()
-	querier := &countingSessionQuerier{QuerierStub: &QuerierStub{}}
+func (q *memorySessionQuerier) CreateCacheMany(ctx context.Context, arg *dbgen.CreateCacheManyParams) (int64, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.createManyError != nil {
+		err := q.createManyError
+		q.createManyError = nil
+		return 0, err
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	for i, key := range arg.Keys {
+		q.values[key] = append([]byte(nil), arg.Values[i]...)
+	}
+	return int64(len(arg.Keys)), nil
+}
+
+func (q *memorySessionQuerier) failNextCreateCacheMany(err error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.createManyError = err
+}
+
+func (q *memorySessionQuerier) GetCachedByKey(ctx context.Context, key string) ([]byte, error) {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	value, ok := q.values[key]
+	if !ok {
+		return nil, pgx.ErrNoRows
+	}
+	return append([]byte(nil), value...), nil
+}
+
+func (q *memorySessionQuerier) DeleteCachedByKeys(ctx context.Context, keys []string) (int64, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	var affected int64
+	for _, key := range keys {
+		if _, ok := q.values[key]; ok {
+			delete(q.values, key)
+			affected++
+		}
+	}
+	return affected, nil
+}
+
+func TestSessionStoreRenewPersistsQuickly(t *testing.T) {
+	ctx := t.Context()
+	querier := newMemorySessionQuerier()
 	cache := NewStaticCache[CacheKey, any](1000, &CacheMissingValue{})
 	business := NewBusinessWithQuerier(nil, querier, cache)
 	store := NewSessionStore(business, session.KeyPersistent, &sessionMetricsStub{})
@@ -44,78 +109,183 @@ func TestSessionStoreRenewDoesNotCallDBInline(t *testing.T) {
 	if err := store.Init(ctx, oldSess); err != nil {
 		t.Fatal(err)
 	}
+	if err := oldSess.Set(ctx, session.KeyPersistent, true); err != nil {
+		t.Fatal(err)
+	}
+	<-store.persistDelayChan
+	if err := business.Impl().StoreUserSessions(ctx, map[string]uint{oldSess.ID(): 1}, session.KeyPersistent, sessionCacheTTL); err != nil {
+		t.Fatal(err)
+	}
 
 	newSess := session.NewSession(session.NewSessionData("new-sid"), store)
 	if err := newSess.Set(ctx, session.KeyPersistent, true); err != nil {
 		t.Fatal(err)
 	}
 	select {
-	case <-store.persistChan:
+	case <-store.persistDelayChan:
 	case <-time.After(time.Second):
 		t.Fatal("setup session was not queued for persistence")
 	}
+	store.Start(ctx, time.Hour)
+	t.Cleanup(store.Stop)
+	querier.failNextCreateCacheMany(errors.New("transient write failure"))
 
 	if err := store.Renew(ctx, oldSess.ID(), newSess); err != nil {
 		t.Fatal(err)
 	}
 
-	if querier.createCacheManyCalls != 0 {
-		t.Fatalf("Renew called CreateCacheMany inline %d time(s)", querier.createCacheManyCalls)
-	}
-	if querier.deleteCachedByKeysCalls != 0 {
-		t.Fatalf("Renew called DeleteCachedByKeys inline %d time(s)", querier.deleteCachedByKeysCalls)
-	}
-
 	if _, err := store.Read(ctx, newSess.ID(), false); err != nil {
 		t.Fatalf("renewed session was not cached locally: %v", err)
 	}
-	oldData, err := cache.Get(ctx, SessionCacheKey(oldSess.ID()))
-	if err != nil {
-		t.Fatalf("old session tombstone was not cached locally: %v", err)
-	}
-	oldSessionData, ok := oldData.(*session.SessionData)
-	if !ok || !oldSessionData.Has(session.KeyTombstone) {
-		t.Fatalf("old session was not tombstoned locally: %v", oldData)
+	if _, err := store.Read(ctx, oldSess.ID(), false); !errors.Is(err, session.ErrSessionMissing) {
+		t.Fatalf("old session remained available locally: %v", err)
 	}
 
-	queued := make(map[string]bool)
-	select {
-	case sid := <-store.persistChan:
-		queued[sid] = true
-	case <-time.After(time.Second):
-		t.Fatal("first renewed session persistence event was not queued")
+	deadline := time.Now().Add(time.Second)
+	remoteCache := NewStaticCache[CacheKey, any](1000, &CacheMissingValue{})
+	remoteStore := NewSessionStore(NewBusinessWithQuerier(nil, querier, remoteCache), session.KeyPersistent, &sessionMetricsStub{})
+	var remoteSession *session.Session
+	var err error
+	for {
+		remoteSession, err = remoteStore.Read(ctx, newSess.ID(), true /*skip cache*/)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, session.ErrSessionMissing) {
+			t.Fatalf("failed to read renewed session from another store: %v", err)
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("renewed session was not persisted within the low-latency batch window")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
-
-	select {
-	case sid := <-store.persistChan:
-		queued[sid] = true
-	case <-time.After(time.Second):
-		t.Fatal("second renewed session persistence event was not queued")
+	if !remoteSession.Data().Has(session.KeyPersistent) {
+		t.Fatal("renewed session lost persistent state")
 	}
-	if !queued[newSess.ID()] || !queued[oldSess.ID()] {
-		t.Fatalf("queued SIDs = %v, want old and new", queued)
+	if _, err := remoteStore.Read(ctx, oldSess.ID(), false); err != nil {
+		t.Fatalf("old session was deleted before tombstone persistence: %v", err)
 	}
 
 	if err := store.persistSessions(ctx, map[string]uint{oldSess.ID(): 1, newSess.ID(): 1}); err != nil {
 		t.Fatal(err)
 	}
-	if querier.createCacheManyCalls != 1 {
-		t.Fatalf("persistSessions called CreateCacheMany %d time(s)", querier.createCacheManyCalls)
+	freshCache := NewStaticCache[CacheKey, any](1000, &CacheMissingValue{})
+	freshStore := NewSessionStore(NewBusinessWithQuerier(nil, querier, freshCache), session.KeyPersistent, &sessionMetricsStub{})
+	if _, err := freshStore.Read(ctx, oldSess.ID(), false); !errors.Is(err, session.ErrSessionMissing) {
+		t.Fatalf("old session remained persisted after tombstone processing: %v", err)
 	}
-	if querier.deleteCachedByKeysCalls != 1 {
-		t.Fatalf("persistSessions called DeleteCachedByKeys %d time(s)", querier.deleteCachedByKeysCalls)
+}
+
+func TestSessionStoreRenewReturnsImmediateBackpressure(t *testing.T) {
+	ctx := t.Context()
+	querier := newMemorySessionQuerier()
+	cache := NewStaticCache[CacheKey, any](1000, &CacheMissingValue{})
+	store := NewSessionStore(NewBusinessWithQuerier(nil, querier, cache), session.KeyPersistent, &sessionMetricsStub{})
+
+	oldSess := session.NewSession(session.NewSessionData("old-sid-backpressure"), store)
+	if err := store.Init(ctx, oldSess); err != nil {
+		t.Fatal(err)
 	}
-	if len(querier.deletedKeys) != 1 || querier.deletedKeys[0] != SessionCacheKey(oldSess.ID()).String() {
-		t.Fatalf("deleted keys = %v", querier.deletedKeys)
+	newSess := session.NewSession(session.NewSessionData("new-sid-backpressure"), store)
+	if err := newSess.Set(ctx, session.KeyPersistent, true); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := cache.Get(ctx, SessionCacheKey(oldSess.ID())); err != ErrCacheMiss {
-		t.Fatalf("old session tombstone was not removed locally: %v", err)
+	<-store.persistDelayChan
+	for range cap(store.persistNowChan) {
+		store.persistNowChan <- "queued-sid"
+	}
+
+	if err := store.Renew(ctx, oldSess.ID(), newSess); !errors.Is(err, common.ErrBackpressure) {
+		t.Fatalf("Renew error = %v, want %v", err, common.ErrBackpressure)
+	}
+	if _, err := store.Read(ctx, oldSess.ID(), false); err != nil {
+		t.Fatalf("old session was tombstoned after immediate queue failure: %v", err)
+	}
+}
+
+func TestSessionStoreRenewDoesNotWaitForPersistence(t *testing.T) {
+	ctx := t.Context()
+	querier := newMemorySessionQuerier()
+	cache := NewStaticCache[CacheKey, any](1000, &CacheMissingValue{})
+	business := NewBusinessWithQuerier(nil, querier, cache)
+	store := NewSessionStore(business, session.KeyPersistent, &sessionMetricsStub{})
+
+	oldSess := session.NewSession(session.NewSessionData("old-sid"), store)
+	if err := store.Init(ctx, oldSess); err != nil {
+		t.Fatal(err)
+	}
+	if err := oldSess.Set(ctx, session.KeyPersistent, true); err != nil {
+		t.Fatal(err)
+	}
+	<-store.persistDelayChan
+	if err := business.Impl().StoreUserSessions(ctx, map[string]uint{oldSess.ID(): 1}, session.KeyPersistent, sessionCacheTTL); err != nil {
+		t.Fatal(err)
+	}
+
+	newSess := session.NewSession(session.NewSessionData("new-sid"), store)
+	if err := newSess.Set(ctx, session.KeyPersistent, true); err != nil {
+		t.Fatal(err)
+	}
+	<-store.persistDelayChan
+
+	persistErr := errors.New("write session")
+	querier.createCacheError = persistErr
+	if err := store.Renew(ctx, oldSess.ID(), newSess); err != nil {
+		t.Fatalf("Renew waited for persistence: %v", err)
+	}
+
+	remoteCache := NewStaticCache[CacheKey, any](1000, &CacheMissingValue{})
+	remoteStore := NewSessionStore(NewBusinessWithQuerier(nil, querier, remoteCache), session.KeyPersistent, &sessionMetricsStub{})
+	if _, err := remoteStore.Read(ctx, oldSess.ID(), false); err != nil {
+		t.Fatalf("old session was unavailable after failed renewal: %v", err)
+	}
+	if _, err := remoteStore.Read(ctx, newSess.ID(), false); !errors.Is(err, session.ErrSessionMissing) {
+		t.Fatalf("renewed session was persisted synchronously: %v", err)
+	}
+}
+
+func TestSessionStoreRenewKeepsNonPersistentSessionsAsynchronous(t *testing.T) {
+	ctx := t.Context()
+	querier := newMemorySessionQuerier()
+	cache := NewStaticCache[CacheKey, any](1000, &CacheMissingValue{})
+	business := NewBusinessWithQuerier(nil, querier, cache)
+	store := NewSessionStore(business, session.KeyPersistent, &sessionMetricsStub{})
+	oldSess := session.NewSession(session.NewSessionData("old-sid"), store)
+	if err := store.Init(ctx, oldSess); err != nil {
+		t.Fatal(err)
+	}
+	oldData, err := oldSess.Data().MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := business.Impl().StoreInCache(ctx, SessionCacheKey(oldSess.ID()).String(), oldData, sessionCacheTTL); err != nil {
+		t.Fatal(err)
+	}
+	newSess := session.NewSession(session.NewSessionData("new-sid"), store)
+
+	if err := store.Renew(ctx, oldSess.ID(), newSess); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Read(ctx, newSess.ID(), false); err != nil {
+		t.Fatalf("renewed session was not available locally: %v", err)
+	}
+	if _, err := store.Read(ctx, oldSess.ID(), false); !errors.Is(err, session.ErrSessionMissing) {
+		t.Fatalf("old session remained available locally: %v", err)
+	}
+
+	remoteCache := NewStaticCache[CacheKey, any](1000, &CacheMissingValue{})
+	remoteStore := NewSessionStore(NewBusinessWithQuerier(nil, querier, remoteCache), session.KeyPersistent, &sessionMetricsStub{})
+	if _, err := remoteStore.Read(ctx, newSess.ID(), false); !errors.Is(err, session.ErrSessionMissing) {
+		t.Fatalf("non-persistent session was stored synchronously: %v", err)
+	}
+	if _, err := remoteStore.Read(ctx, oldSess.ID(), false); err != nil {
+		t.Fatalf("old non-persistent session was deleted synchronously: %v", err)
 	}
 }
 
 func TestStoreUserSessionsDoesNotDeleteTombstones(t *testing.T) {
-	ctx := context.Background()
-	querier := &countingSessionQuerier{QuerierStub: &QuerierStub{}}
+	ctx := t.Context()
+	querier := newMemorySessionQuerier()
 	cache := NewStaticCache[CacheKey, any](1000, &CacheMissingValue{})
 	impl := NewBusinessWithQuerier(nil, querier, cache).Impl()
 
@@ -127,11 +297,8 @@ func TestStoreUserSessionsDoesNotDeleteTombstones(t *testing.T) {
 	if err := impl.StoreUserSessions(ctx, map[string]uint{oldSID: 1}, session.KeyPersistent, sessionCacheTTL); err != nil {
 		t.Fatal(err)
 	}
-	if querier.deleteCachedByKeysCalls != 0 {
-		t.Fatalf("StoreUserSessions deleted tombstone sessions %d time(s)", querier.deleteCachedByKeysCalls)
-	}
-	if querier.createCacheManyCalls != 0 {
-		t.Fatalf("StoreUserSessions persisted tombstone sessions %d time(s)", querier.createCacheManyCalls)
+	if _, err := impl.RetrieveFromCache(ctx, SessionCacheKey(oldSID).String()); !errors.Is(err, ErrCacheMiss) {
+		t.Fatalf("tombstone was persisted: %v", err)
 	}
 	if _, err := cache.Get(ctx, SessionCacheKey(oldSID)); err != nil {
 		t.Fatalf("StoreUserSessions removed tombstone from local cache: %v", err)
@@ -139,8 +306,8 @@ func TestStoreUserSessionsDoesNotDeleteTombstones(t *testing.T) {
 }
 
 func TestSessionStoreRenewTombstonesOldSessionOnAlreadyCancelledContext(t *testing.T) {
-	ctx := context.Background()
-	querier := &countingSessionQuerier{QuerierStub: &QuerierStub{}}
+	ctx := t.Context()
+	querier := newMemorySessionQuerier()
 	cache := NewStaticCache[CacheKey, any](1000, &CacheMissingValue{})
 	business := NewBusinessWithQuerier(nil, querier, cache)
 	store := NewSessionStore(business, session.KeyPersistent, &sessionMetricsStub{})

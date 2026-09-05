@@ -94,61 +94,61 @@ const (
             <p style="font-size:16px;line-height:26px;margin:16px 0">
               Here is your {{.Period}}{{if .PeriodDate}} ({{.PeriodDate}}){{end}} Private Captcha usage report:
             </p>
-            <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0 24px;border-collapse:collapse">
+            <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0 24px;border-collapse:separate;border-spacing:0">
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Total Requests</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalRequests | humanize}}</span></td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .RequestsChange 0.0}}color:#22883e{{else if lt .RequestsChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .RequestsChange 0.0}}+{{end}}{{printf "%.1f" .RequestsChange}}%</span></td>
+                <td style="padding:10px 20px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;color:#000000;text-align:left; font-weight:bold; background-color: #ecf1f7;border-radius:2px 0 0 0">Total Requests</td>
+                <td style="padding:10px 20px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalRequests | humanize}}</span></td>
+                <td style="padding:10px 20px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:13px;text-align:right;border-radius:0 2px 0 0;{{if gt .RequestsChange 0.0}}color:#437540{{else if lt .RequestsChange 0.0}}color:#c33030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .RequestsChange 0.0}}+{{end}}{{printf "%.1f" .RequestsChange}}%</span></td>
               </tr>
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Total Verifications</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalVerifies | humanize}}</span></td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .VerifiesChange 0.0}}color:#22883e{{else if lt .VerifiesChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .VerifiesChange 0.0}}+{{end}}{{printf "%.1f" .VerifiesChange}}%</span></td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;color:#000000;text-align:left; font-weight:bold; background-color: #ecf1f7">Total Verifications</td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalVerifies | humanize}}</span></td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:13px;text-align:right;{{if gt .VerifiesChange 0.0}}color:#437540{{else if lt .VerifiesChange 0.0}}color:#c33030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .VerifiesChange 0.0}}+{{end}}{{printf "%.1f" .VerifiesChange}}%</span></td>
               </tr>
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Verification Rate</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .VerificationRate}}%</span></td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .VerificationRateChange 0.0}}color:#22883e{{else if lt .VerificationRateChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .VerificationRateChange 0.0}}+{{end}}{{printf "%.1f" .VerificationRateChange}}%</span></td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;color:#000000;text-align:left; font-weight:bold; background-color: #ecf1f7;{{if not (and .AccountLimit (or (gt .TotalRequests .AccountLimit) (gt .TotalVerifies .AccountLimit)))}}border-radius:0 0 0 2px{{end}}">Verification Rate</td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .VerificationRate}}%</span></td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:13px;text-align:right;{{if gt .VerificationRateChange 0.0}}color:#437540{{else if lt .VerificationRateChange 0.0}}color:#c33030{{else}}color:#888888{{end}};{{if not (and .AccountLimit (or (gt .TotalRequests .AccountLimit) (gt .TotalVerifies .AccountLimit)))}}border-radius:0 0 2px 0{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .VerificationRateChange 0.0}}+{{end}}{{printf "%.1f" .VerificationRateChange}}%</span></td>
               </tr>
               {{- if .AccountLimit}}{{if or (gt .TotalRequests .AccountLimit) (gt .TotalVerifies .AccountLimit)}}
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#c53030;text-align:left">Account Limit</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;color:#c53030'>{{.AccountLimit | humanize}}</span></td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right"></td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;color:#c33030;text-align:left; font-weight:bold; background-color: #ecf1f7;border-radius:0 0 0 2px">Account Limit</td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;color:#c33030'>{{.AccountLimit | humanize}}</span></td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:13px;text-align:right;border-radius:0 0 2px 0"></td>
               </tr>
               {{- end}}{{end}}
              </table>
             {{- if or .TotalFormSubmissions .PrevFormSubmissions .TotalFormErrors .PrevFormErrors}}
-            <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0 24px;border-collapse:collapse">
+            <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0 24px;border-collapse:separate;border-spacing:0">
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Total Submissions</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalFormSubmissions | humanize}}</span></td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .FormSubmissionsChange 0.0}}color:#22883e{{else if lt .FormSubmissionsChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .FormSubmissionsChange 0.0}}+{{end}}{{printf "%.1f" .FormSubmissionsChange}}%</span></td>
+                <td style="padding:10px 20px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;color:#000000;text-align:left; font-weight:bold; background-color: #ecf1f7;border-radius:2px 0 0 0">Total Submissions</td>
+                <td style="padding:10px 20px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalFormSubmissions | humanize}}</span></td>
+                <td style="padding:10px 20px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:13px;text-align:right;border-radius:0 2px 0 0;{{if gt .FormSubmissionsChange 0.0}}color:#437540{{else if lt .FormSubmissionsChange 0.0}}color:#c33030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .FormSubmissionsChange 0.0}}+{{end}}{{printf "%.1f" .FormSubmissionsChange}}%</span></td>
               </tr>
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Total Errors</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalFormErrors | humanize}}</span></td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .FormErrorsChange 0.0}}color:#22883e{{else if lt .FormErrorsChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .FormErrorsChange 0.0}}+{{end}}{{printf "%.1f" .FormErrorsChange}}%</span></td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;color:#000000;text-align:left; font-weight:bold; background-color: #ecf1f7">Total Errors</td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalFormErrors | humanize}}</span></td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:13px;text-align:right;{{if gt .FormErrorsChange 0.0}}color:#437540{{else if lt .FormErrorsChange 0.0}}color:#c33030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .FormErrorsChange 0.0}}+{{end}}{{printf "%.1f" .FormErrorsChange}}%</span></td>
               </tr>
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Error Rate</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .FormErrorRate}}%</span></td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .FormErrorRateChange 0.0}}color:#22883e{{else if lt .FormErrorRateChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .FormErrorRateChange 0.0}}+{{end}}{{printf "%.1f" .FormErrorRateChange}}%</span></td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;color:#000000;text-align:left; font-weight:bold; background-color: #ecf1f7;border-radius:0 0 0 2px">Error Rate</td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .FormErrorRate}}%</span></td>
+                <td style="padding:10px 20px;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:13px;text-align:right;border-radius:0 0 2px 0;{{if gt .FormErrorRateChange 0.0}}color:#437540{{else if lt .FormErrorRateChange 0.0}}color:#c33030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .FormErrorRateChange 0.0}}+{{end}}{{printf "%.1f" .FormErrorRateChange}}%</span></td>
               </tr>
             </table>
             {{- end}}
             {{- if .SecurityEvents}}
             <p style="font-size:16px;line-height:26px;margin:16px 0">Notable security events:</p>
-            <table border="0" cellpadding="0" cellspacing="0" style="margin:16px 0 24px;border-collapse:collapse;width:100%">
-              <tr>
-                <th scope="col" style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;color:#000000;font-weight:bold;text-align:left">Property</th>
-                <th scope="col" style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;color:#000000;font-weight:bold;text-align:left">Date</th>
-                <th scope="col" style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;color:#000000;font-weight:bold;text-align:right">Requests</th>
-                <th scope="col" style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;color:#000000;font-weight:bold;text-align:right">Verifications</th>
+            <table border="0" cellpadding="0" cellspacing="0" style="margin:16px 0 24px;border-collapse:separate;border-spacing:0;width:100%">
+              <tr style="background-color: #ecf1f7; font-size:14px;color:#000000;font-weight:bold;">
+                <th scope="col" style="padding:10px 12px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:left;border-radius:2px 0 0 0">Property</th>
+                <th scope="col" style="padding:10px 12px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:left">Date</th>
+                <th scope="col" style="padding:10px 12px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:right">Requests</th>
+                <th scope="col" style="padding:10px 12px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:right;border-radius:0 2px 0 0">Verifications</th>
               </tr>
-              {{- range .SecurityEvents}}
-              <tr{{if .Alternate}} style="background-color:#f9f9f9"{{end}}>
-                <td style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;text-align:left" title="{{.Name}}">
+              {{- range $i, $event := .SecurityEvents}}
+              <tr{{if .Alternate}} style="background-color:#f9faf5"{{end}}>
+                <td style="padding:10px 12px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:13px;text-align:left;{{if eq $i (sub (len $.SecurityEvents) 1)}}border-radius:0 0 0 2px{{end}}" title="{{.Name}}">
                   {{if .Link}}
                   <a href="{{.Link}}" style="color:#000000;text-decoration:none">
                     {{truncate .Name 24}} <span style="font-size:12px">&#8599;</span>
@@ -157,26 +157,26 @@ const (
                   {{truncate .Name 24}}
                   {{end}}
                 </td>
-                <td style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;text-align:left;white-space:nowrap">{{.Date}}</td>
-                <td style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Requests | humanize}}</span></td>
-                <td style="padding:10px 12px;border:1px solid #dddddd;font-size:13px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Verifies | humanize}}{{if .FailedVerifies}} ({{.FailedVerifies | humanize}} failed){{end}}</span></td>
+                <td style="padding:10px 12px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:13px;text-align:left;white-space:nowrap">{{.Date}}</td>
+                <td style="padding:10px 12px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:13px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Requests | humanize}}</span></td>
+                <td style="padding:10px 12px;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:13px;text-align:right;{{if eq $i (sub (len $.SecurityEvents) 1)}}border-radius:0 0 2px 0{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Verifies | humanize}}{{if .FailedVerifies}} ({{.FailedVerifies | humanize}} failed){{end}}</span></td>
               </tr>
               {{- end}}
             </table>
             {{- end}}
             {{- if .TopProperties}}
             <p style="font-size:16px;line-height:26px;margin:16px 0">Top {{len .TopProperties}} properties by requests:</p>
-            <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0 24px;border-collapse:collapse;width:100%">
-              <tr>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:left;">Property</td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:left">Domain</td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:right">Requests</td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:right">%</td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:right">Change</td>
+            <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0 24px;border-collapse:separate;border-spacing:0;width:100%">
+              <tr style="background-color: #ecf1f7; font-size:14px;color:#000000;font-weight:bold;">
+                <td style="padding:12px 16px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:left;border-radius:2px 0 0 0;">Property</td>
+                <td style="padding:12px 16px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:left">Domain</td>
+                <td style="padding:12px 16px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:right">Requests</td>
+                <td style="padding:12px 16px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:right">%</td>
+                <td style="padding:12px 16px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:right;border-radius:0 2px 0 0">Change</td>
               </tr>
-              {{- range .TopProperties}}
-              <tr{{if .Alternate}} style="background-color:#f9f9f9"{{end}}>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Name}}">
+              {{- range $i, $property := .TopProperties}}
+              <tr{{if .Alternate}} style="background-color:#f9faf5"{{end}}>
+                <td style="padding:12px 16px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:left;{{if eq $i (sub (len $.TopProperties) 1)}}border-radius:0 0 0 2px{{end}}" title="{{.Name}}">
                   {{if .Link}}
                   <a href="{{.Link}}" style="color:#000000;text-decoration:none">
                     {{truncate .Name 24}} <span style="font-size:12px">&#8599;</span>
@@ -185,27 +185,27 @@ const (
                   {{truncate .Name 24}}
                   {{end}}
                 </td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Domain}}">{{truncate .Domain 24}}</td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Count | humanize}}</span></td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .Percent}}%</span></td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right;{{if gt .Change 0.0}}color:#22883e{{else if lt .Change 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%</span></td>
+                <td style="padding:12px 16px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:left" title="{{.Domain}}">{{truncate .Domain 24}}</td>
+                <td style="padding:12px 16px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Count | humanize}}</span></td>
+                <td style="padding:12px 16px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .Percent}}%</span></td>
+                <td style="padding:12px 16px;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:right;{{if eq $i (sub (len $.TopProperties) 1)}}border-radius:0 0 2px 0;{{end}}{{if gt .Change 0.0}}color:#437540{{else if lt .Change 0.0}}color:#c33030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%</span></td>
               </tr>
               {{- end}}
             </table>
             {{- end}}
             {{- if .TopForms}}
             <p style="font-size:16px;line-height:26px;margin:16px 0">Top {{len .TopForms}} forms by submissions:</p>
-            <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0 24px;border-collapse:collapse;width:100%">
-              <tr>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:left;">Form</td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:left">URL</td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:right">Submissions</td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:right">%</td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:right">Change</td>
+            <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0 24px;border-collapse:separate;border-spacing:0;width:100%">
+              <tr style="background-color: #ecf1f7; font-size:14px;color:#000000;font-weight:bold;">
+                <td style="padding:12px 16px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:left;border-radius:2px 0 0 0;">Form</td>
+                <td style="padding:12px 16px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:left">URL</td>
+                <td style="padding:12px 16px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:right">Submissions</td>
+                <td style="padding:12px 16px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:right">%</td>
+                <td style="padding:12px 16px;border-top:1px dashed #bfbebc;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;text-align:right;border-radius:0 2px 0 0">Change</td>
               </tr>
-              {{- range .TopForms}}
-              <tr{{if .Alternate}} style="background-color:#f9f9f9"{{end}}>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Name}}">
+              {{- range $i, $form := .TopForms}}
+              <tr{{if .Alternate}} style="background-color:#f9faf5"{{end}}>
+                <td style="padding:12px 16px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:left;{{if eq $i (sub (len $.TopForms) 1)}}border-radius:0 0 0 2px{{end}}" title="{{.Name}}">
                   {{if .Link}}
                   <a href="{{.Link}}" style="color:#000000;text-decoration:none">
                     {{truncate .Name 24}} <span style="font-size:12px">&#8599;</span>
@@ -214,10 +214,10 @@ const (
                   {{truncate .Name 24}}
                   {{end}}
                 </td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.URL}}">{{truncate .URL 24}}</td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Count | humanize}}</span></td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .Percent}}%</span></td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right;{{if gt .Change 0.0}}color:#22883e{{else if lt .Change 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%</span></td>
+                <td style="padding:12px 16px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:left" title="{{.URL}}">{{truncate .URL 24}}</td>
+                <td style="padding:12px 16px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Count | humanize}}</span></td>
+                <td style="padding:12px 16px;border-left:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .Percent}}%</span></td>
+                <td style="padding:12px 16px;border-left:1px dashed #bfbebc;border-right:1px dashed #bfbebc;border-bottom:1px dashed #bfbebc;font-size:14px;text-align:right;{{if eq $i (sub (len $.TopForms) 1)}}border-radius:0 0 2px 0;{{end}}{{if gt .Change 0.0}}color:#437540{{else if lt .Change 0.0}}color:#c33030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%</span></td>
               </tr>
               {{- end}}
             </table>

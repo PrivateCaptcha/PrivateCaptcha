@@ -167,3 +167,38 @@ func TestProcessBatchMapChannelCloseLosesData(t *testing.T) {
 		t.Errorf("Expected 50 items, got %d. Lost: %d", count, 50-count)
 	}
 }
+
+func TestProcessBatchMapTriggersAfterUpdatesToSameKey(t *testing.T) {
+	const triggerSize = 3
+
+	ctx, cancel := context.WithCancel(context.Background())
+	processed := make(chan map[string]uint, 1)
+	done := make(chan struct{})
+	processor := func(ctx context.Context, batch map[string]uint) error {
+		processed <- batch
+		return nil
+	}
+
+	ch := make(chan string, triggerSize)
+	go func() {
+		defer close(done)
+		ProcessBatchMap(ctx, ch, time.Hour, triggerSize, 100, processor)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+
+	for range triggerSize {
+		ch <- "key"
+	}
+
+	select {
+	case batch := <-processed:
+		if len(batch) != 1 || batch["key"] != triggerSize {
+			t.Fatalf("Expected 3 updates to one key, got %v", batch)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Expected batch to be processed after reaching the update trigger size")
+	}
+}

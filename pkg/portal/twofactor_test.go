@@ -139,6 +139,22 @@ func TestPostTwoFactorOtherServer(t *testing.T) {
 	if location, _ := resp.Location(); location.String() != "/" {
 		t.Errorf("unexpected redirect: %v", location)
 	}
+
+	idx = slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
+	if idx == -1 {
+		t.Fatal("cannot find rotated session cookie in response")
+	}
+	rotatedCookie := resp.Cookies()[idx]
+	deadline := time.Now().Add(time.Second)
+	for {
+		if _, err = server.Sessions.Store.Read(ctx, rotatedCookie.Value, true /*skip cache*/); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("rotated session was not persisted within the low-latency batch window: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func TestPostTwoFactorRotatesSession(t *testing.T) {

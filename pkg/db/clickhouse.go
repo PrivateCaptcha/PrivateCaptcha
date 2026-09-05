@@ -49,8 +49,9 @@ func connectClickhouse(ctx context.Context, opts ClickHouseConnectOpts) *sql.DB 
 			Password: opts.Password,
 		},
 		Settings: clickhouse.Settings{
-			"max_execution_time": 60,
-			"session_timezone":   "UTC",
+			// NOTE: this is pointless because ClickHouse Go Driver sets max_execution_time based on timeout in context
+			// "max_execution_time": 60,
+			"session_timezone": "UTC",
 		},
 		ReadTimeout: 15 * time.Second,
 		DialTimeout: 30 * time.Second,
