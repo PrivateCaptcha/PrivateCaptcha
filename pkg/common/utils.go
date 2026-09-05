@@ -10,12 +10,10 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
-	"time"
 	"unicode"
 
 	"maps"
 
-	"github.com/jpillora/backoff"
 	"github.com/mailru/easyjson"
 )
 
@@ -252,44 +250,6 @@ func GuessFirstName(username string, email string) string {
 	}
 
 	return username
-}
-
-func ChunkedCleanup(ctx context.Context, minInterval, maxInterval time.Duration, defaultChunkSize int, deleter func(context.Context, time.Time, int) int) {
-	b := &backoff.Backoff{
-		Min:    minInterval,
-		Max:    maxInterval,
-		Factor: 2,
-		Jitter: true,
-	}
-
-	slog.DebugContext(ctx, "Starting chunked clean up", "maxInterval", maxInterval.String(), "size", defaultChunkSize)
-
-	deleteChunk := defaultChunkSize
-
-	for running := true; running; {
-		select {
-		case <-ctx.Done():
-			running = false
-		case <-time.After(b.Duration()):
-			deleted := deleter(ctx, time.Now(), deleteChunk)
-			if deleted == 0 {
-				deleteChunk = defaultChunkSize
-				continue
-			}
-
-			slog.DebugContext(ctx, "Deleted records", "count", deleted)
-
-			// in case of any deletes, we want to go back to small interval first
-			b.Reset()
-
-			if deleted == deleteChunk {
-				// 1.5 scaling factor
-				deleteChunk += deleteChunk / 2
-			}
-		}
-	}
-
-	slog.DebugContext(ctx, "Finished cleaning up")
 }
 
 func ParseDomainName(input string) (string, error) {
