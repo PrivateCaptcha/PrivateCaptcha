@@ -39,7 +39,6 @@ func (s *server) Setup(router *http.ServeMux) {
 	}
 
 	s.setupWithPrefix(prefix, router)
-	//router.HandleFunc("/", catchAll)
 }
 
 func (s *server) setupWithPrefix(prefix string, router *http.ServeMux) {
@@ -167,15 +166,4 @@ func (s *server) submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintln(w, greenPage)
-}
-
-func catchAll(w http.ResponseWriter, r *http.Request) {
-	slog.Error("Inside catchall handler", "path", r.URL.Path, "method", r.Method)
-
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		slog.Error("Failed to handle the request", "path", r.URL.Path)
-
-		return
-	}
 }
