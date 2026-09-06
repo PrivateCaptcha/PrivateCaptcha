@@ -1,12 +1,53 @@
 package db
 
 import (
+	"context"
 	"encoding/json"
+	"net/netip"
 	"strings"
 	"testing"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
+
+type auditCaptureQuerier struct {
+	*QuerierStub
+	batch []*dbgen.CreateAuditLogsParams
+}
+
+func (q *auditCaptureQuerier) CreateAuditLogs(_ context.Context, batch []*dbgen.CreateAuditLogsParams) (int64, error) {
+	q.batch = batch
+	return int64(len(batch)), nil
+}
+
+func TestAuditLogPersistsSessionHashWithoutSessionID(t *testing.T) {
+	const sid = "raw-session-bearer"
+	hash := common.HashSessionID(sid)
+	querier := &auditCaptureQuerier{QuerierStub: &QuerierStub{}}
+	auditLog := NewAuditLog(querier, 1)
+	ctx := context.WithValue(t.Context(), common.SessionHashContextKey, hash)
+	ctx = context.WithValue(ctx, common.RateLimitKeyContextKey, netip.MustParseAddr("192.0.2.1"))
+	event := &common.AuditLogEvent{UserID: 1, Action: common.AuditLogActionLogin}
+
+	auditLog.RecordEvent(ctx, event, common.AuditLogSourcePortal)
+	queued := <-auditLog.persistChan
+	if queued.SessionHash != hash {
+		t.Fatalf("queued session hash = %q, want %q", queued.SessionHash.String(), hash.String())
+	}
+	if err := auditLog.PersistAuditLog(t.Context(), []*common.AuditLogEvent{queued}); err != nil {
+		t.Fatal(err)
+	}
+	if len(querier.batch) != 1 {
+		t.Fatalf("persisted batch length = %d, want 1", len(querier.batch))
+	}
+	if got := querier.batch[0].SessionID; got != hash.String() {
+		t.Fatalf("persisted session correlation = %q, want %q", got, hash.String())
+	}
+	if strings.Contains(querier.batch[0].SessionID, sid) {
+		t.Fatalf("persisted audit record contains raw session ID %q", sid)
+	}
+}
 
 func TestNewUpdateFormAuditLogEventStoresRequestsPerMinute(t *testing.T) {
 	updatedForm := &dbgen.Form{

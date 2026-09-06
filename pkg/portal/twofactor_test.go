@@ -10,13 +10,11 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
 func TestPostTwoFactor(t *testing.T) {
@@ -50,7 +48,7 @@ func TestPostTwoFactor(t *testing.T) {
 	}
 }
 
-func loginSuite(srv *http.ServeMux, email, token string) *http.Response {
+func loginSuite(srv *http.ServeMux, email, token string, cookies ...*http.Cookie) *http.Response {
 	form := url.Values{}
 	form.Add(common.ParamCSRFToken, token)
 	form.Add(common.ParamEmail, email)
@@ -59,6 +57,9 @@ func loginSuite(srv *http.ServeMux, email, token string) *http.Response {
 	// Send the POST request
 	req := httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	for _, cookie := range cookies {
+		req.AddCookie(cookie)
+	}
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
@@ -78,83 +79,6 @@ func twoFactorSuite(srv *http.ServeMux, email, token string, code int, cookie *h
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 	return w.Result()
-}
-
-// technically it's close to TestPersistentSession, but it's more "end-to-end"
-func TestPostTwoFactorOtherServer(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	ctx := t.Context()
-
-	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
-	if err != nil {
-		t.Fatalf("failed to create new account: %v", err)
-	}
-
-	resp := loginSuite(srv, user.Email, server.XSRF.Token(""))
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Unexpected login status code: %v", resp.StatusCode)
-	}
-
-	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
-	if idx == -1 {
-		t.Fatal("cannot find session cookie in response")
-	}
-	cookie := resp.Cookies()[idx]
-
-	// wait until the session is persisted to DB
-	for attempt := 0; attempt < 5; attempt++ {
-		time.Sleep(400 * time.Millisecond)
-
-		_, err = store.Impl().RetrieveFromCache(ctx, "session/"+cookie.Value)
-		if err == nil {
-			break
-		}
-	}
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if deleted := cache.Delete(ctx, db.SessionCacheKey(cookie.Value)); !deleted {
-		t.Fatal("Didn't delete cached session")
-	}
-
-	code, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code, cookie)
-
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("unexpected post twofactor code: %v", resp.StatusCode)
-	}
-
-	if location, _ := resp.Location(); location.String() != "/" {
-		t.Errorf("unexpected redirect: %v", location)
-	}
-
-	idx = slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
-	if idx == -1 {
-		t.Fatal("cannot find rotated session cookie in response")
-	}
-	rotatedCookie := resp.Cookies()[idx]
-	deadline := time.Now().Add(time.Second)
-	for {
-		if _, err = server.Sessions.Store.Read(ctx, rotatedCookie.Value, true /*skip cache*/); err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("rotated session was not persisted within the low-latency batch window: %v", err)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
 }
 
 func TestPostTwoFactorRotatesSession(t *testing.T) {
@@ -183,7 +107,7 @@ func TestPostTwoFactorRotatesSession(t *testing.T) {
 	}
 	oldCookie := resp.Cookies()[idx]
 
-	code, err := portal_tests.TwoFactorCodeFromSession(ctx, oldCookie.Value, server.Sessions.Store)
+	code, err := portal_tests.TwoFactorCodeFromEmail(user.Email)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,12 +171,12 @@ func TestPostTwoFactorAttemptLimit(t *testing.T) {
 	}
 	cookie := resp.Cookies()[idx]
 
-	code, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
+	code, err := portal_tests.TwoFactorCodeFromEmail(user.Email)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for attempt := 1; attempt <= maxFailedAttempts; attempt++ {
+	for attempt := 1; attempt < maxFailedAttempts; attempt++ {
 		resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code+1, cookie)
 		body, readErr := io.ReadAll(resp.Body)
 		resp.Body.Close()
@@ -264,53 +188,127 @@ func TestPostTwoFactorAttemptLimit(t *testing.T) {
 		}
 	}
 
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code, cookie)
+	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code+1, cookie)
 	body, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		t.Fatalf("failed to read limited response: %v", err)
 	}
-	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "Too many failed attempts. Please request a new code.") {
-		t.Fatalf("expected correct code to be rejected after five failures: status %v, body %s", resp.StatusCode, body)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "Too many failed attempts. Please start again.") {
+		t.Fatalf("expected fifth failure to exhaust the challenge: status %v, body %s", resp.StatusCode, body)
+	}
+	if cookies := resp.Cookies(); len(cookies) != 1 || cookies[0].MaxAge != -1 {
+		t.Fatalf("exhausted challenge did not clear its cookie: %v", cookies)
 	}
 
+	mailer, ok := server.Mailer.(*email.StubMailer)
+	if !ok {
+		t.Fatalf("mailer type = %T, want *email.StubMailer", server.Mailer)
+	}
+	sentBeforeResend := mailer.TwoFactorCount()
 	resp = resend2faSuite(srv, user.Email, server.XSRF.Token(user.Email), cookie)
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("unexpected resend status code: %v", resp.StatusCode)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("exhausted challenge resend status = %v, want redirect", resp.StatusCode)
+	}
+	if cookies := resp.Cookies(); len(cookies) != 1 || cookies[0].MaxAge != -1 {
+		t.Fatalf("exhausted resend did not clear its cookie: %v", cookies)
+	}
+	if sent := mailer.TwoFactorCount(); sent != sentBeforeResend {
+		t.Fatalf("exhausted resend sent %d additional codes", sent-sentBeforeResend)
 	}
 
-	code, err = portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code+1, cookie)
-	body, err = io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		t.Fatalf("failed to read response after resend: %v", err)
-	}
-	if resp.StatusCode != http.StatusOK || !strings.Contains(string(body), "Code is not valid.") {
-		t.Fatalf("expected resend to reset failed attempts: status %v, body %s", resp.StatusCode, body)
-	}
-
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code, cookie)
+	sentBeforeLogin := mailer.TwoFactorCount()
+	resp = loginSuite(srv, user.Email, server.XSRF.Token(""), cookie)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("unexpected post twofactor status code after resend: %v", resp.StatusCode)
+		t.Fatalf("exhausted challenge login status = %v, want redirect", resp.StatusCode)
+	}
+	if cookies := resp.Cookies(); len(cookies) != 1 || cookies[0].MaxAge != -1 {
+		t.Fatalf("exhausted login did not clear its cookie: %v", cookies)
+	}
+	if sent := mailer.TwoFactorCount(); sent != sentBeforeLogin {
+		t.Fatalf("exhausted login sent %d additional codes", sent-sentBeforeLogin)
 	}
 
-	idx = slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
-	if idx == -1 {
-		t.Fatal("cannot find rotated session cookie in response")
+	sentBeforeRegistration := mailer.TwoFactorCount()
+	registrationEmail := t.Name() + "-registration@privatecaptcha.com"
+	resp = registerSuite(srv, "Registrant", registrationEmail, server.XSRF.Token(""), cookie)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("exhausted challenge registration status = %v, want redirect", resp.StatusCode)
 	}
-	newSession, err := server.Sessions.Store.Read(ctx, resp.Cookies()[idx].Value, false /*skip cache*/)
+	if cookies := resp.Cookies(); len(cookies) != 1 || cookies[0].MaxAge != -1 {
+		t.Fatalf("exhausted registration did not clear its cookie: %v", cookies)
+	}
+	if sent := mailer.TwoFactorCount(); sent != sentBeforeRegistration {
+		t.Fatalf("exhausted registration sent %d additional codes", sent-sentBeforeRegistration)
+	}
+}
+
+func TestRegistrationInvalidCSRFCannotConsumeAttempt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	emailAddress := t.Name() + "@privatecaptcha.com"
+	resp := registerSuite(srv, "Registrant", emailAddress, server.XSRF.Token(""))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected registration status code: %v", resp.StatusCode)
+	}
+	cookieIndex := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
+	if cookieIndex == -1 {
+		t.Fatal("cannot find registration session cookie")
+	}
+	cookie := resp.Cookies()[cookieIndex]
+	sid, err := url.QueryUnescape(cookie.Value)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if newSession.Data().Has(session.KeyLoginAttempts) {
-		t.Fatal("failed login attempts remain after successful verification")
+	code, err := portal_tests.TwoFactorCodeFromEmail(emailAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for attempt := 1; attempt < maxFailedAttempts; attempt++ {
+		resp = twoFactorSuite(srv, emailAddress, server.XSRF.Token(emailAddress), code+1, cookie)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("failed attempt %d status = %v, want OK", attempt, resp.StatusCode)
+		}
+	}
+
+	mailer, ok := server.Mailer.(*email.StubMailer)
+	if !ok {
+		t.Fatalf("mailer type = %T, want *email.StubMailer", server.Mailer)
+	}
+	sentBeforeExhaustion := mailer.TwoFactorCount()
+	resp = twoFactorSuite(srv, emailAddress, server.XSRF.Token("wrong-email@example.com"), code+1, cookie)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("cap-reaching registration status = %v, want redirect", resp.StatusCode)
+	}
+	if location, err := resp.Location(); err != nil || location.Path != "/"+common.ExpiredEndpoint {
+		t.Fatalf("cap-reaching registration redirect = (%v, %v), want /%s", location, err, common.ExpiredEndpoint)
+	}
+	if cookies := resp.Cookies(); len(cookies) != 0 {
+		t.Fatalf("invalid CSRF changed the registration cookie: %v", cookies)
+	}
+	if sent := mailer.TwoFactorCount(); sent != sentBeforeExhaustion {
+		t.Fatalf("invalid CSRF sent %d additional codes", sent-sentBeforeExhaustion)
+	}
+	if _, err := store.Impl().FindUserByEmail(t.Context(), emailAddress); err == nil {
+		t.Fatal("cap-reaching registration with invalid CSRF created an account")
+	}
+	var failedAttempts int32
+	if err := store.Pool.QueryRow(t.Context(), "SELECT failed_attempts FROM backend.sessions WHERE session_id = $1", sid).Scan(&failedAttempts); err != nil {
+		t.Fatal(err)
+	}
+	if failedAttempts != maxFailedAttempts-1 {
+		t.Fatalf("invalid CSRF failed attempts = %d, want %d", failedAttempts, maxFailedAttempts-1)
 	}
 }
 
@@ -353,7 +351,7 @@ func TestResend2FA(t *testing.T) {
 	}
 	cookie := resp.Cookies()[idx]
 
-	originalCode, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
+	originalCode, err := portal_tests.TwoFactorCodeFromEmail(user.Email)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +371,7 @@ func TestResend2FA(t *testing.T) {
 	}
 
 	// The code should have been reissued and should be different
-	newCode, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
+	newCode, err := portal_tests.TwoFactorCodeFromEmail(user.Email)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -453,98 +451,5 @@ func TestResend2FAWithCompletedSession(t *testing.T) {
 	// Should redirect to expired since session is already completed (no email in session)
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Expected redirect, got status code: %v", resp.StatusCode)
-	}
-}
-
-func TestParseOrgInviteIDFromURLValid(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	// Use the server's IDHasher
-	encodedID := server.IDHasher.Encrypt(123)
-	rawURL := "https://portal.example.com/" + common.OrgInviteEndpoint + "/" + encodedID + "/" + common.RegisterEndpoint
-
-	result := server.parseOrgInviteIDFromURL(rawURL)
-
-	if result != 123 {
-		t.Errorf("Expected 123, got %d", result)
-	}
-}
-
-func TestParseOrgInviteIDFromURLNoPrefixMatch(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	// URL without orginvite prefix
-	rawURL := "https://portal.example.com/other/path/" + common.RegisterEndpoint
-
-	result := server.parseOrgInviteIDFromURL(rawURL)
-
-	if result != -1 {
-		t.Errorf("Expected -1, got %d", result)
-	}
-}
-
-func TestParseOrgInviteIDFromURLNoSuffix(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	encodedID := server.IDHasher.Encrypt(123)
-	// URL without /signup suffix
-	rawURL := "https://portal.example.com/" + common.OrgInviteEndpoint + "/" + encodedID
-
-	result := server.parseOrgInviteIDFromURL(rawURL)
-
-	if result != -1 {
-		t.Errorf("Expected -1, got %d", result)
-	}
-}
-
-func TestParseOrgInviteIDFromURLInvalidID(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	// Use an invalid encoded ID
-	rawURL := "https://portal.example.com/" + common.OrgInviteEndpoint + "/invalid-id/" + common.RegisterEndpoint
-
-	result := server.parseOrgInviteIDFromURL(rawURL)
-
-	if result != -1 {
-		t.Errorf("Expected -1 for invalid ID, got %d", result)
-	}
-}
-
-func TestParseOrgInviteIDFromURLEmptyPath(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	// Path with empty ID segment
-	rawURL := "https://portal.example.com/" + common.OrgInviteEndpoint + "//" + common.RegisterEndpoint
-
-	result := server.parseOrgInviteIDFromURL(rawURL)
-
-	if result != -1 {
-		t.Errorf("Expected -1 for empty ID, got %d", result)
-	}
-}
-
-func TestParseOrgInviteIDFromURLRelativePath(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	encodedID := server.IDHasher.Encrypt(456)
-	// Relative URL
-	rawURL := "/" + common.OrgInviteEndpoint + "/" + encodedID + "/" + common.RegisterEndpoint
-
-	result := server.parseOrgInviteIDFromURL(rawURL)
-
-	if result != 456 {
-		t.Errorf("Expected 456, got %d", result)
 	}
 }

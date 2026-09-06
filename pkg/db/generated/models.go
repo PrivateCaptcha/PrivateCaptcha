@@ -416,6 +416,92 @@ func (ns NullRuleConditionProperty) Value() (driver.Value, error) {
 	return string(ns.RuleConditionProperty), nil
 }
 
+type SessionChallengeKind string
+
+const (
+	SessionChallengeKindSignIn       SessionChallengeKind = "sign_in"
+	SessionChallengeKindRegistration SessionChallengeKind = "registration"
+	SessionChallengeKindEmailChange  SessionChallengeKind = "email_change"
+)
+
+func (e *SessionChallengeKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SessionChallengeKind(s)
+	case string:
+		*e = SessionChallengeKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SessionChallengeKind: %T", src)
+	}
+	return nil
+}
+
+type NullSessionChallengeKind struct {
+	SessionChallengeKind SessionChallengeKind `json:"backend_session_challenge_kind"`
+	Valid                bool                 `json:"valid"` // Valid is true if SessionChallengeKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSessionChallengeKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.SessionChallengeKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SessionChallengeKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSessionChallengeKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SessionChallengeKind), nil
+}
+
+type SessionState string
+
+const (
+	SessionStatePending       SessionState = "pending"
+	SessionStateAuthenticated SessionState = "authenticated"
+	SessionStateRevoked       SessionState = "revoked"
+)
+
+func (e *SessionState) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SessionState(s)
+	case string:
+		*e = SessionState(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SessionState: %T", src)
+	}
+	return nil
+}
+
+type NullSessionState struct {
+	SessionState SessionState `json:"backend_session_state"`
+	Valid        bool         `json:"valid"` // Valid is true if SessionState is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSessionState) Scan(value interface{}) error {
+	if value == nil {
+		ns.SessionState, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SessionState.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSessionState) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SessionState), nil
+}
+
 type SubscriptionSource string
 
 const (
@@ -463,7 +549,6 @@ type APIKey struct {
 	Name              string             `db:"name" json:"name"`
 	ExternalID        pgtype.UUID        `db:"external_id" json:"external_id"`
 	UserID            pgtype.Int4        `db:"user_id" json:"user_id"`
-	Enabled           pgtype.Bool        `db:"enabled" json:"enabled"`
 	RequestsPerSecond float64            `db:"requests_per_second" json:"requests_per_second"`
 	RequestsBurst     int32              `db:"requests_burst" json:"requests_burst"`
 	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
@@ -474,6 +559,7 @@ type APIKey struct {
 	Period            time.Duration      `db:"period" json:"period"`
 	Scope             ApiKeyScope        `db:"scope" json:"scope"`
 	LastUsedAt        pgtype.Timestamptz `db:"last_used_at" json:"last_used_at"`
+	Enabled           pgtype.Bool        `db:"enabled" json:"enabled"`
 	Readonly          bool               `db:"readonly" json:"readonly"`
 }
 
@@ -618,6 +704,22 @@ type Property struct {
 	ShowNotice       bool               `db:"show_notice" json:"show_notice"`
 }
 
+type Session struct {
+	SessionID            string                   `db:"session_id" json:"session_id"`
+	State                SessionState             `db:"state" json:"state"`
+	Version              int32                    `db:"version" json:"version"`
+	UserID               pgtype.Int4              `db:"user_id" json:"user_id"`
+	Data                 []byte                   `db:"data" json:"data"`
+	ExpiresAt            pgtype.Timestamptz       `db:"expires_at" json:"expires_at"`
+	ChallengeKind        NullSessionChallengeKind `db:"challenge_kind" json:"challenge_kind"`
+	ChallengeCode        pgtype.Text              `db:"challenge_code" json:"challenge_code"`
+	ChallengeEmail       pgtype.Text              `db:"challenge_email" json:"challenge_email"`
+	ChallengeExpiresAt   pgtype.Timestamptz       `db:"challenge_expires_at" json:"challenge_expires_at"`
+	FailedAttempts       int32                    `db:"failed_attempts" json:"failed_attempts"`
+	RegistrationInviteID pgtype.Int4              `db:"registration_invite_id" json:"registration_invite_id"`
+	VerifyRegistration   pgtype.Bool              `db:"verify_registration" json:"verify_registration"`
+}
+
 type Subscription struct {
 	ID                     int32              `db:"id" json:"id"`
 	ExternalProductID      string             `db:"external_product_id" json:"external_product_id"`
@@ -662,7 +764,6 @@ type UserNotification struct {
 	Subject              string             `db:"subject" json:"subject"`
 	ReferenceID          string             `db:"reference_id" json:"reference_id"`
 	ProcessingAttempts   int32              `db:"processing_attempts" json:"processing_attempts"`
-	RequiresSubscription pgtype.Bool        `db:"requires_subscription" json:"requires_subscription"`
 	CreatedAt            pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	ScheduledAt          pgtype.Timestamptz `db:"scheduled_at" json:"scheduled_at"`
@@ -671,6 +772,7 @@ type UserNotification struct {
 	ReplyToEmail         pgtype.Text        `db:"reply_to_email" json:"reply_to_email"`
 	EmailTo              pgtype.Text        `db:"email_to" json:"email_to"`
 	PersistUntil         pgtype.Timestamptz `db:"persist_until" json:"persist_until"`
+	RequiresSubscription pgtype.Bool        `db:"requires_subscription" json:"requires_subscription"`
 }
 
 type UserSettings struct {

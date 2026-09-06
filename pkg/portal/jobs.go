@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
@@ -26,7 +27,11 @@ func (s *Server) OffboardUser(user *dbgen.User) common.OneOffJob {
 }
 
 func (s *Server) CheckRegistration(sess *session.Session, r *http.Request) common.OneOffJob {
-	return &registrationCheckJob{Sess: sess}
+	return &registrationCheckJob{
+		Sess:  sess,
+		Store: s.Sessions.Store,
+		Email: strings.TrimSpace(r.FormValue(common.ParamEmail)),
+	}
 }
 
 func (s *Server) LoginUser(sess *session.Session) common.OneOffJob {
@@ -74,35 +79,10 @@ type LoginUserJob struct {
 	Store db.Implementor
 }
 
-func (j *LoginUserJob) Name() string {
-	return "LoginUser"
-}
-func (j *LoginUserJob) InitialPause() time.Duration {
-	return 0
-}
-func (j *LoginUserJob) NewParams() any {
-	return struct{}{}
-}
-func (j *LoginUserJob) RunOnce(ctx context.Context, params any) error {
-	userID, hasUserID := j.Sess.Get(ctx, session.KeyUserID).(int32)
-	if hasUserID {
-		j.Store.AuditLog().RecordEvent(ctx, newUserAuthAuditLogEvent(userID, common.AuditLogActionLogin), common.AuditLogSourcePortal)
-
-		slog.DebugContext(ctx, "Fetching system notification for user", "userID", userID)
-		if n, err := j.Store.Impl().RetrieveSystemUserNotification(ctx, time.Now().UTC(), userID); err == nil {
-			if serr := j.Sess.Set(ctx, session.KeyNotificationID, n.ID); serr != nil {
-				slog.WarnContext(ctx, "Failed to set session value", common.ErrAttr(serr))
-			}
-		}
-	} else {
-		slog.ErrorContext(ctx, "UserID not found in session")
-	}
-
-	return nil
-}
-
 type registrationCheckJob struct {
-	Sess *session.Session
+	Sess  *session.Session
+	Store session.Store
+	Email string
 }
 
 func (j *registrationCheckJob) Name() string {
@@ -119,16 +99,36 @@ func (j *registrationCheckJob) RunOnce(ctx context.Context, params any) error {
 		return nil
 	}
 
-	email, hasEmail := j.Sess.Get(ctx, session.KeyUserEmail).(string)
-	if !hasEmail {
-		return nil
+	if j.Email == spammerEmail {
+		slog.WarnContext(ctx, "Requiring verification for registration", "reason", "email", common.SessionHashAttr(j.Sess.Hash()))
+		return j.Store.SetVerifyRegistration(ctx, j.Sess.ID())
 	}
 
-	if email == spammerEmail {
-		slog.WarnContext(ctx, "Requiring verification for registration", "reason", "email", common.SessionIDAttr(j.Sess.ID()))
-		if serr := j.Sess.Set(ctx, session.KeyVerifyRegistration, true); serr != nil {
-			slog.WarnContext(ctx, "Failed to set session value", common.ErrAttr(serr))
+	return nil
+}
+
+func (j *LoginUserJob) Name() string {
+	return "LoginUser"
+}
+func (j *LoginUserJob) InitialPause() time.Duration {
+	return 0
+}
+func (j *LoginUserJob) NewParams() any {
+	return struct{}{}
+}
+func (j *LoginUserJob) RunOnce(ctx context.Context, params any) error {
+	authority, ok := j.Sess.Authority()
+	if ok && authority.State == session.StateAuthenticated && authority.UserID > 0 {
+		j.Store.AuditLog().RecordEvent(ctx, newUserAuthAuditLogEvent(authority.UserID, common.AuditLogActionLogin), common.AuditLogSourcePortal)
+
+		slog.DebugContext(ctx, "Fetching system notification for user", "userID", authority.UserID)
+		if n, err := j.Store.Impl().RetrieveSystemUserNotification(ctx, time.Now().UTC(), authority.UserID); err == nil {
+			if serr := j.Sess.Set(ctx, session.KeyNotificationID, n.ID); serr != nil {
+				slog.WarnContext(ctx, "Failed to set session value", common.ErrAttr(serr))
+			}
 		}
+	} else {
+		slog.ErrorContext(ctx, "Authenticated Authority not found in session")
 	}
 
 	return nil

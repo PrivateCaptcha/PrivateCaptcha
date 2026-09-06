@@ -34,18 +34,46 @@ const (
 type stubSessionStore struct{}
 
 func (s *stubSessionStore) Start(_ context.Context, _ time.Duration) {}
-func (s *stubSessionStore) Init(_ context.Context, _ *session.Session) error {
+func (s *stubSessionStore) EnqueueExpirationRenewal(_ context.Context, _ string) {
+}
+func (s *stubSessionStore) UpdatePayload(_ context.Context, _ string) {}
+func (s *stubSessionStore) StartAnonymousSession(sid string) *session.Session {
+	return session.NewAnonymousSession(sid, s)
+}
+func (s *stubSessionStore) Resolve(context.Context, string) (*session.Session, error) {
+	return nil, session.ErrSessionMissing
+}
+func (s *stubSessionStore) IssueSignInChallenge(context.Context, session.SignInChallengeIssue) (*session.ChallengeResult, error) {
+	return nil, nil
+}
+func (s *stubSessionStore) IssueRegistrationChallenge(context.Context, session.RegistrationChallengeIssue) (*session.ChallengeResult, error) {
+	return nil, nil
+}
+func (s *stubSessionStore) SetVerifyRegistration(context.Context, string) error {
 	return nil
 }
-func (s *stubSessionStore) Read(_ context.Context, _ string, _ bool) (*session.Session, error) {
-	return nil, fmt.Errorf("not found")
+func (s *stubSessionStore) ResendPendingChallenge(context.Context, session.PendingChallengeResend) (*session.ChallengeResult, error) {
+	return nil, nil
 }
-func (s *stubSessionStore) Update(_ context.Context, _ *session.Session) error { return nil }
-func (s *stubSessionStore) Renew(_ context.Context, _ string, _ *session.Session) error {
-	return nil
+func (s *stubSessionStore) ConsumeSignInChallenge(context.Context, session.SignInChallengeConsume) (*session.ChallengeResult, error) {
+	return nil, nil
 }
-func (s *stubSessionStore) RollbackRenew(ctx context.Context, oldSID string) {}
-func (s *stubSessionStore) Destroy(_ context.Context, _ string) error        { return nil }
+func (s *stubSessionStore) ConsumeRegistrationChallenge(context.Context, session.RegistrationChallengeConsume) (*session.RegistrationConsumeResult, error) {
+	return nil, nil
+}
+func (s *stubSessionStore) CreateRegistrationSuccessor(context.Context, session.RegistrationSuccessorCreate) (*session.ChallengeResult, error) {
+	return nil, nil
+}
+func (s *stubSessionStore) IssueEmailChangeChallenge(context.Context, session.EmailChangeChallengeIssue) (*session.ChallengeResult, error) {
+	return nil, nil
+}
+func (s *stubSessionStore) ConsumeEmailChangeChallenge(context.Context, session.EmailChangeChallengeConsume) (*session.ChallengeResult, error) {
+	return nil, nil
+}
+func (s *stubSessionStore) RevokeSession(context.Context, string) (*session.RevocationResult, error) {
+	return nil, nil
+}
+func (s *stubSessionStore) RevokeUserSessions(context.Context, int32) error { return nil }
 
 var (
 	srv          *portal.Server
@@ -119,6 +147,12 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 		w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
 		_, _ = out.WriteTo(w)
 	}
+}
+
+func registerLogoutRoute(router *http.ServeMux, server *portal.Server) {
+	router.HandleFunc("POST "+server.RelURL(common.LogoutEndpoint), func(w http.ResponseWriter, r *http.Request) {
+		common.Redirect(server.RelURL(common.LoginEndpoint), http.StatusOK, w, r)
+	})
 }
 
 func stubPropertyStatsHandler(w http.ResponseWriter, r *http.Request) {
@@ -320,6 +354,7 @@ func main() {
 	for _, p := range pages {
 		router.HandleFunc(p.Path, servePage(p))
 	}
+	registerLogoutRoute(router, srv)
 
 	// mock JSON endpoints for organization, property, rule, and account stats
 	orgStatsPattern := fmt.Sprintf("/portal/%s/{%s}/%s/{%s}",

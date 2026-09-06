@@ -25,7 +25,7 @@ type LogEntry struct {
 	ErrorDetails         string
 	Extras               string
 	TraceID              string
-	SessID               string
+	SessionHash          string
 	Service              string
 	TraceColor           string
 	TraceBackground      template.CSS
@@ -137,12 +137,12 @@ func mustHex(s string) int {
 // normalizeLog converts raw JSON map to a structured LogEntry
 func normalizeLog(raw map[string]interface{}) LogEntry {
 	entry := LogEntry{
-		Timestamp: formatTimestamp(raw),
-		Level:     getString(raw, "level", "severity", "log_level"),
-		Message:   getString(raw, "message", "msg", "text"),
-		TraceID:   getString(raw, "traceID", "trace_id", "traceId"),
-		SessID:    getString(raw, "sessID", "session_id", "sessionId"),
-		Service:   getString(raw, "service", "svc"),
+		Timestamp:   formatTimestamp(raw),
+		Level:       getString(raw, "level", "severity", "log_level"),
+		Message:     getString(raw, "message", "msg", "text"),
+		TraceID:     getString(raw, "traceID", "trace_id", "traceId"),
+		SessionHash: getString(raw, "sessHash"),
+		Service:     getString(raw, "service", "svc"),
 	}
 
 	if entry.Timestamp == "" {
@@ -234,6 +234,7 @@ func formatExtras(raw map[string]interface{}) string {
 		"traceID":     true,
 		"trace_id":    true,
 		"traceId":     true,
+		"sessHash":    true,
 		"sessID":      true,
 		"session_id":  true,
 		"sessionId":   true,

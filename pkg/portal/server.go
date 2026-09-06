@@ -326,7 +326,7 @@ func (s *Server) MiddlewarePrivateRead(public alice.Chain, timeout alice.Constru
 }
 
 func (s *Server) MiddlewarePrivateWrite(public alice.Chain, timeout alice.Constructor) alice.Chain {
-	return public.Append(s.Maintenance, defaultMaxBytesHandler, timeout, s.csrf(s.csrfUserIDKeyFunc), s.private)
+	return public.Append(s.Maintenance, defaultMaxBytesHandler, timeout, s.csrf(s.csrfAuthenticatedUserAuthorityKeyFunc), s.private)
 }
 
 func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Constructor) {
@@ -346,20 +346,21 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Get(common.AccountVerifyEndpoint), cachedOpenRead, s.Handler(s.getAccountVerify))
 	rg.Handle(rg.Get(common.ErrorEndpoint, arg(common.ParamCode)), public, http.HandlerFunc(s.error))
 	rg.Handle(rg.Get(common.ExpiredEndpoint), public, http.HandlerFunc(s.expired))
-	rg.Handle(rg.Get(common.LogoutEndpoint), public, http.HandlerFunc(s.logout))
 
 	// openWrite is protected by captcha, other "write" handlers are protected by CSRF token / auth
 	// larger write timeout is mostly due to emails / external APIs
 	publicWriteTimeout := common.SoftTimeoutHandler(5 * time.Second)
 	openWrite := public.Append(s.Maintenance, defaultMaxBytesHandler, publicWriteTimeout)
-	csrfEmail := openWrite.Append(s.csrf(s.csrfUserEmailKeyFunc))
+	csrfEmail := openWrite.Append(s.csrf(s.csrfPendingEmailAuthorityKeyFunc))
+	pendingChallenge := openWrite.Append(s.csrfPendingChallenge)
 	internalTimeout := common.HardTimeoutHandler(10 * time.Second)
 	privateWrite := s.MiddlewarePrivateWrite(public, internalTimeout)
 	privateRead := s.MiddlewarePrivateRead(public, internalTimeout)
 
+	rg.Handle(rg.Post(common.LogoutEndpoint), privateWrite, http.HandlerFunc(s.logout))
 	rg.Handle(rg.Post(common.LoginEndpoint), openWrite, http.HandlerFunc(s.postLogin))
 	rg.Handle(rg.Post(common.RegisterEndpoint), openWrite, http.HandlerFunc(s.postRegister))
-	rg.Handle(rg.Post(common.TwoFactorEndpoint), csrfEmail, http.HandlerFunc(s.postTwoFactor))
+	rg.Handle(rg.Post(common.TwoFactorEndpoint), pendingChallenge, http.HandlerFunc(s.postTwoFactor))
 	rg.Handle(rg.Post(common.ResendEndpoint), csrfEmail, http.HandlerFunc(s.resend2fa))
 	rg.Handle(rg.Get(common.OrgEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrg))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg)), privateRead, http.HandlerFunc(s.getPortal))
@@ -508,36 +509,31 @@ func (s *Server) private(next http.Handler) http.Handler {
 	)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sess := s.Sessions.SessionStart(w, r)
-
 		ctx := r.Context()
-		ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.ID())
-
-		if step, ok := sess.Get(ctx, session.KeyLoginStep).(int); ok {
-			// this is a sign it could be a local stale session in case user finished login on another node
-			if (step == loginStepSignInVerify) || (step == loginStepSignUpVerify) {
-				slog.WarnContext(ctx, "About to recover potential stale session from DB")
-				s.Sessions.RecoverSession(ctx, sess)
-				step, _ = sess.Get(ctx, session.KeyLoginStep).(int)
-			}
-
-			if step == loginStepCompleted {
-				// update limits each time as rate limiting gets cleaned up frequently (impact shouldn't be much in portal)
-				s.RateLimiter.UpdateRequestLimits(r, authenticatedBucketCap, authenticatedLeakInterval)
-
+		sess, err := s.Sessions.Get(r)
+		if err == nil {
+			authority, ok := sess.Authority()
+			if ok && authority.State == session.StateAuthenticated && authority.UserID > 0 {
+				ctx = context.WithValue(ctx, common.SessionHashContextKey, sess.Hash())
 				ctx = context.WithValue(ctx, common.LoggedInContextKey, true)
 				ctx = context.WithValue(ctx, common.SessionContextKey, sess)
-
+				s.RateLimiter.UpdateRequestLimits(r, authenticatedBucketCap, authenticatedLeakInterval)
+				s.Sessions.ScheduleExpirationRenewal(w, r, sess)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
-			} else {
-				slog.WarnContext(ctx, "Session present, but login not finished", "step", step)
 			}
+		} else if !errors.Is(err, session.ErrSessionMissing) {
+			slog.ErrorContext(ctx, "Failed to resolve session for private request", common.ErrAttr(err))
 		}
 
 		// for HTMX requests we don't want to do it (as they are mostly "background")
 		if _, ok := r.Header[common.HeaderHtmxRequest]; !ok {
-			_ = sess.Set(ctx, session.KeyReturnURL, r.URL.RequestURI())
+			if errors.Is(err, session.ErrSessionMissing) {
+				sess, err = s.Sessions.Start(w, r)
+			}
+			if err == nil && sess != nil {
+				_ = sess.Set(ctx, session.KeyReturnURL, r.URL.RequestURI())
+			}
 		}
 
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)

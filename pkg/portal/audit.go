@@ -35,16 +35,16 @@ type AuditLogsRenderContext struct {
 // UserAuditLog represents a single audit log entry for display in the UI.
 // Extensions can use this type to populate custom audit log types via AuditLogParser.
 type UserAuditLog struct {
-	UserName  string
-	UserEmail string
-	Action    string
-	Property  string
-	Resource  string
-	Value     string
-	TableName string
-	Time      string
-	Source    string
-	SessionID string
+	UserName    string
+	UserEmail   string
+	Action      string
+	Property    string
+	Resource    string
+	Value       string
+	TableName   string
+	Time        string
+	Source      string
+	SessionHash common.SessionHash
 }
 
 var (
@@ -347,11 +347,12 @@ func (s *Server) getAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewMode
 }
 
 func (s *Server) NewUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*UserAuditLog, error) {
+	sessionHash, _ := common.ParseSessionHash(log.SessionID)
 	ul := &UserAuditLog{
-		Time:      log.CreatedAt.Time.Format(auditLogTimeFormat),
-		Action:    string(log.Action),
-		TableName: log.EntityTable,
-		SessionID: log.SessionID,
+		Time:        log.CreatedAt.Time.Format(auditLogTimeFormat),
+		Action:      string(log.Action),
+		TableName:   log.EntityTable,
+		SessionHash: sessionHash,
 	}
 	var err error
 

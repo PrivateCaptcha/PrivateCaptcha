@@ -48,7 +48,8 @@ func TestDismissNotification(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		time.Sleep(200 * time.Millisecond)
 
-		if sess, found = server.Sessions.SessionGet(sessionReq); found {
+		if sess, err = server.Sessions.Get(sessionReq); err == nil {
+			found = true
 			if _, ok := sess.Get(ctx, session.KeyNotificationID).(int32); ok {
 				break
 			}

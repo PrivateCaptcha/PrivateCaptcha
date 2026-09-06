@@ -3,7 +3,9 @@ package portal
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -19,6 +21,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
 func createAPIKeySuite(srv *http.ServeMux, csrfToken string, cookie *http.Cookie, name string, days int) *http.Response {
@@ -61,7 +64,6 @@ func TestCreateAPIKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
 	name := "My API Key"
 	resp := createAPIKeySuite(srv, csrfToken, cookie, name, 90)
@@ -550,6 +552,103 @@ func TestEditEmail(t *testing.T) {
 	}
 }
 
+func TestEmailChangeLifecycle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	issueReq := httptest.NewRequest(http.MethodPost, "/settings/tab/general/email", nil)
+	issueReq.AddCookie(cookie)
+	issueReq.Header.Set(common.HeaderCSRFToken, csrfToken)
+	issueW := httptest.NewRecorder()
+	srv.ServeHTTP(issueW, issueReq)
+	if issueW.Code != http.StatusOK {
+		t.Fatalf("email-change issue status = %d, want 200", issueW.Code)
+	}
+	maskedEmail := common.MaskEmail(user.Email, '*')
+	if !strings.Contains(issueW.Body.String(), maskedEmail) {
+		t.Fatalf("email-change issue did not render authoritative recipient %q", maskedEmail)
+	}
+	code, err := portal_tests.TwoFactorCodeFromEmail(user.Email)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	update := func(email string, verificationCode int) *http.Response {
+		form := url.Values{}
+		form.Set(common.ParamCSRFToken, csrfToken)
+		form.Set(common.ParamEmail, email)
+		form.Set(common.ParamVerificationCode, strconv.Itoa(verificationCode))
+		req := httptest.NewRequest(http.MethodPut, "/settings/tab/general", strings.NewReader(form.Encode()))
+		req.AddCookie(cookie)
+		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+		return w.Result()
+	}
+
+	newEmail := strings.ToLower(t.Name()) + "_new@privatecaptcha.com"
+	resp := update(newEmail, code+1)
+	body, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("invalid email-change code status = %d, want 200", resp.StatusCode)
+	}
+	if !strings.Contains(string(body), maskedEmail) {
+		t.Fatalf("invalid email-change attempt did not render authoritative recipient %q", maskedEmail)
+	}
+	current, err := store.Impl().RetrieveUser(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Email != user.Email {
+		t.Fatalf("invalid code changed email to %q", current.Email)
+	}
+
+	resp = update(newEmail, code)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("email-change consume status = %d, want 200", resp.StatusCode)
+	}
+	current, err = store.Impl().RetrieveUser(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Email != newEmail {
+		t.Fatalf("email after successful change = %q", current.Email)
+	}
+
+	replayEmail := strings.ToLower(t.Name()) + "_replay@privatecaptcha.com"
+	resp = update(replayEmail, code)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("email-change replay status = %d, want 200", resp.StatusCode)
+	}
+	current, err = store.Impl().RetrieveUser(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Email != newEmail {
+		t.Fatalf("replayed challenge changed email to %q", current.Email)
+	}
+}
+
 func TestPutGeneralSettings(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -676,6 +775,10 @@ func TestDeleteAccount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	otherCookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest("DELETE", "/user", nil)
 	req.AddCookie(cookie)
@@ -688,10 +791,88 @@ func TestDeleteAccount(t *testing.T) {
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
+	cleared := false
+	for _, responseCookie := range resp.Cookies() {
+		if responseCookie.Name == server.Sessions.CookieName && responseCookie.MaxAge == -1 {
+			cleared = true
+		}
+	}
+	if !cleared {
+		t.Fatal("account deletion did not clear the current session cookie")
+	}
+
+	otherReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	otherReq.AddCookie(otherCookie)
+	otherW := httptest.NewRecorder()
+	srv.ServeHTTP(otherW, otherReq)
+	if otherW.Code == http.StatusOK {
+		t.Fatal("account deletion left another authenticated session active")
+	}
 
 	_, err = store.Impl().RetrieveUser(ctx, user.ID)
 	if err != db.ErrSoftDeleted {
 		t.Errorf("Expected ErrSoftDeleted after deleting user, got: %v", err)
+	}
+}
+
+func TestDeleteAccountRevocationFailureRetainsCookie(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	originalSessions := server.Sessions
+	server.Sessions = &session.Manager{
+		CookieName:   originalSessions.CookieName,
+		Store:        &revokeFailureSessionStore{Store: originalSessions.Store, err: errors.New("session revocation unavailable")},
+		MaxLifetime:  originalSessions.MaxLifetime,
+		Path:         originalSessions.Path,
+		SecureCookie: originalSessions.SecureCookie,
+	}
+	t.Cleanup(func() { server.Sessions = originalSessions })
+	req := httptest.NewRequest(http.MethodDelete, "/user", nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("revocation failure status = %d, want redirect", resp.StatusCode)
+	}
+	if location, err := resp.Location(); err != nil || location.Path != "/"+common.ErrorEndpoint+"/500" {
+		t.Fatalf("revocation failure redirect = (%v, %v)", location, err)
+	}
+	for _, responseCookie := range resp.Cookies() {
+		if responseCookie.Name == server.Sessions.CookieName {
+			t.Fatalf("revocation failure changed the current session cookie: %+v", responseCookie)
+		}
+	}
+	if _, err := store.Impl().RetrieveUser(ctx, user.ID); !errors.Is(err, db.ErrSoftDeleted) {
+		t.Fatalf("user after revocation failure error = %v, want %v", err, db.ErrSoftDeleted)
+	}
+
+	freshStore := db.NewSessionStore(store, server.Metrics)
+	freshManager := &session.Manager{
+		CookieName:   originalSessions.CookieName,
+		Store:        freshStore,
+		MaxLifetime:  originalSessions.MaxLifetime,
+		Path:         originalSessions.Path,
+		SecureCookie: originalSessions.SecureCookie,
+	}
+	if _, err := freshManager.Get(requestWithSessionCookie(http.MethodGet, "/", cookie)); !errors.Is(err, session.ErrSessionMissing) {
+		t.Fatalf("fresh store authenticated soft-deleted user: %v", err)
 	}
 }
 

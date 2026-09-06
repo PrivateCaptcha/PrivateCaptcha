@@ -2,6 +2,7 @@ package maintenance
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -40,7 +41,10 @@ func (j *CleanupDBCacheJob) NewParams() any {
 }
 
 func (j *CleanupDBCacheJob) RunOnce(ctx context.Context, params any) error {
-	return j.Store.Impl().DeleteExpiredCache(ctx)
+	impl := j.Store.Impl()
+	cacheErr := impl.DeleteExpiredCache(ctx)
+	sessionErr := impl.DeleteExpiredSessions(ctx)
+	return errors.Join(cacheErr, sessionErr)
 }
 
 type CleanupDeletedRecordsJob struct {

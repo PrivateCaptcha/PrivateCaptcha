@@ -17,6 +17,29 @@ import (
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
 
+func TestNewUserAuditLogAcceptsOnlySessionHashes(t *testing.T) {
+	server := &Server{}
+	valid := common.HashSessionID("session-secret")
+
+	log := &dbgen.AuditLog{EntityTable: "extension", SessionID: valid.String()}
+	model, err := server.NewUserAuditLog(t.Context(), log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model.SessionHash != valid {
+		t.Fatalf("SessionHash = %q, want %q", model.SessionHash.String(), valid.String())
+	}
+
+	log.SessionID = "raw-session-bearer"
+	model, err = server.NewUserAuditLog(t.Context(), log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !model.SessionHash.IsZero() {
+		t.Fatalf("raw audit session ID accepted as hash: %q", model.SessionHash.String())
+	}
+}
+
 func TestUserAuditLogInitFromUser(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1234,14 +1257,17 @@ func TestNewUserAuditLogsArray(t *testing.T) {
 
 	// Create audit log events directly using PersistAuditLog
 	now := time.Now().UTC()
+	sid := t.Name() + "-raw-session-bearer"
+	sessionHash := common.HashSessionID(sid)
 	auditEvents := []*common.AuditLogEvent{
 		{
-			UserID:    user.ID,
-			Action:    common.AuditLogActionCreate,
-			EntityID:  int64(user.ID),
-			TableName: db.TableNameProperties,
-			Timestamp: now,
-			Source:    common.AuditLogSourcePortal,
+			UserID:      user.ID,
+			Action:      common.AuditLogActionCreate,
+			EntityID:    int64(user.ID),
+			TableName:   db.TableNameProperties,
+			SessionHash: sessionHash,
+			Timestamp:   now,
+			Source:      common.AuditLogSourcePortal,
 			NewValue: &db.AuditLogProperty{
 				Name:    "test-property-1.com",
 				OrgID:   org.ID,
@@ -1249,12 +1275,13 @@ func TestNewUserAuditLogsArray(t *testing.T) {
 			},
 		},
 		{
-			UserID:    user.ID,
-			Action:    common.AuditLogActionUpdate,
-			EntityID:  int64(user.ID),
-			TableName: db.TableNameProperties,
-			Timestamp: now.Add(-1 * time.Hour),
-			Source:    common.AuditLogSourcePortal,
+			UserID:      user.ID,
+			Action:      common.AuditLogActionUpdate,
+			EntityID:    int64(user.ID),
+			TableName:   db.TableNameProperties,
+			SessionHash: sessionHash,
+			Timestamp:   now.Add(-1 * time.Hour),
+			Source:      common.AuditLogSourcePortal,
 			OldValue: &db.AuditLogProperty{
 				Name: "old-name.com",
 			},
@@ -1280,6 +1307,18 @@ func TestNewUserAuditLogsArray(t *testing.T) {
 	if len(logs) == 0 {
 		t.Fatal("Expected non-empty audit logs array")
 	}
+	foundHash := false
+	for _, log := range logs {
+		if strings.Contains(log.AuditLog.SessionID, sid) {
+			t.Fatalf("persisted audit log contains raw session ID %q", sid)
+		}
+		if log.AuditLog.SessionID == sessionHash.String() {
+			foundHash = true
+		}
+	}
+	if !foundHash {
+		t.Fatalf("persisted audit logs do not contain session hash %q", sessionHash.String())
+	}
 
 	// Test newUserAuditLogs with NON-EMPTY array
 	result := server.newUserAuditLogs(ctx, logs)
@@ -1296,6 +1335,15 @@ func TestNewUserAuditLogsArray(t *testing.T) {
 		if ul.Action == "" {
 			t.Errorf("Audit log %d: Expected Action to be set", i)
 		}
+	}
+	foundHash = false
+	for _, ul := range result {
+		if ul.SessionHash == sessionHash {
+			foundHash = true
+		}
+	}
+	if !foundHash {
+		t.Fatalf("audit presentation does not contain session hash %q", sessionHash.String())
 	}
 }
 

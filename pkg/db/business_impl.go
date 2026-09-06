@@ -19,7 +19,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/maypok86/otter/v2"
 )
 
 const (
@@ -241,6 +240,527 @@ type BusinessStoreImpl struct {
 	cache   common.Cache[CacheKey, any]
 }
 
+func storedSession(
+	sessionID string,
+	state dbgen.SessionState,
+	version int32,
+	userID pgtype.Int4,
+	data []byte,
+	expiresAt pgtype.Timestamptz,
+	challengeKind dbgen.NullSessionChallengeKind,
+	challengeEmail pgtype.Text,
+	registrationRequiresVerification pgtype.Bool,
+) *session.StoredSession {
+	return &session.StoredSession{
+		SessionID:          sessionID,
+		State:              session.State(state),
+		Version:            version,
+		UserID:             userID.Int32,
+		Payload:            data,
+		ExpiresAt:          expiresAt.Time,
+		ChallengeKind:      session.ChallengeKind(challengeKind.SessionChallengeKind),
+		ChallengeEmail:     challengeEmail.String,
+		VerifyRegistration: registrationRequiresVerification.Bool,
+	}
+}
+
+func storedDBSession(record *dbgen.Session) *session.StoredSession {
+	return storedSession(
+		record.SessionID,
+		record.State,
+		record.Version,
+		record.UserID,
+		record.Data,
+		record.ExpiresAt,
+		record.ChallengeKind,
+		record.ChallengeEmail,
+		record.VerifyRegistration,
+	)
+}
+
+func mutationOutcome(value string) (session.TransitionOutcome, error) {
+	switch session.TransitionOutcome(value) {
+	case session.TransitionSucceeded:
+		return session.TransitionSucceeded, nil
+	case session.TransitionInvalidCode:
+		return session.TransitionInvalidCode, nil
+	default:
+		return "", fmt.Errorf("unexpected session transition outcome %q", value)
+	}
+}
+
+func challengeKindMatches(record *dbgen.InspectSessionChallengeRow, kind session.ChallengeKind) bool {
+	actualKind := session.ChallengeKind(record.ChallengeKind.SessionChallengeKind)
+	if kind == "" {
+		return record.State == dbgen.SessionStatePending &&
+			(actualKind == session.ChallengeKindSignIn || actualKind == session.ChallengeKindRegistration)
+	}
+	expectedState := dbgen.SessionStatePending
+	if kind == session.ChallengeKindEmailChange {
+		expectedState = dbgen.SessionStateAuthenticated
+	}
+	return record.State == expectedState && actualKind == kind
+}
+
+func challengeAttemptsExhausted(record *dbgen.InspectSessionChallengeRow, maxAttempts int32) bool {
+	return maxAttempts > 0 && record.FailedAttempts >= maxAttempts
+}
+
+func (impl *BusinessStoreImpl) inspectChallengeMiss(
+	ctx context.Context,
+	sid string,
+	kind session.ChallengeKind,
+	maxAttempts int32,
+) (session.TransitionOutcome, error) {
+	record, err := impl.querier.InspectSessionChallenge(ctx, sid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return session.TransitionMissing, nil
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to inspect session challenge", common.ErrAttr(err))
+		return "", err
+	}
+
+	if kind != session.ChallengeKindEmailChange &&
+		challengeKindMatches(record, "") &&
+		!record.SessionExpired && challengeAttemptsExhausted(record, maxAttempts) {
+		return session.TransitionAttemptsExhausted, nil
+	}
+	if !challengeKindMatches(record, kind) {
+		return session.TransitionStale, nil
+	}
+	if record.SessionExpired || record.ChallengeExpired.Bool {
+		return session.TransitionExpired, nil
+	}
+	if challengeAttemptsExhausted(record, maxAttempts) {
+		return session.TransitionAttemptsExhausted, nil
+	}
+	if kind == session.ChallengeKindRegistration && record.VerifyRegistration.Bool {
+		return session.TransitionVerificationRequired, nil
+	}
+	return session.TransitionStale, nil
+}
+
+func (impl *BusinessStoreImpl) RetrieveLiveSession(ctx context.Context, sid string) (*session.StoredSession, error) {
+	if sid == "" {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	record, err := impl.querier.GetLiveSession(ctx, sid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrRecordNotFound
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve live session", common.ErrAttr(err))
+		return nil, err
+	}
+
+	return storedSession(
+		record.SessionID,
+		record.State,
+		record.Version,
+		record.UserID,
+		record.Data,
+		record.ExpiresAt,
+		record.ChallengeKind,
+		record.ChallengeEmail,
+		record.VerifyRegistration,
+	), nil
+}
+
+func (impl *BusinessStoreImpl) IssueSignInChallenge(ctx context.Context, params *dbgen.IssueSignInChallengeParams) (*session.ChallengeIssueResult, error) {
+	if params == nil || params.SessionID == "" || params.UserID <= 0 || !params.ChallengeCode.Valid || params.ChallengeCode.String == "" || params.Data == nil || params.SessionTtl <= 0 || params.ChallengeTtl <= 0 || params.MaxAttempts <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	record, err := impl.querier.IssueSignInChallenge(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		outcome, inspectErr := impl.inspectChallengeMiss(ctx, params.SessionID, session.ChallengeKindSignIn, params.MaxAttempts)
+		return &session.ChallengeIssueResult{Outcome: outcome}, inspectErr
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to issue sign-in challenge", common.ErrAttr(err))
+		return nil, err
+	}
+	return &session.ChallengeIssueResult{Outcome: session.TransitionSucceeded, Session: storedDBSession(record)}, nil
+}
+
+func (impl *BusinessStoreImpl) IssueRegistrationChallenge(ctx context.Context, params *dbgen.IssueRegistrationChallengeParams) (*session.ChallengeIssueResult, error) {
+	if params == nil || params.SessionID == "" || !params.ChallengeEmail.Valid || params.ChallengeEmail.String == "" || !params.ChallengeCode.Valid || params.ChallengeCode.String == "" || params.Data == nil || (params.InviteID.Valid && params.InviteID.Int32 <= 0) || params.SessionTtl <= 0 || params.ChallengeTtl <= 0 || params.MaxAttempts <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	record, err := impl.querier.IssueRegistrationChallenge(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		outcome, inspectErr := impl.inspectChallengeMiss(ctx, params.SessionID, session.ChallengeKindRegistration, params.MaxAttempts)
+		return &session.ChallengeIssueResult{Outcome: outcome}, inspectErr
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to issue registration challenge", common.ErrAttr(err))
+		return nil, err
+	}
+	return &session.ChallengeIssueResult{Outcome: session.TransitionSucceeded, Session: storedDBSession(record)}, nil
+}
+
+func (impl *BusinessStoreImpl) SetVerifyRegistration(ctx context.Context, sid string) (*session.StoredSession, error) {
+	if sid == "" {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	record, err := impl.querier.SetVerifyRegistration(ctx, sid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrRecordNotFound
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to require registration verification", common.ErrAttr(err))
+		return nil, err
+	}
+	return storedDBSession(record), nil
+}
+
+func (impl *BusinessStoreImpl) IssueEmailChangeChallenge(ctx context.Context, params *dbgen.IssueEmailChangeChallengeParams) (*session.ChallengeIssueResult, error) {
+	if params == nil || params.SessionID == "" || !params.ChallengeCode.Valid || params.ChallengeCode.String == "" || params.ChallengeTtl <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	record, err := impl.querier.IssueEmailChangeChallenge(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return &session.ChallengeIssueResult{Outcome: session.TransitionStale}, nil
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to issue email-change challenge", common.ErrAttr(err))
+		return nil, err
+	}
+	return &session.ChallengeIssueResult{Outcome: session.TransitionSucceeded, Session: storedDBSession(record)}, nil
+}
+
+func (impl *BusinessStoreImpl) ResendPendingChallenge(ctx context.Context, params *dbgen.ResendPendingChallengeParams) (*session.ChallengeIssueResult, error) {
+	if params == nil || params.SessionID == "" || !params.ChallengeCode.Valid || params.ChallengeCode.String == "" || params.ChallengeTtl <= 0 || params.MaxAttempts <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	record, err := impl.querier.ResendPendingChallenge(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		outcome, inspectErr := impl.inspectChallengeMiss(ctx, params.SessionID, "", params.MaxAttempts)
+		return &session.ChallengeIssueResult{Outcome: outcome}, inspectErr
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to resend pending challenge", common.ErrAttr(err))
+		return nil, err
+	}
+	return &session.ChallengeIssueResult{Outcome: session.TransitionSucceeded, Session: storedDBSession(record)}, nil
+}
+
+func (impl *BusinessStoreImpl) ConsumeSignInChallenge(ctx context.Context, params *dbgen.ConsumeSignInChallengeParams) (*session.SignInChallengeConsumeResult, error) {
+	if params == nil || params.SessionID == "" || params.SuccessorSessionID == "" || params.SessionID == params.SuccessorSessionID || !params.ChallengeCode.Valid || params.SuccessorData == nil || params.SuccessorTtl <= 0 || params.MaxAttempts <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	record, err := impl.querier.ConsumeSignInChallenge(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		outcome, inspectErr := impl.inspectChallengeMiss(ctx, params.SessionID, session.ChallengeKindSignIn, params.MaxAttempts)
+		return &session.SignInChallengeConsumeResult{Outcome: outcome}, inspectErr
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to consume sign-in challenge", common.ErrAttr(err))
+		return nil, err
+	}
+	outcome, err := mutationOutcome(record.Outcome)
+	if err != nil {
+		return nil, err
+	}
+	if outcome == session.TransitionInvalidCode && record.FailedAttempts >= params.MaxAttempts {
+		outcome = session.TransitionAttemptsExhausted
+	}
+	result := &session.SignInChallengeConsumeResult{
+		Outcome: outcome,
+		Session: storedSession(
+			record.SessionID,
+			record.State,
+			record.Version,
+			record.UserID,
+			record.Data,
+			record.ExpiresAt,
+			record.ChallengeKind,
+			record.ChallengeEmail,
+			record.VerifyRegistration,
+		),
+		FailedAttempts: record.FailedAttempts,
+	}
+	if record.SessionID_2.Valid {
+		result.Successor = storedSession(
+			record.SessionID_2.String,
+			record.State_2.SessionState,
+			record.Version_2.Int32,
+			record.UserID_2,
+			record.Data_2,
+			record.ExpiresAt_2,
+			record.ChallengeKind_2,
+			record.ChallengeEmail_2,
+			record.VerifyRegistration_2,
+		)
+	}
+	return result, nil
+}
+
+func (impl *BusinessStoreImpl) ConsumeRegistrationChallenge(ctx context.Context, params *dbgen.ConsumeRegistrationChallengeParams) (*session.RegistrationChallengeConsumeResult, error) {
+	if params == nil || params.SessionID == "" || !params.ChallengeCode.Valid || params.MaxAttempts <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	record, err := impl.querier.ConsumeRegistrationChallenge(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		outcome, inspectErr := impl.inspectChallengeMiss(ctx, params.SessionID, session.ChallengeKindRegistration, params.MaxAttempts)
+		return &session.RegistrationChallengeConsumeResult{Outcome: outcome}, inspectErr
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to consume registration challenge", common.ErrAttr(err))
+		return nil, err
+	}
+	outcome, err := mutationOutcome(record.Outcome)
+	if err != nil {
+		return nil, err
+	}
+	if outcome == session.TransitionInvalidCode && record.FailedAttempts >= params.MaxAttempts {
+		outcome = session.TransitionAttemptsExhausted
+	}
+	result := &session.RegistrationChallengeConsumeResult{
+		Outcome: outcome,
+		Session: storedSession(
+			record.SessionID,
+			record.State,
+			record.Version,
+			record.UserID,
+			record.Data,
+			record.ExpiresAt,
+			record.ChallengeKind,
+			record.ChallengeEmail,
+			record.VerifyRegistration,
+		),
+		FailedAttempts: record.FailedAttempts,
+	}
+	if outcome == session.TransitionSucceeded {
+		result.Name, err = session.RegistrationNameFromPayload(record.Data)
+		if err != nil {
+			// Return the committed revocation so SessionStore can retain its terminal marker.
+			return result, fmt.Errorf("decode consumed registration Payload: %w", err)
+		}
+		result.Email = record.ChallengeEmail.String
+		result.InviteID = record.RegistrationInviteID.Int32
+	}
+	return result, nil
+}
+
+func (impl *BusinessStoreImpl) CreateRegistrationSuccessor(ctx context.Context, params *dbgen.CreateRegistrationSuccessorParams) (*session.RegistrationSuccessorResult, error) {
+	if params == nil || params.SessionID == "" || params.UserID <= 0 || params.Data == nil || params.SessionTtl <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	record, err := impl.querier.CreateRegistrationSuccessor(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return &session.RegistrationSuccessorResult{Outcome: session.TransitionStale}, nil
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create registration successor", common.ErrAttr(err))
+		return nil, err
+	}
+	return &session.RegistrationSuccessorResult{Outcome: session.TransitionSucceeded, Session: storedDBSession(record)}, nil
+}
+
+func (impl *BusinessStoreImpl) ConsumeEmailChangeChallenge(ctx context.Context, params *dbgen.ConsumeEmailChangeChallengeParams) (*session.EmailChangeChallengeConsumeResult, error) {
+	if params == nil || params.SessionID == "" || !params.ChallengeCode.Valid || params.MaxAttempts <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	record, err := impl.querier.ConsumeEmailChangeChallenge(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		outcome, inspectErr := impl.inspectChallengeMiss(ctx, params.SessionID, session.ChallengeKindEmailChange, params.MaxAttempts)
+		return &session.EmailChangeChallengeConsumeResult{Outcome: outcome}, inspectErr
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to consume email-change challenge", common.ErrAttr(err))
+		return nil, err
+	}
+	outcome, err := mutationOutcome(record.Outcome)
+	if err != nil {
+		return nil, err
+	}
+	if outcome == session.TransitionInvalidCode && record.FailedAttempts >= params.MaxAttempts {
+		outcome = session.TransitionAttemptsExhausted
+	}
+	return &session.EmailChangeChallengeConsumeResult{
+		Outcome: outcome,
+		Session: storedSession(
+			record.SessionID,
+			record.State,
+			record.Version,
+			record.UserID,
+			record.Data,
+			record.ExpiresAt,
+			record.ChallengeKind,
+			record.ChallengeEmail,
+			record.VerifyRegistration,
+		),
+		FailedAttempts: record.FailedAttempts,
+	}, nil
+}
+
+func (impl *BusinessStoreImpl) UpdateSessionPayloads(ctx context.Context, updates []session.PayloadUpdate) ([]session.PayloadUpdateResult, error) {
+	if len(updates) == 0 {
+		return nil, nil
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	params := &dbgen.UpdateSessionPayloadsParams{
+		SessionIds:       make([]string, 0, len(updates)),
+		ExpectedVersions: make([]int32, 0, len(updates)),
+		Payloads:         make([][]byte, 0, len(updates)),
+	}
+	for _, update := range updates {
+		if update.SessionID == "" {
+			return nil, ErrInvalidInput
+		}
+		params.SessionIds = append(params.SessionIds, update.SessionID)
+		params.ExpectedVersions = append(params.ExpectedVersions, update.ExpectedVersion)
+		params.Payloads = append(params.Payloads, update.Payload)
+	}
+
+	results, err := impl.querier.UpdateSessionPayloads(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update session Payloads", "count", len(updates), common.ErrAttr(err))
+		return nil, err
+	}
+
+	converted := make([]session.PayloadUpdateResult, 0, len(results))
+	for _, result := range results {
+		converted = append(converted, session.PayloadUpdateResult{
+			SessionID: result.SessionID,
+			Version:   result.Version,
+		})
+	}
+	return converted, nil
+}
+
+func (impl *BusinessStoreImpl) RenewSessionExpirations(ctx context.Context, sids []string, ttl time.Duration) ([]session.ExpirationRenewalResult, error) {
+	if len(sids) == 0 {
+		return nil, nil
+	}
+	if ttl <= 0 {
+		return nil, ErrInvalidInput
+	}
+	for _, sid := range sids {
+		if sid == "" {
+			return nil, ErrInvalidInput
+		}
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	results, err := impl.querier.RenewSessionExpirations(ctx, &dbgen.RenewSessionExpirationsParams{
+		Ttl:        ttl,
+		SessionIds: sids,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to renew session expirations", "count", len(sids), common.ErrAttr(err))
+		return nil, err
+	}
+
+	converted := make([]session.ExpirationRenewalResult, 0, len(results))
+	for _, result := range results {
+		converted = append(converted, session.ExpirationRenewalResult{
+			SessionID: result.SessionID,
+			Version:   result.Version,
+			ExpiresAt: result.ExpiresAt.Time,
+		})
+	}
+	return converted, nil
+}
+
+func (impl *BusinessStoreImpl) RevokeSession(ctx context.Context, sid string) (*session.RevocationResult, error) {
+	if sid == "" {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	result, err := impl.querier.RevokeSession(ctx, sid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Missing and expired sessions are already unusable, so revocation is idempotent.
+		return nil, nil
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to revoke session", common.ErrAttr(err))
+		return nil, err
+	}
+
+	return &session.RevocationResult{
+		SessionID: result.SessionID,
+		State:     session.State(result.State),
+		Version:   result.Version,
+		UserID:    result.UserID.Int32,
+	}, nil
+}
+
+func (impl *BusinessStoreImpl) RevokeUserSessions(ctx context.Context, userID int32) ([]session.RevocationResult, error) {
+	if userID <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	results, err := impl.querier.RevokeUserSessions(ctx, pgtype.Int4{Int32: userID, Valid: true})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to revoke user sessions", "userID", userID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	converted := make([]session.RevocationResult, 0, len(results))
+	for _, result := range results {
+		converted = append(converted, session.RevocationResult{
+			SessionID: result.SessionID,
+			State:     session.State(result.State),
+			Version:   result.Version,
+			UserID:    userID,
+		})
+	}
+	return converted, nil
+}
+
 func (impl *BusinessStoreImpl) RetrieveFromCache(ctx context.Context, key string) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, ErrInvalidInput
@@ -311,6 +831,21 @@ func (impl *BusinessStoreImpl) DeleteExpiredCache(ctx context.Context) error {
 
 	slog.Log(ctx, common.LevelTrace, "Deleted expired cache", "affected", affected)
 
+	return nil
+}
+
+func (impl *BusinessStoreImpl) DeleteExpiredSessions(ctx context.Context) error {
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	affected, err := impl.querier.DeleteExpiredSessions(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to delete expired sessions", common.ErrAttr(err))
+		return err
+	}
+
+	slog.Log(ctx, common.LevelTrace, "Deleted expired sessions", "affected", affected)
 	return nil
 }
 
@@ -464,199 +999,6 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 	auditEvent := newUserAuditLogEvent(user, nil, common.AuditLogActionSoftDelete)
 
 	return auditEvent, nil
-}
-
-func (impl *BusinessStoreImpl) doGetSessionbyID(ctx context.Context, sid string) (*session.SessionData, error) {
-	sslog := slog.With(common.SessionIDAttr(sid))
-	sessionID, _ := sessionIDFunc(sid)
-	data, err := impl.RetrieveFromCache(ctx, sessionID)
-	if (err == nil) && (len(data) > 0) {
-		sslog.DebugContext(ctx, "Found session data cached in DB")
-		sd := session.NewSessionData(sid)
-		if uerr := sd.UnmarshalBinary(data); uerr != nil {
-			sslog.ErrorContext(ctx, "Failed to unmarshal session data from cache", common.ErrAttr(uerr))
-			return nil, uerr
-		}
-
-		sslog.Log(ctx, common.LevelTrace, "Unmarshaled session data from binary", "fields", sd.Size())
-
-		return sd, nil
-	}
-
-	if err == ErrCacheMiss {
-		sslog.DebugContext(ctx, "Session data not found cached in DB")
-		// this will cause item to be purged from otter cache, should it still be there
-		return nil, otter.ErrNotFound
-	}
-
-	sslog.ErrorContext(ctx, "Failed to read session data from DB cache", "size", len(data), common.ErrAttr(err))
-
-	return nil, err
-}
-
-func (impl *BusinessStoreImpl) DeleteUserSession(ctx context.Context, sid string) error {
-	if found := impl.cache.Delete(ctx, SessionCacheKey(sid)); !found {
-		slog.WarnContext(ctx, "User session was not found in memory cache to delete")
-	}
-
-	if impl.querier == nil {
-		return ErrMaintenance
-	}
-
-	sessionID, _ := sessionIDFunc(sid)
-	affected, err := impl.querier.DeleteCachedByKey(ctx, sessionID)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to delete cached session from DB", common.ErrAttr(err))
-	} else {
-		slog.Log(ctx, common.LevelTrace, "Deleted cached session from DB", "affected", affected)
-	}
-
-	return err
-}
-
-func (impl *BusinessStoreImpl) DeleteUserSessions(ctx context.Context, sids []string) error {
-	if len(sids) == 0 {
-		return nil
-	}
-
-	keys := make([]string, 0, len(sids))
-	for _, sid := range sids {
-		if found := impl.cache.Delete(ctx, SessionCacheKey(sid)); !found {
-			slog.WarnContext(ctx, "User session was not found in memory cache to delete")
-		}
-		sessionID, _ := sessionIDFunc(sid)
-		keys = append(keys, sessionID)
-	}
-
-	if impl.querier == nil {
-		return ErrMaintenance
-	}
-
-	affected, err := impl.querier.DeleteCachedByKeys(ctx, keys)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to delete cached sessions from DB", "count", len(keys), common.ErrAttr(err))
-	} else {
-		slog.Log(ctx, common.LevelTrace, "Deleted cached sessions from DB", "count", len(keys), "affected", affected)
-	}
-
-	return err
-}
-
-func (impl *BusinessStoreImpl) CacheUserSession(ctx context.Context, data *session.SessionData) error {
-	if data == nil {
-		return ErrInvalidInput
-	}
-
-	return impl.cache.Set(ctx, SessionCacheKey(data.ID()), data)
-}
-
-func (impl *BusinessStoreImpl) RetrieveUserSession(ctx context.Context, sid string, skipCache bool) (*session.SessionData, error) {
-	if len(sid) == 0 {
-		return nil, ErrInvalidInput
-	}
-
-	if skipCache {
-		// we do not re-cache it yet and let external changes to be merged first
-		return impl.doGetSessionbyID(ctx, sid)
-	}
-
-	reader := &StoreOneReader[string, session.SessionData]{
-		CacheKey:    SessionCacheKey(sid),
-		Cache:       impl.cache,
-		DropInvalid: true,
-	}
-
-	if impl.querier != nil {
-		reader.QueryFunc = impl.doGetSessionbyID
-		reader.QueryKeyFunc = QueryKeyString
-	}
-
-	return reader.Read(ctx)
-}
-
-func (impl *BusinessStoreImpl) GetCachedUserSessions(ctx context.Context, batch map[string]uint) ([]*session.SessionData, error) {
-	reader := &StoreBulkReader[string, string, session.SessionData]{
-		ArgFunc:      nil, // we shouldn't be using it as we read from cache only
-		Cache:        impl.cache,
-		CacheKeyFunc: SessionCacheKey,
-		QueryKeyFunc: sessionIDFunc,
-		QueryFunc:    nil, // explicitly set - we are only interested in cache
-		DropInvalid:  true,
-	}
-
-	// NOTE: it does have the side-effect of extending session expiration in our cache once again (which _is_ a "bug"),
-	// but its impact is not large enough to bother
-	cached, _, err := reader.Read(ctx, batch)
-	if (err != nil) && (err != ErrMaintenance) {
-		slog.Log(ctx, common.LevelTrace, "Failed to read cached sessions", common.ErrAttr(err))
-		return nil, err
-	}
-	return cached, nil
-}
-
-func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[string]uint, persistKey session.SessionKey, ttl time.Duration) error {
-	cached, err := impl.GetCachedUserSessions(ctx, batch)
-	if err != nil {
-		return err
-	}
-
-	if len(cached) == 0 {
-		slog.DebugContext(ctx, "No sessions to save")
-		return nil
-	}
-
-	slog.DebugContext(ctx, "Read sessions chunk to save", "count", len(cached))
-
-	keys := make([]string, 0, len(batch))
-	values := make([][]byte, 0, len(batch))
-	intervals := make([]time.Duration, 0, len(batch))
-
-	for _, sd := range cached {
-		if sd.Has(session.KeyTombstone) {
-			continue
-		}
-
-		if !sd.Has(persistKey) {
-			slog.Log(ctx, common.LevelTrace, "Skipping persisting session without persist key", common.SessionIDAttr(sd.ID()))
-			continue
-		}
-
-		data, err := sd.MarshalBinary()
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to marshal session", common.SessionIDAttr(sd.ID()), common.ErrAttr(err))
-			continue
-		}
-
-		slog.Log(ctx, common.LevelTrace, "Marshaled session data to binary", common.SessionIDAttr(sd.ID()), "fields", sd.Size())
-
-		sidKey, _ := sessionIDFunc(sd.ID())
-		keys = append(keys, sidKey)
-		values = append(values, data)
-		intervals = append(intervals, ttl)
-	}
-
-	if len(keys) == 0 {
-		slog.WarnContext(ctx, "No persistent sessions to save")
-		return nil
-	}
-
-	if impl.querier == nil {
-		return ErrMaintenance
-	}
-
-	affected, err := impl.querier.CreateCacheMany(ctx, &dbgen.CreateCacheManyParams{
-		Keys:      keys,
-		Values:    values,
-		Intervals: intervals,
-	})
-
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to cache sessions", "count", len(keys), common.ErrAttr(err))
-	}
-
-	slog.DebugContext(ctx, "Saved persisted sessions to DB", "count", len(keys), "affected", affected)
-
-	return err
 }
 
 func (impl *BusinessStoreImpl) RetrievePropertyBySitekey(ctx context.Context, sitekey string) (*dbgen.Property, error) {

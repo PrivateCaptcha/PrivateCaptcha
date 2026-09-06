@@ -18,10 +18,9 @@ import (
 )
 
 const (
-	SitekeyLen         = 32
-	APIKeyPrefix       = "pc_"
-	SecretLen          = len(APIKeyPrefix) + SitekeyLen
-	sessionCachePrefix = "session/"
+	SitekeyLen   = 32
+	APIKeyPrefix = "pc_"
+	SecretLen    = len(APIKeyPrefix) + SitekeyLen
 )
 
 var (
@@ -265,10 +264,6 @@ func stringKeyUUID(key string) (pgtype.UUID, error) {
 	}
 
 	return result, nil
-}
-
-func sessionIDFunc(sid string) (string, error) {
-	return sessionCachePrefix + sid, nil
 }
 
 func IdentityKeyFunc[TKey any](key TKey) (TKey, error) {

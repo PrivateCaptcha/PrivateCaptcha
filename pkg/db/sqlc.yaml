@@ -95,6 +95,15 @@ sql:
           backend_rule_action_property_difficulty_growth: RuleActionPropertyDifficultyGrowth
           backend_rule_action_property_break: RuleActionPropertyBreak
           backend_user_setting: UserSettings
+          backend_session: Session
+          backend_session_state: SessionState
+          backend_session_state_pending: SessionStatePending
+          backend_session_state_authenticated: SessionStateAuthenticated
+          backend_session_state_revoked: SessionStateRevoked
+          backend_session_challenge_kind: SessionChallengeKind
+          backend_session_challenge_kind_sign_in: SessionChallengeKindSignIn
+          backend_session_challenge_kind_registration: SessionChallengeKindRegistration
+          backend_session_challenge_kind_email_change: SessionChallengeKindEmailChange
         overrides:
           - db_type: "pg_catalog.interval"
             go_type: "time.Duration"
