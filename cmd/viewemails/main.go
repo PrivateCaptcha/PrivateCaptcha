@@ -123,7 +123,7 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 			FormSubmissionsChange:  17.5,
 			FormErrorsChange:       -11.4,
 			FormErrorRate:          10.9,
-			FormErrorRateChange:    -24.1,
+			FormErrorRateChange:    24.1,
 			TopProperties: []*email.PropertyStat{
 				{Name: "Main Site with extremely long name", Domain: "*.example.com", Link: stubPropertyURL, Count: 5200, Percent: 41.8, Change: 8.3},
 				{Name: "Blog", Domain: "blog.example.com", Link: stubPropertyURL, Count: 3100, Percent: 24.9, Change: 6.9, Alternate: true},
