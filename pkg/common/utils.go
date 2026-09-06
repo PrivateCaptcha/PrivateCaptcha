@@ -256,26 +256,26 @@ func ParseDomainName(input string) (string, error) {
 	if len(input) == 0 {
 		return "", errEmptyDomain
 	}
-
 	parsedURL, err := url.Parse(input)
 	if err != nil {
 		return "", err
 	}
-
 	domain := parsedURL.Host
 	if domain == "" {
+		// scheme-less input ("bar.com", "bar.com:8080") — url.Parse left Host empty.
+		// Preserve the existing fallback + LastIndex(":") port-stripping so we
+		// don't regress the inputs covered by TestCleanupDomain.
 		domain = input
+		if slashIndex := strings.LastIndex(domain, "/"); slashIndex != -1 {
+			domain = domain[:slashIndex]
+		}
+		if colonIndex := strings.LastIndex(domain, ":"); colonIndex != -1 {
+			domain = domain[:colonIndex]
+		}
+		return domain, nil
 	}
-
-	if slashIndex := strings.LastIndex(domain, "/"); slashIndex != -1 {
-		domain = domain[:slashIndex]
-	}
-
-	if colonIndex := strings.LastIndex(domain, ":"); colonIndex != -1 {
-		domain = domain[:colonIndex]
-	}
-
-	return domain, nil
+	// Hostname() correctly strips both ":port" and IPv6 "[...]" brackets
+	return parsedURL.Hostname(), nil
 }
 
 func IsLocalhost(address string) bool {

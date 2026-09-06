@@ -442,3 +442,16 @@ func TestFormatMagnitude(t *testing.T) {
 		})
 	}
 }
+
+func TestParseDomainNameIPv6Repro(t *testing.T) {
+	for _, in := range []string{
+		"http://[::1]:8080", // browser Origin shape with explicit port
+		"http://[::1]/",     // RFC 6454 default-port shape
+		"http://[::1]",      // default-port shape, no path
+		"http://127.0.0.1:8080",
+		"http://localhost:8080",
+	} {
+		got, _ := ParseDomainName(in)
+		t.Logf("ParseDomainName(%q) = %q  IsLocalhost=%v", in, got, IsLocalhost(got))
+	}
+}
