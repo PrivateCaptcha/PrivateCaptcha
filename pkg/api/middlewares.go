@@ -135,8 +135,8 @@ func NewUserLimiter(store db.Implementor, planService billing.PlanService) *base
 	// missing TTL should be equal to "usual" TTL here because it has the same meaning (we mark user has no violation)
 	userLimits, err = db.NewMemoryCacheEx[int32, bool]("user_limits", maxLimitedUsers, false /*missing value*/, userLimitTTL,
 		func(o *otter.Options[int32, bool]) {
-			// we want to ONLY use ExpiryAccessing so that we _force_ re-checking various user limit conditions
-			o.ExpiryCalculator = otter.ExpiryAccessing[int32, bool](userLimitTTL)
+			// we want to ONLY use ExpiryWriting so that we _force_ re-checking various user limit conditions
+			o.ExpiryCalculator = otter.ExpiryWriting[int32, bool](userLimitTTL)
 		})
 	if err != nil {
 		slog.Error("Failed to create memory cache for user limits", common.ErrAttr(err))
