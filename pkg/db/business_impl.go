@@ -3402,6 +3402,8 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 	impl.invalidateOrgPropertiesCache(ctx, updatedProperty.OrgID.Int32, &property.ID)
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(oldOrgID))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(updatedProperty.OrgID.Int32))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(updatedProperty.OrgOwnerID.Int32))
 	// and cache property
 	impl.cacheProperty(ctx, updatedProperty)
 
