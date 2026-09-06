@@ -144,7 +144,7 @@ func hashIDs(ids []int32) uint32 {
 	return h.Sum32()
 }
 
-func formDashboardURL(ctx context.Context, portalURL string, hasher common.IdentifierHasher, form *dbgen.Form) string {
+func formDashboardURL(ctx context.Context, portalURL string, hasher common.IdentifierHasher, form *dbgen.Form, utm string) string {
 	if (len(portalURL) == 0) || (hasher == nil) || (form == nil) || (!form.OrgID.Valid) {
 		return ""
 	}
@@ -159,7 +159,10 @@ func formDashboardURL(ctx context.Context, portalURL string, hasher common.Ident
 		return ""
 	}
 
-	return link + "?" + formEmailUTM
+	if len(utm) > 0 {
+		return link + "?" + utm
+	}
+	return link
 }
 
 func scheduleFormDeactivationNotifications(ctx context.Context, creator userNotificationCreator, forms []*dbgen.Form, portalURL string, hasher common.IdentifierHasher, tnow time.Time) error {
@@ -186,7 +189,7 @@ func scheduleFormDeactivationNotifications(ctx context.Context, creator userNoti
 		}
 		groups[ownerID].forms = append(groups[ownerID].forms, &email.DeactivatedForm{
 			Name: form.Name,
-			Link: formDashboardURL(ctx, portalURL, hasher, form),
+			Link: formDashboardURL(ctx, portalURL, hasher, form, formEmailUTM),
 		})
 		groups[ownerID].ids = append(groups[ownerID].ids, form.ID)
 	}

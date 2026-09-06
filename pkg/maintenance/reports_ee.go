@@ -581,7 +581,7 @@ func fillTopForms(ctx context.Context, store db.Implementor, report *email.Usage
 		topForms = append(topForms, &email.FormStat{
 			Name:      form.Name,
 			URL:       form.URL,
-			Link:      formDashboardURL(ctx, portalURL, hasher, form),
+			Link:      formDashboardURL(ctx, portalURL, hasher, form, report.UTM),
 			Count:     fs.CurrentSubmissions,
 			Percent:   percent,
 			Change:    change,
