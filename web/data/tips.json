@@ -1,0 +1,212 @@
+[
+    {
+        "id": "api-key-scope",
+        "text": "You can limit API key scope to a certain organization for an in-depth security",
+        "link": "",
+        "patterns": ["/settings"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "openapi-portal",
+        "text": "You can integrate with Private Captcha portal using our OpenAPI spec",
+        "link": "https://docs.privatecaptcha.com/docs/integrations/openapi/",
+        "patterns": ["/", "/{$}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "form-proxy-hide-url",
+        "text": "Form proxy allows you to hide your backend URL in web page code",
+        "link": "https://docs.privatecaptcha.com/docs/reference/form-proxy/",
+        "patterns": ["/org/{org}/form/{form}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "form-proxy-verification",
+        "text": "Form proxy checks configured rate limit and CAPTCHA before calling your backend",
+        "link": "https://docs.privatecaptcha.com/docs/reference/form-proxy/",
+        "patterns": ["/org/{org}/form/{form}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "difficulty-rule-tor-vpn",
+        "text": "You can change CAPTCHA difficulty for VPN or TOR networks with difficulty rules",
+        "link": "https://docs.privatecaptcha.com/docs/reference/rules/#traffic-source",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "difficulty-rule-search-crawler",
+        "text": "You can change CAPTCHA difficulty for search crawlers with difficutly rules",
+        "link": "https://docs.privatecaptcha.com/docs/reference/rules/#traffic-source",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "difficulty-rule-public-cloud",
+        "text": "You can change CAPTCHA difficulty for Public Clouds with difficutly rules",
+        "link": "https://docs.privatecaptcha.com/docs/reference/rules/#traffic-source",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "difficulty-rule-block-bot",
+        "text": "You can completely block requests from known bots with difficutly rules",
+        "link": "https://docs.privatecaptcha.com/docs/reference/rules/#block-request",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "difficulty-rule-old-browser",
+        "text": "You can change CAPTCHA difficulty for old browser versions with difficulty rules",
+        "link": "https://docs.privatecaptcha.com/docs/reference/rules/#browser-version",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "difficulty-rule-country",
+        "text": "You can change CAPTCHA difficulty based on Country with difficulty rules",
+        "link": "https://docs.privatecaptcha.com/docs/reference/rules/#country",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "difficulty-rule-user-agent",
+        "text": "You can change CAPTCHA difficulty based on User-Agent with difficulty rules",
+        "link": "https://docs.privatecaptcha.com/docs/reference/rules/#country",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "difficulty-rule-dns-proxy",
+        "text": "It is possible to use your own domain name instead of api.privatecaptcha.com",
+        "link": "https://docs.privatecaptcha.com/docs/reference/dns-proxy/",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "platform-api",
+        "text": "You can manage your domains and organizations using our public API",
+        "link": "https://docs.privatecaptcha.com/docs/reference/platform-api/",
+        "patterns": ["/", "/{$}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "widget-display-mode",
+        "text": "Website widget offers best protection with default display mode 'widget'",
+        "link": "https://docs.privatecaptcha.com/docs/reference/security/#widget-display-mode",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "property-allow-localhost",
+        "text": "To receive and verify CAPTCHA challenges locally, enable 'Allow localhost' setting",
+        "link": "https://docs.privatecaptcha.com/docs/reference/property-settings/#localhost",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "property-allow-subdomains",
+        "text": "You can use a single CAPTCHA property for all subdomains with 'Allow subdomains' setting",
+        "link": "https://docs.privatecaptcha.com/docs/reference/property-settings/#subdomains",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "property-difficulty-growth-fast",
+        "text": "You can set 'fast' difficulty growth for protection of more sensitive forms",
+        "link": "https://docs.privatecaptcha.com/docs/reference/property-settings/#difficulty-growth",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "property-repeated-solutions",
+        "text": "Repeated CAPTCHA solutions should not be accepted by default in forms",
+        "link": "https://docs.privatecaptcha.com/docs/reference/property-settings/#repeated-solutions",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "eu-only-endpoints",
+        "text": "EU-only endpoints are available independently for widget and for verification API",
+        "link": "https://docs.privatecaptcha.com/docs/reference/eu-isolation/",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "property-separate-development",
+        "text": "Use a separate property for local development, than you use for the production site",
+        "link": "https://docs.privatecaptcha.com/docs/reference/testing/",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "verify-expected-sitekey",
+        "text": "For custom server-side integrations, send 'X-PC-Sitekey' header with an expected sitekey",
+        "link": "https://docs.privatecaptcha.com/docs/reference/verify-api/",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "widget-popup-style",
+        "text": "Popup widget style is recommended to use with 'click' start mode only",
+        "link": "https://docs.privatecaptcha.com/docs/reference/security/#widget-display-mode",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "security-recommendations",
+        "text": "You can find our official security recommendations in the documentation",
+        "link": "https://docs.privatecaptcha.com/docs/reference/security/",
+        "patterns": ["/", "/{$}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "widget-customization",
+        "text": "You can customize the widget's width, accent colors, border, and extra spacing",
+        "link": "https://docs.privatecaptcha.com/docs/tutorials/widget-customization/",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "recaptcha-compat-mode",
+        "text": "Private Captcha website script has reCAPTCHA compatibility mode for easy migration",
+        "link": "https://docs.privatecaptcha.com/docs/tutorials/migrate-from-recaptcha/#fast-migration",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "widget-cors",
+        "text": "Widget will load only on the domain, configured during property creation, by default",
+        "link": "https://docs.privatecaptcha.com/docs/reference/property-settings/#domain",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "one-sitekey-many-domains",
+        "text": "Using same SiteKey on multiple domains suffers from the 'noisy neighbor' problem",
+        "link": "",
+        "patterns": ["/org/{org}/property/{property}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "bulk-import",
+        "text": "You can import multiple domains to Private Captcha portal using our Platform API",
+        "link": "https://docs.privatecaptcha.com/docs/reference/platform-api/",
+        "patterns": ["/", "/{$}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "org-member-invite-email",
+        "text": "You can invite a member to an organization by email even before they have an account",
+        "link": "",
+        "patterns": ["/org/{org}"],
+        "updated_at": "2026-09-06"
+    },
+    {
+        "id": "move-property-org",
+        "text": "You can transfer properties and forms between orgs and orgs between users",
+        "link": "",
+        "patterns": ["/org/{org}"],
+        "updated_at": "2026-09-06"
+    }
+]

@@ -1625,3 +1625,28 @@ ul.htmx-swapping li {
   opacity: 0;
   transition: opacity 1s ease-out;
 }
+
+.pc-footer-tip {
+    @apply flex;
+    @apply items-center;
+    @apply justify-center;
+    @apply py-5;
+    @apply xl:justify-start;
+    @apply xl:pr-8;
+}
+
+.pc-tip-icon {
+    @apply text-pc-green-hover;
+}
+
+.pc-tip-mark {
+    font-weight: bold;
+    font-family: Erode;
+    @apply text-base;
+    @apply text-pc-green-hover;
+    @apply ml-1;
+}
+
+.pc-tip-text {
+    @apply ml-1 mr-1;
+}

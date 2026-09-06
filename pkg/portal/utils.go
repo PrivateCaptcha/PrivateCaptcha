@@ -12,6 +12,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
+	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
 
 // NOTE: this will eventually be replaced by proper OTP
@@ -196,4 +197,18 @@ func newUserAuthAuditLogEvent(userID int32, action common.AuditLogAction) *commo
 		OldValue:  nil,
 		NewValue:  nil,
 	}
+}
+
+type TipIndex map[string][]*web.Tip
+
+func indexTips(tips []*web.Tip) TipIndex {
+	index := make(TipIndex)
+
+	for _, tip := range tips {
+		for _, pattern := range tip.Patterns {
+			index[pattern] = append(index[pattern], tip)
+		}
+	}
+
+	return index
 }

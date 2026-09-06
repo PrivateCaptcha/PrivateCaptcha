@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -77,6 +78,8 @@ func Templates() *embed.FS {
 	return &templateFiles
 }
 
+const tipsFile = "tips.json"
+
 //go:embed data/*.json
 var dataFiles embed.FS
 
@@ -95,6 +98,11 @@ func LoadData() (DataContext, error) {
 			continue
 		}
 
+		// tips.json has a known schema and is loaded separately
+		if entry.Name() == tipsFile {
+			continue
+		}
+
 		content, err := dataFiles.ReadFile("data/" + entry.Name())
 		if err != nil {
 			return nil, err
@@ -110,4 +118,26 @@ func LoadData() (DataContext, error) {
 	}
 
 	return data, nil
+}
+
+type Tip struct {
+	ID        string   `json:"id"`
+	Text      string   `json:"text"`
+	Link      string   `json:"link"`
+	Patterns  []string `json:"patterns"`
+	UpdatedAt string   `json:"updated_at"`
+}
+
+func LoadTips() ([]*Tip, error) {
+	content, err := dataFiles.ReadFile("data/" + tipsFile)
+	if err != nil {
+		return nil, fmt.Errorf("read tips.json: %w", err)
+	}
+
+	var tips []*Tip
+	if err := json.Unmarshal(content, &tips); err != nil {
+		return nil, err
+	}
+
+	return tips, nil
 }

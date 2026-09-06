@@ -26,6 +26,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
+	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
 
 var (
@@ -83,6 +84,7 @@ type RequestContext struct {
 	UserEmail    string
 	CDN          string
 	API          string
+	Tips         []*web.Tip
 	LoggedIn     bool
 	FirstSession bool
 }
@@ -174,6 +176,8 @@ type Server struct {
 	Jobs               db.UserJobs
 	PlatformCtx        interface{}
 	DataCtx            interface{}
+	Tips               []*web.Tip
+	TipIndex           TipIndex
 	AdminEmail         common.ConfigItem
 	CountryCodeHeader  common.ConfigItem
 	UserLimiter        api.UserLimiter
@@ -253,6 +257,7 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 	}
 
 	s.PlatformCtx = platformCtx
+	s.TipIndex = indexTips(s.Tips)
 
 	if s.TwoFactorDuration == 0 {
 		// 10 minutes + grace time (just like usual TOTP)

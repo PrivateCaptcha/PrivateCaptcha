@@ -289,6 +289,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 
 	if pathPattern, ok := ctx.Value(common.PathPatternContextKey).(string); ok && len(pathPattern) > 0 {
 		reqCtx.Pattern = common.RelURL(s.Prefix, pathPattern)
+
+		if r.Method == http.MethodGet {
+			reqCtx.Tips = s.TipIndex[pathPattern]
+		}
 	}
 
 	if sess, found := s.Sessions.SessionGet(r); found {

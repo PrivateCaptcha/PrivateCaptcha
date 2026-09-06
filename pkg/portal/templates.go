@@ -10,8 +10,10 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"math/rand/v2"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -126,6 +128,23 @@ func NewTemplatesBuilder() *TemplatesBuilder {
 					return def
 				}
 				return val
+			},
+			"random": func(v any) (any, error) {
+				rv := reflect.ValueOf(v)
+
+				if !rv.IsValid() {
+					return nil, nil
+				}
+
+				if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
+					return nil, fmt.Errorf("random expects a slice or array, got %T", v)
+				}
+
+				if rv.Len() == 0 {
+					return nil, nil
+				}
+
+				return rv.Index(rand.IntN(rv.Len())).Interface(), nil
 			},
 		},
 	}

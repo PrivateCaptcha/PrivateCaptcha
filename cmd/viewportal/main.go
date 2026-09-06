@@ -97,6 +97,11 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 			API:         "//api.privatecaptcha.local",
 		}
 
+		if r.Method == http.MethodGet {
+			pattern := strings.TrimPrefix(p.Path, srv.Prefix)
+			reqCtx.Tips = srv.TipIndex[pattern]
+		}
+
 		platformCtx := &portal.PlatformRenderContext{
 			GitCommit:  assetVersion,
 			Enterprise: enterpriseFromQuery(r),
@@ -108,6 +113,8 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 			http.Error(w, fmt.Sprintf("Render error: %v", err), http.StatusInternalServerError)
 			return
 		}
+
+		slog.InfoContext(ctx, "Handling request", "path", p.Path, "method", r.Method)
 
 		w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
 		_, _ = out.WriteTo(w)
@@ -270,6 +277,11 @@ func main() {
 		log.Fatalf("Failed to load data: %v", err)
 	}
 
+	tips, err := web.LoadTips()
+	if err != nil {
+		log.Fatalf("Failed to load tips: %v", err)
+	}
+
 	srv = &portal.Server{
 		Prefix:   "/portal",
 		APIURL:   "http://localhost:8080/api",
@@ -277,6 +289,7 @@ func main() {
 		Sessions: &session.Manager{Store: &stubSessionStore{}},
 		DataCtx:  dataCtx,
 		XSRF:     &common.XSRFMiddleware{Key: "viewportal-key", Timeout: 1 * time.Hour},
+		Tips:     tips,
 	}
 
 	builder := portal.NewTemplatesBuilder()

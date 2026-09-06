@@ -222,6 +222,13 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		return err
 	}
 
+	// so far tips are disabled
+	//tips, err := web.LoadTips()
+	tips, err := []*web.Tip{}, nil
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to load tips", common.ErrAttr(err))
+	}
+
 	healthCheck := &maintenance.HealthCheckJob{
 		BusinessDB:      businessDB,
 		TimeSeriesDB:    timeSeriesDB,
@@ -291,6 +298,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Mailer:             mailer,
 		RateLimiter:        ipRateLimiter,
 		DataCtx:            dataCtx,
+		Tips:               tips,
 		IDHasher:           idHasher,
 		AdminEmail:         cfg.Get(common.AdminEmailKey),
 		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
