@@ -61,7 +61,7 @@ func (s *Server) moveForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	canMove := user.ID == form.CreatorID.Int32
+	canMove := (user.ID == form.CreatorID.Int32) || (user.ID == form.OrgOwnerID.Int32)
 	if !canMove {
 		slog.ErrorContext(ctx, "Not enough permissions to move form", "userID", user.ID, "orgUserID", org.UserID.Int32, "formUserID", form.CreatorID.Int32)
 		s.RedirectError(http.StatusForbidden, w, r)

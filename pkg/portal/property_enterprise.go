@@ -67,7 +67,7 @@ func (s *Server) moveProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// we can only move properties that we created
-	canMove := user.ID == property.CreatorID.Int32
+	canMove := (user.ID == property.CreatorID.Int32) || (user.ID == property.OrgOwnerID.Int32)
 	if !canMove {
 		slog.ErrorContext(ctx, "Not enough permissions to move property", "userID", user.ID,
 			"orgUserID", org.UserID.Int32, "propertyUserID", property.CreatorID.Int32)
