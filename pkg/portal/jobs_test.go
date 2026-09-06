@@ -1,12 +1,50 @@
 package portal
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
+
+type registrationVerificationStoreStub struct {
+	session.Store
+	sid string
+}
+
+func (s *registrationVerificationStoreStub) SetVerifyRegistration(_ context.Context, sid string) error {
+	s.sid = sid
+	return nil
+}
+
+func (s *registrationVerificationStoreStub) UpdatePayload(context.Context, string) {}
+
+func TestCheckRegistrationJob(t *testing.T) {
+	form := url.Values{common.ParamEmail: {spammerEmail}}
+	req := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	store := &registrationVerificationStoreStub{}
+	srv := &Server{Sessions: &session.Manager{Store: store}}
+	sess := session.NewSessionWithAuthority(
+		session.Authority{State: session.StatePending, ChallengeKind: session.ChallengeKindRegistration},
+		session.NewPayload(t.Name(), store),
+	)
+	job := srv.CheckRegistration(sess, req)
+	if err := job.RunOnce(t.Context(), job.NewParams()); err != nil {
+		t.Fatal(err)
+	}
+	if store.sid != sess.ID() {
+		t.Fatalf("verification SID = %q, want %q", store.sid, sess.ID())
+	}
+}
 
 func TestCleanupAuditLogJob(t *testing.T) {
 	if testing.Short() {

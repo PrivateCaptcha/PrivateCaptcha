@@ -27,6 +27,9 @@ setup-docker: docker/pc.env
 lint:
 	$(GOPATH)/bin/golangci-lint run
 
+format:
+	$(GOPATH)/bin/golangci-lint fmt
+
 init-widget:
 	cd widget && env STAGE="$(STAGE)" npm install
 
@@ -182,7 +185,7 @@ clean-docker:
 	@$(DOCKER) compose -f docker/docker-compose.base.yml down -v --remove-orphans
 
 find-docker-2fa:
-	@$(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix 2>/dev/null | jq -r 'select(.msg=="Failed to send two factor code") | .code' | tail -n 1
+	@$(DOCKER) compose -f docker/docker-compose.base.yml exec -T postgres psql -U postgres -d privatecaptcha -Atc "SELECT challenge_code FROM backend.sessions WHERE challenge_code IS NOT NULL ORDER BY challenge_expires_at DESC NULLS LAST LIMIT 1"
 
 sqlc:
 	# https://github.com/sqlc-dev/sqlc/issues/3571

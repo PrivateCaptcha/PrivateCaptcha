@@ -14,7 +14,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 
 	"github.com/maypok86/otter/v2"
 	"github.com/maypok86/otter/v2/stats"
@@ -318,7 +317,7 @@ const (
 	subscriptionCacheKeyPrefix
 	notificationCacheKeyPrefix
 	templateCacheKeyPrefix
-	sessionCacheKeyPrefix
+	retiredSessionCacheKeyPrefix
 	userAuditLogsCacheKeyPrefix
 	propertyAuditLogsCacheKeyPrefix
 	orgAuditLogsCacheKeyPrefix
@@ -374,7 +373,6 @@ func init() {
 	cachePrefixToStrings[subscriptionCacheKeyPrefix] = "subscr/"
 	cachePrefixToStrings[notificationCacheKeyPrefix] = "notif/"
 	cachePrefixToStrings[templateCacheKeyPrefix] = "template/"
-	cachePrefixToStrings[sessionCacheKeyPrefix] = "session/"
 	cachePrefixToStrings[userAuditLogsCacheKeyPrefix] = "userAuditLogs/"
 	cachePrefixToStrings[propertyAuditLogsCacheKeyPrefix] = "propAuditLogs/"
 	cachePrefixToStrings[orgAuditLogsCacheKeyPrefix] = "orgAuditLogs/"
@@ -402,7 +400,7 @@ func init() {
 	cachePrefixToStrings[orgStatsCacheKeyPrefix] = "orgStats/"
 
 	for i, v := range cachePrefixToStrings {
-		if len(v) == 0 {
+		if len(v) == 0 && i != int(retiredSessionCacheKeyPrefix) {
 			panic(fmt.Sprintf("found unconfigured cache prefix value for key: %v", i))
 		}
 	}
@@ -415,7 +413,6 @@ func init() {
 	gob.Register(&dbgen.Organization{})
 	gob.Register(&dbgen.Subscription{})
 	gob.Register(&dbgen.DifficultyRule{})
-	gob.Register(&session.SessionData{})
 	gob.Register(&dbgen.APIKey{})
 	gob.Register(&dbgen.Form{})
 	gob.Register(&dbgen.AsyncTask{})
@@ -504,7 +501,6 @@ func StringCacheKey(prefix CacheKeyPrefix, value string) CacheKey {
 	}
 }
 
-func SessionCacheKey(id string) CacheKey { return StringCacheKey(sessionCacheKeyPrefix, id) }
 func UserCacheKey(id int32) CacheKey     { return Int32CacheKey(userCacheKeyPrefix, id) }
 func APIKeyCacheKey(str string) CacheKey { return StringCacheKey(apiKeyCacheKeyPrefix, str) }
 func orgCacheKey(orgID int32) CacheKey   { return Int32CacheKey(orgCacheKeyPrefix, orgID) }

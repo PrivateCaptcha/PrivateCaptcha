@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -149,41 +150,48 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := s.Sessions.SessionStart(w, r)
-	if step, ok := sess.Get(ctx, session.KeyLoginStep).(int); ok {
-		if step == loginStepCompleted {
-			slog.DebugContext(ctx, "User seem to be already logged in", "email", email)
-			common.Redirect(s.RelURL("/"), http.StatusOK, w, r)
-			return
-		} else {
-			slog.WarnContext(ctx, "Session present, but login not finished", "step", step, "email", email)
-		}
+	sess, err := s.Sessions.Start(w, r)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to start sign-in session", common.ErrAttr(err))
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+	if authority, ok := sess.Authority(); ok && authority.State == session.StateAuthenticated {
+		slog.DebugContext(ctx, "User is already logged in", "email", email)
+		common.Redirect(s.RelURL("/"), http.StatusOK, w, r)
+		return
+	}
+	if err := sess.Set(ctx, session.KeyUserName, user.Name); err != nil {
+		slog.ErrorContext(ctx, "Failed to set sign-in Payload", common.ErrAttr(err))
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
 	}
 
 	code := twoFactorCode(ctx)
 	location := r.Header.Get(s.CountryCodeHeader.Value())
-
-	if err := s.Mailer.SendTwoFactor(ctx, user.Email, code, r.UserAgent(), location, false); err != nil {
+	result, err := s.Sessions.IssueSignInChallenge(w, r, sess, user.ID, fmt.Sprintf("%06d", code), s.TwoFactorDuration, maxFailedAttempts)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to issue sign-in challenge", common.ErrAttr(err))
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+	issuedAuthority, ok := challengeResultAuthority(result, session.ChallengeKindSignIn)
+	if !ok {
+		if result != nil && result.Outcome == session.TransitionAttemptsExhausted {
+			s.Sessions.ClearCookie(w, r)
+		}
+		slog.WarnContext(ctx, "Sign-in challenge was not issued", "outcome", result)
+		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
+		return
+	}
+	if err := s.Mailer.SendTwoFactor(ctx, issuedAuthority.ChallengeEmail, code, r.UserAgent(), location, false); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
-	_ = sess.Set(ctx, session.KeyLoginStep, loginStepSignInVerify)
-	_ = sess.Set(ctx, session.KeyUserEmail, user.Email)
-	_ = sess.Set(ctx, session.KeyUserName, user.Name)
-	_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
-	_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
-	_ = sess.Set(ctx, session.KeyUserID, user.ID)
-	// we clean this flag because at this point the user should either be registered or subscribed
-	_ = sess.Delete(ctx, session.KeyVerifyRegistration)
-	// this is needed in case we will be routed to another server that does not have our session in memory
-	// (previously we persisted ONLY logged in sessions, but if we're rerouted during login, it will break)
-	// this should be OK now because we verified that user is a registered user AND they solved captcha
-	_ = sess.Set(ctx, session.KeyPersistent, true)
-
-	data.Token = s.XSRF.Token(user.Email)
-	data.Email = common.MaskEmail(user.Email, '*')
+	data.Token = s.XSRF.Token(issuedAuthority.ChallengeEmail)
+	data.Email = common.MaskEmail(issuedAuthority.ChallengeEmail, '*')
 
 	s.render(w, r, twofactorContentsTemplate, data, true /*new*/)
 }

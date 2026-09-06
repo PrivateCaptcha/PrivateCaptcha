@@ -331,22 +331,26 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (*ViewModel, 
 	code := twoFactorCode(ctx)
 	location := r.Header.Get(s.CountryCodeHeader.Value())
 
-	if err := s.Mailer.SendTwoFactor(ctx, user.Email, code, r.UserAgent(), location, false); err != nil {
+	result, err := s.Sessions.IssueEmailChangeChallenge(ctx, sess, fmt.Sprintf("%06d", code), s.TwoFactorDuration)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to issue email-change challenge", common.ErrAttr(err))
+		renderCtx.ErrorMessage = "Failed to start email verification. Please try again."
+	} else if issuedAuthority, ok := challengeResultAuthority(result, session.ChallengeKindEmailChange); !ok {
+		renderCtx.ErrorMessage = "Failed to start email verification. Please try again."
+	} else if err := s.Mailer.SendTwoFactor(ctx, issuedAuthority.ChallengeEmail, code, r.UserAgent(), location, false); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to send verification code. Please try again."
 	} else {
-		_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
-		_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
+		renderCtx.TwoFactorEmail = common.MaskEmail(issuedAuthority.ChallengeEmail, '*')
 	}
 
 	return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
 }
 
 func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
-	tnow := time.Now().UTC()
 	ctx := r.Context()
-
-	user, err := s.SessionUser(ctx, s.Session(w, r))
+	sess := s.Session(w, r)
+	user, err := s.SessionUser(ctx, sess)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +368,6 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 	renderCtx.EditEmail = (len(formEmail) > 0) && (formEmail != user.Email) && ((len(formName) == 0) || (formName == user.Name))
 
 	anyChange := false
-	sess := s.Session(w, r)
 
 	if renderCtx.EditEmail {
 		renderCtx.Email = formEmail
@@ -376,24 +379,22 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
 		}
 
-		sentCode, hasSentCode := sess.Get(ctx, session.KeyTwoFactorCode).(int)
-		codeTimestamp, ok := sess.Get(ctx, session.KeyTwoFactorCodeTimestamp).(time.Time)
-		if !ok {
-			slog.ErrorContext(ctx, "Failed to get verification code timestamp")
-			renderCtx.TwoFactorError = "Code is not valid."
+		result, err := s.Sessions.ConsumeEmailChangeChallenge(ctx, sess, strings.TrimSpace(r.FormValue(common.ParamVerificationCode)), maxFailedAttempts)
+		if err != nil {
+			return nil, err
+		}
+		if result == nil || result.Outcome != session.TransitionSucceeded || result.Session == nil {
+			if result != nil && result.Authority.ChallengeEmail != "" {
+				renderCtx.TwoFactorEmail = common.MaskEmail(result.Authority.ChallengeEmail, '*')
+			}
+			if result != nil && result.Outcome == session.TransitionAttemptsExhausted {
+				renderCtx.TwoFactorError = "Too many failed attempts. Please request a new code."
+			} else {
+				renderCtx.TwoFactorError = "Code is not valid."
+			}
 			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
 		}
-		formCode := r.FormValue(common.ParamVerificationCode)
-
-		// we "used" the code now
-		_ = sess.Delete(ctx, session.KeyTwoFactorCode)
-		_ = sess.Delete(ctx, session.KeyTwoFactorCodeTimestamp)
-
-		if enteredCode, err := strconv.Atoi(formCode); !hasSentCode || (err != nil) || (enteredCode != sentCode) || (!codeTimestamp.IsZero() && tnow.After(codeTimestamp.Add(s.TwoFactorDuration))) {
-			slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "timestamp", codeTimestamp, common.ErrAttr(err))
-			renderCtx.TwoFactorError = "Code is not valid."
-			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
-		}
+		sess = result.Session
 
 		anyChange = (len(formEmail) > 0) && (formEmail != user.Email)
 	} else /*edit name only*/ {
@@ -425,7 +426,6 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 			renderCtx.EditEmail = false
 			_ = sess.Set(ctx, session.KeyUserName, renderCtx.Name)
 			if emailToUpdate != user.Email {
-				_ = sess.Set(ctx, session.KeyUserEmail, emailToUpdate)
 				renderCtx.Email = emailToUpdate
 			}
 		} else {
@@ -471,11 +471,16 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		auditEvent, err := impl.SoftDeleteUser(ctx, user)
 		return []*common.AuditLogEvent{auditEvent}, err
 	}); err == nil {
+		if err := s.Sessions.RevokeUserSessions(ctx, user.ID); err != nil {
+			slog.ErrorContext(ctx, "Failed to revoke deleted user sessions", common.ErrAttr(err))
+			s.RedirectError(http.StatusInternalServerError, w, r)
+			return
+		}
 		job := s.Jobs.OffboardUser(user)
 		go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), job, job.NewParams())
 		s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
-
-		s.logout(w, r)
+		s.Sessions.ClearCookie(w, r)
+		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusOK, w, r)
 	} else {
 		slog.ErrorContext(ctx, "Failed to delete user", common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)

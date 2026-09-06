@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -3595,7 +3596,7 @@ func TestOrgIDEmpty(t *testing.T) {
 	}
 }
 
-func TestEmailMismatchDuringInviteRegistrationBlocksUser(t *testing.T) {
+func TestEmailMismatchDuringInviteRegistrationLeavesInviteUnlinked(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -3659,17 +3660,24 @@ func TestEmailMismatchDuringInviteRegistrationBlocksUser(t *testing.T) {
 	srv.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("expected rejected registration form, got status %d", w.Code)
+		t.Fatalf("expected registration challenge, got status %d", w.Code)
 	}
-	if _, err := portal_tests.TwoFactorCodeFromSession(ctx, inviteCookie.Value, server.Sessions.Store); err == nil {
-		t.Fatal("expected mismatched registration not to start two-factor verification")
-	}
-
-	differentUser, _, err := db_tests.CreateNewAccountForTest(ctx, store, differentUserName, testPlan)
+	code, err := portal_tests.TwoFactorCodeFromEmail(differentEmail)
 	if err != nil {
 		t.Fatal(err)
 	}
-	authCookie, err := portal_tests.AuthenticateSuite(ctx, differentUser.Email, srv, server.XSRF, server.Sessions)
+	resp := twoFactorSuite(srv, differentEmail, server.XSRF.Token(differentEmail), code, inviteCookie)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected registration completion, got status %d", resp.StatusCode)
+	}
+	authCookieIndex := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool {
+		return c.Name == server.Sessions.CookieName
+	})
+	if authCookieIndex == -1 {
+		t.Fatal("expected authenticated successor cookie")
+	}
+	authCookie := resp.Cookies()[authCookieIndex]
+	differentUser, err := store.Impl().FindUserByEmail(ctx, differentEmail)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3699,5 +3707,102 @@ func TestEmailMismatchDuringInviteRegistrationBlocksUser(t *testing.T) {
 	invite := members[0].OrganizationUser
 	if invite.ID != inviteRecord.ID || invite.UserID.Valid || !invite.Email.Valid || invite.Email.String != invitedEmail {
 		t.Fatal("expected the original invite to remain unlinked")
+	}
+}
+
+func TestInviteRegistrationPreservesContinuation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invitedEmail := strings.ToLower(t.Name()) + "@privatecaptcha.com"
+	invite, _, err := store.Impl().InviteEmailToOrg(ctx, owner, org, invitedEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	invitePath := fmt.Sprintf("/%s/%s/%s", common.OrgInviteEndpoint, server.IDHasher.Encrypt(int(invite.ID)), common.RegisterEndpoint)
+	req := httptest.NewRequest(http.MethodGet, invitePath, nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	inviteCookieIndex := slices.IndexFunc(w.Result().Cookies(), func(c *http.Cookie) bool {
+		return c.Name == server.Sessions.CookieName
+	})
+	if inviteCookieIndex == -1 {
+		t.Fatal("expected invite registration session cookie")
+	}
+	inviteCookie := w.Result().Cookies()[inviteCookieIndex]
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(""))
+	form.Set(common.ParamEmail, invitedEmail)
+	form.Set(common.ParamName, "Invited User")
+	form.Set(common.ParamTerms, "true")
+	form.Set(common.ParamPortalSolution, "captchaSolution")
+	req = httptest.NewRequest(http.MethodPost, "/"+common.RegisterEndpoint, strings.NewReader(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.AddCookie(inviteCookie)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("registration issue status = %d, want 200", w.Code)
+	}
+
+	code, err := portal_tests.TwoFactorCodeFromEmail(invitedEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := twoFactorSuite(srv, invitedEmail, server.XSRF.Token(invitedEmail), code, inviteCookie)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("registration completion status = %d, want redirect", resp.StatusCode)
+	}
+	expectedPath := fmt.Sprintf("/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)))
+	location, err := resp.Location()
+	if err != nil || location.Path != expectedPath {
+		t.Fatalf("registration continuation = (%v, %v), want %s", location, err, expectedPath)
+	}
+	authCookieIndex := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool {
+		return c.Name == server.Sessions.CookieName
+	})
+	if authCookieIndex == -1 {
+		t.Fatal("expected authenticated successor cookie")
+	}
+	authCookie := resp.Cookies()[authCookieIndex]
+	user, err := store.Impl().FindUserByEmail(ctx, invitedEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	linked := false
+	for attempt := 0; attempt < 20; attempt++ {
+		members, retrieveErr := store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
+		if retrieveErr == nil && len(members) == 1 && members[0].LinkedUserID.Valid && members[0].LinkedUserID.Int32 == user.ID {
+			linked = true
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if !linked {
+		t.Fatal("registration did not link the email invite")
+	}
+
+	req = httptest.NewRequest(http.MethodPut, expectedPath+"/members", nil)
+	req.AddCookie(authCookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("join status = %d, want redirect", w.Code)
+	}
+	_, level, err := store.Impl().RetrieveUserOrganization(ctx, user, org.ID)
+	if err != nil || !level.Valid || level.AccessLevel != dbgen.AccessLevelMember {
+		t.Fatalf("joined access level = (%v, %v), want member", level, err)
 	}
 }

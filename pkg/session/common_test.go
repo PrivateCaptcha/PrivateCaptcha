@@ -6,443 +6,359 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"slices"
 	"testing"
 	"time"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
-type stubStore struct{}
-
-func (s *stubStore) Start(ctx context.Context, interval time.Duration) {}
-func (s *stubStore) Init(ctx context.Context, session *Session) error  { return nil }
-func (s *stubStore) Read(ctx context.Context, sid string, skipCache bool) (*Session, error) {
-	return nil, ErrSessionMissing
-}
-func (s *stubStore) Update(ctx context.Context, session *Session) error { return nil }
-func (s *stubStore) Renew(ctx context.Context, oldSID string, session *Session) error {
-	return nil
-}
-func (s *stubStore) RollbackRenew(ctx context.Context, oldSID string) {}
-func (s *stubStore) Destroy(ctx context.Context, sid string) error    { return nil }
-
-type memoryStore struct {
-	sessions map[string]*Session
+type stubStore struct {
+	resolved           *Session
+	resolveErr         error
+	issueSignIn        func(context.Context, SignInChallengeIssue) (*ChallengeResult, error)
+	issueRegistration  func(context.Context, RegistrationChallengeIssue) (*ChallengeResult, error)
+	consumeSignIn      func(context.Context, SignInChallengeConsume) (*ChallengeResult, error)
+	createRegistration func(context.Context, RegistrationSuccessorCreate) (*ChallengeResult, error)
+	revokeSession      func(context.Context, string) (*RevocationResult, error)
 }
 
-func newMemoryStore() *memoryStore {
-	return &memoryStore{sessions: make(map[string]*Session)}
+func (s *stubStore) Start(ctx context.Context, interval time.Duration)        {}
+func (s *stubStore) EnqueueExpirationRenewal(ctx context.Context, sid string) {}
+func (s *stubStore) StartAnonymousSession(sid string) *Session {
+	return NewAnonymousSession(sid, payloadStoreStub{})
 }
-
-func (s *memoryStore) Start(ctx context.Context, interval time.Duration) {}
-func (s *memoryStore) Init(ctx context.Context, session *Session) error {
-	s.sessions[session.ID()] = session
-	return nil
+func (s *stubStore) Resolve(ctx context.Context, sid string) (*Session, error) {
+	return s.resolved, s.resolveErr
 }
-func (s *memoryStore) Read(ctx context.Context, sid string, skipCache bool) (*Session, error) {
-	sess, ok := s.sessions[sid]
-	if !ok {
-		return nil, ErrSessionMissing
+func (s *stubStore) IssueSignInChallenge(ctx context.Context, issue SignInChallengeIssue) (*ChallengeResult, error) {
+	if s.issueSignIn == nil {
+		return nil, nil
 	}
-	return sess, nil
+	return s.issueSignIn(ctx, issue)
 }
-func (s *memoryStore) Update(ctx context.Context, session *Session) error {
-	s.sessions[session.ID()] = session
-	return nil
-}
-func (s *memoryStore) Renew(ctx context.Context, oldSID string, session *Session) error {
-	if err := s.Init(ctx, session); err != nil {
-		return err
+func (s *stubStore) IssueRegistrationChallenge(ctx context.Context, issue RegistrationChallengeIssue) (*ChallengeResult, error) {
+	if s.issueRegistration != nil {
+		return s.issueRegistration(ctx, issue)
 	}
-	s.sessions[oldSID] = NewSession(NewTombstoneSessionData(oldSID), s)
-	return nil
+	return nil, nil
 }
-func (s *memoryStore) RollbackRenew(ctx context.Context, oldSID string) {}
-func (s *memoryStore) Destroy(ctx context.Context, sid string) error {
-	delete(s.sessions, sid)
-	return nil
+func (s *stubStore) SetVerifyRegistration(context.Context, string) error { return nil }
+func (s *stubStore) ResendPendingChallenge(context.Context, PendingChallengeResend) (*ChallengeResult, error) {
+	return nil, nil
 }
-
-type failingRenewStore struct {
-	*memoryStore
-}
-
-func (s *failingRenewStore) Renew(ctx context.Context, oldSID string, session *Session) error {
-	return errors.New("renew failed")
-}
-
-func TestSessionStartRejectsUnknownCookieID(t *testing.T) {
-	store := newMemoryStore()
-	manager := &Manager{
-		CookieName:  "pcsid",
-		Store:       store,
-		MaxLifetime: 10 * time.Minute,
-		Path:        "/",
+func (s *stubStore) ConsumeSignInChallenge(ctx context.Context, consume SignInChallengeConsume) (*ChallengeResult, error) {
+	if s.consumeSignIn == nil {
+		return nil, nil
 	}
+	return s.consumeSignIn(ctx, consume)
+}
+func (s *stubStore) ConsumeRegistrationChallenge(context.Context, RegistrationChallengeConsume) (*RegistrationConsumeResult, error) {
+	return nil, nil
+}
+func (s *stubStore) CreateRegistrationSuccessor(ctx context.Context, create RegistrationSuccessorCreate) (*ChallengeResult, error) {
+	if s.createRegistration != nil {
+		return s.createRegistration(ctx, create)
+	}
+	return nil, nil
+}
+func (s *stubStore) IssueEmailChangeChallenge(context.Context, EmailChangeChallengeIssue) (*ChallengeResult, error) {
+	return nil, nil
+}
+func (s *stubStore) ConsumeEmailChangeChallenge(context.Context, EmailChangeChallengeConsume) (*ChallengeResult, error) {
+	return nil, nil
+}
+func (s *stubStore) RevokeSession(ctx context.Context, sid string) (*RevocationResult, error) {
+	if s.revokeSession == nil {
+		return nil, nil
+	}
+	return s.revokeSession(ctx, sid)
+}
+func (s *stubStore) RevokeUserSessions(context.Context, int32) error { return nil }
 
-	attackerID := "attacker-known-session"
+func TestManagerStartReplacesUnknownCookieWithAnonymousSession(t *testing.T) {
+	store := &stubStore{resolveErr: ErrSessionMissing}
+	manager := &Manager{CookieName: "pcsid", Store: store, MaxLifetime: 3 * time.Hour, Path: "/portal"}
 	req := httptest.NewRequest(http.MethodGet, "/portal/login", nil)
-	req.AddCookie(&http.Cookie{Name: manager.CookieName, Value: url.QueryEscape(attackerID)})
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.AddCookie(&http.Cookie{Name: manager.CookieName, Value: url.QueryEscape("legacy-sid")})
 	w := httptest.NewRecorder()
+	beforeExpiry := time.Now().Add(manager.MaxLifetime - time.Second)
 
-	sess := manager.SessionStart(w, req)
-
-	if sess.ID() == attackerID {
-		t.Fatal("unknown client supplied session ID was reused")
+	sess, err := manager.Start(w, req)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, ok := store.sessions[attackerID]; ok {
-		t.Fatal("unknown client supplied session ID was initialized")
+	if sess.ID() == "legacy-sid" {
+		t.Fatal("unknown legacy SID was reused")
 	}
-	if _, ok := store.sessions[sess.ID()]; !ok {
-		t.Fatal("fresh session ID was not initialized")
+	if _, ok := sess.Authority(); ok {
+		t.Fatal("new local session unexpectedly has Authority")
 	}
-
-	resp := w.Result()
-	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == manager.CookieName })
-	if idx == -1 {
-		t.Fatal("fresh session cookie was not returned")
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("session cookies = %d, want 1", len(cookies))
 	}
-	cookie := resp.Cookies()[idx]
-	if cookie.Value == url.QueryEscape(attackerID) {
-		t.Fatal("fresh session cookie reused unknown client supplied value")
+	cookie := cookies[0]
+	if cookie.Value != url.QueryEscape(sess.ID()) || cookie.Path != manager.Path || cookie.MaxAge != int(manager.MaxLifetime.Seconds()) {
+		t.Fatalf("anonymous session cookie = %+v", cookie)
 	}
-	if cookie.SameSite != http.SameSiteLaxMode {
-		t.Fatalf("expected SameSite=Lax, got %v", cookie.SameSite)
+	if !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("anonymous session cookie is not secure: %+v", cookie)
+	}
+	if cookie.Expires.Before(beforeExpiry) || cookie.Expires.After(time.Now().Add(manager.MaxLifetime+time.Second)) {
+		t.Fatalf("anonymous session cookie expiration = %s", cookie.Expires)
 	}
 }
 
-func TestSessionRenewRotatesCookieAndTombstonesOldSession(t *testing.T) {
-	store := newMemoryStore()
-	manager := &Manager{
-		CookieName:  "pcsid",
-		Store:       store,
-		MaxLifetime: 10 * time.Minute,
-		Path:        "/",
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/portal/twofactor", nil)
+func TestManagerStartPreservesCookieOnStoreFailure(t *testing.T) {
+	storeErr := errors.New("database unavailable")
+	manager := &Manager{CookieName: "pcsid", Store: &stubStore{resolveErr: storeErr}, MaxLifetime: 3 * time.Hour, Path: "/"}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: manager.CookieName, Value: "existing-sid"})
 	w := httptest.NewRecorder()
-	sess := manager.SessionStart(w, req)
-	if err := sess.Set(req.Context(), KeyUserID, int32(123)); err != nil {
-		t.Fatal(err)
-	}
-	if err := sess.Delete(req.Context(), KeyUserID); err != nil {
-		t.Fatal(err)
-	}
-	if err := sess.Set(req.Context(), KeyLoginStep, 2); err != nil {
-		t.Fatal(err)
-	}
 
-	renewW := httptest.NewRecorder()
-	renewed := manager.SessionRenew(renewW, req, sess)
-
-	if renewed.ID() == sess.ID() {
-		t.Fatal("session ID was not rotated")
+	if _, err := manager.Start(w, req); !errors.Is(err, storeErr) {
+		t.Fatalf("Start error = %v, want %v", err, storeErr)
 	}
-	if oldSession, ok := store.sessions[sess.ID()]; !ok || !oldSession.Data().Has(KeyTombstone) {
-		t.Fatal("old session was not tombstoned")
-	}
-	if _, ok := renewed.Get(req.Context(), KeyUserID).(int32); ok {
-		t.Fatal("renewed session did not delete requested key")
-	}
-	if step, ok := renewed.Get(req.Context(), KeyLoginStep).(int); !ok || step != 2 {
-		t.Fatalf("renewed session did not set requested key: %v", step)
-	}
-
-	resp := renewW.Result()
-	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == manager.CookieName })
-	if idx == -1 {
-		t.Fatal("rotated session cookie was not returned")
-	}
-	cookie := resp.Cookies()[idx]
-	if cookie.Value == url.QueryEscape(sess.ID()) {
-		t.Fatal("rotated session cookie reused old session ID")
-	}
-	if cookie.SameSite != http.SameSiteLaxMode {
-		t.Fatalf("expected SameSite=Lax, got %v", cookie.SameSite)
+	if len(w.Result().Cookies()) != 0 {
+		t.Fatalf("store failure replaced cookie: %v", w.Result().Cookies())
 	}
 }
 
-func TestSessionRenewFallsBackWhenStoreRenewFails(t *testing.T) {
-	store := &failingRenewStore{memoryStore: newMemoryStore()}
-	manager := &Manager{
-		CookieName:  "pcsid",
-		Store:       store,
-		MaxLifetime: 10 * time.Minute,
-		Path:        "/",
+func TestManagerGetPreservesMissingAndInfrastructureErrors(t *testing.T) {
+	manager := &Manager{CookieName: "pcsid", Store: &stubStore{resolveErr: ErrSessionMissing}}
+	if _, err := manager.Get(httptest.NewRequest(http.MethodGet, "/", nil)); !errors.Is(err, ErrSessionMissing) {
+		t.Fatalf("missing cookie error = %v, want %v", err, ErrSessionMissing)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/portal/twofactor", nil)
-	w := httptest.NewRecorder()
-	sess := manager.SessionStart(w, req)
-	if err := sess.Set(req.Context(), KeyUserID, int32(123)); err != nil {
-		t.Fatal(err)
-	}
-	if err := sess.Set(req.Context(), KeyTwoFactorCode, 456789); err != nil {
-		t.Fatal(err)
-	}
-	if err := sess.Set(req.Context(), KeyLoginStep, 2); err != nil {
-		t.Fatal(err)
-	}
-	if err := sess.Delete(req.Context(), KeyTwoFactorCode); err != nil {
-		t.Fatal(err)
-	}
-
-	renewW := httptest.NewRecorder()
-	renewed := manager.SessionRenew(renewW, req, sess)
-
-	if renewed.ID() != sess.ID() {
-		t.Fatal("renew failure should keep using the existing session")
-	}
-	if step, ok := renewed.Get(req.Context(), KeyLoginStep).(int); !ok || step != 2 {
-		t.Fatalf("fallback session did not get final login step: %v", step)
-	}
-	if _, ok := renewed.Get(req.Context(), KeyTwoFactorCode).(int); ok {
-		t.Fatal("fallback session kept 2FA code")
-	}
-	if len(renewW.Result().Cookies()) != 0 {
-		t.Fatal("fallback renewal should not replace the session cookie")
+	storeErr := errors.New("database unavailable")
+	manager.Store = &stubStore{resolveErr: storeErr}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{Name: manager.CookieName, Value: "sid"})
+	if _, err := manager.Get(req); !errors.Is(err, storeErr) {
+		t.Fatalf("infrastructure error = %v, want %v", err, storeErr)
 	}
 }
 
-func TestSessionKeyString(t *testing.T) {
-	sessionKeys := []SessionKey{
-		KeyLoginStep,
-		KeyUserID,
-		KeyUserEmail,
-		KeyTwoFactorCode,
-		KeyUserName,
-		KeyPersistent,
-		KeyNotificationID,
-		KeyReturnURL,
-		KeyTwoFactorCodeTimestamp,
-		KeyOrgInviteID,
-		KeyTombstone,
+func TestManagerIssueSignInChallengeSetsCookieOnlyAfterSuccess(t *testing.T) {
+	pending := NewSessionWithAuthority(
+		Authority{State: StatePending, Version: 1, ExpiresAt: time.Now().Add(3 * time.Hour)},
+		NewPayload(t.Name(), payloadStoreStub{}),
+	)
+	store := &stubStore{issueSignIn: func(context.Context, SignInChallengeIssue) (*ChallengeResult, error) {
+		return &ChallengeResult{Outcome: TransitionSucceeded, Session: pending}, nil
+	}}
+	manager := &Manager{CookieName: "pcsid", Store: store, MaxLifetime: 3 * time.Hour, Path: "/"}
+	anonymous := NewAnonymousSession(t.Name(), payloadStoreStub{})
+	req := httptest.NewRequest(http.MethodPost, "/login", nil)
+	w := httptest.NewRecorder()
+
+	result, err := manager.IssueSignInChallenge(w, req, anonymous, 42, "123456", 15*time.Minute, 5)
+	if err != nil || result.Outcome != TransitionSucceeded || result.Session.ID() != pending.ID() {
+		t.Fatalf("issue result = (%+v, %v)", result, err)
+	}
+	if cookies := w.Result().Cookies(); len(cookies) != 1 || cookies[0].Value != url.QueryEscape(pending.ID()) {
+		t.Fatalf("pending cookie = %v", cookies)
 	}
 
-	expectedStrings := []string{
-		"LoginStep",
-		"UserID",
-		"UserEmail",
-		"TwoFactorCode",
-		"UserName",
-		"Persistent",
-		"NotificationID",
-		"ReturnURL",
-		"TwoFactorCodeTimestamp",
-		"OrgInviteID",
-		"Tombstone",
+	store.issueSignIn = func(context.Context, SignInChallengeIssue) (*ChallengeResult, error) {
+		return nil, errors.New("database unavailable")
 	}
+	w = httptest.NewRecorder()
+	if _, err := manager.IssueSignInChallenge(w, req, anonymous, 42, "123456", 15*time.Minute, 5); err == nil {
+		t.Fatal("issue failure was ignored")
+	}
+	if len(w.Result().Cookies()) != 0 {
+		t.Fatalf("issue failure set cookie: %v", w.Result().Cookies())
+	}
+}
 
-	for i, key := range sessionKeys {
-		t.Run(expectedStrings[i], func(t *testing.T) {
-			str := key.String()
-			if str != expectedStrings[i] {
-				t.Errorf("Expected %s, got %s", expectedStrings[i], str)
+func TestManagerTransitionFailuresPreserveCookie(t *testing.T) {
+	storeErr := errors.New("database unavailable")
+	store := &stubStore{
+		issueRegistration: func(context.Context, RegistrationChallengeIssue) (*ChallengeResult, error) {
+			return nil, storeErr
+		},
+		consumeSignIn: func(context.Context, SignInChallengeConsume) (*ChallengeResult, error) {
+			return nil, storeErr
+		},
+		createRegistration: func(context.Context, RegistrationSuccessorCreate) (*ChallengeResult, error) {
+			return nil, storeErr
+		},
+	}
+	manager := &Manager{CookieName: "pcsid", Store: store, MaxLifetime: 3 * time.Hour, Path: "/"}
+	predecessor := NewAnonymousSession(t.Name(), payloadStoreStub{})
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	req.AddCookie(&http.Cookie{Name: manager.CookieName, Value: predecessor.ID()})
+	tests := []struct {
+		name string
+		run  func(http.ResponseWriter) error
+	}{
+		{name: "registration issue", run: func(w http.ResponseWriter) error {
+			_, err := manager.IssueRegistrationChallenge(w, req, predecessor, "user@example.com", "123456", 15*time.Minute, 5)
+			return err
+		}},
+		{name: "sign-in consume", run: func(w http.ResponseWriter) error {
+			_, err := manager.ConsumeSignInChallenge(w, req, predecessor, "123456", 5)
+			return err
+		}},
+		{name: "registration successor", run: func(w http.ResponseWriter) error {
+			_, err := manager.CreateRegistrationSuccessor(w, req, predecessor, 42)
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			if err := tt.run(w); !errors.Is(err, storeErr) {
+				t.Fatalf("transition error = %v, want %v", err, storeErr)
+			}
+			if len(w.Result().Cookies()) != 0 {
+				t.Fatalf("transition failure replaced cookie: %v", w.Result().Cookies())
 			}
 		})
 	}
 }
 
-func TestSessionKeyStringUnknown(t *testing.T) {
-	unknown := SessionKey(9999)
-	str := unknown.String()
-	if str != "SessionKey" {
-		t.Errorf("Unknown key should return 'SessionKey', got %s", str)
-	}
-}
+func TestManagerConsumeSignInChallengeRotatesServerGeneratedSID(t *testing.T) {
+	predecessor := NewSessionWithAuthority(
+		Authority{State: StatePending, Version: 2, ExpiresAt: time.Now().Add(time.Hour)},
+		NewPayload("predecessor", payloadStoreStub{}),
+	)
+	store := &stubStore{consumeSignIn: func(_ context.Context, consume SignInChallengeConsume) (*ChallengeResult, error) {
+		successor := NewSessionWithAuthority(
+			Authority{State: StateAuthenticated, Version: 1, UserID: 42, ExpiresAt: time.Now().Add(3 * time.Hour)},
+			NewPayload(consume.SuccessorSessionID, payloadStoreStub{}),
+		)
+		return &ChallengeResult{Outcome: TransitionSucceeded, Session: successor}, nil
+	}}
+	manager := &Manager{CookieName: "pcsid", Store: store, MaxLifetime: 3 * time.Hour, Path: "/"}
+	req := httptest.NewRequest(http.MethodPost, "/2fa", nil)
+	w := httptest.NewRecorder()
 
-func TestSessionDataMerge(t *testing.T) {
-	sd1 := NewSessionData("session1")
-	sd2 := NewSessionData("session2")
-
-	sd1.set(KeyUserID, 123)
-	sd2.set(KeyUserID, 456)
-	sd2.set(KeyUserEmail, "test@example.com")
-
-	sd1.Merge(sd2, false)
-
-	if val, _ := sd1.get(KeyUserID); val != 123 {
-		t.Errorf("Existing key should not be overwritten, got %v", val)
-	}
-
-	if val, ok := sd1.get(KeyUserEmail); !ok || val != "test@example.com" {
-		t.Errorf("New key from source should be added, got %v, %v", val, ok)
-	}
-}
-
-func TestSessionDataMergeSameIDs(t *testing.T) {
-	sd1 := NewSessionData("aaa")
-	sd2 := NewSessionData("zzz")
-
-	sd1.set(KeyUserName, "name1")
-	sd2.set(KeyPersistent, true)
-
-	sd1.Merge(sd2, false)
-
-	if val, _ := sd1.get(KeyUserName); val != "name1" {
-		t.Errorf("Existing key should be preserved")
-	}
-
-	if val, ok := sd1.get(KeyPersistent); !ok || val != true {
-		t.Errorf("New key should be added from merge")
-	}
-}
-
-func TestSessionDataMergeEmpty(t *testing.T) {
-	sd1 := NewSessionData("session1")
-	sd2 := NewSessionData("session2")
-
-	sd1.set(KeyUserID, 123)
-
-	sd1.Merge(sd2, false)
-
-	if sd1.Size() != 1 {
-		t.Errorf("Size should remain 1 after merging empty session, got %d", sd1.Size())
-	}
-}
-
-func TestSessionMerge(t *testing.T) {
-	sd1 := NewSessionData("session1")
-	sd2 := NewSessionData("session2")
-
-	store := &stubStore{}
-	s1 := NewSession(sd1, store)
-	s2 := NewSession(sd2, store)
-
-	sd1.set(KeyUserID, 100)
-	sd2.set(KeyUserName, "testuser")
-
-	s1.Merge(s2)
-
-	if val, _ := s1.Data().get(KeyUserID); val != 100 {
-		t.Errorf("Existing key should be preserved")
-	}
-
-	if val, ok := s1.Data().get(KeyUserName); !ok || val != "testuser" {
-		t.Errorf("New key should be added from merge")
-	}
-}
-
-func TestSessionDataHas(t *testing.T) {
-	sd := NewSessionData("test")
-
-	if sd.Has(KeyUserID) {
-		t.Error("Should not have KeyUserID initially")
-	}
-
-	sd.set(KeyUserID, 123)
-
-	if !sd.Has(KeyUserID) {
-		t.Error("Should have KeyUserID after setting")
-	}
-}
-
-func TestSessionDataMarshalling(t *testing.T) {
-	sd := NewSessionData("test")
-	sd.set(KeyUserID, 123)
-	sd.set(KeyUserEmail, "test@example.com")
-
-	data, err := sd.MarshalBinary()
+	result, err := manager.ConsumeSignInChallenge(w, req, predecessor, "123456", 5)
 	if err != nil {
-		t.Fatalf("MarshalBinary failed: %v", err)
+		t.Fatal(err)
 	}
-
-	sd2 := NewSessionData("test2")
-	if err := sd2.UnmarshalBinary(data); err != nil {
-		t.Fatalf("UnmarshalBinary failed: %v", err)
+	if result.Session.ID() == predecessor.ID() {
+		t.Fatal("successful sign-in reused predecessor SID")
 	}
-
-	if val, _ := sd2.get(KeyUserID); val != 123 {
-		t.Errorf("Expected UserID 123, got %v", val)
-	}
-
-	if val, _ := sd2.get(KeyUserEmail); val != "test@example.com" {
-		t.Errorf("Expected email test@example.com, got %v", val)
+	if cookies := w.Result().Cookies(); len(cookies) != 1 || cookies[0].Value != url.QueryEscape(result.Session.ID()) {
+		t.Fatalf("successor cookie = %v", cookies)
 	}
 }
 
-func TestSessionGobEncoding(t *testing.T) {
-	sd := NewSessionData("test")
-	sd.set(KeyUserID, 123)
-	sd.set(KeyUserEmail, "test@example.com")
+func TestManagerRevokeClearsCookieOnlyAfterSuccess(t *testing.T) {
+	storeErr := errors.New("database unavailable")
+	store := &stubStore{revokeSession: func(context.Context, string) (*RevocationResult, error) { return nil, storeErr }}
+	manager := &Manager{CookieName: "pcsid", Store: store, Path: "/portal", SecureCookie: true}
+	req := httptest.NewRequest(http.MethodGet, "/portal/logout", nil)
+	req.AddCookie(&http.Cookie{Name: manager.CookieName, Value: "sid"})
+	w := httptest.NewRecorder()
 
-	data, err := sd.GobEncode()
+	if _, err := manager.Revoke(w, req); !errors.Is(err, storeErr) {
+		t.Fatalf("Revoke error = %v, want %v", err, storeErr)
+	}
+	if len(w.Result().Cookies()) != 0 {
+		t.Fatalf("revocation failure cleared cookie: %v", w.Result().Cookies())
+	}
+
+	store.revokeSession = func(context.Context, string) (*RevocationResult, error) {
+		return &RevocationResult{SessionID: "sid", State: StateRevoked, Version: 2, UserID: 42}, nil
+	}
+	w = httptest.NewRecorder()
+	result, err := manager.Revoke(w, req)
 	if err != nil {
-		t.Fatalf("GobEncode failed: %v", err)
+		t.Fatal(err)
 	}
-
-	sd2 := NewSessionData("test2")
-	if err := sd2.GobDecode(data); err != nil {
-		t.Fatalf("GobDecode failed: %v", err)
+	if result.UserID != 42 {
+		t.Fatalf("revoked user ID = %d, want 42", result.UserID)
 	}
-
-	if sd2.ID() != "test" {
-		t.Errorf("Session ID was not serialized. got %v", sd2.ID())
+	if result.SessionHash != common.HashSessionID("sid") {
+		t.Fatalf("revoked session hash = %q, want %q", result.SessionHash.String(), common.HashSessionID("sid").String())
 	}
-
-	if val, _ := sd2.get(KeyUserID); val != 123 {
-		t.Errorf("Expected UserID 123, got %v", val)
-	}
-
-	if val, _ := sd2.get(KeyUserEmail); val != "test@example.com" {
-		t.Errorf("Expected email test@example.com, got %v", val)
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].MaxAge != -1 || !cookies[0].Expires.Before(time.Now()) || !cookies[0].Secure {
+		t.Fatalf("cleared cookie = %v", cookies)
 	}
 }
 
-func TestSessionDataMergeWithOverwrite(t *testing.T) {
-	sd1 := NewSessionData("session1")
-	sd2 := NewSessionData("session2")
-
-	sd1.set(KeyUserID, 123)
-	sd2.set(KeyUserID, 456)
-	sd2.set(KeyUserEmail, "new@example.com")
-
-	sd1.Merge(sd2, true)
-
-	if val, _ := sd1.get(KeyUserID); val != 456 {
-		t.Errorf("Existing key should be overwritten, got %v", val)
-	}
-
-	if val, ok := sd1.get(KeyUserEmail); !ok || val != "new@example.com" {
-		t.Errorf("New key should be added, got %v, %v", val, ok)
-	}
-}
-
-func TestSessionRefresh(t *testing.T) {
-	sd1 := NewSessionData("session1")
-	sd2 := NewSessionData("session2")
-
+func TestScheduleExpirationRenewalRefreshesCookieWithoutChangingAuthority(t *testing.T) {
 	store := &stubStore{}
-	s1 := NewSession(sd1, store)
-	s2 := NewSession(sd2, store)
-
-	sd1.set(KeyUserID, 100)
-	sd2.set(KeyUserID, 200)
-	sd2.set(KeyUserName, "newuser")
-
-	s1.Refresh(s2)
-
-	if val, _ := s1.Data().get(KeyUserID); val != 200 {
-		t.Errorf("Existing key should be overwritten, got %v", val)
+	manager := &Manager{
+		CookieName:  "pcsid",
+		Store:       store,
+		MaxLifetime: 3 * time.Hour,
+		Path:        "/portal",
 	}
+	authority := Authority{
+		State:      StateAuthenticated,
+		Version:    7,
+		UserID:     42,
+		ExpiresAt:  time.Now().Add(2 * time.Hour),
+		LeaseUntil: time.Now().Add(5 * time.Minute),
+	}
+	sess := NewSessionWithAuthority(authority, NewPayload(t.Name(), payloadStoreStub{}))
+	req := httptest.NewRequest(http.MethodGet, "/portal/dashboard", nil)
+	w := httptest.NewRecorder()
 
-	if val, ok := s1.Data().get(KeyUserName); !ok || val != "newuser" {
-		t.Errorf("New key should be added, got %v, %v", val, ok)
+	manager.ScheduleExpirationRenewal(w, req, sess)
+
+	actualAuthority, _ := sess.Authority()
+	if actualAuthority != authority {
+		t.Fatalf("scheduling changed Authority: got %+v, want %+v", actualAuthority, authority)
+	}
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("renewal cookies = %d, want 1", len(cookies))
+	}
+	if cookies[0].Value != url.QueryEscape(t.Name()) || cookies[0].MaxAge != int(manager.MaxLifetime.Seconds()) {
+		t.Fatalf("renewal cookie = %+v", cookies[0])
 	}
 }
 
-func TestSessionBool(t *testing.T) {
-	store := &stubStore{}
-	sess := NewSession(NewSessionData("sid"), store)
-	ctx := t.Context()
-
-	if _, ok := sess.Get(ctx, KeyVerifyRegistration).(bool); ok {
-		t.Error("Get messed up return value for non-existing key")
+func TestScheduleExpirationRenewalSkipsIneligibleSessions(t *testing.T) {
+	tests := []struct {
+		name      string
+		authority Authority
+	}{
+		{name: "outside window", authority: Authority{State: StateAuthenticated, ExpiresAt: time.Now().Add(3 * time.Hour)}},
+		{name: "pending", authority: Authority{State: StatePending, ExpiresAt: time.Now().Add(time.Hour)}},
+		{name: "expired", authority: Authority{State: StateAuthenticated, ExpiresAt: time.Now().Add(-time.Hour)}},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &stubStore{}
+			manager := &Manager{CookieName: "pcsid", Store: store, MaxLifetime: 3 * time.Hour, Path: "/"}
+			sess := NewSessionWithAuthority(tt.authority, NewPayload(t.Name(), payloadStoreStub{}))
+			w := httptest.NewRecorder()
 
-	sess.Set(ctx, KeyVerifyRegistration, true)
+			manager.ScheduleExpirationRenewal(w, httptest.NewRequest(http.MethodGet, "/", nil), sess)
 
-	if value, ok := sess.Get(ctx, KeyVerifyRegistration).(bool); !ok || !value {
-		t.Error("Get messed up return value for existing key")
+			if len(w.Result().Cookies()) != 0 {
+				t.Fatalf("ineligible session refreshed cookie: %v", w.Result().Cookies())
+			}
+		})
+	}
+}
+
+func TestExpirationRenewalWindowBoundary(t *testing.T) {
+	now := time.Date(2026, time.September, 1, 10, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name      string
+		authority Authority
+		want      bool
+	}{
+		{name: "at boundary", authority: Authority{State: StateAuthenticated, ExpiresAt: now.Add(sessionExpirationRenewalWindow)}, want: true},
+		{name: "outside boundary", authority: Authority{State: StateAuthenticated, ExpiresAt: now.Add(sessionExpirationRenewalWindow + time.Nanosecond)}},
+		{name: "expired", authority: Authority{State: StateAuthenticated, ExpiresAt: now}},
+		{name: "pending", authority: Authority{State: StatePending, ExpiresAt: now.Add(time.Hour)}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if actual := shouldScheduleExpirationRenewal(tt.authority, now); actual != tt.want {
+				t.Fatalf("shouldScheduleExpirationRenewal() = %t, want %t", actual, tt.want)
+			}
+		})
 	}
 }

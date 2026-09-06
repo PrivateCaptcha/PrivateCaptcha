@@ -116,32 +116,32 @@ func (s *Server) Form(org *dbgen.Organization, r *http.Request) (*dbgen.Form, er
 	return form, nil
 }
 
-func (s *Server) Session(w http.ResponseWriter, r *http.Request) *session.Session {
+func (s *Server) Session(_ http.ResponseWriter, r *http.Request) *session.Session {
 	ctx := r.Context()
-	sess, ok := ctx.Value(common.SessionContextKey).(*session.Session)
-	if !ok || (sess == nil) {
-		slog.ErrorContext(ctx, "Failed to get session from context")
-		var found bool
-		sess, found = s.Sessions.SessionGet(r)
-		if !found || (sess == nil) {
-			slog.ErrorContext(ctx, "Failed to get started session")
-			sess = s.Sessions.SessionStart(w, r)
+	sess, _ := ctx.Value(common.SessionContextKey).(*session.Session)
+	if sess == nil {
+		var err error
+		sess, err = s.Sessions.Get(r)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to get authenticated session", common.ErrAttr(err))
 		}
 	}
-
 	return sess
 }
 
 func (s *Server) SessionUser(ctx context.Context, sess *session.Session) (*dbgen.User, error) {
-	userID, ok := sess.Get(ctx, session.KeyUserID).(int32)
-	if !ok {
+	if sess == nil {
+		return nil, ErrInvalidSession
+	}
+	authority, ok := sess.Authority()
+	if !ok || authority.State != session.StateAuthenticated || authority.UserID <= 0 {
 		slog.ErrorContext(ctx, "Failed to get userID from session")
 		return nil, ErrInvalidSession
 	}
 
-	user, err := s.Store.Impl().RetrieveUser(ctx, userID)
+	user, err := s.Store.Impl().RetrieveUser(ctx, authority.UserID)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by ID", "id", userID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to find user by ID", "id", authority.UserID, common.ErrAttr(err))
 		return nil, err
 	}
 
@@ -150,13 +150,17 @@ func (s *Server) SessionUser(ctx context.Context, sess *session.Session) (*dbgen
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session(w, r)
-	if userID, ok := sess.Get(ctx, session.KeyUserID).(int32); ok {
-		s.Store.AuditLog().RecordEvent(ctx, newUserAuthAuditLogEvent(userID, common.AuditLogActionLogout), common.AuditLogSourcePortal)
-		s.Store.Impl().CleanupUserCache(ctx, userID)
+	result, err := s.Sessions.Revoke(w, r)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to revoke session during logout", common.ErrAttr(err))
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
 	}
-
-	s.Sessions.SessionDestroy(w, r)
+	if result != nil && result.UserID > 0 {
+		ctx = context.WithValue(ctx, common.SessionHashContextKey, result.SessionHash)
+		s.Store.AuditLog().RecordEvent(ctx, newUserAuthAuditLogEvent(result.UserID, common.AuditLogActionLogout), common.AuditLogSourcePortal)
+		s.Store.Impl().CleanupUserCache(ctx, result.UserID)
+	}
 	common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusOK, w, r)
 }
 
