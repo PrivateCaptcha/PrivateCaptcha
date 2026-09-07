@@ -20,7 +20,7 @@ VALUES (sqlc.arg(org_id), LOWER(sqlc.arg(email)), 'invited') RETURNING *;
 -- name: LinkOrgInviteToUser :one
 UPDATE backend.organization_users
 SET user_id = $1, email = NULL, updated_at = NOW()
-WHERE id = $2 AND user_id IS NULL AND LOWER(email) = LOWER($3)
+WHERE id = $2 AND user_id IS NULL AND LOWER(email) = LOWER($3) AND level = 'invited'
 RETURNING *;
 
 -- name: UpdateOrgMembershipLevel :execrows

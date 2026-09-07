@@ -2,21 +2,52 @@ package portal
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
-func registerSuite(srv *http.ServeMux, name, email, token string) *http.Response {
+type blockingRegistrationJobs struct {
+	db.UserJobs
+	job common.OneOffJob
+}
+
+func (j *blockingRegistrationJobs) CheckRegistration(*session.Session, *http.Request) common.OneOffJob {
+	return j.job
+}
+
+type blockingRegistrationCheckJob struct {
+	started  chan struct{}
+	release  chan struct{}
+	finished chan struct{}
+}
+
+func (j *blockingRegistrationCheckJob) Name() string                { return "BlockingRegistrationCheck" }
+func (j *blockingRegistrationCheckJob) InitialPause() time.Duration { return 0 }
+func (j *blockingRegistrationCheckJob) NewParams() any              { return struct{}{} }
+func (j *blockingRegistrationCheckJob) RunOnce(context.Context, any) error {
+	close(j.started)
+	<-j.release
+	close(j.finished)
+	return nil
+}
+
+func registerSuite(srv *http.ServeMux, name, email, token string, cookies ...*http.Cookie) *http.Response {
 	form := url.Values{}
 	form.Add(common.ParamCSRFToken, token)
 	form.Add(common.ParamEmail, email)
@@ -27,6 +58,9 @@ func registerSuite(srv *http.ServeMux, name, email, token string) *http.Response
 	// Send the POST request
 	req := httptest.NewRequest("POST", "/"+common.RegisterEndpoint, bytes.NewBufferString(form.Encode()))
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	for _, cookie := range cookies {
+		req.AddCookie(cookie)
+	}
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
@@ -55,7 +89,7 @@ func TestPostRegister(t *testing.T) {
 	cookie := resp.Cookies()[idx]
 
 	ctx := t.Context()
-	code, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
+	code, err := portal_tests.TwoFactorCodeFromEmail(email)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,6 +122,142 @@ func TestPostRegister(t *testing.T) {
 
 	if user.Email != email {
 		t.Errorf("Unexpected user email")
+	}
+}
+
+func TestPostRegisterRunsRegistrationCheckAsynchronously(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	job := &blockingRegistrationCheckJob{
+		started: make(chan struct{}), release: make(chan struct{}), finished: make(chan struct{}),
+	}
+	originalJobs := server.Jobs
+	server.Jobs = &blockingRegistrationJobs{UserJobs: originalJobs, job: job}
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(job.release) }) }
+	t.Cleanup(func() {
+		release()
+		server.Jobs = originalJobs
+	})
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	response := make(chan *http.Response, 1)
+	go func() {
+		response <- registerSuite(srv, "Async User", t.Name()+"@privatecaptcha.com", server.XSRF.Token(""))
+	}()
+
+	select {
+	case <-job.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("registration check did not start")
+	}
+	select {
+	case resp := <-response:
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("registration status = %d, want %d", resp.StatusCode, http.StatusOK)
+		}
+	case <-time.After(time.Second):
+		release()
+		<-response
+		t.Fatal("registration response waited for the registration check")
+	}
+
+	release()
+	select {
+	case <-job.finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("registration check did not finish")
+	}
+}
+
+func TestRegistrationInvalidCSRFDoesNotConsumeChallenge(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	email := t.Name() + "@privatecaptcha.com"
+	resp := registerSuite(srv, "Foo Bar", email, server.XSRF.Token(""))
+	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
+	if idx == -1 {
+		t.Fatal("cannot find registration session cookie")
+	}
+	cookie := resp.Cookies()[idx]
+	code, err := portal_tests.TwoFactorCodeFromEmail(email)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp = twoFactorSuite(srv, email, server.XSRF.Token("wrong-email@example.com"), code, cookie)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("invalid CSRF status = %d, want redirect", resp.StatusCode)
+	}
+	location, err := resp.Location()
+	if err != nil || location.Path != "/"+common.ExpiredEndpoint {
+		t.Fatalf("invalid CSRF redirect = (%v, %v), want /%s", location, err, common.ExpiredEndpoint)
+	}
+	if _, err := store.Impl().FindUserByEmail(t.Context(), email); err == nil {
+		t.Fatal("invalid CSRF created an account")
+	}
+
+	resp = twoFactorSuite(srv, email, server.XSRF.Token(email), code, cookie)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("valid CSRF retry status = %d, want redirect", resp.StatusCode)
+	}
+	if _, err := store.Impl().FindUserByEmail(t.Context(), email); err != nil {
+		t.Fatalf("valid CSRF retry did not create an account: %v", err)
+	}
+}
+
+func TestRegistrationCheckRequiresVerification(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	resp := registerSuite(srv, "Spam User", spammerEmail, server.XSRF.Token(""))
+	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
+	if idx == -1 {
+		t.Fatal("cannot find registration session cookie")
+	}
+	cookie := resp.Cookies()[idx]
+	code, err := portal_tests.TwoFactorCodeFromEmail(spammerEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.AddCookie(cookie)
+		sess, resolveErr := server.Sessions.Get(req)
+		if resolveErr == nil {
+			authority, ok := sess.Authority()
+			if ok && authority.VerifyRegistration {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("registration screening did not update cached Authority: %v", resolveErr)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	resp = twoFactorSuite(srv, spammerEmail, server.XSRF.Token(spammerEmail), code, cookie)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("verification-required status = %d, want redirect", resp.StatusCode)
+	}
+	location, err := resp.Location()
+	if err != nil || location.Path != "/"+common.AccountVerifyEndpoint {
+		t.Fatalf("verification-required redirect = (%v, %v), want /%s", location, err, common.AccountVerifyEndpoint)
+	}
+	if _, err := store.Impl().FindUserByEmail(t.Context(), spammerEmail); err == nil {
+		t.Fatal("verification-required registration created an account")
 	}
 }
 
@@ -312,6 +482,57 @@ func TestPostRegisterMissingCaptcha(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "captcha") {
 		t.Error("Expected error message about captcha")
+	}
+}
+
+func TestPostRegisterPreservesInviteIDOnValidationError(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	inviteID := server.IDHasher.Encrypt(42)
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, server.XSRF.Token(""))
+	form.Add(common.ParamEmail, t.Name()+"@privatecaptcha.com")
+	form.Add(common.ParamID, inviteID)
+	form.Add(common.ParamName, "Test User")
+	form.Add(common.ParamTerms, "true")
+
+	req := httptest.NewRequest(http.MethodPost, "/"+common.RegisterEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	input := portal_tests.ParseHTML(t, w.Body).Find(fmt.Sprintf("input[name=%q]", common.ParamID))
+	if value, exists := input.Attr("value"); !exists || value != inviteID {
+		t.Fatalf("invite ID after validation error = %q, want %q", value, inviteID)
+	}
+}
+
+func TestPostRegisterRejectsInvalidInviteID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	for _, inviteID := range []string{"invalid", server.IDHasher.Encrypt(int(math.MaxInt32) + 1)} {
+		form := url.Values{}
+		form.Add(common.ParamID, inviteID)
+		form.Add(common.ParamTerms, "true")
+		req := httptest.NewRequest(http.MethodPost, "/"+common.RegisterEndpoint, bytes.NewBufferString(form.Encode()))
+		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+
+		if w.Code != http.StatusSeeOther {
+			t.Fatalf("invalid invite ID %q status = %d, want redirect", inviteID, w.Code)
+		}
 	}
 }
 

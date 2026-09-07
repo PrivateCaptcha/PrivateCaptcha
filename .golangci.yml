@@ -20,6 +20,15 @@ linters:
       - pkg/db/generated/
       - widget/node_modules
 
+formatters:
+  enable:
+    - goimports
+    - golines
+
+  settings:
+    golines:
+      max-len: 160
+
 run:
   build-tags:
     - enterprise

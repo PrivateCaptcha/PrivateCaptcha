@@ -32,6 +32,7 @@ type RenderConstants struct {
 	Token                           string
 	Email                           string
 	Name                            string
+	ID                              string
 	URL                             string
 	Method                          string
 	Tab                             string
@@ -144,6 +145,7 @@ func NewRenderConstants() *RenderConstants {
 		Token:                           common.ParamCSRFToken,
 		Email:                           common.ParamEmail,
 		Name:                            common.ParamName,
+		ID:                              common.ParamID,
 		URL:                             common.ParamURL,
 		Method:                          common.ParamMethod,
 		Tab:                             common.ParamTab,
@@ -295,7 +297,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		}
 	}
 
-	if sess, found := s.Sessions.SessionGet(r); found {
+	if sess, err := s.Sessions.Get(r); err == nil {
 		if username, ok := sess.Get(ctx, session.KeyUserName).(string); ok {
 			reqCtx.UserName = username
 		}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 
 	"context"
@@ -77,17 +78,20 @@ func TestMain(m *testing.M) {
 
 	if testing.Short() {
 		store = db.NewBusinessEx(nil, cache)
+		mailer := &email.StubMailer{}
+		portal_tests.SetTwoFactorCodeSource(mailer.TwoFactorCode)
 		server = &Server{
 			Stage:  common.StageTest,
 			Store:  store,
 			Prefix: "",
 			XSRF:   &common.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
 			Sessions: &session.Manager{
-				Store:       db.NewSessionStore(store, session.KeyPersistent, stubMetrics),
+				Store:       db.NewSessionStore(store, stubMetrics),
 				CookieName:  "pcsid",
 				MaxLifetime: 1 * time.Minute,
 			},
 			PuzzleEngine:       puzzleEngine,
+			Mailer:             mailer,
 			PlanService:        planService,
 			DataCtx:            dataCtx,
 			PlatformCtx:        platformCtx,
@@ -139,12 +143,13 @@ func TestMain(m *testing.M) {
 
 	store = db.NewBusinessEx(pool, cache)
 
-	sessionStore := db.NewSessionStore(store, session.KeyPersistent, stubMetrics)
+	sessionStore := db.NewSessionStore(store, stubMetrics)
 
 	ctx := context.TODO()
 	cdnURLConfig := config.AsURL(ctx, cfg.Get(common.CDNBaseURLKey))
 	portalURLConfig := config.AsURL(ctx, cfg.Get(common.PortalBaseURLKey))
-	mailer := NewPortalMailer("https:"+cdnURLConfig.URL(), "https:"+portalURLConfig.URL(), &email.StubSender{}, cfg, useragent.NewParser())
+	mailer := &email.StubMailer{Mailer: NewPortalMailer("https:"+cdnURLConfig.URL(), "https:"+portalURLConfig.URL(), &email.StubSender{}, cfg, useragent.NewParser())}
+	portal_tests.SetTwoFactorCodeSource(mailer.TwoFactorCode)
 
 	server = &Server{
 		Stage:      common.StageTest,
@@ -200,6 +205,71 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
+func TestPrivateRenewalFollowsAuthentication(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sid, err := url.QueryUnescape(cookie.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Pool.Exec(ctx, "UPDATE backend.sessions SET expires_at = NOW() + INTERVAL '1 hour' WHERE session_id = $1", sid); err != nil {
+		t.Fatal(err)
+	}
+
+	originalManager := server.Sessions
+	freshStore := db.NewSessionStore(store, server.Metrics)
+	server.Sessions = &session.Manager{
+		CookieName:   originalManager.CookieName,
+		Store:        freshStore,
+		MaxLifetime:  originalManager.MaxLifetime,
+		Path:         originalManager.Path,
+		SecureCookie: originalManager.SecureCookie,
+	}
+	t.Cleanup(func() {
+		freshStore.Stop()
+		freshStore.Shutdown()
+		server.Sessions = originalManager
+	})
+
+	invalidReq := httptest.NewRequest(http.MethodPut, "/settings/tab/general", nil)
+	invalidReq.AddCookie(cookie)
+	invalidReq.Header.Set(common.HeaderCSRFToken, "invalid")
+	invalidW := httptest.NewRecorder()
+	srv.ServeHTTP(invalidW, invalidReq)
+	for _, responseCookie := range invalidW.Result().Cookies() {
+		if responseCookie.Name == server.Sessions.CookieName {
+			t.Fatal("invalid private-write CSRF renewed the session cookie")
+		}
+	}
+
+	validReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	validReq.AddCookie(cookie)
+	validW := httptest.NewRecorder()
+	srv.ServeHTTP(validW, validReq)
+	renewed := false
+	for _, responseCookie := range validW.Result().Cookies() {
+		if responseCookie.Name == server.Sessions.CookieName && responseCookie.Value == cookie.Value {
+			renewed = true
+		}
+	}
+	if !renewed {
+		t.Fatal("authenticated request inside the renewal window did not refresh the cookie")
+	}
+}
+
 func TestPortalServerStoreErrors(t *testing.T) {
 	expectedErr := errors.New("generic db error")
 	stub := &db.QuerierStub{Error: expectedErr}
@@ -218,7 +288,7 @@ func TestPortalServerStoreErrors(t *testing.T) {
 	puzzleEngine := &portal_tests.StubPuzzleEngine{Result: &puzzle.VerifyResult{Error: puzzle.VerifyNoError}}
 	stubMetrics := monitoring.NewStub()
 
-	sessionStore := db.NewSessionStore(store, session.KeyPersistent, stubMetrics)
+	sessionStore := db.NewSessionStore(store, stubMetrics)
 
 	ctx := context.TODO()
 	baseCfg := config.NewBaseConfig(config.NewEnvConfig(os.Getenv))

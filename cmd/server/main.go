@@ -276,7 +276,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}
 
 	emailVerifier := &portal.PortalEmailVerifier{}
-	sessionStore := db.NewSessionStore(businessDB, session.KeyPersistent, metrics)
+	sessionStore := db.NewSessionStore(businessDB, metrics)
 	xsrfKey := cfg.Get(common.XSRFKeyKey)
 	portalServer := &portal.Server{
 		Stage:      stage,
@@ -546,7 +546,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		<-quit
 		slog.DebugContext(ctx, "Shutting down gracefully")
 		jobs.Stop()
-		sessionStore.Stop()
 		apiServer.Stop()
 		businessDB.Stop()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), _shutdownPeriod)
@@ -554,6 +553,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		httpServer.SetKeepAlivesEnabled(false)
 		serr := httpServer.Shutdown(shutdownCtx)
 		stopOngoingGracefully()
+		sessionStore.Stop()
 		if serr != nil {
 			slog.ErrorContext(ctx, "Failed to shutdown gracefully", common.ErrAttr(serr))
 			fmt.Fprintf(stderr, "error shutting down http server gracefully: %s\n", serr)

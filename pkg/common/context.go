@@ -11,7 +11,7 @@ const (
 	SitekeyContextKey
 	SecretContextKey
 	RateLimitKeyContextKey
-	SessionIDContextKey
+	SessionHashContextKey
 	ServiceContextKey
 	TimeContextKey
 	FormContextKey

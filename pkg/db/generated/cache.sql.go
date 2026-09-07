@@ -31,55 +31,6 @@ func (q *Queries) CreateCache(ctx context.Context, arg *CreateCacheParams) (int6
 	return result.RowsAffected(), nil
 }
 
-const createCacheMany = `-- name: CreateCacheMany :execrows
-INSERT INTO backend.cache (key, value, expires_at)
-SELECT unnest($1::TEXT[]) as key,
-       unnest($2::BYTEA[]) as value,
-       NOW() + unnest($3::INTERVAL[]) as expires_at
-ON CONFLICT (key)
-DO UPDATE SET
-    value = EXCLUDED.value,
-    expires_at = EXCLUDED.expires_at
-`
-
-type CreateCacheManyParams struct {
-	Keys      []string        `db:"keys" json:"keys"`
-	Values    [][]byte        `db:"values" json:"values"`
-	Intervals []time.Duration `db:"intervals" json:"intervals"`
-}
-
-func (q *Queries) CreateCacheMany(ctx context.Context, arg *CreateCacheManyParams) (int64, error) {
-	result, err := q.db.Exec(ctx, createCacheMany, arg.Keys, arg.Values, arg.Intervals)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const deleteCachedByKey = `-- name: DeleteCachedByKey :execrows
-DELETE FROM backend.cache WHERE key = $1
-`
-
-func (q *Queries) DeleteCachedByKey(ctx context.Context, key string) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteCachedByKey, key)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const deleteCachedByKeys = `-- name: DeleteCachedByKeys :execrows
-DELETE FROM backend.cache WHERE key = ANY($1::TEXT[])
-`
-
-func (q *Queries) DeleteCachedByKeys(ctx context.Context, keys []string) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteCachedByKeys, keys)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const deleteExpiredCache = `-- name: DeleteExpiredCache :execrows
 DELETE FROM backend.cache WHERE expires_at < NOW()
 `
@@ -101,21 +52,4 @@ func (q *Queries) GetCachedByKey(ctx context.Context, key string) ([]byte, error
 	var value []byte
 	err := row.Scan(&value)
 	return value, err
-}
-
-const updateCacheExpiration = `-- name: UpdateCacheExpiration :execrows
-UPDATE backend.cache SET expires_at = NOW() + $2::INTERVAL WHERE key = $1
-`
-
-type UpdateCacheExpirationParams struct {
-	Key     string        `db:"key" json:"key"`
-	Column2 time.Duration `db:"column_2" json:"column_2"`
-}
-
-func (q *Queries) UpdateCacheExpiration(ctx context.Context, arg *UpdateCacheExpirationParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateCacheExpiration, arg.Key, arg.Column2)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }

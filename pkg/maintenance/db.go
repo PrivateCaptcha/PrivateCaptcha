@@ -2,6 +2,7 @@ package maintenance
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -35,12 +36,26 @@ func (j *CleanupDBCacheJob) Name() string {
 	return "cleanup_db_cache_job"
 }
 
+type CleanupDBCacheParams struct {
+	BatchSize int `json:"batch_size"`
+}
+
 func (j *CleanupDBCacheJob) NewParams() any {
-	return struct{}{}
+	return &CleanupDBCacheParams{BatchSize: 100}
 }
 
 func (j *CleanupDBCacheJob) RunOnce(ctx context.Context, params any) error {
-	return j.Store.Impl().DeleteExpiredCache(ctx)
+	p, ok := params.(*CleanupDBCacheParams)
+	if !ok || (p == nil) {
+		slog.ErrorContext(ctx, "Job parameter has incorrect type", "params", params, "job", j.Name())
+		p = j.NewParams().(*CleanupDBCacheParams)
+	}
+
+	impl := j.Store.Impl()
+	cacheErr := impl.DeleteExpiredCache(ctx)
+	sessionErr := impl.DeleteExpiredSessions(ctx, int32(p.BatchSize))
+
+	return errors.Join(cacheErr, sessionErr)
 }
 
 type CleanupDeletedRecordsJob struct {
