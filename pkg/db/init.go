@@ -83,7 +83,7 @@ func connectEx(ctx context.Context, cfg common.ConfigStore, timeout time.Duratio
 			Database: cfg.Get(common.ClickHouseDBKey).Value(),
 			User:     clickHouseUser(cfg, admin),
 			Password: clickHousePassword(cfg, admin),
-			Port:     9000,
+			Port:     config_pkg.AsInt(cfg.Get(common.ClickHousePortKey), 9000),
 			Verbose:  config_pkg.AsBool(cfg.Get(common.VerboseKey)),
 		}
 

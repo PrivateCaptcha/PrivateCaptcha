@@ -36,6 +36,13 @@ trap cleanup EXIT
 ENV_FILE="${REPO_ROOT}/.postgres-test-env-${TEST_RUN_ID}"
 source "$ENV_FILE"
 
+POSTGRES_MIGRATION_URL="postgres://${PG_ADMIN_USER}:${PGPASSWORD}@${PG_HOST}:${PG_PORT}/${PC_DB_NAME}?search_path=public"
+export POSTGRES_MIGRATION_URL
+
+# Light tests must not connect to ClickHouse through ambient configuration.
+unset PC_CLICKHOUSE_HOST PC_CLICKHOUSE_PORT PC_CLICKHOUSE_DB PC_CLICKHOUSE_USER PC_CLICKHOUSE_PASSWORD
+unset PC_CLICKHOUSE_ADMIN PC_CLICKHOUSE_ADMIN_PASSWORD
+
 echo "=== Initializing Postgres Test Database ==="
 PGHOST="$PG_HOST" \
 PGPORT="$PG_PORT" \
@@ -46,7 +53,7 @@ PGOPTIONS="--search_path=public" \
 pkg/db/migrations/init/postgres.sh "$PC_DB_NAME" "$PC_DB_USER" "$PC_DB_PASSWORD"
 
 echo "=== Migrating Postgres Test Database ==="
-PC_POSTGRES="postgres://${PG_ADMIN_USER}:${PGPASSWORD}@${PG_HOST}:${PG_PORT}/${PC_DB_NAME}?search_path=public" \
+PC_POSTGRES="$POSTGRES_MIGRATION_URL" \
 PC_CLICKHOUSE_OPTIONAL="true" \
 PC_DOMAIN="privatecaptcha.local" \
 PC_ADMIN_EMAIL="admin@privatecaptcha.local" \

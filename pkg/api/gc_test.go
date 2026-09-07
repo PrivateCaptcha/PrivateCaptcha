@@ -17,7 +17,7 @@ func gcPropertyDataTestSuite(ctx context.Context, property *dbgen.Property, dele
 	t.Helper()
 
 	const requests = 1000
-	tnow := time.Now()
+	tnow := time.Now().In(time.FixedZone("UTC+3", 3*60*60))
 	dp := difficulty.NewDBProperty(property)
 
 	for i := 0; i < requests; i++ {

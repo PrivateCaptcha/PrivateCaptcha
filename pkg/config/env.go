@@ -49,6 +49,7 @@ func init() {
 	configKeyToEnvName[common.ClickHouseUserKey] = "PC_CLICKHOUSE_USER"
 	configKeyToEnvName[common.ClickHouseAdminPasswordKey] = "PC_CLICKHOUSE_ADMIN_PASSWORD"
 	configKeyToEnvName[common.ClickHousePasswordKey] = "PC_CLICKHOUSE_PASSWORD"
+	configKeyToEnvName[common.ClickHousePortKey] = "PC_CLICKHOUSE_PORT"
 	configKeyToEnvName[common.PostgresKey] = "PC_POSTGRES"
 	configKeyToEnvName[common.PostgresHostKey] = "PC_POSTGRES_HOST"
 	configKeyToEnvName[common.PostgresDBKey] = "PC_POSTGRES_DB"

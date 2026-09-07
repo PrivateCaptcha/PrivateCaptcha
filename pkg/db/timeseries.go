@@ -299,7 +299,7 @@ ORDER BY timestamp`
 		clickhouse.Named("user_id", strconv.Itoa(int(r.UserID))),
 		clickhouse.Named("org_id", strconv.Itoa(int(r.OrgID))),
 		clickhouse.Named("property_id", strconv.Itoa(int(r.PropertyID))),
-		clickhouse.Named("timestamp", from.Format(time.DateTime)))
+		clickhouse.DateNamed("timestamp", from, clickhouse.Seconds))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to execute property stats query", common.ErrAttr(err))
 		return nil, err

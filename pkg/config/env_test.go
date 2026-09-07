@@ -13,6 +13,21 @@ func TestRegisterEnvName(t *testing.T) {
 	}
 }
 
+func TestClickHousePortEnvName(t *testing.T) {
+	t.Parallel()
+
+	cfg := NewEnvConfig(func(name string) string {
+		if name == "PC_CLICKHOUSE_PORT" {
+			return "19000"
+		}
+		return ""
+	})
+
+	if got := cfg.Get(common.ClickHousePortKey).Value(); got != "19000" {
+		t.Errorf("ClickHouse port = %q, want 19000", got)
+	}
+}
+
 func TestEnvConfigValueUpdate(t *testing.T) {
 	t.Parallel()
 

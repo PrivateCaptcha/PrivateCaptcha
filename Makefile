@@ -1,4 +1,4 @@
-.PHONY: clean build deploy
+.PHONY: clean build deploy run-postgres-test-db stop-postgres-test-db run-clickhouse-test-db stop-clickhouse-test-db test-local-light test-local
 
 STAGE ?= dev
 GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
@@ -11,9 +11,14 @@ CGO_TEST_ENABLED ?= 0
 TEST_NAME ?=
 TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.test.yml -f docker/docker-compose.test.clickhouse.yml
 POSTGRES_TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.postgres-test.yml
+CLICKHOUSE_TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.clickhouse-test.yml
+CLICKHOUSE_TEST_DOCKER_COMPOSE_PROJECT ?= privatecaptcha-clickhouse-test
+CLICKHOUSE_TEST_CLIENT ?= $(DOCKER) compose -p $(CLICKHOUSE_TEST_DOCKER_COMPOSE_PROJECT) $(CLICKHOUSE_TEST_DOCKER_COMPOSE_FILES) exec -T clickhouse-test clickhouse-client
 GOPATH := $(shell go env GOPATH)
 OPEN ?= printf "file://%s\n"
 TEST_PG_PORT ?= 15432
+TEST_CH_PORT ?= 19000
+TEST_CH_HTTP_PORT ?= 18123
 
 setup-git:
 	git config core.hooksPath scripts/hooks
@@ -73,8 +78,17 @@ run-postgres-test-db:
 stop-postgres-test-db:
 	@$(DOCKER) compose $(POSTGRES_TEST_DOCKER_COMPOSE_FILES) down -v --remove-orphans
 
+run-clickhouse-test-db:
+	@env CH_PORT=$(TEST_CH_PORT) CH_HTTP_PORT=$(TEST_CH_HTTP_PORT) $(DOCKER) compose -p $(CLICKHOUSE_TEST_DOCKER_COMPOSE_PROJECT) $(CLICKHOUSE_TEST_DOCKER_COMPOSE_FILES) up -d --wait clickhouse-test
+
+stop-clickhouse-test-db:
+	@env CH_PORT=$(TEST_CH_PORT) CH_HTTP_PORT=$(TEST_CH_HTTP_PORT) $(DOCKER) compose -p $(CLICKHOUSE_TEST_DOCKER_COMPOSE_PROJECT) $(CLICKHOUSE_TEST_DOCKER_COMPOSE_FILES) down -v
+
 test-local-light: build-server-ee build-tests-ee
 	@PGPASSWORD="$${PGPASSWORD:-postgres}" PG_ADMIN_USER="$${PG_ADMIN_USER:-postgres}" PG_HOST="$${PG_HOST:-localhost}" PG_PORT="$(TEST_PG_PORT)" GIT_COMMIT="$(GIT_COMMIT)" bash scripts/test-local-postgres.sh ./docker/run-tests.sh
+
+test-local: build-server-ee build-tests-ee
+	@PGPASSWORD="$${PGPASSWORD:-postgres}" PG_ADMIN_USER="$${PG_ADMIN_USER:-postgres}" PG_HOST="$${PG_HOST:-localhost}" PG_PORT="$(TEST_PG_PORT)" CH_HOST="localhost" CH_PORT="$(TEST_CH_PORT)" CH_HTTP_PORT="$(TEST_CH_HTTP_PORT)" CH_ADMIN_PASSWORD="" CLICKHOUSE_CLIENT_CMD="$(CLICKHOUSE_TEST_CLIENT)" GIT_COMMIT="$(GIT_COMMIT)" bash scripts/test-local-postgres.sh bash scripts/test-local-clickhouse.sh ./docker/run-tests.sh
 
 vendors:
 	go mod tidy
