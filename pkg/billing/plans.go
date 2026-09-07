@@ -26,15 +26,6 @@ type basePlan struct {
 	apiRequestsPerSecond float64
 }
 
-func (p *basePlan) IsValid() bool {
-	return len(p.name) > 0 &&
-		len(p.productID) > 0 &&
-		len(p.priceIDYearly) > 0 &&
-		p.priceMonthly > 0 &&
-		p.priceYearly > 0 &&
-		p.requestsLimit > 0
-}
-
 func (plan *basePlan) Equals(productID string, priceID string) bool {
 	return (plan.productID == productID) &&
 		((plan.priceIDMonthly == priceID) || (plan.priceIDYearly == priceID))
@@ -62,7 +53,6 @@ type Plan interface {
 	Name() string
 	ProductID() string
 	PriceIDs() (string, string)
-	IsValid() bool
 	Equals(productID string, priceID string) bool
 	TrialDays() int
 	RequestsLimit(trial bool) int64
