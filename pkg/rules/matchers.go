@@ -15,7 +15,7 @@ import (
 // Matcher is the interface that all specialized matchers implement.
 type Matcher interface {
 	Matches(ri *RequestInfo) bool
-	IsStale() bool
+	IsStale(ri *RequestInfo) bool
 }
 
 // StringMatcher handles string-based matching (UserAgent, CountryCode, Domain).
@@ -42,7 +42,7 @@ func (sm *StringMatcher) extract(ri *RequestInfo) string {
 	}
 }
 
-func (sm *StringMatcher) IsStale() bool {
+func (sm *StringMatcher) IsStale(_ *RequestInfo) bool {
 	return false
 }
 
@@ -100,7 +100,7 @@ type IPMatcher struct {
 
 var _ Matcher = (*IPMatcher)(nil)
 
-func (im *IPMatcher) IsStale() bool {
+func (im *IPMatcher) IsStale(_ *RequestInfo) bool {
 	return false
 }
 
@@ -149,7 +149,7 @@ type HeaderMatcher struct {
 
 var _ Matcher = (*HeaderMatcher)(nil)
 
-func (hm *HeaderMatcher) IsStale() bool {
+func (hm *HeaderMatcher) IsStale(_ *RequestInfo) bool {
 	return false
 }
 
@@ -230,7 +230,7 @@ func (bm *BotMatcher) looksLikeBot(ri *RequestInfo) bool {
 	return false
 }
 
-func (bm *BotMatcher) IsStale() bool {
+func (bm *BotMatcher) IsStale(_ *RequestInfo) bool {
 	return bm.UAParser == nil
 }
 
@@ -276,7 +276,7 @@ func (m *BrowserVersionMatcher) GobDecode(data []byte) error {
 	return dec.Decode(&m.ConditionOperatorNegated)
 }
 
-func (m *BrowserVersionMatcher) IsStale() bool {
+func (m *BrowserVersionMatcher) IsStale(_ *RequestInfo) bool {
 	return m.UAParser == nil || m.BrowserVersions == nil
 }
 
@@ -325,7 +325,7 @@ func browserVersionKey(ua useragent.UserAgent) (BrowserVersionKey, bool) {
 }
 
 func (m *BrowserVersionMatcher) Matches(ri *RequestInfo) bool {
-	if ri == nil || m.IsStale() || m.Threshold <= 0 {
+	if ri == nil || m.IsStale(ri) || m.Threshold <= 0 {
 		return false
 	}
 
@@ -358,7 +358,7 @@ type AlwaysMatcher struct{}
 
 var _ Matcher = (*AlwaysMatcher)(nil)
 
-func (am *AlwaysMatcher) IsStale() bool {
+func (am *AlwaysMatcher) IsStale(_ *RequestInfo) bool {
 	return false
 }
 

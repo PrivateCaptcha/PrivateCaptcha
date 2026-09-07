@@ -320,7 +320,7 @@ func TestBrowserVersionFailsOpenWithoutRuntimeDependencies(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.matcher.IsStale(); got != tt.stale {
+			if got := tt.matcher.IsStale(nil); got != tt.stale {
 				t.Fatalf("IsStale() = %v, want %v", got, tt.stale)
 			}
 			if tt.matcher.Matches(request) {
@@ -351,7 +351,7 @@ func TestBrowserVersionGobPreservesNegation(t *testing.T) {
 	if !decoded.ConditionOperatorNegated {
 		t.Error("ConditionOperatorNegated = false, want true")
 	}
-	if !decoded.IsStale() {
+	if !decoded.IsStale(nil) {
 		t.Error("decoded matcher is not stale")
 	}
 	if decoded.Matches(browserVersionRequest(browserVersionCases(149)[0].ua)) {

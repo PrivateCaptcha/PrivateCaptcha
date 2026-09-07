@@ -36,7 +36,7 @@ type rule interface {
 	Matches(ri *RequestInfo) bool
 	Apply(op *overrideProperty) bool
 	IsTerminal() bool
-	IsStale() bool
+	IsStale(ri *RequestInfo) bool
 }
 
 type CompiledRules struct {
@@ -88,7 +88,7 @@ func (cr *CompiledRules) GobDecode(data []byte) error {
 	}
 
 	for _, r := range cr.rules {
-		if r != nil && r.IsStale() {
+		if r != nil && r.IsStale(nil) {
 			cr.isStale = true
 			break
 		}
@@ -99,7 +99,7 @@ func (cr *CompiledRules) GobDecode(data []byte) error {
 
 func isBlockedByRules(rules []rule, ri *RequestInfo) (blocked bool, terminal bool) {
 	for _, r := range rules {
-		if r == nil || !r.IsTerminal() || r.IsStale() {
+		if r == nil || !r.IsTerminal() || r.IsStale(ri) {
 			continue
 		}
 		if !r.Matches(ri) {
@@ -129,7 +129,7 @@ func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) (difficul
 	anyMatched := false
 
 	for _, rule := range cr.rules {
-		if rule == nil || rule.IsStale() || !rule.Matches(ri) {
+		if rule == nil || rule.IsStale(ri) || !rule.Matches(ri) {
 			continue
 		}
 
@@ -248,11 +248,11 @@ func (rb *RuleBase) Matches(ri *RequestInfo) bool {
 	return rb.Matcher.Matches(ri)
 }
 func (rb *RuleBase) IsTerminal() bool { return rb.Terminal }
-func (rb *RuleBase) IsStale() bool {
+func (rb *RuleBase) IsStale(ri *RequestInfo) bool {
 	if rb.Matcher == nil {
 		return true
 	}
-	return rb.Matcher.IsStale()
+	return rb.Matcher.IsStale(ri)
 }
 
 // difficultyLevelRule adjusts the difficulty level by a percentage for a property
