@@ -893,7 +893,12 @@ func (s *Server) getOrgSearch(w http.ResponseWriter, r *http.Request) (*ViewMode
 	}, nil
 }
 
-func (s *Server) createOrgMembersRenderContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*orgMemberRenderContext, *common.AuditLogEvent, error) {
+func (s *Server) createOrgMembersRenderContext(
+	ctx context.Context,
+	baseCtx *portalBaseRenderContext,
+	org *dbgen.Organization,
+	user *dbgen.User,
+) (*orgMemberRenderContext, *common.AuditLogEvent, error) {
 	baseCtx.Tab = portalMembersTabIndex
 
 	renderCtx := &orgMemberRenderContext{
@@ -945,7 +950,12 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMod
 	}, nil
 }
 
-func (s *Server) createOrgSettingsRenderContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*orgSettingsRenderContext, *common.AuditLogEvent, error) {
+func (s *Server) createOrgSettingsRenderContext(
+	ctx context.Context,
+	baseCtx *portalBaseRenderContext,
+	org *dbgen.Organization,
+	user *dbgen.User,
+) (*orgSettingsRenderContext, *common.AuditLogEvent, error) {
 	baseCtx.Tab = portalSettingsTabIndex
 
 	renderCtx := &orgSettingsRenderContext{

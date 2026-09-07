@@ -466,7 +466,11 @@ func TestPutFormUpdatesSettings(t *testing.T) {
 	values.Set(common.ParamRequestsPerMinute, "24")
 	values.Set(common.ParamActive, "true")
 
-	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.EditEndpoint), strings.NewReader(values.Encode()))
+	req := httptest.NewRequest(
+		http.MethodPut,
+		fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.EditEndpoint),
+		strings.NewReader(values.Encode()),
+	)
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
@@ -557,7 +561,11 @@ func TestPostTestFormReturnsResult(t *testing.T) {
 	values.Set(common.ParamURL, downstream.URL+"/override")
 	values.Set(common.ParamMethod, http.MethodDelete)
 
-	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint), strings.NewReader(values.Encode()))
+	req := httptest.NewRequest(
+		http.MethodPost,
+		fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint),
+		strings.NewReader(values.Encode()),
+	)
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
@@ -636,7 +644,11 @@ func TestPostTestFormReturnsFailureResult(t *testing.T) {
 	values.Set(common.ParamURL, downstream.URL+"/failure")
 	values.Set(common.ParamMethod, http.MethodPatch)
 
-	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint), strings.NewReader(values.Encode()))
+	req := httptest.NewRequest(
+		http.MethodPost,
+		fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint),
+		strings.NewReader(values.Encode()),
+	)
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
@@ -699,7 +711,11 @@ func TestPostTestFormIgnoresPostedMethodOverride(t *testing.T) {
 	values.Set(common.ParamURL, downstream.URL+"/invalid")
 	values.Set(common.ParamMethod, http.MethodTrace)
 
-	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint), strings.NewReader(values.Encode()))
+	req := httptest.NewRequest(
+		http.MethodPost,
+		fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint),
+		strings.NewReader(values.Encode()),
+	)
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
@@ -772,7 +788,11 @@ func TestPutFormCannotEdit(t *testing.T) {
 	values.Set(common.ParamRequestsPerMinute, "10")
 	values.Set(common.ParamActive, "true")
 
-	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.EditEndpoint), strings.NewReader(values.Encode()))
+	req := httptest.NewRequest(
+		http.MethodPut,
+		fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.EditEndpoint),
+		strings.NewReader(values.Encode()),
+	)
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))

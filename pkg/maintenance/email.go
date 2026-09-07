@@ -361,7 +361,18 @@ func (j *UserEmailNotificationsJob) processNotificationsChunk(ctx context.Contex
 			// NOTE: checking this logic in code (instead of SQL) means that we might attempt to process same notifications
 			// again and again so we rely on "processing_attempts" circuit breaker logic
 			if isActive := n.Status.Valid && j.PlanService.IsSubscriptionActive(n.Status.String); isActive != un.RequiresSubscription.Bool {
-				nlog.WarnContext(ctx, "Skipping user notification without matching subscription status", "userID", un.UserID.Int32, "expected", un.RequiresSubscription.Bool, "actual", isActive, "subscID", n.SubscriptionID.Int32)
+				nlog.WarnContext(
+					ctx,
+					"Skipping user notification without matching subscription status",
+					"userID",
+					un.UserID.Int32,
+					"expected",
+					un.RequiresSubscription.Bool,
+					"actual",
+					isActive,
+					"subscID",
+					n.SubscriptionID.Int32,
+				)
 				continue
 			}
 		}

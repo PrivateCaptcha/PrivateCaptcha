@@ -812,11 +812,29 @@ func TestRefreshBrowserVersionsJobPreservesProviderOnFailure(t *testing.T) {
 		{name: "DatabaseError", err: dbErr},
 		{name: "MalformedJSON", data: []byte(`{"versions":`)},
 		{name: "EmptyVersion", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows}}, validRecords[1:]...))},
-		{name: "ZeroMajorVersion", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "0.1"}}, validRecords[1:]...))},
-		{name: "MalformedVersion", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "152.x.1"}}, validRecords[1:]...))},
-		{name: "VersionOverflow", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "999999999999999999999.0"}}, validRecords[1:]...))},
-		{name: "TooManyVersionComponents", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "152.0.1.2.3"}}, validRecords[1:]...))},
-		{name: "ImplausibleMajorVersion", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "1001.0"}}, validRecords[1:]...))},
+		{
+			name: "ZeroMajorVersion",
+			data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "0.1"}}, validRecords[1:]...)),
+		},
+		{
+			name: "MalformedVersion",
+			data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "152.x.1"}}, validRecords[1:]...)),
+		},
+		{
+			name: "VersionOverflow",
+			data: browserVersionSnapshotData(
+				t,
+				append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "999999999999999999999.0"}}, validRecords[1:]...),
+			),
+		},
+		{
+			name: "TooManyVersionComponents",
+			data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "152.0.1.2.3"}}, validRecords[1:]...)),
+		},
+		{
+			name: "ImplausibleMajorVersion",
+			data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: rules.BrowserChrome, Platform: rules.PlatformWindows, Version: "1001.0"}}, validRecords[1:]...)),
+		},
 		{name: "DuplicateRecord", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{validRecords[0]}, validRecords[:8]...))},
 		{name: "UnknownRecord", data: browserVersionSnapshotData(t, append([]BrowserVersionRecord{{Browser: "unknown", Platform: rules.PlatformMacOS, Version: "18.0"}}, validRecords[1:]...))},
 	}

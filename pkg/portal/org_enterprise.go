@@ -666,7 +666,12 @@ func (s *Server) transferOrg(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.RelURL("/"), http.StatusOK, w, r)
 }
 
-func (s *Server) createOrgAuditLogsContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*orgAuditLogsRenderContext, *common.AuditLogEvent, error) {
+func (s *Server) createOrgAuditLogsContext(
+	ctx context.Context,
+	baseCtx *portalBaseRenderContext,
+	org *dbgen.Organization,
+	user *dbgen.User,
+) (*orgAuditLogsRenderContext, *common.AuditLogEvent, error) {
 	baseCtx.Tab = portalEventsTabIndex
 
 	renderCtx := &orgAuditLogsRenderContext{

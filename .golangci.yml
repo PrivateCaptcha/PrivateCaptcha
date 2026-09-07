@@ -23,7 +23,7 @@ linters:
 formatters:
   enable:
     - goimports
-    #- golines
+    - golines
 
   settings:
     golines:

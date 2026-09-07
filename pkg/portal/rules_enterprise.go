@@ -581,7 +581,12 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
 
 	// Redirect back to rules tab with success message
-	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+	common.Redirect(
+		s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint,
+		http.StatusOK,
+		w,
+		r,
+	)
 }
 
 func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
@@ -1012,7 +1017,12 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 
 	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
 
-	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+	common.Redirect(
+		s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint,
+		http.StatusOK,
+		w,
+		r,
+	)
 }
 
 func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
@@ -1156,7 +1166,12 @@ func (s *Server) deletePropertyRule(w http.ResponseWriter, r *http.Request) {
 
 	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
 
-	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+	common.Redirect(
+		s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint,
+		http.StatusOK,
+		w,
+		r,
+	)
 }
 
 func (s *Server) deleteOrgRule(w http.ResponseWriter, r *http.Request) {

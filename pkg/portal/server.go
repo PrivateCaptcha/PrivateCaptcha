@@ -380,7 +380,11 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.EditEndpoint), privateWrite, s.Handler(s.putForm))
 	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.DeleteEndpoint), privateWrite, http.HandlerFunc(s.deleteForm))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.ReportsEndpoint), privateRead, s.Handler(s.getFormReportsTab))
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.IntegrationsEndpoint), privateRead, s.Handler(s.getFormIntegrationsTab))
+	rg.Handle(
+		rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.IntegrationsEndpoint),
+		privateRead,
+		s.Handler(s.getFormIntegrationsTab),
+	)
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.SettingsEndpoint), privateRead, s.Handler(s.getFormSettingsTab))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getFormAuditLogsTab))
 	testFormRateLimiter := s.RateLimiter.RateLimitExFunc(2, 5*time.Second)
@@ -394,13 +398,41 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.DeleteEndpoint), privateWrite, http.HandlerFunc(s.deleteProperty))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.ClientSetupEndpoint), privateRead, s.Handler(s.getPropertyWizardClientStep))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.ServerSetupEndpoint), privateRead, s.Handler(s.getPropertyWizardServerStep))
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.ReportsEndpoint), privateRead, s.Handler(s.getPropertyReportsTab))
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.SettingsEndpoint), privateRead, s.Handler(s.getPropertySettingsTab))
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.IntegrationsEndpoint), privateRead, s.Handler(s.getPropertyIntegrationsTab))
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getPropertyAuditLogsTab))
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.RulesEndpoint), privateRead, s.Handler(s.getPropertyRulesTab))
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.StatsEndpoint, arg(common.ParamPeriod)), privateRead, http.HandlerFunc(s.getPropertyStats))
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.StatsEndpoint, arg(common.ParamPeriod)), privateRead, http.HandlerFunc(s.getFormStats))
+	rg.Handle(
+		rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.ReportsEndpoint),
+		privateRead,
+		s.Handler(s.getPropertyReportsTab),
+	)
+	rg.Handle(
+		rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.SettingsEndpoint),
+		privateRead,
+		s.Handler(s.getPropertySettingsTab),
+	)
+	rg.Handle(
+		rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.IntegrationsEndpoint),
+		privateRead,
+		s.Handler(s.getPropertyIntegrationsTab),
+	)
+	rg.Handle(
+		rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.EventsEndpoint),
+		privateRead,
+		s.Handler(s.getPropertyAuditLogsTab),
+	)
+	rg.Handle(
+		rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.RulesEndpoint),
+		privateRead,
+		s.Handler(s.getPropertyRulesTab),
+	)
+	rg.Handle(
+		rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.StatsEndpoint, arg(common.ParamPeriod)),
+		privateRead,
+		http.HandlerFunc(s.getPropertyStats),
+	)
+	rg.Handle(
+		rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.StatsEndpoint, arg(common.ParamPeriod)),
+		privateRead,
+		http.HandlerFunc(s.getFormStats),
+	)
 
 	rg.Handle(rg.Get(common.SettingsEndpoint), privateRead, s.Handler(s.getSettings))
 	rg.Handle(rg.Get(common.SettingsEndpoint, common.TabEndpoint, arg(common.ParamTab)), privateRead, s.Handler(s.getSettingsTab))

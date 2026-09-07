@@ -1676,7 +1676,12 @@ func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *db
 	return property, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams *dbgen.CreatePropertyParams, formParams *dbgen.CreateFormParams, org *dbgen.Organization) (*dbgen.Form, *dbgen.Property, []*common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) CreateNewForm(
+	ctx context.Context,
+	propertyParams *dbgen.CreatePropertyParams,
+	formParams *dbgen.CreateFormParams,
+	org *dbgen.Organization,
+) (*dbgen.Form, *dbgen.Property, []*common.AuditLogEvent, error) {
 	if (propertyParams == nil) || (formParams == nil) || (len(formParams.Name) == 0) || (len(formParams.URL) == 0) {
 		return nil, nil, nil, ErrInvalidInput
 	}
@@ -1842,7 +1847,13 @@ func (impl *BusinessStoreImpl) DeactivateForms(ctx context.Context, ids []int32)
 	return forms, nil
 }
 
-func (impl *BusinessStoreImpl) MoveForm(ctx context.Context, user *dbgen.User, form *dbgen.Form, property *dbgen.Property, org *dbgen.GetUserOrganizationsRow) (*dbgen.Form, *dbgen.Property, []*common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) MoveForm(
+	ctx context.Context,
+	user *dbgen.User,
+	form *dbgen.Form,
+	property *dbgen.Property,
+	org *dbgen.GetUserOrganizationsRow,
+) (*dbgen.Form, *dbgen.Property, []*common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, nil, nil, ErrMaintenance
 	}
@@ -3370,7 +3381,12 @@ func (impl *BusinessStoreImpl) RetrieveOrgProperty(ctx context.Context, org *dbg
 	return property, nil
 }
 
-func (impl *BusinessStoreImpl) CreateNewAccount(ctx context.Context, params *dbgen.CreateSubscriptionParams, email, name, orgName string, expectedUserID int32) (*dbgen.User, *dbgen.Organization, []*common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) CreateNewAccount(
+	ctx context.Context,
+	params *dbgen.CreateSubscriptionParams,
+	email, name, orgName string,
+	expectedUserID int32,
+) (*dbgen.User, *dbgen.Organization, []*common.AuditLogEvent, error) {
 	if (len(email) == 0) || (len(orgName) == 0) {
 		return nil, nil, nil, ErrInvalidInput
 	}
@@ -3394,7 +3410,12 @@ func (impl *BusinessStoreImpl) CreateNewAccount(ctx context.Context, params *dbg
 
 			if (existingUser.ID == expectedUserID) || ((expectedUserID == -1) && !existingUser.SubscriptionID.Valid) {
 				if existingUser.SubscriptionID.Valid {
-					if existingSubscription, err := impl.RetrieveSubscription(ctx, existingUser.SubscriptionID.Int32, true /*skip cache*/); (err == nil) && !IsInternalSubscription(existingSubscription.Source) {
+					if existingSubscription, err := impl.RetrieveSubscription(
+						ctx,
+						existingUser.SubscriptionID.Int32,
+						true, /*skip cache*/
+					); (err == nil) &&
+						!IsInternalSubscription(existingSubscription.Source) {
 						slog.ErrorContext(ctx, "Existing user already has external subscription",
 							"existingUserID", existingUser.ID, "subscriptionID", existingSubscription.ID)
 						return nil, nil, nil, ErrDuplicateAccount
@@ -4277,7 +4298,12 @@ func (impl *BusinessStoreImpl) UpdateAsyncTask(ctx context.Context, uuid pgtype.
 	return nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveOrgOwnerWithSubscription(ctx context.Context, org *dbgen.Organization, activeUser *dbgen.User, skipCache bool) (owner *dbgen.User, subscr *dbgen.Subscription, err error) {
+func (impl *BusinessStoreImpl) RetrieveOrgOwnerWithSubscription(
+	ctx context.Context,
+	org *dbgen.Organization,
+	activeUser *dbgen.User,
+	skipCache bool,
+) (owner *dbgen.User, subscr *dbgen.Subscription, err error) {
 	isUserOrgOwner := org.UserID.Valid && (org.UserID.Int32 == activeUser.ID)
 
 	if isUserOrgOwner {
@@ -4655,7 +4681,13 @@ func newDifficultyRuleFromUpdate(result *dbgen.UpdateDifficultyRuleRow) *dbgen.D
 	}
 }
 
-func (impl *BusinessStoreImpl) UpdateDifficultyRule(ctx context.Context, org *dbgen.Organization, property *dbgen.Property, user *dbgen.User, params *dbgen.UpdateDifficultyRuleParams) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) UpdateDifficultyRule(
+	ctx context.Context,
+	org *dbgen.Organization,
+	property *dbgen.Property,
+	user *dbgen.User,
+	params *dbgen.UpdateDifficultyRuleParams,
+) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
 	if (params == nil) || (user == nil) || (org == nil) {
 		return nil, nil, ErrInvalidInput
 	}
@@ -4768,7 +4800,13 @@ const (
 	RulePositionStep = 100.0
 )
 
-func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, org *dbgen.Organization, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) MoveDifficultyRule(
+	ctx context.Context,
+	org *dbgen.Organization,
+	rule *dbgen.DifficultyRule,
+	newIndex int,
+	user *dbgen.User,
+) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, nil, ErrMaintenance
 	}
@@ -4953,7 +4991,13 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForOrg(ctx context.Contex
 	return nil
 }
 
-func (impl *BusinessStoreImpl) MoveDifficultyRuleWithRebalancing(ctx context.Context, org *dbgen.Organization, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) MoveDifficultyRuleWithRebalancing(
+	ctx context.Context,
+	org *dbgen.Organization,
+	rule *dbgen.DifficultyRule,
+	newIndex int,
+	user *dbgen.User,
+) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
 	// Move the rule
 	updatedRule, auditEvent, err := impl.MoveDifficultyRule(ctx, org, rule, newIndex, user)
 	if err != nil {
@@ -5043,7 +5087,12 @@ func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *d
 	return settings, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.Context, limit, lastSeenUserID int32, referencePrefix, referenceSuffix string, expiredStatus string) ([]*dbgen.GetUsersWithPendingWeeklyReportRow, error) {
+func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(
+	ctx context.Context,
+	limit, lastSeenUserID int32,
+	referencePrefix, referenceSuffix string,
+	expiredStatus string,
+) ([]*dbgen.GetUsersWithPendingWeeklyReportRow, error) {
 	if limit <= 0 || lastSeenUserID < 0 || len(referencePrefix) == 0 || len(referenceSuffix) == 0 {
 		return nil, ErrInvalidInput
 	}
@@ -5063,7 +5112,19 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.
 		if errors.Is(err, pgx.ErrNoRows) {
 			return []*dbgen.GetUsersWithPendingWeeklyReportRow{}, nil
 		}
-		slog.ErrorContext(ctx, "Failed to retrieve users with pending weekly report", "limit", limit, "lastSeenUserID", lastSeenUserID, "prefix", referencePrefix, "suffix", referenceSuffix, common.ErrAttr(err))
+		slog.ErrorContext(
+			ctx,
+			"Failed to retrieve users with pending weekly report",
+			"limit",
+			limit,
+			"lastSeenUserID",
+			lastSeenUserID,
+			"prefix",
+			referencePrefix,
+			"suffix",
+			referenceSuffix,
+			common.ErrAttr(err),
+		)
 		return nil, err
 	}
 
@@ -5072,7 +5133,12 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.
 	return users, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(ctx context.Context, limit, lastSeenUserID int32, referencePrefix, referenceSuffix string, expiredStatus string) ([]*dbgen.GetUsersWithPendingMonthlyReportRow, error) {
+func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(
+	ctx context.Context,
+	limit, lastSeenUserID int32,
+	referencePrefix, referenceSuffix string,
+	expiredStatus string,
+) ([]*dbgen.GetUsersWithPendingMonthlyReportRow, error) {
 	if limit <= 0 || lastSeenUserID < 0 || len(referencePrefix) == 0 || len(referenceSuffix) == 0 {
 		return nil, ErrInvalidInput
 	}
@@ -5092,7 +5158,19 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(ctx context
 		if errors.Is(err, pgx.ErrNoRows) {
 			return []*dbgen.GetUsersWithPendingMonthlyReportRow{}, nil
 		}
-		slog.ErrorContext(ctx, "Failed to retrieve users with pending monthly report", "limit", limit, "lastSeenUserID", lastSeenUserID, "prefix", referencePrefix, "suffix", referenceSuffix, common.ErrAttr(err))
+		slog.ErrorContext(
+			ctx,
+			"Failed to retrieve users with pending monthly report",
+			"limit",
+			limit,
+			"lastSeenUserID",
+			lastSeenUserID,
+			"prefix",
+			referencePrefix,
+			"suffix",
+			referenceSuffix,
+			common.ErrAttr(err),
+		)
 		return nil, err
 	}
 

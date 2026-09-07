@@ -754,7 +754,8 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	}
 
 	var auditEvent *common.AuditLogEvent
-	if (name != form.Name) || (urlValue != form.URL) || (method != form.Method) || (active != form.Active) || (retryRequestCount != form.RetryRequestCount) || (requestsPerMinute != form.RequestsPerMinute) {
+	if (name != form.Name) || (urlValue != form.URL) || (method != form.Method) || (active != form.Active) || (retryRequestCount != form.RetryRequestCount) ||
+		(requestsPerMinute != form.RequestsPerMinute) {
 		params := &dbgen.UpdateFormParams{
 			ID:                form.ID,
 			Name:              name,

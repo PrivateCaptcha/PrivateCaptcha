@@ -85,7 +85,12 @@ func newStubAuditLog() *UserAuditLog {
 	}
 }
 
-func (s *Server) createOrgAuditLogsContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*orgAuditLogsRenderContext, *common.AuditLogEvent, error) {
+func (s *Server) createOrgAuditLogsContext(
+	ctx context.Context,
+	baseCtx *portalBaseRenderContext,
+	org *dbgen.Organization,
+	user *dbgen.User,
+) (*orgAuditLogsRenderContext, *common.AuditLogEvent, error) {
 	baseCtx.Tab = portalEventsTabIndex
 
 	renderCtx := &orgAuditLogsRenderContext{

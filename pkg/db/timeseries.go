@@ -555,7 +555,13 @@ func sortUserReportProperties(properties []*common.UserReportPropertyStat) {
 	})
 }
 
-func (ts *TimeSeriesDB) retrieveReportStats(ctx context.Context, userID int32, from, mid, to time.Time, accessTable, verifyTable string, options common.UserReportOptions) (*common.UserReportStats, error) {
+func (ts *TimeSeriesDB) retrieveReportStats(
+	ctx context.Context,
+	userID int32,
+	from, mid, to time.Time,
+	accessTable, verifyTable string,
+	options common.UserReportOptions,
+) (*common.UserReportStats, error) {
 	if userID <= 0 || invalidUserReportOptions(options) {
 		return nil, ErrInvalidInput
 	}

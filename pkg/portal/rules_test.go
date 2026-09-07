@@ -117,7 +117,13 @@ func postCreatePropertyRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen
 	return postRuleRequest(srv, cookie, "POST", endpoint, token, params)
 }
 
-func postCreateOrgRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, name, conditionProp, conditionOp, conditionValue, actionProp, actionValue string) *http.Response {
+func postCreateOrgRule(
+	srv *http.ServeMux,
+	cookie *http.Cookie,
+	user *dbgen.User,
+	org *dbgen.Organization,
+	name, conditionProp, conditionOp, conditionValue, actionProp, actionValue string,
+) *http.Response {
 	endpoint := fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)))
 	token := server.XSRF.Token(strconv.Itoa(int(user.ID)))
 	params := map[string]string{
@@ -132,7 +138,15 @@ func postCreateOrgRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User
 	return postRuleRequest(srv, cookie, "POST", endpoint, token, params)
 }
 
-func postEditPropertyRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, name, conditionOp, conditionValue, actionValue string) *http.Response {
+func postEditPropertyRule(
+	srv *http.ServeMux,
+	cookie *http.Cookie,
+	user *dbgen.User,
+	org *dbgen.Organization,
+	prop *dbgen.Property,
+	rule *dbgen.DifficultyRule,
+	name, conditionOp, conditionValue, actionValue string,
+) *http.Response {
 	endpoint := fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID)))
 	token := server.XSRF.Token(strconv.Itoa(int(user.ID)))
 	params := map[string]string{
@@ -147,7 +161,14 @@ func postEditPropertyRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.U
 	return postRuleRequest(srv, cookie, "POST", endpoint, token, params)
 }
 
-func postEditOrgRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, rule *dbgen.DifficultyRule, name, conditionProp, conditionOp, conditionValue, actionProp, actionValue string) *http.Response {
+func postEditOrgRule(
+	srv *http.ServeMux,
+	cookie *http.Cookie,
+	user *dbgen.User,
+	org *dbgen.Organization,
+	rule *dbgen.DifficultyRule,
+	name, conditionProp, conditionOp, conditionValue, actionProp, actionValue string,
+) *http.Response {
 	endpoint := fmt.Sprintf("/org/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID)))
 	token := server.XSRF.Token(strconv.Itoa(int(user.ID)))
 	params := map[string]string{

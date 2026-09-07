@@ -83,7 +83,18 @@ func seed(usersCount, orgsCount, propertiesCount, solutionsCount int, solutionsF
 	return nil
 }
 
-func seedUser(ctx context.Context, u int, orgsCount, propertiesCount, solutionsCount int, solutionsFile string, plan billing.Plan, store db.Implementor, cfg common.ConfigStore, wg *sync.WaitGroup, resultsChan chan string, solutionsSemaphore chan struct{}) error {
+func seedUser(
+	ctx context.Context,
+	u int,
+	orgsCount, propertiesCount, solutionsCount int,
+	solutionsFile string,
+	plan billing.Plan,
+	store db.Implementor,
+	cfg common.ConfigStore,
+	wg *sync.WaitGroup,
+	resultsChan chan string,
+	solutionsSemaphore chan struct{},
+) error {
 	email := fmt.Sprintf("test.user.%v@privatecaptcha.com", u)
 	name := fmt.Sprintf("John%v Doe%v", u, u)
 	orgName := fmt.Sprintf("John%v-doe%v", u, u)

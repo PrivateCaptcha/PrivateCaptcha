@@ -111,6 +111,13 @@ func TestBackfillLevels(t *testing.T) {
 	slog.Debug("Backfill waiting finished", "difficulty", actualDifficulty, "level", actualLevel)
 
 	if !backfilled {
-		t.Errorf("Property level was not backfilled. actualDifficulty=%v actualLevel=%v minLevel=%v preResetDifficulty=%v preResetLevel=%v", actualDifficulty, actualLevel, minBackfilledLevel, diff, level)
+		t.Errorf(
+			"Property level was not backfilled. actualDifficulty=%v actualLevel=%v minLevel=%v preResetDifficulty=%v preResetLevel=%v",
+			actualDifficulty,
+			actualLevel,
+			minBackfilledLevel,
+			diff,
+			level,
+		)
 	}
 }

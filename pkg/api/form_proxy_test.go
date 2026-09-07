@@ -154,7 +154,18 @@ func TestSubmitFormBatchRecordsFinalSuccess(t *testing.T) {
 	}))
 	defer downstream.Close()
 
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true, Active: true}
+	form := &dbgen.Form{
+		ID:                123,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               downstream.URL,
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 2,
+		Enabled:           true,
+		Active:            true,
+	}
 	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
 	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: []*dbgen.Form{form}}, cache)
 	server := &Server{
@@ -187,7 +198,18 @@ func TestSubmitFormBatchRecordsOneFinalFailureAfterRetries(t *testing.T) {
 	}))
 	defer downstream.Close()
 
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true, Active: true}
+	form := &dbgen.Form{
+		ID:                123,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               downstream.URL,
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 2,
+		Enabled:           true,
+		Active:            true,
+	}
 	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
 	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: []*dbgen.Form{form}}, cache)
 	server := &Server{
@@ -240,7 +262,19 @@ func TestProcessFormSubmissionClonesClientWhenRedirectsEnabled(t *testing.T) {
 	defer downstream.Close()
 
 	verifier := &stubSubmitFormURLVerifier{}
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL + "/redirect", Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true, RedirectCount: 1}
+	form := &dbgen.Form{
+		ID:                123,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               downstream.URL + "/redirect",
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 0,
+		Enabled:           true,
+		Active:            true,
+		RedirectCount:     1,
+	}
 	server := &Server{
 		FormsClient:       common.NewFormHTTPClient(verifier, 0),
 		FormURLVerifier:   verifier,
@@ -335,7 +369,18 @@ func TestSubmitFormWithRetryReturnsSuccessResult(t *testing.T) {
 	}))
 	defer downstream.Close()
 
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
+	form := &dbgen.Form{
+		ID:                123,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               downstream.URL,
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 0,
+		Enabled:           true,
+		Active:            true,
+	}
 	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{}, 0)
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
@@ -368,7 +413,19 @@ func TestSubmitFormWithRetryTreatsRedirectAsFailureWhenDisabled(t *testing.T) {
 	}))
 	defer downstream.Close()
 
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL + "/redirect", Method: dbgen.FormMethodPost, RetryRequestCount: 1, Enabled: true, Active: true, RedirectCount: 0}
+	form := &dbgen.Form{
+		ID:                123,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               downstream.URL + "/redirect",
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 1,
+		Enabled:           true,
+		Active:            true,
+		RedirectCount:     0,
+	}
 	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{}, 0)
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
@@ -407,7 +464,19 @@ func TestSubmitFormWithRetryFollowsRedirectWhenEnabled(t *testing.T) {
 	}))
 	defer downstream.Close()
 
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL + "/redirect", Method: dbgen.FormMethodPost, RetryRequestCount: 1, Enabled: true, Active: true, RedirectCount: 1}
+	form := &dbgen.Form{
+		ID:                123,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               downstream.URL + "/redirect",
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 1,
+		Enabled:           true,
+		Active:            true,
+		RedirectCount:     1,
+	}
 	verifier := &stubSubmitFormURLVerifier{}
 	client := common.NewFormHTTPClient(verifier, form.RedirectCount)
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
@@ -438,7 +507,18 @@ func TestSubmitFormWithRetryReturnsFailureResult(t *testing.T) {
 	}))
 	defer downstream.Close()
 
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
+	form := &dbgen.Form{
+		ID:                123,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               downstream.URL,
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 0,
+		Enabled:           true,
+		Active:            true,
+	}
 	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{}, 0)
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
@@ -465,7 +545,18 @@ func TestSubmitFormWithRetryReturnsFailureResultAfterRetries(t *testing.T) {
 	}))
 	defer downstream.Close()
 
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true, Active: true}
+	form := &dbgen.Form{
+		ID:                123,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               downstream.URL,
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 2,
+		Enabled:           true,
+		Active:            true,
+	}
 	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{}, 0)
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
@@ -504,7 +595,18 @@ func TestSubmitFormWithRetryRetriesSelectedHttpStatuses(t *testing.T) {
 			}))
 			defer downstream.Close()
 
-			form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 1, Enabled: true, Active: true}
+			form := &dbgen.Form{
+				ID:                123,
+				PropertyID:        456,
+				OrgOwnerID:        db.Int(7),
+				OrgID:             db.Int(8),
+				ExternalID:        db.TestPropertyUUID,
+				URL:               downstream.URL,
+				Method:            dbgen.FormMethodPost,
+				RetryRequestCount: 1,
+				Enabled:           true,
+				Active:            true,
+			}
 			client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{}, 0)
 			submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
@@ -529,7 +631,18 @@ func TestSubmitFormWithRetryRetriesTransportError(t *testing.T) {
 		attempts++
 		return nil, expectedErr
 	})}
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: "https://example.com/submit", Method: dbgen.FormMethodPost, RetryRequestCount: 1, Enabled: true, Active: true}
+	form := &dbgen.Form{
+		ID:                123,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               "https://example.com/submit",
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 1,
+		Enabled:           true,
+		Active:            true,
+	}
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
 	result := SubmitFormWithRetry(context.Background(), client, form, submission)
@@ -556,7 +669,18 @@ func TestSubmitFormWithRetryDoesNotRetryBadRequest(t *testing.T) {
 	}))
 	defer downstream.Close()
 
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true, Active: true}
+	form := &dbgen.Form{
+		ID:                123,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               downstream.URL,
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 2,
+		Enabled:           true,
+		Active:            true,
+	}
 	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{}, 0)
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
@@ -584,7 +708,18 @@ func TestSubmitFormOnceDoesNotReadSuccessfulResponseBody(t *testing.T) {
 			Header:     make(http.Header),
 		}, nil
 	})}
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: "https://example.com/submit", Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
+	form := &dbgen.Form{
+		ID:                123,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               "https://example.com/submit",
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 0,
+		Enabled:           true,
+		Active:            true,
+	}
 	submission := &FormSubmission{ID: "sub-1", FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
 	result, err := submitFormOnce(context.Background(), client, form, submission)
@@ -611,7 +746,18 @@ func TestSubmitFormOnceDoesNotReadBadRequestBody(t *testing.T) {
 			Header:     make(http.Header),
 		}, nil
 	})}
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: "https://example.com/submit", Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
+	form := &dbgen.Form{
+		ID:                123,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               "https://example.com/submit",
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 0,
+		Enabled:           true,
+		Active:            true,
+	}
 	submission := &FormSubmission{ID: "sub-1", FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
 	result, err := submitFormOnce(context.Background(), client, form, submission)
