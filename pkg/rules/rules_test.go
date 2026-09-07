@@ -1980,16 +1980,6 @@ func (m *customMatcher) Matches(ri *RequestInfo) bool {
 	}
 }
 
-type requestAwareStaleMatcher struct{}
-
-func (m *requestAwareStaleMatcher) Matches(_ *RequestInfo) bool {
-	return true
-}
-
-func (m *requestAwareStaleMatcher) IsStale(ri *RequestInfo) bool {
-	return ri.UserAgent() == "stale"
-}
-
 func TestRegisterMatcherFactory(t *testing.T) {
 	const testCustomPropertyName = "custom_property"
 
@@ -3355,29 +3345,9 @@ func TestCompiledRulesStaleRuleDoesNotBlockRequest(t *testing.T) {
 	}
 }
 
-func TestCompiledRulesApplyUsesRequestAwareStaleness(t *testing.T) {
-	compiled := NewCompiledRules([]rule{
-		&difficultyLevelRule{
-			RuleBase:    RuleBase{RuleID: 1, Matcher: &requestAwareStaleMatcher{}},
-			PercentDiff: 100,
-		},
-	})
-	property := stubProperty(50)
-
-	stale, _ := compiled.Apply(newTestRequestInfo("stale", netip.MustParseAddr("1.2.3.4")), property)
-	if stale != property {
-		t.Fatal("expected stale rule to leave property unchanged")
-	}
-
-	fresh, _ := compiled.Apply(newTestRequestInfo("fresh", netip.MustParseAddr("1.2.3.4")), property)
-	if fresh == property {
-		t.Fatal("expected fresh rule to apply")
-	}
-}
-
 func TestRuleBaseWithoutMatcherIsStale(t *testing.T) {
 	var ruleBase RuleBase
-	if !ruleBase.IsStale(nil) {
+	if !ruleBase.IsStale() {
 		t.Fatal("expected a rule without a matcher to be marked stale")
 	}
 }
