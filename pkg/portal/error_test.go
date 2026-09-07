@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -44,6 +45,32 @@ func TestErrorPage(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSignedInErrorPageIncludesLogoutCSRF(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx = context.WithValue(ctx, common.LoggedInContextKey, true)
+	req := httptest.NewRequest(http.MethodGet, "/error/500", nil).WithContext(ctx)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	server.renderError(ctx, w, req, http.StatusInternalServerError)
+
+	assertLogoutButtons(t, w.Body, user.ID)
 }
 
 func TestNotFoundHandler(t *testing.T) {

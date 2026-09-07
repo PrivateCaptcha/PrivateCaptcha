@@ -27,7 +27,13 @@ func (sp *safeProcessor[T, B]) Process(ctx context.Context, batch B) (err error)
 	return sp.processor(ctx, batch)
 }
 
-func ProcessBatchArray[T any](ctx context.Context, channel <-chan T, delay time.Duration, triggerSize, maxBatchSize int, processor func(context.Context, []T) error) {
+func ProcessBatchArray[T any](
+	ctx context.Context,
+	channel <-chan T,
+	delay time.Duration,
+	triggerSize, maxBatchSize int,
+	processor func(context.Context, []T) error,
+) {
 	var batch []T
 	sp := &safeProcessor[T, []T]{processor: processor}
 	slog.DebugContext(ctx, "Processing batch", "interval", delay.String())
@@ -80,7 +86,13 @@ func ProcessBatchArray[T any](ctx context.Context, channel <-chan T, delay time.
 
 // as they say, a little copy-paste is better than a little dependency
 // it is assumed to be called with such parameters that make uint enough for counting
-func ProcessBatchMap[T comparable](ctx context.Context, channel <-chan T, delay time.Duration, triggerSize, maxBatchSize int, processor func(context.Context, map[T]uint) error) {
+func ProcessBatchMap[T comparable](
+	ctx context.Context,
+	channel <-chan T,
+	delay time.Duration,
+	triggerSize, maxBatchSize int,
+	processor func(context.Context, map[T]uint) error,
+) {
 	defer func() {
 		if rvr := recover(); rvr != nil {
 			slog.ErrorContext(ctx, "ProcessBatchMap crashed", "panic", rvr, "stack", string(debug.Stack()))

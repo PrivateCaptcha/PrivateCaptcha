@@ -11,7 +11,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -21,10 +20,7 @@ const testDomain = "example.com"
 
 var testAPIKeyUUID = pgtype.UUID{Bytes: [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}, Valid: true}
 var testAPIKeySecret = UUIDToSecret(testAPIKeyUUID)
-var testCacheKeyStr = SessionCacheKey("valid-sid").String()
-var testCacheKey = SessionCacheKey("valid-sid")
-
-type dummySessionStore struct{}
+var testCacheKeyStr = "test/valid-key"
 
 type createPropertyQuerierStub struct {
 	*QuerierStub
@@ -79,18 +75,6 @@ func (s *transferOrganizationQuerierStub) GetOrganizationUsers(context.Context, 
 func (s *transferOrganizationQuerierStub) GetOrgPropertiesByDateAscending(context.Context, *dbgen.GetOrgPropertiesByDateAscendingParams) ([]*dbgen.Property, error) {
 	return s.properties, nil
 }
-
-func (s *dummySessionStore) Start(ctx context.Context, interval time.Duration)        {}
-func (s *dummySessionStore) Init(ctx context.Context, session *session.Session) error { return nil }
-func (s *dummySessionStore) Read(ctx context.Context, sid string, skipCache bool) (*session.Session, error) {
-	return nil, nil
-}
-func (s *dummySessionStore) Update(ctx context.Context, session *session.Session) error { return nil }
-func (s *dummySessionStore) Renew(ctx context.Context, oldSID string, session *session.Session) error {
-	return nil
-}
-func (s *dummySessionStore) RollbackRenew(ctx context.Context, oldSID string) {}
-func (s *dummySessionStore) Destroy(ctx context.Context, sid string) error    { return nil }
 
 func (s *createPropertyQuerierStub) CreateProperty(ctx context.Context, arg *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
 	return s.property, s.Error
@@ -512,92 +496,6 @@ func TestBusinessStoreImplSoftDeleteUser(t *testing.T) {
 		expectedErr := errors.New("db error")
 		store := setupTestStore(t, expectedErr)
 		_, err := store.SoftDeleteUser(context.Background(), &dbgen.User{})
-		if err == nil {
-			t.Errorf("expected error, got nil")
-		}
-	})
-}
-
-func TestBusinessStoreImplDeleteUserSession(t *testing.T) {
-	t.Run("ErrNoRows", func(t *testing.T) {
-		store := setupTestStore(t, pgx.ErrNoRows)
-		err := store.DeleteUserSession(context.Background(), "valid-sid")
-		if err == nil {
-			t.Errorf("expected error, got nil")
-		}
-	})
-
-	t.Run("GenericError", func(t *testing.T) {
-		expectedErr := errors.New("db error")
-		store := setupTestStore(t, expectedErr)
-		err := store.DeleteUserSession(context.Background(), "valid-sid")
-		if err == nil {
-			t.Errorf("expected error, got nil")
-		}
-	})
-}
-
-func TestBusinessStoreImplCacheUserSession(t *testing.T) {
-
-	t.Run("InvalidInput", func(t *testing.T) {
-		store := setupTestStore(t, nil)
-		err := store.CacheUserSession(context.Background(), nil)
-		if !errors.Is(err, ErrInvalidInput) {
-			t.Errorf("expected ErrInvalidInput, got %v", err)
-		}
-	})
-}
-
-func TestBusinessStoreImplRetrieveUserSession(t *testing.T) {
-	t.Run("ErrNoRows", func(t *testing.T) {
-		store := setupTestStore(t, pgx.ErrNoRows)
-		_, err := store.RetrieveUserSession(context.Background(), "valid-sid", false)
-		if err == nil {
-			t.Errorf("expected error, got nil")
-		}
-	})
-
-	t.Run("GenericError", func(t *testing.T) {
-		expectedErr := errors.New("db error")
-		store := setupTestStore(t, expectedErr)
-		_, err := store.RetrieveUserSession(context.Background(), "valid-sid", false)
-		if err == nil {
-			t.Errorf("expected error, got nil")
-		}
-	})
-
-	t.Run("InvalidInput", func(t *testing.T) {
-		store := setupTestStore(t, nil)
-		_, err := store.RetrieveUserSession(context.Background(), "", false)
-		if !errors.Is(err, ErrInvalidInput) {
-			t.Errorf("expected ErrInvalidInput, got %v", err)
-		}
-	})
-}
-
-func TestBusinessStoreImplStoreUserSessions(t *testing.T) {
-	t.Run("ErrNoRows", func(t *testing.T) {
-		store := setupTestStore(t, pgx.ErrNoRows)
-		sd := session.NewSessionData("valid-sid")
-		sess := session.NewSession(sd, &dummySessionStore{})
-		_ = sess.Set(context.Background(), session.KeyPersistent, "true")
-		store.cache.Set(context.Background(), testCacheKey, sd)
-
-		err := store.StoreUserSessions(context.Background(), map[string]uint{"valid-sid": 1}, session.KeyPersistent, time.Minute)
-		if err == nil {
-			t.Errorf("expected error, got nil")
-		}
-	})
-
-	t.Run("GenericError", func(t *testing.T) {
-		expectedErr := errors.New("db error")
-		store := setupTestStore(t, expectedErr)
-		sd := session.NewSessionData("valid-sid")
-		sess := session.NewSession(sd, &dummySessionStore{})
-		_ = sess.Set(context.Background(), session.KeyPersistent, "true")
-		store.cache.Set(context.Background(), testCacheKey, sd)
-
-		err := store.StoreUserSessions(context.Background(), map[string]uint{"valid-sid": 1}, session.KeyPersistent, time.Minute)
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}

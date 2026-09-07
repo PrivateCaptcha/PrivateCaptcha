@@ -13,7 +13,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/badoux/checkmail"
 )
 
@@ -737,8 +736,7 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 	}
 
 	// Validate invite ID from URL
-	inviteIDStr := r.PathValue(common.ParamID)
-	inviteID, err := s.IDHasher.Decrypt(inviteIDStr)
+	inviteID, inviteIDStr, err := common.IntPathArg(r, common.ParamID, s.IDHasher)
 	if err != nil || inviteID <= 0 {
 		slog.WarnContext(ctx, "Invalid invite ID in URL", "idStr", inviteIDStr, common.ErrAttr(err))
 		return nil, ErrInvalidRequestArg
@@ -749,12 +747,12 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 			Token: s.XSRF.Token(""),
 		},
 		CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
+		InviteID:             inviteIDStr,
 		IsRegister:           true,
 	}
 
-	// For security, try cached lookup first. If not found, still render register page
-	// The actual invite validation will happen after 2FA in the background job
-	if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, int32(inviteID)); err == nil {
+	// Use the cache only to prefill the form. Final linking validates against PostgreSQL.
+	if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, inviteID); err == nil {
 		if invite.UserID.Valid {
 			// Invite already linked to a user
 			slog.InfoContext(ctx, "Invite already linked to a user", "inviteID", inviteID, "userID", invite.UserID.Int32)
@@ -766,11 +764,6 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 
 		model.Email = invite.Email.String
 		model.EmailReadonly = true
-
-		// Store invite ID in session so we can link it after registration
-		sess := s.Sessions.SessionStart(w, r)
-		_ = sess.Set(ctx, session.KeyOrgInviteID, int32(inviteID))
-		_ = sess.Set(ctx, session.KeyPersistent, true)
 	}
 
 	// Return the register page view (same as regular register)

@@ -122,27 +122,19 @@ func Text(node *html.Node) string {
 	return strings.TrimSpace(sel.Text())
 }
 
-func TwoFactorCodeFromResponse(ctx context.Context, resp *http.Response, sessions *session.Manager) (int, error) {
-	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == sessions.CookieName })
-	if idx == -1 {
-		return 0, errors.New("failed to find a cookie " + sessions.CookieName)
-	}
-	cookie := resp.Cookies()[idx]
+var twoFactorCodeSource func(string) (int, bool)
 
-	return TwoFactorCodeFromSession(ctx, cookie.Value, sessions.Store)
+func SetTwoFactorCodeSource(source func(string) (int, bool)) {
+	twoFactorCodeSource = source
 }
 
-func TwoFactorCodeFromSession(ctx context.Context, cookie string, store session.Store) (int, error) {
-	sess, err := store.Read(ctx, cookie, false /*skip cache*/)
-	if err != nil {
-		return 0, err
+func TwoFactorCodeFromEmail(email string) (int, error) {
+	if twoFactorCodeSource != nil {
+		if code, ok := twoFactorCodeSource(email); ok {
+			return code, nil
+		}
 	}
-
-	if code, ok := sess.Get(ctx, session.KeyTwoFactorCode).(int); ok {
-		return code, nil
-	}
-
-	return 0, errors.New("2FA code not found in session")
+	return 0, errors.New("2FA code not found in mail capture")
 }
 
 func AuthenticateSuite(ctx context.Context, email string, srv *http.ServeMux, xsrf *common.XSRFMiddleware, sessions *session.Manager) (*http.Cookie, error) {
@@ -164,7 +156,7 @@ func AuthenticateSuite(ctx context.Context, email string, srv *http.ServeMux, xs
 	}
 	cookie := resp.Cookies()[idx]
 
-	code, err := TwoFactorCodeFromSession(ctx, cookie.Value, sessions.Store)
+	code, err := TwoFactorCodeFromEmail(email)
 	if err != nil {
 		return cookie, err
 	}

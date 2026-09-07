@@ -137,7 +137,7 @@
                 <tr>
                     <th style="width: 150px;">Timestamp</th>
                     <th style="width: 100px;">Trace ID</th>
-                    <th style="width: 100px;">Session ID</th>
+                    <th style="width: 100px;">Session Hash</th>
                     <th style="width: 80px;">Service</th>
                     <th>Message</th>
                     <th>Error</th>
@@ -157,7 +157,7 @@
                             <span class="trace-cell" style="opacity: 0.3">(empty)</span>
                         {{end}}
                     </td>
-                    <td>{{.SessID}}</td>
+                    <td>{{.SessionHash}}</td>
                     <td>{{.Service}}</td>
                     <td>
                         <div class="message">{{.Message}}</div>
