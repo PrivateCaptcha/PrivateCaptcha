@@ -72,14 +72,14 @@ func (als AuditLogSource) String() string {
 // channel/buffers of AuditLog in DB. However, current "flat" struct is much more convenient and has smaller total loc.
 // Also the total memory benefit is not projected to be so huge because these are relatively rare one-off events.
 type AuditLogEvent struct {
-	UserID    int32
-	Action    AuditLogAction
-	Source    AuditLogSource
-	EntityID  int64
-	TableName string
-	SessionID string
-	IPAddress netip.Addr
-	OldValue  interface{}
-	NewValue  interface{}
-	Timestamp time.Time
+	UserID      int32
+	Action      AuditLogAction
+	Source      AuditLogSource
+	EntityID    int64
+	TableName   string
+	SessionHash SessionHash
+	IPAddress   netip.Addr
+	OldValue    interface{}
+	NewValue    interface{}
+	Timestamp   time.Time
 }

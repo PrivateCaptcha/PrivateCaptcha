@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	// Add a -w flag to write to the file directly, similar to gofmt
+	// Add a -w flag to write to the file directly, similar to gofmt.
 	writeFlag := flag.Bool("w", false, "write result to (source) file instead of stdout")
 	flag.Parse()
 
@@ -24,53 +24,69 @@ func main() {
 	filename := flag.Arg(0)
 	fset := token.NewFileSet()
 
-	// Parse the file and preserve comments
+	// Parse the file and preserve comments.
 	node, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to parse file: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Traverse the AST looking for structs
+	// Traverse the AST looking for structs.
 	ast.Inspect(node, func(n ast.Node) bool {
-		// We are looking for Type Specifications (e.g., type MyStruct struct {...})
+		// We are looking for Type Specifications:
+		//
+		//	type MyStruct struct {
+		//		...
+		//	}
 		typeSpec, ok := n.(*ast.TypeSpec)
 		if !ok {
-			return true // Continue traversing down this branch
+			return true
 		}
 
-		// Ensure the type is a Struct
+		// Ensure the type is a struct.
 		structType, ok := typeSpec.Type.(*ast.StructType)
 		if !ok {
 			return true
 		}
 
-		// Skip empty structs or structs with only 1 field
+		// Skip empty structs or structs with only one field.
 		if structType.Fields == nil || len(structType.Fields.List) <= 1 {
 			return true
 		}
 
 		var nonBools []*ast.Field
+		var pgBools []*ast.Field
 		var bools []*ast.Field
 
-		// Iterate through the fields and separate them
+		// Split fields into:
+		//
+		// 1. everything else
+		// 2. pgtype.Bool
+		// 3. built-in bool
 		for _, field := range structType.Fields.List {
-			isBool := false
+			switch {
+			case isPgtypeBool(field.Type):
+				pgBools = append(pgBools, field)
 
-			// Check if the field type is an identifier named "bool"
-			if ident, ok := field.Type.(*ast.Ident); ok && ident.Name == "bool" {
-				isBool = true
-			}
-
-			if isBool {
+			case isBuiltinBool(field.Type):
 				bools = append(bools, field)
-			} else {
+
+			default:
 				nonBools = append(nonBools, field)
 			}
 		}
 
-		// Reconstruct the fields list: non-bools first, then bools clumped at the end
-		structType.Fields.List = append(nonBools, bools...)
+		// Reconstruct the fields:
+		//
+		//	non-bools
+		//	pgtype.Bool
+		//	bool
+		fields := make([]*ast.Field, 0, len(structType.Fields.List))
+		fields = append(fields, nonBools...)
+		fields = append(fields, pgBools...)
+		fields = append(fields, bools...)
+
+		structType.Fields.List = fields
 
 		// Fix up field positions so go/format doesn't insert blank lines.
 		//
@@ -84,14 +100,14 @@ func main() {
 		return true
 	})
 
-	// Format the modified AST back into source code
+	// Format the modified AST back into source code.
 	var buf bytes.Buffer
 	if err := format.Node(&buf, fset, node); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to format node: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Output the result
+	// Output the result.
 	if *writeFlag {
 		fileInfo, err := os.Stat(filename)
 		if err != nil {
@@ -103,11 +119,47 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Failed to write file: %v\n", err)
 			os.Exit(1)
 		}
+
 		fmt.Printf("Reformatted %s\n", filename)
 	} else {
-		// If -w is not passed, just print to standard out
 		fmt.Print(buf.String())
 	}
+}
+
+// isBuiltinBool reports whether expr is the built-in bool type:
+//
+//	bool
+func isBuiltinBool(expr ast.Expr) bool {
+	ident, ok := expr.(*ast.Ident)
+	return ok && ident.Name == "bool"
+}
+
+// isPgtypeBool reports whether expr is syntactically:
+//
+//	pgtype.Bool
+//
+// Note that this is purely syntactic. It does not resolve imports, so an
+// aliased import such as:
+//
+//	import pgt "github.com/jackc/pgx/v5/pgtype"
+//
+// followed by:
+//
+//	pgt.Bool
+//
+// will not be detected.
+func isPgtypeBool(expr ast.Expr) bool {
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return false
+	}
+
+	return pkg.Name == "pgtype" && sel.Sel.Name == "Bool"
 }
 
 // fixFieldPositions ensures that consecutive fields in the reordered list have
@@ -117,6 +169,7 @@ func main() {
 // and emits a blank line whenever the gap exceeds one line. After reordering,
 // fields that moved earlier in the list may still carry their original
 // (higher) line positions, causing gaps that trigger spurious blank lines.
+//
 // We fix this by moving any out-of-place field's start position to the line
 // immediately after the previous field ends.
 func fixFieldPositions(fset *token.FileSet, fields []*ast.Field) {
@@ -154,10 +207,11 @@ func fixFieldPositions(fset *token.FileSet, fields []*ast.Field) {
 func setFieldStartPos(field *ast.Field, pos token.Pos) {
 	if len(field.Names) > 0 {
 		field.Names[0].NamePos = pos
-	} else {
-		// Embedded / anonymous field — update the type expression instead.
-		setExprStartPos(field.Type, pos)
+		return
 	}
+
+	// Embedded / anonymous field: update the type expression instead.
+	setExprStartPos(field.Type, pos)
 }
 
 // setExprStartPos moves the first token of an expression to pos.
@@ -166,13 +220,21 @@ func setExprStartPos(expr ast.Expr, pos token.Pos) {
 	switch e := expr.(type) {
 	case *ast.Ident:
 		e.NamePos = pos
-	case *ast.StarExpr: // *T
+
+	case *ast.StarExpr:
+		// *T
 		e.Star = pos
-	case *ast.SelectorExpr: // pkg.T
+
+	case *ast.SelectorExpr:
+		// pkg.T
 		setExprStartPos(e.X, pos)
-	case *ast.ArrayType: // []T / [N]T
+
+	case *ast.ArrayType:
+		// []T / [N]T
 		e.Lbrack = pos
-	case *ast.MapType: // map[K]V
+
+	case *ast.MapType:
+		// map[K]V
 		e.Map = pos
 	}
 }

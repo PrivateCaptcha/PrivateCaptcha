@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -101,6 +102,17 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	email := strings.TrimSpace(r.FormValue(common.ParamEmail))
+	inviteIDStr := r.FormValue(common.ParamID)
+	var inviteID int32
+	if inviteIDStr != "" {
+		value, err := s.IDHasher.Decrypt(inviteIDStr)
+		if err != nil || value <= 0 || value > math.MaxInt32 {
+			slog.WarnContext(ctx, "Invalid invite ID in registration form", "idStr", inviteIDStr, common.ErrAttr(err))
+			s.RedirectError(http.StatusBadRequest, w, r)
+			return
+		}
+		inviteID = int32(value)
+	}
 
 	data := &loginRenderContext{
 		CsrfRenderContext: CsrfRenderContext{
@@ -108,6 +120,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		},
 		CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
 		Email:                email,
+		InviteID:             inviteIDStr,
 		IsRegister:           true,
 	}
 
@@ -186,48 +199,54 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	code := twoFactorCode(ctx)
 	location := r.Header.Get(s.CountryCodeHeader.Value())
 
-	sess := s.Sessions.SessionStart(w, r)
-
-	// Validate email matches invited email if this is an invite registration
-	if inviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && inviteID > 0 {
-		if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, inviteID); err == nil {
-			if !strings.EqualFold(email, invite.Email.String) {
-				data.EmailError = fmt.Sprintf("You must register with %s to accept this organization invitation.", invite.Email.String)
-				data.Email = invite.Email.String
-				data.EmailReadonly = true
-				s.render(w, r, registerContentsTemplate, data, false /*new*/)
-				return
-			}
-		}
+	sess, err := s.Sessions.Start(w, r)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to start registration session", common.ErrAttr(err))
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
 	}
-
-	if err := s.Mailer.SendTwoFactor(ctx, email, code, r.UserAgent(), location, true); err != nil {
+	if err := sess.Set(ctx, session.KeyUserName, name); err != nil {
+		slog.ErrorContext(ctx, "Failed to set registration Payload", common.ErrAttr(err))
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+	result, err := s.Sessions.IssueRegistrationChallenge(w, r, sess, inviteID, email, fmt.Sprintf("%06d", code),
+		s.TwoFactorDuration, maxFailedAttempts)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to issue registration challenge", common.ErrAttr(err))
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+	issuedAuthority, ok := challengeResultAuthority(result, session.ChallengeKindRegistration)
+	if !ok {
+		var outcome session.TransitionOutcome
+		if result != nil {
+			outcome = result.Outcome
+		}
+		if outcome == session.TransitionAttemptsExhausted {
+			s.Sessions.ClearCookie(w, r)
+		}
+		slog.WarnContext(ctx, "Registration challenge was not issued", "outcome", outcome)
+		common.Redirect(s.RelURL(common.RegisterEndpoint), http.StatusUnauthorized, w, r)
+		return
+	}
+	job := s.Jobs.CheckRegistration(result.Session, r)
+	jobCtx := common.CopyTraceID(ctx, context.Background())
+	if ip := ctx.Value(common.RateLimitKeyContextKey); ip != nil {
+		jobCtx = context.WithValue(jobCtx, common.RateLimitKeyContextKey, ip)
+	}
+	go common.RunOneOffJob(jobCtx, job, job.NewParams())
+	if err := s.Mailer.SendTwoFactor(ctx, issuedAuthority.ChallengeEmail, code, r.UserAgent(), location, true); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
 		data.EmailError = "Failed to send a confirmation email. Please try again."
 		s.render(w, r, registerContentsTemplate, data, false /*new*/)
 		return
 	}
 
-	ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.ID())
+	ctx = context.WithValue(ctx, common.SessionHashContextKey, result.Session.Hash())
 
-	_ = sess.Set(ctx, session.KeyLoginStep, loginStepSignUpVerify)
-	_ = sess.Set(ctx, session.KeyUserEmail, email)
-	_ = sess.Set(ctx, session.KeyUserName, name)
-	_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
-	_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
-	_ = sess.Delete(ctx, session.KeyVerifyRegistration)
-	// see comment in postLogin() why we have to use persistent here (although "registered user" argument does not apply)
-	_ = sess.Set(ctx, session.KeyPersistent, true)
-
-	job := s.Jobs.CheckRegistration(sess, r)
-	jobCtx := common.CopyTraceID(ctx, context.Background())
-	if ip := ctx.Value(common.RateLimitKeyContextKey); ip != nil {
-		jobCtx = context.WithValue(jobCtx, common.RateLimitKeyContextKey, ip)
-	}
-	go common.RunOneOffJob(jobCtx, job, job.NewParams())
-
-	data.Token = s.XSRF.Token(email)
-	data.Email = common.MaskEmail(email, '*')
+	data.Token = s.XSRF.Token(issuedAuthority.ChallengeEmail)
+	data.Email = common.MaskEmail(issuedAuthority.ChallengeEmail, '*')
 
 	slog.DebugContext(ctx, "Started 2FA registration flow", "email", email)
 
@@ -252,19 +271,10 @@ func createInternalTrial(plan billing.Plan, status string) *dbgen.CreateSubscrip
 	}
 }
 
-func (s *Server) doRegister(ctx context.Context, sess *session.Session) (*dbgen.User, *dbgen.Organization, error) {
-	email, ok := sess.Get(ctx, session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
+func (s *Server) doRegister(ctx context.Context, email, name string, inviteID int32) (*dbgen.User, *dbgen.Organization, error) {
+	if email == "" || name == "" {
 		return nil, nil, errIncompleteSession
 	}
-
-	name, ok := sess.Get(ctx, session.KeyUserName).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get user name from session")
-		return nil, nil, errIncompleteSession
-	}
-
 	plan := s.PlanService.GetInternalTrialPlan()
 	subscrParams := createInternalTrial(plan, s.PlanService.ActiveTrialStatus())
 
@@ -283,9 +293,8 @@ func (s *Server) doRegister(ctx context.Context, sess *session.Session) (*dbgen.
 		s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
 	}
 
-	// Check for org invite ID in session (optional)
 	var orgInviteID *int32
-	if inviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && inviteID > 0 {
+	if inviteID > 0 {
 		orgInviteID = &inviteID
 	}
 

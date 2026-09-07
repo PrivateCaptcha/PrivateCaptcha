@@ -27,8 +27,8 @@ func (s *Server) createSystemNotificationContext(ctx context.Context, sess *sess
 
 func (s *Server) dismissNotification(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess, found := s.Sessions.SessionGet(r)
-	if !found {
+	sess := s.Session(w, r)
+	if sess == nil {
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}

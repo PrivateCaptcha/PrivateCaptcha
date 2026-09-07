@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/maypok86/otter/v2"
 )
 
@@ -31,6 +29,46 @@ func (c *manualCacheClock) Advance(d time.Duration) {
 func TestRegisterCachePrefixString(t *testing.T) {
 	if err := RegisterCachePrefixString(CACHE_KEY_PREFIXES_COUNT, "count"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCacheKeyPrefixNumericValuesRemainStable(t *testing.T) {
+	fixtures := []struct {
+		prefix CacheKeyPrefix
+		value  CacheKeyPrefix
+	}{
+		{retiredSessionCacheKeyPrefix, 12},
+		{userAuditLogsCacheKeyPrefix, 13},
+		{propertyAuditLogsCacheKeyPrefix, 14},
+		{orgAuditLogsCacheKeyPrefix, 15},
+		{userPropertiesCountCacheKeyPrefix, 16},
+		{userAccountStatsCacheKeyPrefix, 17},
+		{propertyStatsCacheKeyPrefix, 18},
+		{asyncTaskCacheKeyPrefix, 19},
+		{orgPropertiesCountCacheKeyPrefix, 20},
+		{orgInviteCacheKeyPrefix, 21},
+		{compiledPropertyRulesCacheKeyPrefix, 22},
+		{compiledOrgRulesCacheKeyPrefix, 23},
+		{rawPropertyRulesCacheKeyPrefix, 24},
+		{rawOrgRulesCacheKeyPrefix, 25},
+		{difficultyRuleCacheKeyPrefix, 26},
+		{propertyRuleStatsCacheKeyPrefix, 27},
+		{userSettingsCacheKeyPrefix, 28},
+		{orgFormsCacheKeyPrefix, 29},
+		{orgFormsCountCacheKeyPrefix, 30},
+		{formByExternalIDCacheKeyPrefix, 31},
+		{formCacheKeyPrefix, 32},
+		{formStatsCacheKeyPrefix, 33},
+		{formAuditLogsCacheKeyPrefix, 34},
+		{userFormsCountCacheKeyPrefix, 35},
+		{orgSearchCacheKeyPrefix, 36},
+		{orgStatsCacheKeyPrefix, 37},
+		{CACHE_KEY_PREFIXES_COUNT, 38},
+	}
+	for _, fixture := range fixtures {
+		if fixture.prefix != fixture.value {
+			t.Fatalf("cache key prefix = %d, want %d", fixture.prefix, fixture.value)
+		}
 	}
 }
 
@@ -254,40 +292,5 @@ func TestBusinessCacheMissingCompiledRulesRoundTrip(t *testing.T) {
 	}
 	if _, _, err := newImpl.GetCachedCompiledOrgRules(ctx, 456); err != ErrNegativeCacheHit {
 		t.Fatalf("expected negative cache hit for org rules after load, got %v", err)
-	}
-}
-
-func TestBusinessCachePersistenceExcludesPortalSessions(t *testing.T) {
-	ctx := t.Context()
-	const sid = "disk-persistence-session"
-	normalKey := APIKeyCacheKey("disk-persistence-value")
-	sessionKey := SessionCacheKey(sid)
-	source := NewBusiness(nil)
-	if err := source.Cache.Set(ctx, normalKey, "normal-value"); err != nil {
-		t.Fatal(err)
-	}
-	sessionData := session.NewSessionData(sid)
-	if err := source.Impl().CacheUserSession(ctx, sessionData); err != nil {
-		t.Fatal(err)
-	}
-
-	snapshotDir := t.TempDir()
-	if err := source.SaveCache(ctx, snapshotDir); err != nil {
-		t.Fatal(err)
-	}
-	if value, err := source.Cache.Get(ctx, sessionKey); err != nil || value != sessionData {
-		t.Fatalf("saving removed the live in-memory session: value=%v err=%v", value, err)
-	}
-
-	restoredStore := NewBusiness(nil)
-	restoredCache := restoredStore.Cache.(*memcache[CacheKey, any])
-	if err := common.LoadCacheFromFile(ctx, snapshotDir, cachePersistFile, DefaultCacheTTL, restoredCache.store); err != nil {
-		t.Fatal(err)
-	}
-	if value, err := restoredStore.Cache.Get(ctx, normalKey); err != nil || value != "normal-value" {
-		t.Fatalf("non-session cache entry did not round-trip: value=%v err=%v", value, err)
-	}
-	if _, err := restoredStore.Cache.Get(ctx, sessionKey); err != ErrCacheMiss {
-		t.Fatalf("session was serialized in the snapshot: %v", err)
 	}
 }

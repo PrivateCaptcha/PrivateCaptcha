@@ -88,7 +88,7 @@ func (al *AuditLog) PersistAuditLog(ctx context.Context, batch []*common.AuditLo
 			Source:      source,
 			EntityID:    Int8(e.EntityID),
 			EntityTable: e.TableName,
-			SessionID:   e.SessionID,
+			SessionID:   e.SessionHash.String(),
 			OldValue:    nil,
 			NewValue:    nil,
 			CreatedAt:   Timestampz(e.Timestamp),
@@ -156,8 +156,8 @@ func (al *AuditLog) RecordEvent(ctx context.Context, event *common.AuditLogEvent
 		slog.ErrorContext(ctx, "Recording audit event without user ID", "table", event.TableName, "entityID", event.EntityID, "action", event.Action.String())
 	}
 
-	if sid, ok := ctx.Value(common.SessionIDContextKey).(string); ok && (len(sid) > 0) {
-		event.SessionID = sid
+	if hash, ok := ctx.Value(common.SessionHashContextKey).(common.SessionHash); ok && !hash.IsZero() {
+		event.SessionHash = hash
 	}
 
 	if ip, ok := ctx.Value(common.RateLimitKeyContextKey).(netip.Addr); ok && ip.IsValid() {

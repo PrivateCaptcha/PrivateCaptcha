@@ -14,7 +14,13 @@ import (
 	"github.com/maypok86/otter/v2"
 )
 
-func SaveCacheToFile[TKey comparable, TValue any](ctx context.Context, dir, filename string, maxItems int, cache *otter.Cache[TKey, TValue], filter func(TValue) bool) error {
+func SaveCacheToFile[TKey comparable, TValue any](
+	ctx context.Context,
+	dir, filename string,
+	maxItems int,
+	cache *otter.Cache[TKey, TValue],
+	filter func(TValue) bool,
+) error {
 	if len(dir) == 0 {
 		slog.DebugContext(ctx, "Skipping saving cache without cache dir")
 		return nil
@@ -72,7 +78,13 @@ func SaveCacheToFile[TKey comparable, TValue any](ctx context.Context, dir, file
 	return nil
 }
 
-func SaveCacheToWriter[TKey comparable, TValue any](ctx context.Context, w io.Writer, cache *otter.Cache[TKey, TValue], maxItems int, filter func(TValue) bool) (int, error) {
+func SaveCacheToWriter[TKey comparable, TValue any](
+	ctx context.Context,
+	w io.Writer,
+	cache *otter.Cache[TKey, TValue],
+	maxItems int,
+	filter func(TValue) bool,
+) (int, error) {
 	timeEnc := gob.NewEncoder(w)
 	if err := timeEnc.Encode(time.Now()); err != nil {
 		return 0, err

@@ -2,9 +2,12 @@ package portal
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -147,7 +150,7 @@ func TestPostLogin(t *testing.T) {
 		t.Errorf("Unexpected post login code: %v", resp.StatusCode)
 	}
 
-	if _, err := portal_tests.TwoFactorCodeFromResponse(ctx, resp, server.Sessions); err != nil {
+	if _, err := portal_tests.TwoFactorCodeFromEmail(user.Email); err != nil {
 		t.Error(err)
 	}
 }
@@ -321,49 +324,99 @@ func TestLogout(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Verify session exists before logout
-	sessionID, err := url.QueryUnescape(cookie.Value)
-	if err != nil {
-		t.Fatalf("failed to unescape session ID: %v", err)
+	resolvedReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	resolvedReq.AddCookie(cookie)
+	if _, err := server.Sessions.Get(resolvedReq); err != nil {
+		t.Fatalf("session should resolve before logout: %v", err)
 	}
 
-	// Wait until the session is persisted to cache (background job)
-	for attempt := 0; attempt < 6; attempt++ {
-		time.Sleep(250 * time.Millisecond)
-
-		_, err = server.Sessions.Store.Read(ctx, sessionID, true /*skip cache*/)
-		if err == nil {
-			break
-		}
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	portalReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	portalReq.AddCookie(cookie)
+	portalW := httptest.NewRecorder()
+	srv.ServeHTTP(portalW, portalReq)
+	if portalW.Code != http.StatusOK {
+		t.Fatalf("portal status = %v, want OK", portalW.Code)
 	}
+	assertLogoutButtons(t, portalW.Body, user.ID)
 
-	if err != nil {
-		t.Fatalf("session should exist in cache before logout: %v", err)
-	}
-
-	// Perform logout
-	logoutReq := httptest.NewRequest("GET", "/"+common.LogoutEndpoint, nil)
-	logoutReq.AddCookie(cookie)
+	logoutGet := httptest.NewRequest(http.MethodGet, "/"+common.LogoutEndpoint, nil)
+	logoutGet.AddCookie(cookie)
 	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, logoutGet)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET logout status = %v, want %v", w.Code, http.StatusMethodNotAllowed)
+	}
+	if _, err := server.Sessions.Get(logoutGet); err != nil {
+		t.Fatalf("GET logout revoked session: %v", err)
+	}
+
+	missingCSRFReq := httptest.NewRequest(http.MethodPost, "/"+common.LogoutEndpoint, nil)
+	missingCSRFReq.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, missingCSRFReq)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("logout without CSRF status = %v, want redirect", w.Code)
+	}
+	if _, err := server.Sessions.Get(missingCSRFReq); err != nil {
+		t.Fatalf("logout without CSRF revoked session: %v", err)
+	}
+
+	invalidForm := url.Values{}
+	invalidForm.Add(common.ParamCSRFToken, "invalid")
+	invalidCSRFReq := httptest.NewRequest(http.MethodPost, "/"+common.LogoutEndpoint, bytes.NewBufferString(invalidForm.Encode()))
+	invalidCSRFReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	invalidCSRFReq.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, invalidCSRFReq)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("logout with invalid CSRF status = %v, want redirect", w.Code)
+	}
+	if _, err := server.Sessions.Get(invalidCSRFReq); err != nil {
+		t.Fatalf("logout with invalid CSRF revoked session: %v", err)
+	}
+
+	logoutReq := httptest.NewRequest(http.MethodPost, "/"+common.LogoutEndpoint, nil)
+	logoutReq.Header.Set(common.HeaderCSRFToken, csrfToken)
+	logoutReq.Header.Set(common.HeaderHtmxRequest, "true")
+	logoutReq.AddCookie(cookie)
+	w = httptest.NewRecorder()
 	srv.ServeHTTP(w, logoutReq)
 
 	resp := w.Result()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("Unexpected logout response code: got %v want %v", resp.StatusCode, http.StatusSeeOther)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected logout response code: got %v want %v", resp.StatusCode, http.StatusOK)
+	}
+	if redirect := resp.Header.Get("HX-Redirect"); redirect != "/"+common.LoginEndpoint {
+		t.Errorf("Unexpected HTMX redirect: got %v want %v", redirect, "/"+common.LoginEndpoint)
 	}
 
-	location, err := resp.Location()
-	if err != nil {
-		t.Fatalf("failed to get redirect location: %v", err)
+	_, err = server.Sessions.Get(logoutReq)
+	if !errors.Is(err, session.ErrSessionMissing) {
+		t.Errorf("session should be revoked after logout: got error %v, want %v", err, session.ErrSessionMissing)
 	}
+}
 
-	if location.Path != "/"+common.LoginEndpoint {
-		t.Errorf("Unexpected redirect location: got %v want %v", location.Path, "/"+common.LoginEndpoint)
+func assertLogoutButtons(t *testing.T, body *bytes.Buffer, userID int32) {
+	t.Helper()
+	document := portal_tests.ParseHTML(t, body)
+	buttons := document.Find(`button[type="button"][hx-post="/logout"][hx-swap="none"]`)
+	if buttons.Length() != 2 {
+		t.Fatalf("logout button count = %d, want 2", buttons.Length())
 	}
-
-	_, err = server.Sessions.Store.Read(ctx, sessionID, true /*skip cache*/)
-	if err != session.ErrSessionMissing {
-		t.Errorf("session should be destroyed after logout: got error %v, want %v", err, session.ErrSessionMissing)
+	if controls := document.Find(`a[href="/logout"], form[action="/logout"]`); controls.Length() != 0 {
+		t.Fatalf("non-HTMX logout control count = %d, want 0", controls.Length())
+	}
+	headersJSON, ok := document.Find("body").Attr("hx-headers")
+	if !ok {
+		t.Fatal("page does not provide inherited HTMX headers")
+	}
+	var headers map[string]string
+	if err := json.Unmarshal([]byte(headersJSON), &headers); err != nil {
+		t.Fatalf("invalid HTMX headers: %v", err)
+	}
+	if !server.XSRF.VerifyToken(headers[common.HeaderCSRFToken], strconv.Itoa(int(userID))) {
+		t.Fatal("page contains an invalid inherited CSRF token")
 	}
 }
 

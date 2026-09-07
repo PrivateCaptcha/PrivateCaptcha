@@ -150,7 +150,7 @@ func (q *Queries) InviteUserToOrg(ctx context.Context, arg *InviteUserToOrgParam
 const linkOrgInviteToUser = `-- name: LinkOrgInviteToUser :one
 UPDATE backend.organization_users
 SET user_id = $1, email = NULL, updated_at = NOW()
-WHERE id = $2 AND user_id IS NULL AND LOWER(email) = LOWER($3)
+WHERE id = $2 AND user_id IS NULL AND LOWER(email) = LOWER($3) AND level = 'invited'
 RETURNING org_id, user_id, level, created_at, updated_at, id, email
 `
 

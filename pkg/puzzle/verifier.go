@@ -108,7 +108,16 @@ func ParseVerifyPayload[T any, TPuzzle PuzzleConstraint[T]](ctx context.Context,
 	parts := bytes.SplitN(payload, []byte{'.'}, 3)
 	solutionsBytes, puzzleBytesB64, signatureBytesB64 := parts[0], parts[1], parts[2]
 	if len(solutionsBytes) == 0 || len(puzzleBytesB64) == 0 || len(signatureBytesB64) == 0 {
-		slog.WarnContext(ctx, "Parts of the payload are missing", "solutions", len(solutionsBytes), "puzzle", len(puzzleBytesB64), "signature", len(signatureBytesB64))
+		slog.WarnContext(
+			ctx,
+			"Parts of the payload are missing",
+			"solutions",
+			len(solutionsBytes),
+			"puzzle",
+			len(puzzleBytesB64),
+			"signature",
+			len(signatureBytesB64),
+		)
 		return nil, errEmptyPayloadPart
 	}
 
