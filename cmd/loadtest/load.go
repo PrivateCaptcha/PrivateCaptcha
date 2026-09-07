@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"log/slog"
 	randv2 "math/rand/v2"
@@ -96,49 +95,6 @@ func loadPropertiesEx(count int, cfg common.ConfigStore) (map[[16]byte]*dbgen.Pr
 	}
 
 	return external2propertyMap, user2apiKeyMap, nil
-}
-
-func loadProperty(cfg common.ConfigStore) (*dbgen.Property, *dbgen.APIKey, error) {
-	ctx := context.TODO()
-
-	pool, clickhouse, dberr := db.Connect(ctx, cfg, 5*time.Second, false /*admin*/, nil)
-	if dberr != nil {
-		return nil, nil, dberr
-	}
-
-	defer pool.Close()
-	/*defer*/ clickhouse.Close()
-
-	businessDB := db.NewBusiness(pool)
-
-	properties, err := businessDB.Impl().RetrieveProperties(ctx, 10 /*limit*/)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	slog.Info("Fetched properties", "count", len(properties))
-
-	loginExternalID := db.UUIDFromSiteKey(db.PortalLoginSitekey)
-	registerExternalID := db.UUIDFromSiteKey(db.PortalRegisterSitekey)
-
-	for _, property := range properties {
-		if bytes.Equal(property.ExternalID.Bytes[:], loginExternalID.Bytes[:]) ||
-			bytes.Equal(property.ExternalID.Bytes[:], registerExternalID.Bytes[:]) {
-			continue
-		}
-
-		userID := property.CreatorID.Int32
-
-		if keys, err := businessDB.Impl().RetrieveUserAPIKeys(ctx, userID); err == nil {
-			if len(keys) > 1 {
-				slog.Error("More than 1 API key found", "userID", userID)
-			}
-			// each user HAS to have at least 1 API key per seed()
-			return property, keys[0], nil
-		}
-	}
-
-	return nil, nil, errors.New("valid data was not found")
 }
 
 func randomSiteKey() string {
