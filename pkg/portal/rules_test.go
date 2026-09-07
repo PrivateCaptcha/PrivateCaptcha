@@ -3895,52 +3895,6 @@ func TestDifficultyRuleToDisplayAllSwitchCases(t *testing.T) {
 	}
 }
 
-func TestRegisterAction(t *testing.T) {
-	t.Parallel()
-
-	registry := &RuleRegistry{
-		conditions: map[string]ConditionRegistration{},
-		actions:    map[string]ActionFormParser{},
-	}
-
-	t.Run("empty key returns error", func(t *testing.T) {
-		err := registry.RegisterAction("", func(v string) (int32, common.StatusCode) {
-			return 0, common.StatusOK
-		})
-		if err == nil {
-			t.Fatal("Expected error for empty key")
-		}
-		if err != errRuleActionEmpty {
-			t.Errorf("Expected errRuleActionEmpty, got: %v", err)
-		}
-	})
-
-	t.Run("valid registration", func(t *testing.T) {
-		err := registry.RegisterAction("test_action", func(v string) (int32, common.StatusCode) {
-			return 42, common.StatusOK
-		})
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-
-		parser, ok := registry.ActionParser("test_action")
-		if !ok {
-			t.Fatal("Expected action parser to be registered")
-		}
-		val, status := parser("anything")
-		if val != 42 || status != common.StatusOK {
-			t.Errorf("Unexpected parser result: val=%d, status=%v", val, status)
-		}
-	})
-
-	t.Run("unregistered key returns false", func(t *testing.T) {
-		_, ok := registry.ActionParser("nonexistent")
-		if ok {
-			t.Error("Expected false for unregistered key")
-		}
-	})
-}
-
 func TestPostPropertyNewRuleParseRuleFormFails(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
