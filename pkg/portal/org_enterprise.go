@@ -406,7 +406,7 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, ownerSubscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, user, false /*skip cache*/)
+	owner, ownerSubscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, user, false /*skip cache*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org owner subscription", "orgID", org.ID, common.ErrAttr(err))
 		// NOTE: we intentionally allow this to happen as a safe fallback
@@ -421,7 +421,9 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	joined := false
 	if auditEvent, err := s.Store.Impl().JoinOrg(ctx, org.ID, user); err == nil {
+		joined = true
 		// NOTE: we don't want to htmx-swap anything as we need to update the org dropdown
 		common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID))), http.StatusOK, w, r)
 		s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
@@ -434,7 +436,11 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 		// purely theoretically it could have been better to first check if they have a subscription etc. etc.
 		// but there's already a background pipeline for that, so...
 		s.UserLimiter.DropUser(ctx, user.ID)
-		return nil
+		if !joined || owner == nil {
+			return nil
+		}
+		return s.Mailer.SendOrgMemberJoined(bctx, owner.Email, common.GuessFirstName(owner.Name, owner.Email),
+			common.GuessFirstName(user.Name, user.Email), user.Email, org.Name)
 	})
 }
 

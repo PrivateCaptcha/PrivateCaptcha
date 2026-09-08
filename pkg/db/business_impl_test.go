@@ -1371,7 +1371,7 @@ func TestBusinessStoreImplGetCachedOrgInviteByID(t *testing.T) {
 func TestBusinessStoreImplLinkOrgInviteToUser(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
-		err := store.LinkOrgInviteToUser(context.Background(), 1, &dbgen.User{ID: 1})
+		_, err := store.LinkOrgInviteToUser(context.Background(), 1, &dbgen.User{ID: 1})
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}
@@ -1380,7 +1380,7 @@ func TestBusinessStoreImplLinkOrgInviteToUser(t *testing.T) {
 	t.Run("GenericError", func(t *testing.T) {
 		expectedErr := errors.New("db error")
 		store := setupTestStore(t, expectedErr)
-		err := store.LinkOrgInviteToUser(context.Background(), 1, &dbgen.User{ID: 1})
+		_, err := store.LinkOrgInviteToUser(context.Background(), 1, &dbgen.User{ID: 1})
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}

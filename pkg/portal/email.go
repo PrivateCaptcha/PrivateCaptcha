@@ -49,6 +49,7 @@ type PortalMailer struct {
 	TwofactorTemplate  *common.EmailTemplate
 	WelcomeTemplate    *common.EmailTemplate
 	OrgInviteItemplate *common.EmailTemplate
+	OrgMemberJoined    *common.EmailTemplate
 	uaParser           *useragent.Parser
 }
 
@@ -66,6 +67,7 @@ func NewPortalMailer(cdnURL, portalURL string, mailer emailpkg.Sender, cfg commo
 		TwofactorTemplate:  emailpkg.TwoFactorEmailTemplate,
 		WelcomeTemplate:    emailpkg.WelcomeEmailTemplate,
 		OrgInviteItemplate: emailpkg.OrgInvitationTemplate,
+		OrgMemberJoined:    emailpkg.OrgMemberJoinedTemplate,
 		uaParser:           uaParser,
 	}
 }
@@ -247,6 +249,54 @@ func (pm *PortalMailer) SendOrgInvite(ctx context.Context, email, name string, o
 	}
 
 	olog.InfoContext(ctx, "Sent org invite")
+
+	return nil
+}
+
+func (pm *PortalMailer) SendOrgMemberJoined(ctx context.Context, ownerEmail, ownerName, memberName, memberEmail, orgName string) error {
+	if len(ownerEmail) == 0 {
+		return errInvalidEmail
+	}
+
+	data := struct {
+		emailpkg.OrgMemberJoinedContext
+		CurrentYear int
+		CDNURL      string
+	}{
+		CurrentYear: time.Now().Year(),
+		CDNURL:      pm.CDNURL,
+		OrgMemberJoinedContext: emailpkg.OrgMemberJoinedContext{
+			UserName:         ownerName,
+			MemberName:       memberName,
+			MemberEmail:      memberEmail,
+			OrganizationName: orgName,
+		},
+	}
+
+	htmlBody, err := pm.OrgMemberJoined.RenderHTML(ctx, data)
+	if err != nil {
+		return err
+	}
+
+	textBody, err := pm.OrgMemberJoined.RenderText(ctx, data)
+	if err != nil {
+		return err
+	}
+
+	msg := &emailpkg.Message{
+		HTMLBody: htmlBody,
+		TextBody: textBody,
+		Subject:  fmt.Sprintf("[%s] A member joined the %s organization", common.PrivateCaptcha, orgName),
+		EmailTo:  ownerEmail,
+		NameFrom: common.PrivateCaptchaTeam,
+	}
+
+	if err := pm.Mailer.SendEmail(ctx, msg); err != nil {
+		slog.ErrorContext(ctx, "Failed to send organization member joined email", common.ErrAttr(err))
+		return err
+	}
+
+	slog.InfoContext(ctx, "Sent organization member joined email", "email", ownerEmail, "org", orgName)
 
 	return nil
 }

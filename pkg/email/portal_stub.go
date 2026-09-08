@@ -69,3 +69,12 @@ func (sm *StubMailer) SendOrgInvite(ctx context.Context, email, name string, org
 	slog.InfoContext(ctx, "Sent org invite email", "email", email, "name", name, "requiresRegister", requiresRegister)
 	return nil
 }
+
+func (sm *StubMailer) SendOrgMemberJoined(ctx context.Context, ownerEmail, ownerName, memberName, memberEmail, orgName string) error {
+	if sm.Mailer != nil {
+		return sm.Mailer.SendOrgMemberJoined(ctx, ownerEmail, ownerName, memberName, memberEmail, orgName)
+	}
+
+	slog.InfoContext(ctx, "Sent org member joined email", "email", ownerEmail, "memberEmail", memberEmail, "org", orgName)
+	return nil
+}

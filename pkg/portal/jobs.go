@@ -61,17 +61,30 @@ func (j *onboardUserJob) NewParams() any {
 }
 
 func (j *onboardUserJob) RunOnce(ctx context.Context, params any) error {
+	userName := common.GuessFirstName(j.user.Name, j.user.Email)
+	err := j.mailer.SendWelcome(ctx, j.user.Email, userName)
+
 	// Link org invite if present
 	if j.orgInviteID != nil && *j.orgInviteID > 0 {
-		if err := j.store.Impl().LinkOrgInviteToUser(ctx, *j.orgInviteID, j.user); err != nil {
+		if orgUser, err := j.store.Impl().LinkOrgInviteToUser(ctx, *j.orgInviteID, j.user); err != nil {
 			slog.ErrorContext(ctx, "Failed to link org invite to user", "inviteID", *j.orgInviteID, "userID", j.user.ID, common.ErrAttr(err))
 			// Don't return error - this is a non-critical failure
 		} else {
 			slog.InfoContext(ctx, "Linked org invite to user", "inviteID", *j.orgInviteID, "userID", j.user.ID)
+
+			org, _, err := j.store.Impl().RetrieveUserOrganization(ctx, j.user, orgUser.OrgID)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to retrieve organization for linked invite", "inviteID", *j.orgInviteID, "userID", j.user.ID, common.ErrAttr(err))
+			} else if owner, err := j.store.Impl().RetrieveUser(ctx, org.UserID.Int32); err != nil {
+				slog.ErrorContext(ctx, "Failed to retrieve organization owner for linked invite", "orgID", org.ID, "userID", j.user.ID, common.ErrAttr(err))
+			} else if err := j.mailer.SendOrgMemberJoined(ctx, owner.Email, common.GuessFirstName(owner.Name, owner.Email),
+				userName, j.user.Email, org.Name); err != nil {
+				slog.ErrorContext(ctx, "Failed to send organization member joined email", "orgID", org.ID, "userID", j.user.ID, common.ErrAttr(err))
+			}
 		}
 	}
 
-	return j.mailer.SendWelcome(ctx, j.user.Email, common.GuessFirstName(j.user.Name, j.user.Email))
+	return err
 }
 
 type LoginUserJob struct {

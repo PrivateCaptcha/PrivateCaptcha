@@ -69,6 +69,7 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 
 	data := struct {
 		email.OrgInvitationContext
+		email.OrgMemberJoinedContext
 		email.APIKeyExpirationContext
 		email.TwoFactorEmailContext
 		email.UsageReportContext
@@ -94,6 +95,12 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 			OrgOwnerName:  "Pat Smith",
 			OrgOwnerEmail: "john.doe@example.com",
 			OrgURL:        "https://portal.privatecaptcha.com/org/5",
+		},
+		OrgMemberJoinedContext: email.OrgMemberJoinedContext{
+			UserName:         "Pat Smith",
+			MemberName:       "Alex Smith",
+			MemberEmail:      "alex.smith@example.com",
+			OrganizationName: "My Organization",
 		},
 		TwoFactorEmailContext: email.TwoFactorEmailContext{
 			Code:        "123456",

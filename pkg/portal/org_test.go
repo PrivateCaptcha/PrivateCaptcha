@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -1056,6 +1058,18 @@ func TestJoinOrg(t *testing.T) {
 	}
 
 	ctx := t.Context()
+	mailer, ok := server.Mailer.(*email.StubMailer)
+	if !ok {
+		t.Fatalf("mailer type = %T, want *email.StubMailer", server.Mailer)
+	}
+	portalMailer, ok := mailer.Mailer.(*PortalMailer)
+	if !ok {
+		t.Fatalf("mailer type = %T, want *PortalMailer", mailer.Mailer)
+	}
+	sender, ok := portalMailer.Mailer.(*email.StubSender)
+	if !ok {
+		t.Fatalf("sender type = %T, want *email.StubSender", portalMailer.Mailer)
+	}
 	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create owner account: %v", err)
@@ -1077,6 +1091,7 @@ func TestJoinOrg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	emailCount := atomic.LoadInt32(&sender.Count)
 
 	req := httptest.NewRequest("PUT", fmt.Sprintf("/org/%s/members", server.IDHasher.Encrypt(int(org.ID))), nil)
 	req.AddCookie(cookie)
@@ -1088,6 +1103,14 @@ func TestJoinOrg(t *testing.T) {
 	resp := w.Result()
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for atomic.LoadInt32(&sender.Count) < emailCount+1 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := atomic.LoadInt32(&sender.Count); got != emailCount+1 {
+		t.Errorf("owner email count = %d, want %d", got, emailCount+1)
 	}
 
 	members, err := store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
@@ -2134,7 +2157,7 @@ func TestOrgInviteRegisterAlreadyLinked(t *testing.T) {
 	}
 
 	// Link the email invite to user3 (who is not yet in the org)
-	err = store.Impl().LinkOrgInviteToUser(ctx, inviteRecord.ID, user3)
+	_, err = store.Impl().LinkOrgInviteToUser(ctx, inviteRecord.ID, user3)
 	if err != nil {
 		t.Fatalf("Failed to link invite to user: %v", err)
 	}
@@ -2176,7 +2199,7 @@ func TestLinkOrgInviteRequiresInvitedLevel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := store.Impl().LinkOrgInviteToUser(ctx, invite.ID, invitedUser); err == nil {
+	if _, err := store.Impl().LinkOrgInviteToUser(ctx, invite.ID, invitedUser); err == nil {
 		t.Fatal("linked an organization row that was no longer an invite")
 	}
 	var linked bool
@@ -2335,7 +2358,7 @@ func TestOrgMemberBecomesMemberAfterJoining(t *testing.T) {
 	}
 
 	// Link the email invite to the new user (simulating the onboard job)
-	err = store.Impl().LinkOrgInviteToUser(ctx, inviteRecord.ID, newUser)
+	_, err = store.Impl().LinkOrgInviteToUser(ctx, inviteRecord.ID, newUser)
 	if err != nil {
 		t.Fatalf("Failed to link invite to user: %v", err)
 	}

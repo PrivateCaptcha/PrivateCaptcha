@@ -14,6 +14,7 @@ var (
 		WelcomeEmailTemplate,
 		TwoFactorEmailTemplate,
 		OrgInvitationTemplate,
+		OrgMemberJoinedTemplate,
 		UsageReportTemplate,
 		FormDeactivationTemplate,
 	}

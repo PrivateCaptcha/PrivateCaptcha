@@ -198,6 +198,7 @@ func TestUsageReportTemplateProtectionFailureCounts(t *testing.T) {
 func TestEmailTemplates(t *testing.T) {
 	data := struct {
 		OrgInvitationContext
+		OrgMemberJoinedContext
 		APIKeyExpirationContext
 		TwoFactorEmailContext
 		UsageReportContext
@@ -225,6 +226,12 @@ func TestEmailTemplates(t *testing.T) {
 			OrgOwnerEmail:    "john.doe@example.com",
 			OrgURL:           "https://portal.privatecaptcha.com/org/5",
 			RequiresRegister: false,
+		},
+		OrgMemberJoinedContext: OrgMemberJoinedContext{
+			UserName:         "Pat Smith",
+			MemberName:       "Alex Smith",
+			MemberEmail:      "alex.smith@example.com",
+			OrganizationName: "My Organization",
 		},
 		TwoFactorEmailContext: TwoFactorEmailContext{
 			Code:        "123456",

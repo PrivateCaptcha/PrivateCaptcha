@@ -2413,13 +2413,13 @@ func (impl *BusinessStoreImpl) GetCachedOrgInviteByID(ctx context.Context, invit
 	return FetchCachedOne[dbgen.OrganizationUser](ctx, impl.cache, orgInviteCacheKey(inviteID))
 }
 
-func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID int32, user *dbgen.User) error {
+func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID int32, user *dbgen.User) (*dbgen.OrganizationUser, error) {
 	if user == nil {
-		return ErrInvalidInput
+		return nil, ErrInvalidInput
 	}
 
 	if impl.querier == nil {
-		return ErrMaintenance
+		return nil, ErrMaintenance
 	}
 
 	orgUser, err := impl.querier.LinkOrgInviteToUser(ctx, &dbgen.LinkOrgInviteToUserParams{
@@ -2429,7 +2429,7 @@ func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to link org invite to user", "inviteID", inviteID, "userID", user.ID, "email", user.Email, common.ErrAttr(err))
-		return err
+		return nil, err
 	}
 
 	slog.InfoContext(ctx, "Linked org invite to user", "inviteID", inviteID, "userID", user.ID, "email", user.Email)
@@ -2438,7 +2438,7 @@ func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID
 	_ = impl.cache.Set(ctx, orgInviteCacheKey(orgUser.ID), orgUser)
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(user.ID))
 
-	return nil
+	return orgUser, nil
 }
 
 func (impl *BusinessStoreImpl) JoinOrg(ctx context.Context, orgID int32, user *dbgen.User) (*common.AuditLogEvent, error) {
