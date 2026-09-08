@@ -380,8 +380,8 @@ func TestRetrievePropertyReportCandidates(t *testing.T) {
 
 	addRequests(requestHeavyProperty.ID, requestHeavyDay, 8)
 	addVerifies(requestHeavyProperty.ID, requestHeavyDay, 2, 0)
-	addRequests(requestHeavyProperty.ID, nonQualifyingDay, 1)
-	addVerifies(requestHeavyProperty.ID, nonQualifyingDay, 1, 0)
+	addRequests(requestHeavyProperty.ID, nonQualifyingDay, 6)
+	addVerifies(requestHeavyProperty.ID, nonQualifyingDay, 6, 0)
 	addRequests(requestHeavyProperty.ID, mid.Add(-time.Hour), 2)
 	addRequests(lowerVolumeFailureProperty.ID, failureHeavyDay, 1)
 	addVerifies(lowerVolumeFailureProperty.ID, failureHeavyDay, 0, 5)
@@ -415,27 +415,31 @@ func TestRetrievePropertyReportCandidates(t *testing.T) {
 		t.Fatalf("properties count = %d, want 2", len(stats.Properties))
 	}
 	requestHeavyStat := reportPropertyStatForTest(t, stats.Properties, requestHeavyProperty.ID)
-	if requestHeavyStat.CurrentRequests != 9 || requestHeavyStat.PrevRequests != 2 {
-		t.Errorf("request-heavy property = %+v, want current/previous requests 9/2", requestHeavyStat)
+	if requestHeavyStat.CurrentRequests != 14 || requestHeavyStat.PrevRequests != 2 {
+		t.Errorf("request-heavy property = %+v, want current/previous requests 14/2", requestHeavyStat)
 	}
 	highVolumeFailureStat := reportPropertyStatForTest(t, stats.Properties, highVolumeFailureProperty.ID)
 	if highVolumeFailureStat.CurrentRequests != 5 || highVolumeFailureStat.PrevRequests != 0 {
 		t.Errorf("high-volume failure property = %+v, want current/previous requests 5/0", highVolumeFailureStat)
 	}
-	if len(stats.SecurityEvents) != 4 {
-		t.Fatalf("security events count = %d, want 4", len(stats.SecurityEvents))
+	if len(stats.SecurityEvents) != 6 {
+		t.Fatalf("security events count = %d, want 6", len(stats.SecurityEvents))
 	}
 	highVolumeFailureCounts := make(map[uint64]bool)
 	for _, candidate := range stats.SecurityEvents {
-		if candidate.PropertyID == highVolumeFailureProperty.ID {
+		if candidate.PropertyID == highVolumeFailureProperty.ID && candidate.FailureQualified {
 			highVolumeFailureCounts[candidate.FailedVerifies] = true
 		}
 	}
 	if len(highVolumeFailureCounts) != 2 || !highVolumeFailureCounts[8] || !highVolumeFailureCounts[7] {
 		t.Errorf("high-volume failure counts = %v, want only 8 and 7", highVolumeFailureCounts)
 	}
-	if candidate := reportSecurityEventByIDForTest(t, stats.SecurityEvents, requestHeavyProperty.ID); candidate.Requests != 8 || candidate.Verifies != 2 || candidate.FailedVerifies != 0 {
-		t.Errorf("request-heavy candidate = %+v, want 8 requests and 2 verifications", candidate)
+	highRequestFound := false
+	for _, candidate := range stats.SecurityEvents {
+		highRequestFound = highRequestFound || (candidate.PropertyID == requestHeavyProperty.ID && candidate.Requests == 6 && candidate.Verifies == 6)
+	}
+	if !highRequestFound {
+		t.Error("high-request candidate with 6 requests and 6 verifications was not selected")
 	}
 	if candidate := reportSecurityEventByIDForTest(t, stats.SecurityEvents, lowerVolumeFailureProperty.ID); candidate.Requests != 1 || candidate.Verifies != 5 || candidate.FailedVerifies != 5 {
 		t.Errorf("lower-volume candidate = %+v, want 1 request and 5 failed verifications", candidate)
@@ -450,11 +454,16 @@ func TestRetrievePropertyReportCandidates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve limited property report stats: %v", err)
 	}
-	if len(limited.SecurityEvents) != 2 {
-		t.Fatalf("limited candidates count = %d, want 2", len(limited.SecurityEvents))
+	if len(limited.SecurityEvents) != 3 {
+		t.Fatalf("limited candidates count = %d, want 3", len(limited.SecurityEvents))
 	}
-	reportSecurityEventByIDForTest(t, limited.SecurityEvents, requestHeavyProperty.ID)
-	reportSecurityEventByIDForTest(t, limited.SecurityEvents, highVolumeFailureProperty.ID)
+	highRequestFound = false
+	for _, candidate := range limited.SecurityEvents {
+		highRequestFound = highRequestFound || (candidate.PropertyID == requestHeavyProperty.ID && candidate.Requests == 6 && candidate.Verifies == 6)
+	}
+	if !highRequestFound {
+		t.Error("limited candidates did not include the highest-request nonqualifying event")
+	}
 
 	withoutCandidates, err := timeSeries.RetrieveWeeklyPropertiesReportStats(ctx, user.ID, from, mid, to, common.UserReportOptions{
 		TopPropertiesLimit:                2,
@@ -471,6 +480,20 @@ func TestRetrievePropertyReportCandidates(t *testing.T) {
 	}
 	reportPropertyStatForTest(t, withoutCandidates.Properties, requestHeavyProperty.ID)
 	reportPropertyStatForTest(t, withoutCandidates.Properties, highVolumeFailureProperty.ID)
+
+	withoutCandidates, err = timeSeries.RetrieveWeeklyPropertiesReportStats(ctx, user.ID, from, mid, to, common.UserReportOptions{
+		TopPropertiesLimit:                2,
+		SecurityEventsLimit:               2,
+		SecurityEventsPerPropertyLimit:    0,
+		SecurityEventRatioThreshold:       3,
+		SecurityEventMinimumDominantCount: 4,
+	})
+	if err != nil {
+		t.Fatalf("failed to retrieve property report stats with zero per-property limit: %v", err)
+	}
+	if len(withoutCandidates.Properties) != 2 || len(withoutCandidates.SecurityEvents) != 0 {
+		t.Errorf("zero per-property limit result has %d properties and %d candidates, want 2 and 0", len(withoutCandidates.Properties), len(withoutCandidates.SecurityEvents))
+	}
 }
 
 func TestRetrievePropertyReportCandidatesWithZeroDenominators(t *testing.T) {

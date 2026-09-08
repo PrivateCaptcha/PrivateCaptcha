@@ -333,8 +333,8 @@ func TestMemoryTimeSeriesRetrievePropertyReportCandidates(t *testing.T) {
 		t.Errorf("second property = %+v, want property 6 with 1000 current and 20 previous requests", stats.Properties[1])
 	}
 
-	if len(stats.SecurityEvents) != 4 {
-		t.Fatalf("security events count = %d, want 4", len(stats.SecurityEvents))
+	if len(stats.SecurityEvents) != 6 {
+		t.Fatalf("security events count = %d, want 6", len(stats.SecurityEvents))
 	}
 	requestHeavy := reportProtectionCandidateForTest(t, stats.SecurityEvents, 1)
 	if requestHeavy.Requests != 400 || requestHeavy.Verifies != 100 || requestHeavy.FailedVerifies != 0 {
@@ -358,6 +358,8 @@ func TestMemoryTimeSeriesRetrievePropertyReportCandidates(t *testing.T) {
 	if minimumCount.Requests != 100 || minimumCount.Verifies != 25 {
 		t.Errorf("minimum-count candidate = %+v, want 100 requests and 25 verifications", minimumCount)
 	}
+	reportProtectionCandidateForTest(t, stats.SecurityEvents, 9)
+	reportProtectionCandidateForTest(t, stats.SecurityEvents, 6)
 
 	limitedOptions := options
 	limitedOptions.SecurityEventsLimit = 3
@@ -365,12 +367,10 @@ func TestMemoryTimeSeriesRetrievePropertyReportCandidates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(limited.SecurityEvents) != 3 {
-		t.Fatalf("limited candidates count = %d, want 3", len(limited.SecurityEvents))
+	if len(limited.SecurityEvents) != 4 {
+		t.Fatalf("limited candidates count = %d, want 4", len(limited.SecurityEvents))
 	}
-	reportProtectionCandidateForTest(t, limited.SecurityEvents, 1)
-	reportProtectionCandidateForTest(t, limited.SecurityEvents, 2)
-	reportProtectionCandidateForTest(t, limited.SecurityEvents, 11)
+	reportProtectionCandidateForTest(t, limited.SecurityEvents, 9)
 
 	withoutCandidatesOptions := options
 	withoutCandidatesOptions.SecurityEventsLimit = 0
@@ -382,12 +382,22 @@ func TestMemoryTimeSeriesRetrievePropertyReportCandidates(t *testing.T) {
 		t.Errorf("zero-limit result has %d properties and %d candidates, want 2 and 0", len(withoutCandidates.Properties), len(withoutCandidates.SecurityEvents))
 	}
 
+	withoutCandidatesOptions = options
+	withoutCandidatesOptions.SecurityEventsPerPropertyLimit = 0
+	withoutCandidates, err = ts.RetrieveWeeklyPropertiesReportStats(ctx, 1, from, mid, to, withoutCandidatesOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(withoutCandidates.Properties) != 2 || len(withoutCandidates.SecurityEvents) != 0 {
+		t.Errorf("zero per-property limit result has %d properties and %d candidates, want 2 and 0", len(withoutCandidates.Properties), len(withoutCandidates.SecurityEvents))
+	}
+
 	monthly, err := ts.RetrieveMonthlyPropertiesReportStats(ctx, 1, from, mid, to, options)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(monthly.Properties) != 2 || len(monthly.SecurityEvents) != 4 {
-		t.Errorf("monthly result has %d properties and %d candidates, want 2 and 4", len(monthly.Properties), len(monthly.SecurityEvents))
+	if len(monthly.Properties) != 2 || len(monthly.SecurityEvents) != 6 {
+		t.Errorf("monthly result has %d properties and %d candidates, want 2 and 6", len(monthly.Properties), len(monthly.SecurityEvents))
 	}
 }
 
@@ -456,7 +466,91 @@ func TestMemoryTimeSeriesPropertyReportCandidatesLimitPerProperty(t *testing.T) 
 	}
 }
 
-func TestMemoryTimeSeriesPropertyReportCandidatesUseOnlyQualifyingDominantCounts(t *testing.T) {
+func TestMemoryTimeSeriesPropertyReportCandidatesIncludeHighRequestDaysAfterRatioEvents(t *testing.T) {
+	ts := NewMemoryTimeSeries()
+	ctx := context.Background()
+	from := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	mid := from.AddDate(0, 0, 7)
+	to := mid.AddDate(0, 0, 7)
+
+	accessLogs := make([]*common.AccessRecord, 0)
+	verifyLogs := make([]*common.VerifyRecord, 0)
+	addEvent := func(propertyID int32, day, requests, successfulVerifies, failedVerifies int) {
+		at := mid.AddDate(0, 0, day)
+		for range requests {
+			accessLogs = append(accessLogs, &common.AccessRecord{UserID: 1, OrgID: 10, PropertyID: propertyID, Timestamp: at})
+		}
+		for range successfulVerifies {
+			verifyLogs = append(verifyLogs, &common.VerifyRecord{UserID: 1, OrgID: 10, PropertyID: propertyID, Timestamp: at})
+		}
+		for range failedVerifies {
+			verifyLogs = append(verifyLogs, &common.VerifyRecord{UserID: 1, OrgID: 10, PropertyID: propertyID, Timestamp: at, Status: 1})
+		}
+	}
+
+	addEvent(1, 1, 500, 100, 0)
+	addEvent(2, 2, 400, 100, 0)
+	addEvent(3, 3, 300, 100, 0)
+	addEvent(4, 4, 1000, 2000, 0)
+	addEvent(5, 5, 1000, 600, 1400)
+	addEvent(6, 6, 250, 100, 0)
+	addEvent(7, 0, 200, 100, 0)
+	if err := ts.WriteAccessLogBatch(ctx, accessLogs); err != nil {
+		t.Fatal(err)
+	}
+	if err := ts.WriteVerifyLogBatch(ctx, verifyLogs); err != nil {
+		t.Fatal(err)
+	}
+
+	options := common.UserReportOptions{
+		TopPropertiesLimit:                5,
+		SecurityEventsLimit:               3,
+		SecurityEventsPerPropertyLimit:    1,
+		SecurityEventRatioThreshold:       1.5,
+		SecurityEventMinimumDominantCount: 100,
+	}
+	weekly, err := ts.RetrieveWeeklyPropertiesReportStats(ctx, 1, from, mid, to, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(weekly.SecurityEvents) != 4 {
+		t.Fatalf("weekly security events count = %d, want 4", len(weekly.SecurityEvents))
+	}
+	ratioProperties := map[int32]bool{1: true, 2: true, 3: true, 6: true, 7: true}
+	weeklyRatioCount := 0
+	weeklyProperties := make(map[int32]bool)
+	for _, event := range weekly.SecurityEvents {
+		weeklyProperties[event.PropertyID] = true
+		if ratioProperties[event.PropertyID] {
+			weeklyRatioCount++
+		}
+	}
+	if weeklyRatioCount != 3 || len(weeklyProperties) != 4 {
+		t.Errorf("weekly events have %d ratio candidates across %d properties, want 3 across 4 properties", weeklyRatioCount, len(weeklyProperties))
+	}
+
+	options.SecurityEventsLimit = 5
+	monthly, err := ts.RetrieveMonthlyPropertiesReportStats(ctx, 1, from, mid, to, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(monthly.SecurityEvents) != 7 {
+		t.Fatalf("monthly security events count = %d, want 7", len(monthly.SecurityEvents))
+	}
+	monthlyRatioCount := 0
+	monthlyProperties := make(map[int32]bool)
+	for _, event := range monthly.SecurityEvents {
+		monthlyProperties[event.PropertyID] = true
+		if ratioProperties[event.PropertyID] {
+			monthlyRatioCount++
+		}
+	}
+	if monthlyRatioCount != 5 || len(monthlyProperties) != 7 {
+		t.Errorf("monthly events have %d ratio candidates across %d properties, want 5 across 7 properties", monthlyRatioCount, len(monthlyProperties))
+	}
+}
+
+func TestMemoryTimeSeriesPropertyReportCandidatesUseRatiosOnlyForQualification(t *testing.T) {
 	ts := NewMemoryTimeSeries()
 	ctx := context.Background()
 	from := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -464,14 +558,17 @@ func TestMemoryTimeSeriesPropertyReportCandidatesUseOnlyQualifyingDominantCounts
 	to := mid.AddDate(0, 0, 7)
 	day := mid.AddDate(0, 0, 1)
 
-	accessLogs := make([]*common.AccessRecord, 0, 190)
+	accessLogs := make([]*common.AccessRecord, 0, 390)
 	for range 100 {
 		accessLogs = append(accessLogs, &common.AccessRecord{UserID: 1, OrgID: 10, PropertyID: 1, Timestamp: day})
 	}
 	for range 90 {
 		accessLogs = append(accessLogs, &common.AccessRecord{UserID: 1, OrgID: 10, PropertyID: 2, Timestamp: day})
 	}
-	verifyLogs := make([]*common.VerifyRecord, 0, 300)
+	for range 200 {
+		accessLogs = append(accessLogs, &common.AccessRecord{UserID: 1, OrgID: 10, PropertyID: 3, Timestamp: day})
+	}
+	verifyLogs := make([]*common.VerifyRecord, 0, 700)
 	for i := range 200 {
 		status := int8(0)
 		if i < 80 {
@@ -482,6 +579,9 @@ func TestMemoryTimeSeriesPropertyReportCandidatesUseOnlyQualifyingDominantCounts
 	for range 100 {
 		verifyLogs = append(verifyLogs, &common.VerifyRecord{UserID: 1, OrgID: 10, PropertyID: 2, Timestamp: day})
 	}
+	for range 400 {
+		verifyLogs = append(verifyLogs, &common.VerifyRecord{UserID: 1, OrgID: 10, PropertyID: 3, Timestamp: day})
+	}
 	if err := ts.WriteAccessLogBatch(ctx, accessLogs); err != nil {
 		t.Fatal(err)
 	}
@@ -489,21 +589,34 @@ func TestMemoryTimeSeriesPropertyReportCandidatesUseOnlyQualifyingDominantCounts
 		t.Fatal(err)
 	}
 
-	stats, err := ts.RetrieveWeeklyPropertiesReportStats(ctx, 1, from, mid, to, common.UserReportOptions{
+	options := common.UserReportOptions{
 		TopPropertiesLimit:                2,
-		SecurityEventsLimit:               1,
+		SecurityEventsLimit:               2,
 		SecurityEventsPerPropertyLimit:    1,
 		SecurityEventRatioThreshold:       0.75,
 		SecurityEventMinimumDominantCount: 1,
-	})
+	}
+	stats, err := ts.RetrieveWeeklyPropertiesReportStats(ctx, 1, from, mid, to, options)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(stats.SecurityEvents) != 1 {
-		t.Fatalf("security events count = %d, want 1", len(stats.SecurityEvents))
+	if len(stats.SecurityEvents) != 3 {
+		t.Fatalf("security events count = %d, want 3", len(stats.SecurityEvents))
 	}
-	if candidate := stats.SecurityEvents[0]; candidate.PropertyID != 2 || candidate.Requests != 90 || candidate.Verifies != 100 {
-		t.Errorf("candidate = %+v, want property 2 selected by qualifying dominant count 90", candidate)
+	for _, propertyID := range []int32{1, 2, 3} {
+		reportProtectionCandidateForTest(t, stats.SecurityEvents, propertyID)
+	}
+
+	options.SecurityEventsLimit = 1
+	limited, err := ts.RetrieveWeeklyPropertiesReportStats(ctx, 1, from, mid, to, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(limited.SecurityEvents) != 1 {
+		t.Fatalf("limit-one security events count = %d, want 1", len(limited.SecurityEvents))
+	}
+	if limited.SecurityEvents[0].PropertyID == 3 {
+		t.Error("limit-one result included a nonqualifying high-request event")
 	}
 }
 

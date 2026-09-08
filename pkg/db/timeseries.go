@@ -555,6 +555,59 @@ func sortUserReportProperties(properties []*common.UserReportPropertyStat) {
 	})
 }
 
+func highRequestSecurityEventsLimit(securityEventsLimit int) int {
+	return min(2, securityEventsLimit/2)
+}
+
+type reportPropertyKey struct {
+	propertyID int32
+	orgID      int32
+}
+
+func reportSecurityEventQualifications(event *common.UserReportSecurityEvent, options common.UserReportOptions) (bool, bool) {
+	requestQualified := event.Requests >= options.SecurityEventMinimumDominantCount &&
+		float64(event.Requests) > float64(max(event.Verifies, 1))*options.SecurityEventRatioThreshold
+	failureQualified := event.FailedVerifies >= options.SecurityEventMinimumDominantCount &&
+		float64(event.FailedVerifies) > float64(max(event.Requests, 1))*options.SecurityEventRatioThreshold
+	return requestQualified || failureQualified, failureQualified
+}
+
+func sortReportSecurityEventsByRequests(events []*common.UserReportSecurityEvent) {
+	sort.Slice(events, func(i, j int) bool {
+		if events[i].Requests != events[j].Requests {
+			return events[i].Requests > events[j].Requests
+		}
+		if events[i].PropertyID != events[j].PropertyID {
+			return events[i].PropertyID < events[j].PropertyID
+		}
+		if events[i].OrgID != events[j].OrgID {
+			return events[i].OrgID < events[j].OrgID
+		}
+		return events[i].Timestamp.Before(events[j].Timestamp)
+	})
+}
+
+func limitReportSecurityEventsByProperty(events []*common.UserReportSecurityEvent, limit, perPropertyLimit int) []*common.UserReportSecurityEvent {
+	if limit <= 0 || perPropertyLimit <= 0 {
+		return nil
+	}
+	sortReportSecurityEventsByRequests(events)
+	propertyCounts := make(map[reportPropertyKey]int)
+	selected := make([]*common.UserReportSecurityEvent, 0, min(limit, len(events)))
+	for _, event := range events {
+		key := reportPropertyKey{propertyID: event.PropertyID, orgID: event.OrgID}
+		if propertyCounts[key] >= perPropertyLimit {
+			continue
+		}
+		selected = append(selected, event)
+		propertyCounts[key]++
+		if len(selected) == limit {
+			return selected
+		}
+	}
+	return selected
+}
+
 func (ts *TimeSeriesDB) retrieveReportStats(
 	ctx context.Context,
 	userID int32,
@@ -607,7 +660,7 @@ func (ts *TimeSeriesDB) retrieveReportStats(
     )
     GROUP BY property_id, org_id, timestamp
 ),
-candidate_ratios AS
+candidate_activity AS
 (
     SELECT
         property_id,
@@ -616,40 +669,20 @@ candidate_ratios AS
         requests,
         verifications,
         failed_verifications,
-        toFloat64(requests) / greatest(toFloat64(verifications), 1.0) AS request_ratio,
-        toFloat64(failed_verifications) / greatest(toFloat64(requests), 1.0) AS failure_ratio
+        toUInt8(requests >= {minimum_dominant_count:UInt64}
+            AND toFloat64(requests) > greatest(toFloat64(verifications), 1.0) * {ratio_threshold:Float64}) AS request_qualified,
+        toUInt8(failed_verifications >= {minimum_dominant_count:UInt64}
+            AND toFloat64(failed_verifications) > greatest(toFloat64(requests), 1.0) * {ratio_threshold:Float64}) AS failure_qualified
     FROM daily_activity
 ),
-qualified_candidates AS
+candidate_pool AS
 (
-    SELECT
-        property_id,
-        org_id,
-        timestamp,
-        requests,
-        verifications,
-        failed_verifications,
-        greatest(
-            if(requests >= {minimum_dominant_count:UInt64} AND request_ratio > {ratio_threshold:Float64}, request_ratio, 0.0),
-            if(failed_verifications >= {minimum_dominant_count:UInt64} AND failure_ratio > {ratio_threshold:Float64}, failure_ratio, 0.0)
-        ) AS ratio,
-        greatest(
-            if(requests >= {minimum_dominant_count:UInt64} AND request_ratio > {ratio_threshold:Float64}, requests, 0),
-            if(failed_verifications >= {minimum_dominant_count:UInt64} AND failure_ratio > {ratio_threshold:Float64}, failed_verifications, 0)
-        ) AS dominant_count,
-        toUInt8(failed_verifications >= {minimum_dominant_count:UInt64} AND failure_ratio > {ratio_threshold:Float64}) AS failure_qualified
-    FROM candidate_ratios
-),
-property_ranked_candidates AS
-(
-    SELECT
-        *,
-        row_number() OVER (
-            PARTITION BY property_id, org_id
-            ORDER BY dominant_count DESC, ratio DESC, timestamp
-        ) AS property_rank
-    FROM qualified_candidates
-    WHERE ratio > 0
+    SELECT *
+    FROM candidate_activity
+    WHERE request_qualified > 0 OR failure_qualified > 0 OR requests > 0
+    ORDER BY requests DESC, property_id, org_id, timestamp
+    LIMIT {security_events_per_property_limit:UInt64} BY
+        property_id, org_id, request_qualified OR failure_qualified
 )
 SELECT
     toUInt8(1) AS row_type,
@@ -681,7 +714,7 @@ FROM
 UNION ALL
 
 SELECT
-    toUInt8(2) AS row_type,
+    if(request_qualified > 0 OR failure_qualified > 0, toUInt8(2), toUInt8(3)) AS row_type,
     property_id,
     org_id,
     requests AS current_requests,
@@ -693,10 +726,9 @@ SELECT
 FROM
 (
     SELECT *
-    FROM property_ranked_candidates
-    WHERE property_rank <= {protection_candidates_per_property_limit:UInt64}
-    ORDER BY dominant_count DESC, ratio DESC, property_id, org_id, timestamp
-    LIMIT {protection_candidates_limit:UInt64}
+    FROM candidate_pool
+    ORDER BY requests DESC, property_id, org_id, timestamp
+    LIMIT {security_events_limit:UInt64} BY request_qualified OR failure_qualified
 )`
 
 	rows, err := ts.Clickhouse.QueryContext(ctx, fmt.Sprintf(query, accessTable, verifyTable, accessTable),
@@ -705,8 +737,8 @@ FROM
 		clickhouse.DateNamed("mid_ts", mid, clickhouse.Seconds),
 		clickhouse.DateNamed("to_ts", to, clickhouse.Seconds),
 		clickhouse.Named("top_properties_limit", uint64(options.TopPropertiesLimit)),
-		clickhouse.Named("protection_candidates_limit", uint64(options.SecurityEventsLimit)),
-		clickhouse.Named("protection_candidates_per_property_limit", uint64(options.SecurityEventsPerPropertyLimit)),
+		clickhouse.Named("security_events_limit", uint64(options.SecurityEventsLimit)),
+		clickhouse.Named("security_events_per_property_limit", uint64(options.SecurityEventsPerPropertyLimit)),
 		clickhouse.Named("ratio_threshold", options.SecurityEventRatioThreshold),
 		clickhouse.Named("minimum_dominant_count", options.SecurityEventMinimumDominantCount))
 	if err != nil {
@@ -717,6 +749,7 @@ FROM
 	defer rows.Close()
 
 	stats := &common.UserReportStats{}
+	highRequestCandidates := make([]*common.UserReportSecurityEvent, 0, options.SecurityEventsLimit)
 
 	for rows.Next() {
 		var rowType uint8
@@ -736,8 +769,8 @@ FROM
 				CurrentRequests: currentRequests,
 				PrevRequests:    previousRequests,
 			})
-		case 2:
-			stats.SecurityEvents = append(stats.SecurityEvents, &common.UserReportSecurityEvent{
+		case 2, 3:
+			candidate := &common.UserReportSecurityEvent{
 				PropertyID:       propertyID,
 				OrgID:            orgID,
 				Timestamp:        timestamp,
@@ -745,7 +778,12 @@ FROM
 				Verifies:         verifications,
 				FailedVerifies:   failedVerifications,
 				FailureQualified: failureQualified != 0,
-			})
+			}
+			if rowType == 2 {
+				stats.SecurityEvents = append(stats.SecurityEvents, candidate)
+			} else {
+				highRequestCandidates = append(highRequestCandidates, candidate)
+			}
 		default:
 			return nil, fmt.Errorf("unknown report stats row type %d", rowType)
 		}
@@ -756,6 +794,9 @@ FROM
 		return nil, err
 	}
 
+	sortReportSecurityEventsByRequests(highRequestCandidates)
+	highRequestEventsLimit := min(highRequestSecurityEventsLimit(options.SecurityEventsLimit), len(highRequestCandidates))
+	stats.SecurityEvents = append(stats.SecurityEvents, highRequestCandidates[:highRequestEventsLimit]...)
 	sortUserReportProperties(stats.Properties)
 	return stats, nil
 }
@@ -1810,12 +1851,6 @@ func (m *MemoryTimeSeries) memoryReportStats(userID int32, from, mid, to time.Ti
 		Verifies       uint64
 		FailedVerifies uint64
 	}
-	type rankedCandidate struct {
-		candidate     *common.UserReportSecurityEvent
-		dominantCount uint64
-		ratio         float64
-	}
-
 	counts := make(map[propKey]*propCounts)
 	candidates := make(map[candidateKey]*candidateCounts)
 	dayStart := func(t time.Time) time.Time {
@@ -1880,83 +1915,29 @@ func (m *MemoryTimeSeries) memoryReportStats(userID int32, from, mid, to time.Ti
 		return stats, nil
 	}
 
-	betterCandidate := func(left, right rankedCandidate) bool {
-		if left.dominantCount != right.dominantCount {
-			return left.dominantCount > right.dominantCount
-		}
-		if left.ratio != right.ratio {
-			return left.ratio > right.ratio
-		}
-		if left.candidate.PropertyID != right.candidate.PropertyID {
-			return left.candidate.PropertyID < right.candidate.PropertyID
-		}
-		if left.candidate.OrgID != right.candidate.OrgID {
-			return left.candidate.OrgID < right.candidate.OrgID
-		}
-		return left.candidate.Timestamp.Before(right.candidate.Timestamp)
-	}
-	keepTopCandidate := func(rankedCandidates []rankedCandidate, candidate rankedCandidate, limit int) []rankedCandidate {
-		if len(rankedCandidates) < limit {
-			return append(rankedCandidates, candidate)
-		}
-
-		worstIndex := 0
-		for i := 1; i < len(rankedCandidates); i++ {
-			if betterCandidate(rankedCandidates[worstIndex], rankedCandidates[i]) {
-				worstIndex = i
-			}
-		}
-		if betterCandidate(candidate, rankedCandidates[worstIndex]) {
-			rankedCandidates[worstIndex] = candidate
-		}
-		return rankedCandidates
-	}
-	perPropertyCandidates := make(map[propKey][]rankedCandidate)
+	qualifyingCandidates := make([]*common.UserReportSecurityEvent, 0, len(candidates))
+	highRequestCandidates := make([]*common.UserReportSecurityEvent, 0, len(candidates))
 	for key, counts := range candidates {
-		requestRatio := float64(counts.Requests) / float64(max(counts.Verifies, 1))
-		failureRatio := float64(counts.FailedVerifies) / float64(max(counts.Requests, 1))
-		failureQualified := counts.FailedVerifies >= options.SecurityEventMinimumDominantCount && failureRatio > options.SecurityEventRatioThreshold
-		ratio := 0.0
-		var dominantCount uint64
-		if counts.Requests >= options.SecurityEventMinimumDominantCount && requestRatio > options.SecurityEventRatioThreshold {
-			ratio = requestRatio
-			dominantCount = counts.Requests
+		candidate := &common.UserReportSecurityEvent{
+			PropertyID:     key.PropertyID,
+			OrgID:          key.OrgID,
+			Timestamp:      key.Timestamp,
+			Requests:       counts.Requests,
+			Verifies:       counts.Verifies,
+			FailedVerifies: counts.FailedVerifies,
 		}
-		if failureQualified {
-			ratio = max(ratio, failureRatio)
-			dominantCount = max(dominantCount, counts.FailedVerifies)
+		qualified, failureQualified := reportSecurityEventQualifications(candidate, options)
+		candidate.FailureQualified = failureQualified
+		if qualified {
+			qualifyingCandidates = append(qualifyingCandidates, candidate)
+		} else if candidate.Requests > 0 {
+			highRequestCandidates = append(highRequestCandidates, candidate)
 		}
-		if ratio == 0 {
-			continue
-		}
-		ranked := rankedCandidate{
-			candidate: &common.UserReportSecurityEvent{
-				PropertyID:       key.PropertyID,
-				OrgID:            key.OrgID,
-				Timestamp:        key.Timestamp,
-				Requests:         counts.Requests,
-				Verifies:         counts.Verifies,
-				FailedVerifies:   counts.FailedVerifies,
-				FailureQualified: failureQualified,
-			},
-			dominantCount: dominantCount,
-			ratio:         ratio,
-		}
-		perPropertyCandidates[key.propKey] = keepTopCandidate(perPropertyCandidates[key.propKey], ranked, options.SecurityEventsPerPropertyLimit)
 	}
 
-	rankedCandidates := make([]rankedCandidate, 0, min(options.SecurityEventsLimit, len(candidates)))
-	for _, propertyCandidates := range perPropertyCandidates {
-		for _, candidate := range propertyCandidates {
-			rankedCandidates = keepTopCandidate(rankedCandidates, candidate, options.SecurityEventsLimit)
-		}
-	}
-	sort.Slice(rankedCandidates, func(i, j int) bool {
-		return betterCandidate(rankedCandidates[i], rankedCandidates[j])
-	})
-	for _, ranked := range rankedCandidates {
-		stats.SecurityEvents = append(stats.SecurityEvents, ranked.candidate)
-	}
+	stats.SecurityEvents = limitReportSecurityEventsByProperty(qualifyingCandidates, options.SecurityEventsLimit, options.SecurityEventsPerPropertyLimit)
+	highRequestEvents := limitReportSecurityEventsByProperty(highRequestCandidates, highRequestSecurityEventsLimit(options.SecurityEventsLimit), options.SecurityEventsPerPropertyLimit)
+	stats.SecurityEvents = append(stats.SecurityEvents, highRequestEvents...)
 
 	return stats, nil
 }
