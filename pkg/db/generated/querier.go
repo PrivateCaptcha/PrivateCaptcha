@@ -67,6 +67,7 @@ type Querier interface {
 	GetOrgFormByName(ctx context.Context, arg *GetOrgFormByNameParams) (*Form, error)
 	GetOrgForms(ctx context.Context, arg *GetOrgFormsParams) ([]*Form, error)
 	GetOrgFormsCount(ctx context.Context, orgID pgtype.Int4) (int64, error)
+	GetOrgInviteByID(ctx context.Context, id int32) (*OrganizationUser, error)
 	GetOrgPropertiesByDateAscending(ctx context.Context, arg *GetOrgPropertiesByDateAscendingParams) ([]*Property, error)
 	GetOrgPropertiesByDateDescending(ctx context.Context, arg *GetOrgPropertiesByDateDescendingParams) ([]*Property, error)
 	GetOrgPropertiesByNameAscending(ctx context.Context, arg *GetOrgPropertiesByNameAscendingParams) ([]*Property, error)

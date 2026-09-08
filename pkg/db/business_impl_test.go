@@ -1368,6 +1368,25 @@ func TestBusinessStoreImplGetCachedOrgInviteByID(t *testing.T) {
 	})
 }
 
+func TestBusinessStoreImplRetrieveOrgInviteByID(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		_, err := store.RetrieveOrgInviteByID(context.Background(), 1)
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		_, err := store.RetrieveOrgInviteByID(context.Background(), 1)
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+}
+
 func TestBusinessStoreImplLinkOrgInviteToUser(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)

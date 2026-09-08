@@ -202,6 +202,9 @@ func (s *QuerierStub) GetOrgPropertyByName(ctx context.Context, arg *dbgen.GetOr
 func (s *QuerierStub) GetOrgFormByName(ctx context.Context, arg *dbgen.GetOrgFormByNameParams) (*dbgen.Form, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) GetOrgInviteByID(ctx context.Context, id int32) (*dbgen.OrganizationUser, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) GetOrganizationUsers(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersRow, error) {
 	return nil, s.Error
 }

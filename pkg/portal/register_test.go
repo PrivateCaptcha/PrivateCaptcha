@@ -9,14 +9,18 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -27,7 +31,7 @@ type blockingRegistrationJobs struct {
 	job common.OneOffJob
 }
 
-func (j *blockingRegistrationJobs) CheckRegistration(*session.Session, *http.Request) common.OneOffJob {
+func (j *blockingRegistrationJobs) CheckRegistration(*session.Session, *http.Request, int32) common.OneOffJob {
 	return j.job
 }
 
@@ -44,6 +48,23 @@ func (j *blockingRegistrationCheckJob) RunOnce(context.Context, any) error {
 	close(j.started)
 	<-j.release
 	close(j.finished)
+	return nil
+}
+
+type registrationJobsWithoutOnboarding struct {
+	db.UserJobs
+}
+
+func (j *registrationJobsWithoutOnboarding) OnboardUser(*dbgen.User, billing.Plan, *int32) common.OneOffJob {
+	return &common.StubOneOffJob{}
+}
+
+type inviteMessageSender struct {
+	messages chan *email.Message
+}
+
+func (s *inviteMessageSender) SendEmail(_ context.Context, message *email.Message) error {
+	s.messages <- message
 	return nil
 }
 
@@ -125,6 +146,162 @@ func TestPostRegister(t *testing.T) {
 	}
 }
 
+func TestRegisterFromEmailInviteRedirectsToInvitedOrganization(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	ownerCookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	originalJobs := server.Jobs
+	server.Jobs = &registrationJobsWithoutOnboarding{UserJobs: originalJobs}
+	t.Cleanup(func() { server.Jobs = originalJobs })
+
+	mailer, ok := server.Mailer.(*email.StubMailer)
+	if !ok {
+		t.Fatalf("mailer type = %T, want *email.StubMailer", server.Mailer)
+	}
+	portalMailer, ok := mailer.Mailer.(*PortalMailer)
+	if !ok {
+		t.Fatalf("mailer type = %T, want *PortalMailer", mailer.Mailer)
+	}
+	originalSender := portalMailer.Mailer
+	originalPortalURL := portalMailer.PortalURL
+	messageSender := &inviteMessageSender{messages: make(chan *email.Message, 1)}
+	portalMailer.Mailer = messageSender
+	portalMailer.PortalURL = "https://portal.example.test"
+	t.Cleanup(func() {
+		portalMailer.Mailer = originalSender
+		portalMailer.PortalURL = originalPortalURL
+	})
+
+	invitedEmail := strings.ToLower(t.Name()) + "@privatecaptcha.com"
+	form := url.Values{
+		common.ParamCSRFToken: {server.XSRF.Token(strconv.Itoa(int(owner.ID)))},
+		common.ParamEmail:     {invitedEmail},
+	}
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/members", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(ownerCookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("invite status = %d, want 200", w.Code)
+	}
+
+	var inviteMessage *email.Message
+	select {
+	case inviteMessage = <-messageSender.messages:
+	case <-time.After(time.Second):
+		t.Fatal("organization invite email was not sent")
+	}
+	portalMailer.Mailer = originalSender
+	portalMailer.PortalURL = originalPortalURL
+	if inviteMessage.EmailTo != invitedEmail {
+		t.Fatalf("invite recipient = %q, want %q", inviteMessage.EmailTo, invitedEmail)
+	}
+
+	const linkPrefix = "following this link: "
+	linkStart := strings.Index(inviteMessage.TextBody, linkPrefix)
+	if linkStart == -1 {
+		t.Fatalf("invite email does not contain registration link: %s", inviteMessage.TextBody)
+	}
+	inviteLink := inviteMessage.TextBody[linkStart+len(linkPrefix):]
+	if linkEnd := strings.IndexByte(inviteLink, '\n'); linkEnd != -1 {
+		inviteLink = inviteLink[:linkEnd]
+	}
+	inviteURL, err := url.Parse(strings.TrimSpace(inviteLink))
+	if err != nil {
+		t.Fatalf("parse invite link: %v", err)
+	}
+	invitePathStart := strings.Index(inviteURL.Path, "/"+common.OrgInviteEndpoint+"/")
+	if invitePathStart == -1 {
+		t.Fatalf("invite link path = %q, want organization invite path", inviteURL.Path)
+	}
+	inviteURL.Path = inviteURL.Path[invitePathStart:]
+
+	req = httptest.NewRequest(http.MethodGet, inviteURL.RequestURI(), nil)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("invite registration page status = %d, want 200", w.Code)
+	}
+	doc := portal_tests.ParseHTML(t, w.Body)
+	emailInput := doc.Find(fmt.Sprintf("input[name=%q]", common.ParamEmail))
+	if value, exists := emailInput.Attr("value"); !exists || value != invitedEmail {
+		t.Fatalf("registration email = %q, want %q", value, invitedEmail)
+	}
+	if _, exists := emailInput.Attr("readonly"); !exists {
+		t.Fatal("invite registration email is not readonly")
+	}
+	inviteID, exists := doc.Find(fmt.Sprintf("input[name=%q]", common.ParamID)).Attr("value")
+	if !exists || inviteID == "" {
+		t.Fatal("invite registration form does not contain invite ID")
+	}
+
+	form = url.Values{
+		common.ParamCSRFToken:      {server.XSRF.Token("")},
+		common.ParamEmail:          {invitedEmail},
+		common.ParamID:             {inviteID},
+		common.ParamName:           {"Invited User"},
+		common.ParamTerms:          {"true"},
+		common.ParamPortalSolution: {"captchaSolution"},
+	}
+	req = httptest.NewRequest(http.MethodPost, "/"+common.RegisterEndpoint, strings.NewReader(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("registration status = %d, want 200", w.Code)
+	}
+	registrationCookieIndex := slices.IndexFunc(w.Result().Cookies(), func(c *http.Cookie) bool {
+		return c.Name == server.Sessions.CookieName
+	})
+	if registrationCookieIndex == -1 {
+		t.Fatal("registration response does not contain a session cookie")
+	}
+	registrationCookie := w.Result().Cookies()[registrationCookieIndex]
+
+	code, err := portal_tests.TwoFactorCodeFromEmail(invitedEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := twoFactorSuite(srv, invitedEmail, server.XSRF.Token(invitedEmail), code, registrationCookie)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("two-factor status = %d, want redirect", resp.StatusCode)
+	}
+	expectedPath := fmt.Sprintf("/org/%s", server.IDHasher.Encrypt(int(org.ID)))
+	location, err := resp.Location()
+	if err != nil || location.String() != expectedPath {
+		t.Fatalf("registration redirect = (%v, %v), want %s", location, err, expectedPath)
+	}
+	authCookieIndex := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool {
+		return c.Name == server.Sessions.CookieName
+	})
+	if authCookieIndex == -1 {
+		t.Fatal("two-factor response does not contain an authenticated session cookie")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, location.String(), nil)
+	req.AddCookie(resp.Cookies()[authCookieIndex])
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("invited organization status = %d, want 200", w.Code)
+	}
+}
+
 func TestPostRegisterRunsRegistrationCheckAsynchronously(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -170,6 +347,64 @@ func TestPostRegisterRunsRegistrationCheckAsynchronously(t *testing.T) {
 	case <-job.finished:
 	case <-time.After(5 * time.Second):
 		t.Fatal("registration check did not finish")
+	}
+}
+
+func TestPostRegisterWarmsOrgInviteCache(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	invitedEmail := strings.ToLower(t.Name()) + "@privatecaptcha.com"
+	var inviteID int32
+	if err := store.Pool.QueryRow(ctx, `
+		INSERT INTO backend.organization_users (org_id, email, level)
+		VALUES ($1, $2, 'invited')
+		RETURNING id`, org.ID, invitedEmail).Scan(&inviteID); err != nil {
+		t.Fatal(err)
+	}
+
+	originalStore := server.Store
+	freshStore := db.NewBusiness(store.Pool)
+	server.Store = freshStore
+	t.Cleanup(func() { server.Store = originalStore })
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	form := url.Values{
+		common.ParamCSRFToken:      {server.XSRF.Token("")},
+		common.ParamEmail:          {invitedEmail},
+		common.ParamID:             {server.IDHasher.Encrypt(int(inviteID))},
+		common.ParamName:           {"Invited User"},
+		common.ParamTerms:          {"true"},
+		common.ParamPortalSolution: {"captchaSolution"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/"+common.RegisterEndpoint, strings.NewReader(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("registration status = %d, want 200", w.Code)
+	}
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		invite, cacheErr := freshStore.Impl().GetCachedOrgInviteByID(ctx, inviteID)
+		if cacheErr == nil {
+			if invite.ID != inviteID {
+				t.Fatalf("cached invite ID = %d, want %d", invite.ID, inviteID)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("organization invite was not cached: %v", cacheErr)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

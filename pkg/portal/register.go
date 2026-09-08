@@ -230,7 +230,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		common.Redirect(s.RelURL(common.RegisterEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
-	job := s.Jobs.CheckRegistration(result.Session, r)
+	job := s.Jobs.CheckRegistration(result.Session, r, inviteID)
 	jobCtx := common.CopyTraceID(ctx, context.Background())
 	if ip := ctx.Value(common.RateLimitKeyContextKey); ip != nil {
 		jobCtx = context.WithValue(jobCtx, common.RateLimitKeyContextKey, ip)

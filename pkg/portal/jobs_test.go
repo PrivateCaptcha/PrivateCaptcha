@@ -37,7 +37,7 @@ func TestCheckRegistrationJob(t *testing.T) {
 		session.Authority{State: session.StatePending, ChallengeKind: session.ChallengeKindRegistration},
 		session.NewPayload(t.Name(), store),
 	)
-	job := srv.CheckRegistration(sess, req)
+	job := srv.CheckRegistration(sess, req, 0)
 	if err := job.RunOnce(t.Context(), job.NewParams()); err != nil {
 		t.Fatal(err)
 	}

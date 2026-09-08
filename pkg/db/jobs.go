@@ -13,5 +13,5 @@ type UserJobs interface {
 	OnboardUser(user *dbgen.User, plan billing.Plan, orgInviteID *int32) common.OneOffJob
 	OffboardUser(user *dbgen.User) common.OneOffJob
 	LoginUser(sess *session.Session) common.OneOffJob
-	CheckRegistration(sess *session.Session, r *http.Request) common.OneOffJob
+	CheckRegistration(sess *session.Session, r *http.Request, orgInviteID int32) common.OneOffJob
 }

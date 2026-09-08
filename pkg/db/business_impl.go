@@ -2413,6 +2413,21 @@ func (impl *BusinessStoreImpl) GetCachedOrgInviteByID(ctx context.Context, invit
 	return FetchCachedOne[dbgen.OrganizationUser](ctx, impl.cache, orgInviteCacheKey(inviteID))
 }
 
+func (impl *BusinessStoreImpl) RetrieveOrgInviteByID(ctx context.Context, inviteID int32) (*dbgen.OrganizationUser, error) {
+	reader := &StoreOneReader[int32, dbgen.OrganizationUser]{
+		CacheKey:    orgInviteCacheKey(inviteID),
+		Cache:       impl.cache,
+		DropInvalid: true,
+	}
+
+	if impl.querier != nil {
+		reader.QueryKeyFunc = QueryKeyInt
+		reader.QueryFunc = impl.querier.GetOrgInviteByID
+	}
+
+	return reader.Read(ctx)
+}
+
 func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID int32, user *dbgen.User) (*dbgen.OrganizationUser, error) {
 	if user == nil {
 		return nil, ErrInvalidInput

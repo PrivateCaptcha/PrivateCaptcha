@@ -157,13 +157,21 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	if orgInviteID > 0 {
 		slog.DebugContext(ctx, "Found org invite ID in session, redirecting to org", "inviteID", orgInviteID)
 		_ = sess.Delete(ctx, session.KeyOrgInviteID)
-		// we can only rely on cache because if the user is redirected to portal root, they still can join the org later
+		// The cache is populated when the invite is created and updated when it is linked.
 		if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, orgInviteID); err == nil {
-			redirectURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(invite.OrgID)))
-			common.Redirect(redirectURL, http.StatusOK, w, r)
-			return
+			user, userErr := s.SessionUser(ctx, sess)
+			if userErr == nil && !invite.UserID.Valid {
+				invite, err = s.Store.Impl().LinkOrgInviteToUser(ctx, orgInviteID, user)
+			}
+			if userErr == nil && err == nil && invite.UserID.Valid && invite.UserID.Int32 == user.ID {
+				redirectURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(invite.OrgID)))
+				common.Redirect(redirectURL, http.StatusOK, w, r)
+				return
+			}
+			slog.WarnContext(ctx, "Org invite is not linked to user, redirecting to root", "inviteID", orgInviteID, "userError", userErr, "linkError", err)
+		} else {
+			slog.WarnContext(ctx, "Org invite is not cached, redirecting to root", "inviteID", orgInviteID)
 		}
-		slog.WarnContext(ctx, "Org invite is not cached, redirecting to root", "inviteID", orgInviteID)
 	}
 
 	if len(newRegistrationRedirectURL) > 0 {
