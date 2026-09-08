@@ -162,7 +162,7 @@ func (ts *TimeSeriesDB) WriteAccessLogBatch(ctx context.Context, records []*comm
 		}
 	}()
 
-	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s SETTINGS async_insert = 1, wait_for_async_insert = 1", AccessLogTableName))
+	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s (user_id, org_id, property_id, fingerprint, timestamp, rule_id) SETTINGS async_insert = 1, wait_for_async_insert = 1", AccessLogTableName))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
 		return err
@@ -211,7 +211,7 @@ func (ts *TimeSeriesDB) WriteVerifyLogBatch(ctx context.Context, records []*comm
 		}
 	}()
 
-	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s SETTINGS async_insert = 1, wait_for_async_insert = 1", VerifyLogTableName))
+	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s (user_id, org_id, property_id, puzzle_id, status, timestamp) SETTINGS async_insert = 1, wait_for_async_insert = 1", VerifyLogTableName))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
 		return err
