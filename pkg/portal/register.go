@@ -85,117 +85,74 @@ func isUserNameValid(name string) bool {
 	return true
 }
 
-func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+type registrationInput struct {
+	email           string
+	name            string
+	inviteID        int32
+	encodedInviteID string
+}
 
-	err := r.ParseForm()
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.RedirectError(http.StatusBadRequest, w, r)
-		return
+type issuedRegistrationChallenge struct {
+	authority session.Authority
+	sess      *session.Session
+	code      int
+	location  string
+}
+
+func (s *Server) parseRegistrationInput(r *http.Request) (registrationInput, bool) {
+	input := registrationInput{
+		email:           strings.TrimSpace(r.FormValue(common.ParamEmail)),
+		name:            strings.TrimSpace(r.FormValue(common.ParamName)),
+		encodedInviteID: r.FormValue(common.ParamID),
+	}
+	if input.encodedInviteID == "" {
+		return input, true
 	}
 
-	if !s.canRegister.Load() {
-		slog.WarnContext(ctx, "Registration is disabled")
-		s.RedirectError(http.StatusNotImplemented, w, r)
-		return
+	value, err := s.IDHasher.Decrypt(input.encodedInviteID)
+	if err != nil || value <= 0 || value > math.MaxInt32 {
+		slog.WarnContext(r.Context(), "Invalid invite ID in registration form", "idStr", input.encodedInviteID, common.ErrAttr(err))
+		return registrationInput{}, false
 	}
+	input.inviteID = int32(value)
+	return input, true
+}
 
-	email := strings.TrimSpace(r.FormValue(common.ParamEmail))
-	inviteIDStr := r.FormValue(common.ParamID)
-	var inviteID int32
-	if inviteIDStr != "" {
-		value, err := s.IDHasher.Decrypt(inviteIDStr)
-		if err != nil || value <= 0 || value > math.MaxInt32 {
-			slog.WarnContext(ctx, "Invalid invite ID in registration form", "idStr", inviteIDStr, common.ErrAttr(err))
-			s.RedirectError(http.StatusBadRequest, w, r)
-			return
-		}
-		inviteID = int32(value)
-	}
-
-	data := &loginRenderContext{
-		CsrfRenderContext: CsrfRenderContext{
-			Token: s.XSRF.Token(""),
-		},
-		CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
-		Email:                email,
-		InviteID:             inviteIDStr,
-		IsRegister:           true,
-	}
-
-	if _, termsAndConditions := r.Form[common.ParamTerms]; !termsAndConditions {
-		// it's an error because they are marked 'required' on the frontend, so something went terribly wrong
-		slog.ErrorContext(ctx, "Terms and conditions were not accepted")
-		s.RedirectError(http.StatusBadRequest, w, r)
-		return
-	}
-
-	captchaSolution := r.FormValue(common.ParamPortalSolution)
-	if len(captchaSolution) == 0 {
-		slog.WarnContext(ctx, "Captcha solution field is empty")
-		data.CaptchaError = "You need to solve captcha to register."
-		s.render(w, r, registerContentsTemplate, data, false /*new*/)
-		return
-	}
-
-	payload, err := s.PuzzleEngine.ParseSolutionPayload(ctx, []byte(captchaSolution))
-	if err != nil {
-		data.CaptchaError = captchaVerificationFailed
-		s.render(w, r, registerContentsTemplate, data, false /*new*/)
-		return
-	}
-
-	ownerSource := &portalPropertyOwnerSource{Store: s.Store, Sitekey: data.CaptchaSitekey}
-	verifyResult, err := s.PuzzleEngine.Verify(ctx, payload, ownerSource, time.Now().UTC())
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
-		data.CaptchaError = captchaVerificationFailed
-		s.render(w, r, registerContentsTemplate, data, false /*new*/)
-		return
-	}
-	if !verifyResult.Success() {
-		slog.ErrorContext(ctx, "Failed to verify captcha", "errors", verifyResult.Error.String())
-		data.CaptchaError = captchaVerificationFailed
-		s.render(w, r, registerContentsTemplate, data, false /*new*/)
-		return
-	}
-
-	name := strings.TrimSpace(r.FormValue(common.ParamName))
-	if len(name) < 3 {
+func (s *Server) validateRegistrationInput(ctx context.Context, input registrationInput, data *loginRenderContext) bool {
+	if len(input.name) < 3 {
 		data.NameError = "Please use a longer name."
-		s.render(w, r, registerContentsTemplate, data, false /*new*/)
-		return
+		return false
 	}
 
-	if !isUserNameValid(name) {
+	if !isUserNameValid(input.name) {
 		data.NameError = userNameErrorMessage
-		s.render(w, r, registerContentsTemplate, data, false /*new*/)
-		return
+		return false
 	}
 
-	if err := s.EmailVerifier.VerifyEmail(ctx, email); err != nil {
+	if err := s.EmailVerifier.VerifyEmail(ctx, input.email); err != nil {
 		slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
 		data.Email = ""
 		data.EmailError = "Email address is not valid."
-		s.render(w, r, registerContentsTemplate, data, false /*new*/)
-		return
+		return false
 	}
 
-	if _, err := s.Store.Impl().FindUserByEmail(ctx, email); err == nil {
-		slog.WarnContext(ctx, "User with such email already exists", "email", email)
+	if _, err := s.Store.Impl().FindUserByEmail(ctx, input.email); err == nil {
+		slog.WarnContext(ctx, "User with such email already exists", "email", input.email)
 		data.Email = ""
 		data.EmailError = emailAlreadyRegisteredError
-		s.render(w, r, registerContentsTemplate, data, false /*new*/)
-		return
+		return false
 	} else if errors.Is(err, db.ErrDisabled) || errors.Is(err, db.ErrSoftDeleted) {
-		slog.WarnContext(ctx, "User is already registered but unavailable", "email", email, common.ErrAttr(err))
+		slog.WarnContext(ctx, "User is already registered but unavailable", "email", input.email, common.ErrAttr(err))
 		data.Email = ""
 		data.EmailError = accountUnavailableError
-		s.render(w, r, registerContentsTemplate, data, false /*new*/)
-		return
+		return false
 	}
 
+	return true
+}
+
+func (s *Server) issueRegistrationChallenge(w http.ResponseWriter, r *http.Request, input registrationInput) (*issuedRegistrationChallenge, bool) {
+	ctx := r.Context()
 	code := twoFactorCode(ctx)
 	location := r.Header.Get(s.CountryCodeHeader.Value())
 
@@ -203,19 +160,19 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to start registration session", common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, false
 	}
-	if err := sess.Set(ctx, session.KeyUserName, name); err != nil {
+	if err := sess.Set(ctx, session.KeyUserName, input.name); err != nil {
 		slog.ErrorContext(ctx, "Failed to set registration Payload", common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, false
 	}
-	result, err := s.Sessions.IssueRegistrationChallenge(w, r, sess, inviteID, email, fmt.Sprintf("%06d", code),
+	result, err := s.Sessions.IssueRegistrationChallenge(w, r, sess, input.inviteID, input.email, fmt.Sprintf("%06d", code),
 		s.TwoFactorDuration, maxFailedAttempts)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to issue registration challenge", common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, false
 	}
 	issuedAuthority, ok := challengeResultAuthority(result, session.ChallengeKindRegistration)
 	if !ok {
@@ -228,27 +185,91 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		}
 		slog.WarnContext(ctx, "Registration challenge was not issued", "outcome", outcome)
 		common.Redirect(s.RelURL(common.RegisterEndpoint), http.StatusUnauthorized, w, r)
-		return
+		return nil, false
 	}
-	job := s.Jobs.CheckRegistration(result.Session, r, inviteID)
+	job := s.Jobs.CheckRegistration(result.Session, r, input.inviteID)
 	jobCtx := common.CopyTraceID(ctx, context.Background())
 	if ip := ctx.Value(common.RateLimitKeyContextKey); ip != nil {
 		jobCtx = context.WithValue(jobCtx, common.RateLimitKeyContextKey, ip)
 	}
 	go common.RunOneOffJob(jobCtx, job, job.NewParams())
-	if err := s.Mailer.SendTwoFactor(ctx, issuedAuthority.ChallengeEmail, code, r.UserAgent(), location, true); err != nil {
+
+	return &issuedRegistrationChallenge{
+		authority: issuedAuthority,
+		sess:      result.Session,
+		code:      code,
+		location:  location,
+	}, true
+}
+
+func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if err := r.ParseForm(); err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	if !s.canRegister.Load() {
+		slog.WarnContext(ctx, "Registration is disabled")
+		s.RedirectError(http.StatusNotImplemented, w, r)
+		return
+	}
+
+	input, ok := s.parseRegistrationInput(r)
+	if !ok {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+	data := &loginRenderContext{
+		CsrfRenderContext: CsrfRenderContext{
+			Token: s.XSRF.Token(""),
+		},
+		CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
+		Email:                input.email,
+		InviteID:             input.encodedInviteID,
+		IsRegister:           true,
+	}
+
+	if _, termsAndConditions := r.Form[common.ParamTerms]; !termsAndConditions {
+		// It's an error because the field is required on the frontend.
+		slog.ErrorContext(ctx, "Terms and conditions were not accepted")
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	if err := s.verifyPortalCaptcha(ctx, r.FormValue(common.ParamPortalSolution), data.CaptchaSitekey); err != nil {
+		data.CaptchaError = captchaVerificationFailed
+		if errors.Is(err, errCaptchaSolutionMissing) {
+			data.CaptchaError = "You need to solve captcha to register."
+		}
+		s.render(w, r, registerContentsTemplate, data, false /*new*/)
+		return
+	}
+
+	if !s.validateRegistrationInput(ctx, input, data) {
+		s.render(w, r, registerContentsTemplate, data, false /*new*/)
+		return
+	}
+
+	challenge, ok := s.issueRegistrationChallenge(w, r, input)
+	if !ok {
+		return
+	}
+	if err := s.Mailer.SendTwoFactor(ctx, challenge.authority.ChallengeEmail, challenge.code, r.UserAgent(), challenge.location, true); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
 		data.EmailError = "Failed to send a confirmation email. Please try again."
 		s.render(w, r, registerContentsTemplate, data, false /*new*/)
 		return
 	}
 
-	ctx = context.WithValue(ctx, common.SessionHashContextKey, result.Session.Hash())
+	ctx = context.WithValue(ctx, common.SessionHashContextKey, challenge.sess.Hash())
 
-	data.Token = s.XSRF.Token(issuedAuthority.ChallengeEmail)
-	data.Email = common.MaskEmail(issuedAuthority.ChallengeEmail, '*')
+	data.Token = s.XSRF.Token(challenge.authority.ChallengeEmail)
+	data.Email = common.MaskEmail(challenge.authority.ChallengeEmail, '*')
 
-	slog.DebugContext(ctx, "Started 2FA registration flow", "email", email)
+	slog.DebugContext(ctx, "Started 2FA registration flow", "email", input.email)
 
 	s.render(w, r, twofactorContentsTemplate, data, true /*new*/)
 }
