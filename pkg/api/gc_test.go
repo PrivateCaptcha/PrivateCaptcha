@@ -21,7 +21,16 @@ func gcPropertyDataTestSuite(ctx context.Context, property *dbgen.Property, dele
 	dp := difficulty.NewDBProperty(property)
 
 	for i := 0; i < requests; i++ {
-		server.Levels.Difficulty(ctx, common.RandomFingerprint(), dp, tnow.Add(time.Duration(i)*10*time.Second))
+		fingerprint := common.RandomFingerprint()
+		timestamp := tnow.Add(time.Duration(i) * 10 * time.Second)
+		_ = server.Levels.RecordAccess(ctx, &common.AccessRecord{
+			Fingerprint: fingerprint,
+			UserID:      dp.OwnerID(),
+			OrgID:       dp.OrgID(),
+			PropertyID:  dp.ID(),
+			Timestamp:   timestamp,
+		})
+		server.Levels.Difficulty(ctx, fingerprint, dp, timestamp)
 	}
 
 	// we need to wait for the timeout in the ProcessAccessLog()

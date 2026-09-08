@@ -13,7 +13,7 @@ TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.test.yml -f docker/docker-
 POSTGRES_TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.postgres-test.yml
 CLICKHOUSE_TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.clickhouse-test.yml
 CLICKHOUSE_TEST_DOCKER_COMPOSE_PROJECT ?= privatecaptcha-clickhouse-test
-CLICKHOUSE_TEST_CLIENT ?= $(DOCKER) compose -p $(CLICKHOUSE_TEST_DOCKER_COMPOSE_PROJECT) $(CLICKHOUSE_TEST_DOCKER_COMPOSE_FILES) exec -T clickhouse-test clickhouse-client
+CLICKHOUSE_TEST_CLIENT ?= bash scripts/clickhouse-http-client.sh
 GOPATH := $(shell go env GOPATH)
 OPEN ?= printf "file://%s\n"
 TEST_PG_PORT ?= 15432
@@ -59,7 +59,7 @@ test-widget-unit:
 	cd widget && env STAGE="$(STAGE)" npm run test
 
 bench-unit:
-	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -bench=. -benchtime=20s -short ./...
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -tags enterprise -bench=. -benchtime=20s -short ./...
 
 test-docker:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose $(TEST_DOCKER_COMPOSE_FILES) down -v --remove-orphans
