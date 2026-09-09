@@ -130,8 +130,8 @@ type Tip struct {
 	Text      string     `json:"text"`
 	Link      string     `json:"link"`
 	Patterns  []string   `json:"patterns"`
-	Reports   TipReports `json:"reports"`
 	UpdatedAt string     `json:"updated_at"`
+	Reports   TipReports `json:"reports"`
 }
 
 func LoadTips() ([]*Tip, error) {
