@@ -16,7 +16,6 @@ var (
 type SessionKey int
 
 const (
-	KeyUserEmail         SessionKey = 2
 	KeyUserName          SessionKey = 4
 	KeyNotificationID    SessionKey = 6
 	KeyReturnURL         SessionKey = 7
@@ -31,8 +30,7 @@ const (
 // this is a relic of sessions migration to Postgres
 func (key SessionKey) IsPayloadKey() bool {
 	switch key {
-	case KeyUserEmail,
-		KeyUserName,
+	case KeyUserName,
 		KeyNotificationID,
 		KeyReturnURL,
 		KeyOrgInviteID,
