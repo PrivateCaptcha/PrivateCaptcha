@@ -32,51 +32,6 @@ const (
 </html>`
 )
 
-// stubSessionStore implements session.Store with no-ops.
-type stubSessionStore struct{}
-
-func (s *stubSessionStore) Start(_ context.Context, _ time.Duration) {}
-func (s *stubSessionStore) EnqueueExpirationRenewal(_ context.Context, _ string) {
-}
-func (s *stubSessionStore) UpdatePayload(_ context.Context, _ string) {}
-func (s *stubSessionStore) StartAnonymousSession(sid string) *session.Session {
-	return session.NewAnonymousSession(sid, s)
-}
-func (s *stubSessionStore) Resolve(context.Context, string) (*session.Session, error) {
-	return nil, session.ErrSessionMissing
-}
-func (s *stubSessionStore) IssueSignInChallenge(context.Context, session.SignInChallengeIssue) (*session.ChallengeResult, error) {
-	return nil, nil
-}
-func (s *stubSessionStore) IssueRegistrationChallenge(context.Context, session.RegistrationChallengeIssue) (*session.ChallengeResult, error) {
-	return nil, nil
-}
-func (s *stubSessionStore) SetVerifyRegistration(context.Context, string, bool) error {
-	return nil
-}
-func (s *stubSessionStore) ResendPendingChallenge(context.Context, session.PendingChallengeResend) (*session.ChallengeResult, error) {
-	return nil, nil
-}
-func (s *stubSessionStore) ConsumeSignInChallenge(context.Context, session.SignInChallengeConsume) (*session.ChallengeResult, error) {
-	return nil, nil
-}
-func (s *stubSessionStore) ConsumeRegistrationChallenge(context.Context, session.RegistrationChallengeConsume) (*session.RegistrationConsumeResult, error) {
-	return nil, nil
-}
-func (s *stubSessionStore) CreateRegistrationSuccessor(context.Context, session.RegistrationSuccessorCreate) (*session.ChallengeResult, error) {
-	return nil, nil
-}
-func (s *stubSessionStore) IssueEmailChangeChallenge(context.Context, session.EmailChangeChallengeIssue) (*session.ChallengeResult, error) {
-	return nil, nil
-}
-func (s *stubSessionStore) ConsumeEmailChangeChallenge(context.Context, session.EmailChangeChallengeConsume) (*session.ChallengeResult, error) {
-	return nil, nil
-}
-func (s *stubSessionStore) RevokeSession(context.Context, string) (*session.RevocationResult, error) {
-	return nil, nil
-}
-func (s *stubSessionStore) RevokeUserSessions(context.Context, int32) error { return nil }
-
 var (
 	srv          *portal.Server
 	pages        []portal.ViewPortalPage
@@ -325,7 +280,7 @@ func main() {
 		Prefix:   "/portal",
 		APIURL:   "http://localhost:8080/api",
 		Stage:    common.StageDev,
-		Sessions: &session.Manager{Store: &stubSessionStore{}},
+		Sessions: &session.Manager{Store: &session.StubSessionStore{}},
 		DataCtx:  dataCtx,
 		XSRF:     &common.XSRFMiddleware{Key: "viewportal-key", Timeout: 1 * time.Hour},
 		Tips:     tips,
