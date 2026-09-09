@@ -14,15 +14,11 @@ type LeakyBucket[TKey comparable] interface {
 	// Adds "usage" of n units. Returns how much was actually added to the bucket and previous bucket level
 	Add(tnow time.Time, n TLevel) (TLevel, TLevel)
 	Update(capacity TLevel, leakInterval time.Duration, tnow time.Time)
-	Key() TKey
-	LastAccessTime() time.Time
 	LeakInterval() time.Duration
 	Capacity() TLevel
 	LeakRate() float64
 	Init(key TKey, capacity TLevel, leakInterval time.Duration, t time.Time)
 }
-
-type LimitUpdaterFunc func(capacity TLevel, leakInterval time.Duration)
 
 type ConstLeakyBucket[TKey comparable] struct {
 	// key of the bucket in the hashmap
@@ -92,16 +88,8 @@ func (lb *ConstLeakyBucket[TKey]) Capacity() TLevel {
 	return lb.capacity
 }
 
-func (lb *ConstLeakyBucket[TKey]) Key() TKey {
-	return lb.key
-}
-
 func (lb *ConstLeakyBucket[TKey]) LeakRate() float64 {
 	return 1.0
-}
-
-func (lb *ConstLeakyBucket[TKey]) LastAccessTime() time.Time {
-	return lb.lastAccessTime
 }
 
 func (lb *ConstLeakyBucket[TKey]) Update(capacity TLevel, leakInterval time.Duration, tnow time.Time) {
