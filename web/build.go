@@ -120,12 +120,18 @@ func LoadData() (DataContext, error) {
 	return data, nil
 }
 
+type TipReports struct {
+	Monthly bool `json:"monthly"`
+	Weekly  bool `json:"weekly"`
+}
+
 type Tip struct {
-	ID        string   `json:"id"`
-	Text      string   `json:"text"`
-	Link      string   `json:"link"`
-	Patterns  []string `json:"patterns"`
-	UpdatedAt string   `json:"updated_at"`
+	ID        string     `json:"id"`
+	Text      string     `json:"text"`
+	Link      string     `json:"link"`
+	Patterns  []string   `json:"patterns"`
+	Reports   TipReports `json:"reports"`
+	UpdatedAt string     `json:"updated_at"`
 }
 
 func LoadTips() ([]*Tip, error) {

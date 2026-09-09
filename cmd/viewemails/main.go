@@ -146,6 +146,8 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 				{Name: "Contact", URL: "https://hooks.example.com/contact", Link: stubFormURL, Count: 520, Percent: 45.6, Change: 11.2},
 				{Name: "Support", URL: "https://hooks.example.com/support", Link: stubFormURL, Count: 380, Percent: 33.3, Change: -5.8, Alternate: true},
 			},
+			Tip:     "Form proxy checks configured rate limit and CAPTCHA before calling your backend",
+			TipLink: "https://docs.privatecaptcha.com/docs/reference/form-proxy/",
 		},
 		FormDeactivationContext: email.FormDeactivationContext{
 			Forms: []*email.DeactivatedForm{

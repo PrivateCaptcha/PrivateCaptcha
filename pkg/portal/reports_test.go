@@ -14,6 +14,7 @@ import (
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
+	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
 
 const reportPortalURL = "https://portal.privatecaptcha.test"
@@ -106,6 +107,9 @@ func TestScheduleWeeklyReport(t *testing.T) {
 	expectedRef := fmt.Sprintf("%s%d/%d/%d", maintenance.WeeklyReferencePrefix, user.ID, year, week)
 
 	payload := usageReportPayload(t, notifications, user.ID, expectedRef)
+	if payload.Tip != "" || payload.TipLink != "" {
+		t.Errorf("expected weekly report without eligible tips to omit tip, got %q (%q)", payload.Tip, payload.TipLink)
+	}
 	if payload.TotalFormSubmissions != 25 {
 		t.Errorf("expected TotalFormSubmissions=25, got %d", payload.TotalFormSubmissions)
 	}
@@ -177,6 +181,9 @@ func TestScheduleMonthlyReport(t *testing.T) {
 	expectedRef := fmt.Sprintf("%s%d/%d/%d", maintenance.MonthlyReferencePrefix, user.ID, tnow.Year(), int(tnow.Month()))
 
 	payload := usageReportPayload(t, notifications, user.ID, expectedRef)
+	if payload.Tip != "" || payload.TipLink != "" {
+		t.Errorf("expected monthly report without eligible tips to omit tip, got %q (%q)", payload.Tip, payload.TipLink)
+	}
 	if payload.TotalFormSubmissions != 50 {
 		t.Errorf("expected TotalFormSubmissions=50, got %d", payload.TotalFormSubmissions)
 	}
@@ -233,6 +240,21 @@ func TestScheduleReportsJob(t *testing.T) {
 	}
 	job := newScheduleReportsJob(1)
 	job.TimeSeries = ts
+	job.Tips = []*web.Tip{
+		{Text: "Use scoped API keys", Link: "https://docs.privatecaptcha.test/api-keys", Reports: web.TipReports{Monthly: true}},
+		{Text: "Protect forms with the proxy", Link: "https://docs.privatecaptcha.test/form-proxy", Reports: web.TipReports{Weekly: true}},
+		{Text: "Review usage limits", Link: "https://docs.privatecaptcha.test/usage", Reports: web.TipReports{Monthly: true}},
+		{Text: "Review security events", Link: "https://docs.privatecaptcha.test/security", Reports: web.TipReports{Weekly: true}},
+		{Text: "Portal-only tip", Link: "https://docs.privatecaptcha.test/portal"},
+	}
+	weeklyTips := map[string]string{
+		"Protect forms with the proxy": "https://docs.privatecaptcha.test/form-proxy",
+		"Review security events":       "https://docs.privatecaptcha.test/security",
+	}
+	monthlyTips := map[string]string{
+		"Use scoped API keys": "https://docs.privatecaptcha.test/api-keys",
+		"Review usage limits": "https://docs.privatecaptcha.test/usage",
+	}
 
 	if err := job.RunOnceAt(ctx, nil, tnow); err != nil {
 		t.Fatalf("RunOnceAt failed: %v", err)
@@ -244,6 +266,10 @@ func TestScheduleReportsJob(t *testing.T) {
 	}
 
 	year, week := tnow.ISOWeek()
+	weeklyTip := ""
+	weeklyTipLink := ""
+	monthlyTip := ""
+	monthlyTipLink := ""
 	for i, account := range accounts {
 		factor := uint64(i + 1)
 		weeklyRef := fmt.Sprintf("%s%d/%d/%d", maintenance.WeeklyReferencePrefix, account.userID, year, week)
@@ -251,11 +277,29 @@ func TestScheduleReportsJob(t *testing.T) {
 		if weekly.TotalRequests != 2*factor || weekly.PrevRequests != factor || weekly.TotalVerifies != factor || weekly.PrevVerifies != factor {
 			t.Errorf("account %d weekly totals = requests %d/%d verifies %d/%d", i, weekly.TotalRequests, weekly.PrevRequests, weekly.TotalVerifies, weekly.PrevVerifies)
 		}
+		if link, ok := weeklyTips[weekly.Tip]; !ok || weekly.TipLink != link {
+			t.Errorf("account %d weekly report has ineligible tip %q (%q)", i, weekly.Tip, weekly.TipLink)
+		}
+		if i == 0 {
+			weeklyTip = weekly.Tip
+			weeklyTipLink = weekly.TipLink
+		} else if weekly.Tip != weeklyTip || weekly.TipLink != weeklyTipLink {
+			t.Errorf("account %d weekly tip %q (%q) differs from %q (%q)", i, weekly.Tip, weekly.TipLink, weeklyTip, weeklyTipLink)
+		}
 
 		monthlyRef := fmt.Sprintf("%s%d/%d/%d", maintenance.MonthlyReferencePrefix, account.userID, tnow.Year(), int(tnow.Month()))
 		monthly := usageReportPayload(t, notifications, account.userID, monthlyRef)
 		if monthly.TotalRequests != 3*factor || monthly.PrevRequests != 3*factor || monthly.TotalVerifies != 2*factor || monthly.PrevVerifies != factor {
 			t.Errorf("account %d monthly totals = requests %d/%d verifies %d/%d", i, monthly.TotalRequests, monthly.PrevRequests, monthly.TotalVerifies, monthly.PrevVerifies)
+		}
+		if link, ok := monthlyTips[monthly.Tip]; !ok || monthly.TipLink != link {
+			t.Errorf("account %d monthly report has ineligible tip %q (%q)", i, monthly.Tip, monthly.TipLink)
+		}
+		if i == 0 {
+			monthlyTip = monthly.Tip
+			monthlyTipLink = monthly.TipLink
+		} else if monthly.Tip != monthlyTip || monthly.TipLink != monthlyTipLink {
+			t.Errorf("account %d monthly tip %q (%q) differs from %q (%q)", i, monthly.Tip, monthly.TipLink, monthlyTip, monthlyTipLink)
 		}
 	}
 }

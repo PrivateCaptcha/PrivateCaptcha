@@ -76,6 +76,9 @@ func TestUsageReportTemplateFormStatsSection(t *testing.T) {
 		if strings.Contains(text, "Total Submissions") {
 			t.Fatal("did not expect form stats section in text when form totals are zero")
 		}
+		if strings.Contains(html, "<strong>Tip:</strong>") || strings.Contains(text, "Tip:") {
+			t.Fatal("did not expect an empty tip in usage report")
+		}
 	})
 
 	t.Run("ShownWhenPresent", func(t *testing.T) {
@@ -244,6 +247,8 @@ func TestEmailTemplates(t *testing.T) {
 		UsageReportContext: UsageReportContext{
 			Period:                 "weekly",
 			PeriodDate:             time.Now().Format("02 Jan 2006"),
+			Tip:                    "Use scoped API keys to limit access",
+			TipLink:                "https://docs.privatecaptcha.com/docs/integrations/openapi/",
 			TotalRequests:          1234,
 			TotalVerifies:          567,
 			PrevRequests:           1100,
@@ -281,12 +286,31 @@ func TestEmailTemplates(t *testing.T) {
 		t.Run(fmt.Sprintf("emailTemplate_%v", tpl.Name()), func(t *testing.T) {
 			ctx := t.Context()
 
-			if _, err := tpl.RenderHTML(ctx, data); err != nil {
+			html, err := tpl.RenderHTML(ctx, data)
+			if err != nil {
 				t.Fatal(err)
 			}
 
-			if _, err := tpl.RenderText(ctx, data); err != nil {
+			text, err := tpl.RenderText(ctx, data)
+			if err != nil {
 				t.Fatal(err)
+			}
+
+			if tpl == UsageReportTemplate {
+				dashboardHTMLIndex := strings.Index(html, "View detailed statistics in your")
+				tipHTMLIndex := strings.Index(html, "<strong>Tip:</strong> Use scoped API keys to limit access")
+				warmlyHTMLIndex := strings.Index(html, "Warmly,")
+				if dashboardHTMLIndex == -1 || tipHTMLIndex <= dashboardHTMLIndex || warmlyHTMLIndex <= tipHTMLIndex ||
+					!strings.Contains(html[tipHTMLIndex:warmlyHTMLIndex], `href="https://docs.privatecaptcha.com/docs/integrations/openapi/"`) {
+					t.Error("usage report html does not include the tip and its link")
+				}
+
+				dashboardTextIndex := strings.Index(text, "View detailed statistics in your")
+				tipTextIndex := strings.Index(text, "Tip: Use scoped API keys to limit access (https://docs.privatecaptcha.com/docs/integrations/openapi/)")
+				warmlyTextIndex := strings.Index(text, "Warmly,")
+				if dashboardTextIndex == -1 || tipTextIndex <= dashboardTextIndex || warmlyTextIndex <= tipTextIndex {
+					t.Error("usage report text does not include the tip and its link")
+				}
 			}
 		})
 	}

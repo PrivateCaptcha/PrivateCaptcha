@@ -222,7 +222,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		return err
 	}
 
-	// so far tips are disabled
 	tips, err := web.LoadTips()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to load tips", common.ErrAttr(err))
@@ -499,6 +498,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		IDHasher:    idHasher,
 		Stage:       stage,
 		UsersLimit:  50,
+		Tips:        tips,
 	})
 	jobs.AddLocked(3*time.Hour, &maintenance.DeactivateFailingFormsJob{
 		Store:      businessDB,

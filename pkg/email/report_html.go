@@ -35,6 +35,8 @@ type FormStat struct {
 type UsageReportContext struct {
 	Period                 string
 	PeriodDate             string
+	Tip                    string
+	TipLink                string
 	TotalRequests          uint64
 	TotalVerifies          uint64
 	PrevRequests           uint64
@@ -223,6 +225,9 @@ const (
             </table>
             {{- end}}
             <p style="font-size:16px;line-height:26px;margin:16px 0">View detailed statistics in your <a href="{{.PortalURL}}/{{.DashboardPath}}">dashboard</a>.</p>
+            {{- if .Tip}}
+            <p style="font-size:16px;font-style: italic;line-height:26px;margin:16px 0; border-left: 1px dashed #bfbebc; padding-left: 16px;"><strong>Tip:</strong> {{.Tip}}{{if .TipLink}} <a href="{{.TipLink}}">&#8599;</a>{{end}}</p>
+            {{- end}}
             <p style="font-size:16px;line-height:26px;margin:16px 0">
               Warmly,<br />The Private Captcha team
             </p>
@@ -278,6 +283,10 @@ Top {{len .TopForms}} forms by submissions:
 {{- end}}
 
 View detailed statistics in your dashboard ({{.PortalURL}}/{{.DashboardPath}}).
+{{- if .Tip}}
+
+Tip: {{.Tip}}{{if .TipLink}} ({{.TipLink}}){{end}}
+{{- end}}
 
 Warmly,
 The Private Captcha team

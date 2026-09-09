@@ -7,6 +7,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
 
 const (
@@ -41,6 +42,7 @@ type ScheduleReportsJob struct {
 	PortalURL   string
 	Stage       string
 	UsersLimit  int32
+	Tips        []*web.Tip
 }
 
 type ScheduleReportsParams struct {

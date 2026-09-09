@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	randv2 "math/rand/v2"
 	"net/url"
 	"strings"
 	"time"
@@ -100,6 +101,28 @@ func weeklyReportPeriod(tnow time.Time) (time.Time, time.Time, time.Time) {
 func monthlyReportPeriod(tnow time.Time) (time.Time, time.Time, time.Time) {
 	to := truncateDay(tnow)
 	return to.AddDate(0, -2, 0), to.AddDate(0, -1, 0), to
+}
+
+func (j *ScheduleReportsJob) fillReportTip(report *email.UsageReportContext, to time.Time, weekly bool) {
+	eligible := make([]int, 0, len(j.Tips))
+	for i, tip := range j.Tips {
+		if (tip != nil) && ((weekly && tip.Reports.Weekly) || (!weekly && tip.Reports.Monthly)) {
+			eligible = append(eligible, i)
+		}
+	}
+	if len(eligible) == 0 {
+		return
+	}
+
+	year := to.Year()
+	period := int(to.Month())
+	if weekly {
+		year, period = to.ISOWeek()
+	}
+	rng := randv2.New(randv2.NewPCG(uint64(year), uint64(period)))
+	tip := j.Tips[eligible[rng.IntN(len(eligible))]]
+	report.Tip = tip.Text
+	report.TipLink = tip.Link
 }
 
 func (j *ScheduleReportsJob) retrieveRequestLimit(ctx context.Context, productID, priceID string, status string) uint64 {
@@ -384,6 +407,7 @@ func (j *ScheduleReportsJob) buildWeeklyReport(ctx context.Context, userID int32
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint + "&" + utm,
 		UTM:           utm,
 	}
+	j.fillReportTip(report, to, true /*weekly*/)
 	if accountStats == nil {
 		statsByUser, err := j.TimeSeries.RetrieveWeeklyAccountReportStats(ctx, []int32{userID}, from, mid, to)
 		if err != nil {
@@ -431,6 +455,7 @@ func (j *ScheduleReportsJob) buildMonthlyReport(ctx context.Context, userID int3
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint + "&" + utm,
 		UTM:           utm,
 	}
+	j.fillReportTip(report, to, false /*weekly*/)
 	if accountStats == nil {
 		statsByUser, err := j.TimeSeries.RetrieveMonthlyAccountReportStats(ctx, []int32{userID}, from, mid, to)
 		if err != nil {
