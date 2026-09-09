@@ -314,12 +314,7 @@ func (s *Server) doRegister(ctx context.Context, email, name string, inviteID in
 		s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
 	}
 
-	var orgInviteID *int32
-	if inviteID > 0 {
-		orgInviteID = &inviteID
-	}
-
-	job := s.Jobs.OnboardUser(user, plan, orgInviteID)
+	job := s.Jobs.OnboardUser(user, plan)
 	go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), job, job.NewParams())
 
 	return user, org, nil

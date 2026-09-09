@@ -55,7 +55,7 @@ type registrationJobsWithoutOnboarding struct {
 	db.UserJobs
 }
 
-func (j *registrationJobsWithoutOnboarding) OnboardUser(*dbgen.User, billing.Plan, *int32) common.OneOffJob {
+func (j *registrationJobsWithoutOnboarding) OnboardUser(*dbgen.User, billing.Plan) common.OneOffJob {
 	return &common.StubOneOffJob{}
 }
 
