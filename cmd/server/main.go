@@ -223,8 +223,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}
 
 	// so far tips are disabled
-	//tips, err := web.LoadTips()
-	tips, err := []*web.Tip{}, nil
+	tips, err := web.LoadTips()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to load tips", common.ErrAttr(err))
 	}
