@@ -55,7 +55,7 @@ func NewPayload(sid string, store PayloadStore) *Payload {
 }
 
 func (p *Payload) Get(key SessionKey) SessionValue {
-	if !isPayloadKey(key) {
+	if !key.IsPayloadKey() {
 		return nil
 	}
 	p.lock.RLock()
@@ -65,7 +65,7 @@ func (p *Payload) Get(key SessionKey) SessionValue {
 }
 
 func (p *Payload) Set(ctx context.Context, key SessionKey, value SessionValue) error {
-	if !isPayloadKey(key) {
+	if !key.IsPayloadKey() {
 		return ErrInvalidPayloadKey
 	}
 	p.lock.Lock()
@@ -76,7 +76,7 @@ func (p *Payload) Set(ctx context.Context, key SessionKey, value SessionValue) e
 }
 
 func (p *Payload) Delete(ctx context.Context, key SessionKey) error {
-	if !isPayloadKey(key) {
+	if !key.IsPayloadKey() {
 		return ErrInvalidPayloadKey
 	}
 	p.lock.Lock()
@@ -120,20 +120,11 @@ func decodePayload(data []byte) (map[SessionKey]SessionValue, error) {
 		}
 	}
 	for key := range values {
-		if !isPayloadKey(key) {
+		if !key.IsPayloadKey() {
 			return nil, ErrInvalidPayloadKey
 		}
 	}
 	return values, nil
-}
-
-func isPayloadKey(key SessionKey) bool {
-	switch key {
-	case KeyUserEmail, KeyUserName, KeyNotificationID, KeyReturnURL, KeyOrgInviteID, KeyFirstSession, KeyAdhocNotification:
-		return true
-	default:
-		return false
-	}
 }
 
 func NewSessionWithAuthority(authority Authority, payload *Payload) *Session {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	randv2 "math/rand/v2"
 	"net/http"
 	"strings"
 
@@ -201,6 +202,8 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
+
+	completion.sess.Set(ctx, session.KeyTip, randv2.IntN(len(s.Tips)))
 
 	ctx = context.WithValue(ctx, common.SessionHashContextKey, completion.sess.Hash())
 

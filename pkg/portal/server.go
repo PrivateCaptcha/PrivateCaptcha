@@ -84,7 +84,7 @@ type RequestContext struct {
 	UserEmail    string
 	CDN          string
 	API          string
-	Tips         []*web.Tip
+	Tip          *web.Tip
 	LoggedIn     bool
 	FirstSession bool
 }
@@ -177,7 +177,6 @@ type Server struct {
 	PlatformCtx        interface{}
 	DataCtx            interface{}
 	Tips               []*web.Tip
-	TipIndex           TipIndex
 	AdminEmail         common.ConfigItem
 	CountryCodeHeader  common.ConfigItem
 	UserLimiter        api.UserLimiter
@@ -257,7 +256,6 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 	}
 
 	s.PlatformCtx = platformCtx
-	s.TipIndex = indexTips(s.Tips)
 
 	if s.TwoFactorDuration == 0 {
 		// 10 minutes + grace time (just like usual TOTP)
@@ -303,6 +301,13 @@ func (s *Server) PartsURL(a ...string) string {
 
 func defaultMaxBytesHandler(next http.Handler) http.Handler {
 	return http.MaxBytesHandler(next, 256*1024)
+}
+
+func TipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(context.WithValue(r.Context(), common.TipContextKey, true))
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) MiddlewarePublicChain(rg *common.RouteGenerator, security alice.Constructor) alice.Chain {
@@ -356,14 +361,15 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	internalTimeout := common.HardTimeoutHandler(10 * time.Second)
 	privateWrite := s.MiddlewarePrivateWrite(public, internalTimeout)
 	privateRead := s.MiddlewarePrivateRead(public, internalTimeout)
+	privateReadWithTip := privateRead.Append(TipMiddleware)
 
 	rg.Handle(rg.Post(common.LogoutEndpoint), privateWrite, http.HandlerFunc(s.logout))
 	rg.Handle(rg.Post(common.LoginEndpoint), openWrite, http.HandlerFunc(s.postLogin))
 	rg.Handle(rg.Post(common.RegisterEndpoint), openWrite, http.HandlerFunc(s.postRegister))
 	rg.Handle(rg.Post(common.TwoFactorEndpoint), pendingChallenge, http.HandlerFunc(s.postTwoFactor))
 	rg.Handle(rg.Post(common.ResendEndpoint), csrfEmail, http.HandlerFunc(s.resend2fa))
-	rg.Handle(rg.Get(common.OrgEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrg))
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg)), privateRead, http.HandlerFunc(s.getPortal))
+	rg.Handle(rg.Get(common.OrgEndpoint, common.NewEndpoint), privateReadWithTip, s.Handler(s.getNewOrg))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg)), privateReadWithTip, http.HandlerFunc(s.getPortal))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.DashboardEndpoint), privateRead, s.Handler(s.getOrgDashboard))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.FormsEndpoint), privateRead, s.Handler(s.getOrgFormsTab))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.ReportsEndpoint), privateRead, s.Handler(s.getOrgReports))
@@ -374,9 +380,9 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.SearchEndpoint), privateRead, s.Handler(s.getOrgSearch))
 	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.EditEndpoint), privateWrite, s.Handler(s.putOrg))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormsEndpoint), privateRead, s.Handler(s.getOrgForms))
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrgForm))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, common.NewEndpoint), privateReadWithTip, s.Handler(s.getNewOrgForm))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postNewOrgForm))
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm)), privateRead, s.Handler(s.getFormDashboard))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm)), privateReadWithTip, s.Handler(s.getFormDashboard))
 	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.EditEndpoint), privateWrite, s.Handler(s.putForm))
 	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.DeleteEndpoint), privateWrite, http.HandlerFunc(s.deleteForm))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.ReportsEndpoint), privateRead, s.Handler(s.getFormReportsTab))
@@ -391,9 +397,9 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TestEndpoint), privateWrite.Append(testFormRateLimiter), s.Handler(s.postTestForm))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertiesEndpoint), privateRead, s.Handler(s.getOrgProperties))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.StatsEndpoint, arg(common.ParamPeriod)), privateRead, http.HandlerFunc(s.getOrgStats))
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrgProperty))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateReadWithTip, s.Handler(s.getNewOrgProperty))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postNewOrgProperty))
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty)), privateRead, s.Handler(s.getPropertyDashboard))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty)), privateReadWithTip, s.Handler(s.getPropertyDashboard))
 	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.EditEndpoint), privateWrite, s.Handler(s.putProperty))
 	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.DeleteEndpoint), privateWrite, http.HandlerFunc(s.deleteProperty))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.ClientSetupEndpoint), privateRead, s.Handler(s.getPropertyWizardClientStep))
@@ -434,14 +440,14 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 		http.HandlerFunc(s.getFormStats),
 	)
 
-	rg.Handle(rg.Get(common.SettingsEndpoint), privateRead, s.Handler(s.getSettings))
+	rg.Handle(rg.Get(common.SettingsEndpoint), privateReadWithTip, s.Handler(s.getSettings))
 	rg.Handle(rg.Get(common.SettingsEndpoint, common.TabEndpoint, arg(common.ParamTab)), privateRead, s.Handler(s.getSettingsTab))
 	rg.Handle(rg.Post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), privateWrite, s.Handler(s.editEmail))
 	rg.Handle(rg.Put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateWrite, s.Handler(s.putGeneralSettings))
 	rg.Handle(rg.Post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postAPIKeySettings))
 	rg.Handle(rg.Put(common.SettingsEndpoint, common.TabEndpoint, common.NotificationsEndpoint), privateWrite, s.Handler(s.putNotificationsSettings))
 
-	rg.Handle(rg.Get(common.AuditLogsEndpoint), privateRead, s.Handler(s.getAuditLogs))
+	rg.Handle(rg.Get(common.AuditLogsEndpoint), privateReadWithTip, s.Handler(s.getAuditLogs))
 
 	rg.Handle(rg.Get(common.UserEndpoint, common.StatsEndpoint), privateRead, http.HandlerFunc(s.getAccountStats))
 	rg.Handle(rg.Post(common.APIKeysEndpoint, arg(common.ParamKey)), privateWrite, s.Handler(s.rotateAPIKey))

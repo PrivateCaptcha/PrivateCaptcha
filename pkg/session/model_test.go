@@ -136,7 +136,7 @@ func TestAuthoritativeSessionAccessorsAllowOnlyPayloadKeys(t *testing.T) {
 	sess := NewSessionWithAuthority(Authority{State: StateAuthenticated, Version: 1}, NewPayload("sid", payloadStoreStub{}))
 	ctx := t.Context()
 
-	allowed := []SessionKey{KeyUserEmail, KeyUserName, KeyNotificationID, KeyReturnURL, KeyOrgInviteID, KeyFirstSession, KeyAdhocNotification}
+	allowed := []SessionKey{KeyUserEmail, KeyUserName, KeyNotificationID, KeyReturnURL, KeyOrgInviteID, KeyFirstSession, KeyAdhocNotification, KeyTip}
 	for _, key := range allowed {
 		if err := sess.Set(ctx, key, key); err != nil {
 			t.Fatalf("Payload key %v Set error: %v", key, err)
@@ -149,7 +149,7 @@ func TestAuthoritativeSessionAccessorsAllowOnlyPayloadKeys(t *testing.T) {
 		}
 	}
 
-	forbidden := []SessionKey{-1, 12, 999}
+	forbidden := []SessionKey{-1, 999}
 	for _, key := range forbidden {
 		if err := sess.Set(ctx, key, key); !errors.Is(err, ErrInvalidPayloadKey) {
 			t.Fatalf("authority key %v Set error = %v, want %v", key, err, ErrInvalidPayloadKey)

@@ -23,7 +23,25 @@ const (
 	KeyOrgInviteID       SessionKey = 9
 	KeyFirstSession      SessionKey = 10
 	KeyAdhocNotification SessionKey = 11
+	KeyTip               SessionKey = 12
 )
+
+// this is a relic of sessions migration to Postgres
+func (key SessionKey) IsPayloadKey() bool {
+	switch key {
+	case KeyUserEmail,
+		KeyUserName,
+		KeyNotificationID,
+		KeyReturnURL,
+		KeyOrgInviteID,
+		KeyFirstSession,
+		KeyAdhocNotification,
+		KeyTip:
+		return true
+	default:
+		return false
+	}
+}
 
 type SessionValue = interface{}
 

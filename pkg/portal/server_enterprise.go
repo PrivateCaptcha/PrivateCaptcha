@@ -45,6 +45,7 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRea
 	arg := func(s string) string {
 		return fmt.Sprintf("{%s}", s)
 	}
+	privateReadWithTip := privateRead.Append(TipMiddleware)
 
 	rg.Handle(rg.Post(common.OrgEndpoint, common.NewEndpoint), privateWrite, http.HandlerFunc(s.postNewOrg))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite, s.Handler(s.postOrgMembers))
@@ -65,11 +66,11 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRea
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.ExportEndpoint), privateRead, http.HandlerFunc(s.exportAuditLogsCSV))
 
 	// Rules routes
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getOrgNewRule))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, common.NewEndpoint), privateReadWithTip, s.Handler(s.getOrgNewRule))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, common.NewEndpoint), privateWrite, http.HandlerFunc(s.postOrgNewRule))
 	rg.Handle(
 		rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, common.NewEndpoint),
-		privateRead,
+		privateReadWithTip,
 		s.Handler(s.getPropertyNewRule),
 	)
 	rg.Handle(
@@ -78,11 +79,11 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRea
 		http.HandlerFunc(s.postPropertyNewRule),
 	)
 
-	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint), privateRead, s.Handler(s.getOrgEditRule))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint), privateReadWithTip, s.Handler(s.getOrgEditRule))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint), privateWrite, http.HandlerFunc(s.postOrgEditRule))
 	rg.Handle(
 		rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint),
-		privateRead,
+		privateReadWithTip,
 		s.Handler(s.getPropertyEditRule),
 	)
 	rg.Handle(

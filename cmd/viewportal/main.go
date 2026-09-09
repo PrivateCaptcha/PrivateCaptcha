@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	randv2 "math/rand/v2"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -125,9 +127,12 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 			API:         "//api.privatecaptcha.local",
 		}
 
-		if r.Method == http.MethodGet {
+		if (r.Method == http.MethodGet) && (len(srv.Tips) > 0) {
 			pattern := strings.TrimPrefix(p.Path, srv.Prefix)
-			reqCtx.Tips = srv.TipIndex[pattern]
+			tip := srv.Tips[randv2.IntN(len(srv.Tips))]
+			if slices.Contains(tip.Patterns, pattern) {
+				reqCtx.Tip = tip
+			}
 		}
 
 		platformCtx := &portal.PlatformRenderContext{

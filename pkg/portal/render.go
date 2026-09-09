@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -289,12 +290,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		reqCtx.LoggedIn = true
 	}
 
-	if pathPattern, ok := ctx.Value(common.PathPatternContextKey).(string); ok && len(pathPattern) > 0 {
+	pathPattern, ok := ctx.Value(common.PathPatternContextKey).(string)
+	if ok && len(pathPattern) > 0 {
 		reqCtx.Pattern = common.RelURL(s.Prefix, pathPattern)
-
-		if r.Method == http.MethodGet {
-			reqCtx.Tips = s.TipIndex[pathPattern]
-		}
 	}
 
 	if sess, err := s.Sessions.Get(r); err == nil {
@@ -305,6 +303,17 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		if reqCtx.LoggedIn {
 			if _, ok := sess.Get(ctx, session.KeyFirstSession).(bool); ok {
 				reqCtx.FirstSession = true
+			}
+
+			if tipAllowed, ok := ctx.Value(common.TipContextKey).(bool); ok && tipAllowed {
+				if tipIndex, ok := sess.Get(ctx, session.KeyTip).(int); ok && (tipIndex >= 0) && (tipIndex < len(s.Tips)) {
+					tip := s.Tips[tipIndex]
+					if slices.Contains(tip.Patterns, pathPattern) {
+						reqCtx.Tip = tip
+						// we (attempt to) show tip only once
+						_ = sess.Delete(ctx, session.KeyTip)
+					}
+				}
 			}
 		}
 	}
