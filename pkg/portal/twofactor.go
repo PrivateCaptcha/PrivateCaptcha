@@ -139,8 +139,8 @@ func (s *Server) orgInviteRedirectURL(ctx context.Context, sess *session.Session
 	slog.DebugContext(ctx, "Found org invite ID in session, redirecting to org", "inviteID", orgInviteID)
 	_ = sess.Delete(ctx, session.KeyOrgInviteID)
 
-	// The cache is populated when the invite is created and updated when it is linked.
-	invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, orgInviteID)
+	// we warmup the cache via registrationCheckJob so most of the time there should be no DB roundtrip
+	invite, err := s.Store.Impl().RetrieveOrgInviteByID(ctx, orgInviteID)
 	if err != nil {
 		slog.WarnContext(ctx, "Org invite is not cached, redirecting to root", "inviteID", orgInviteID)
 		return ""
