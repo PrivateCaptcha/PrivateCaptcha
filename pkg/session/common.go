@@ -24,6 +24,8 @@ const (
 	KeyFirstSession      SessionKey = 10
 	KeyAdhocNotification SessionKey = 11
 	KeyTip               SessionKey = 12
+	// NOTE: update this when you add new items
+	LastSessionKey SessionKey = KeyTip
 )
 
 // this is a relic of sessions migration to Postgres
