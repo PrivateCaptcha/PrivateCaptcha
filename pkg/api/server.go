@@ -351,15 +351,14 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var rulesPair *rules.RulesPair
-	var ri *rules.RequestInfo
+	countryCodeHeader := ""
+	if s.CountryCodeHeader != nil {
+		countryCodeHeader = s.CountryCodeHeader.Value()
+	}
+	ri := rules.NewRequestInfo(r, countryCodeHeader)
 
 	if property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property); ok && property != nil {
 		rulesPair = s.retrievePropertyRules(ctx, property)
-		countryCodeHeader := ""
-		if s.CountryCodeHeader != nil {
-			countryCodeHeader = s.CountryCodeHeader.Value()
-		}
-		ri = rules.NewRequestInfo(r, countryCodeHeader)
 
 		if rulesPair.IsRequestBlocked(ri) {
 			slog.Log(ctx, common.LevelTrace, "Request blocked by difficulty rules")
@@ -577,6 +576,7 @@ func (s *Server) addVerifyRecord(ctx context.Context, result *puzzle.VerifyResul
 		PropertyID: result.PropertyID,
 		PuzzleID:   result.PuzzleID,
 		Timestamp:  time.Now().UTC(),
+		ExpiresAt:  result.ExpiresAt,
 		Status:     int8(result.Error),
 	}
 

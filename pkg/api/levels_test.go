@@ -43,6 +43,15 @@ func TestBackfillLevels(t *testing.T) {
 	})
 
 	ctx := t.Context()
+	recordAccess := func(fingerprint common.TFingerprint, timestamp time.Time) {
+		_ = levels.RecordAccess(ctx, &common.AccessRecord{
+			Fingerprint: fingerprint,
+			UserID:      prop.OwnerID(),
+			OrgID:       prop.OrgID(),
+			PropertyID:  prop.ID(),
+			Timestamp:   timestamp,
+		})
+	}
 
 	var diff uint8
 	var level leakybucket.TLevel
@@ -60,6 +69,7 @@ func TestBackfillLevels(t *testing.T) {
 		for i := 0; i < iterations; i++ {
 			fingerprint := fingerprints[rand.Intn(len(fingerprints))]
 			t := btime.Add(time.Duration(i) * diffInterval)
+			recordAccess(fingerprint, t)
 			diff, level, _ = levels.DifficultyEx(ctx, fingerprint, prop, t)
 			if (i+1)%250 == 0 {
 				slog.Debug("Simulating requests", "difficulty", diff, "level", level, "eventTime", t, "i", i, "bucket", bucket)
@@ -69,6 +79,7 @@ func TestBackfillLevels(t *testing.T) {
 
 	fingerprint := common.RandomFingerprint()
 	// reinit diff to neglect effect of other properties
+	recordAccess(fingerprint, tnow)
 	diff, level, _ = levels.DifficultyEx(ctx, fingerprint, prop, tnow)
 
 	if diff == uint8(common.DifficultyLevelSmall) {
@@ -82,6 +93,7 @@ func TestBackfillLevels(t *testing.T) {
 	levels.Reset()
 
 	// now this should cause the backfill request to be fired
+	recordAccess(fingerprint, tnow)
 	resetDifficulty, resetLevel, _ := levels.DifficultyEx(ctx, fingerprint, prop, tnow)
 	if resetLevel != 1 {
 		t.Errorf("Unexpected level after stats reset: %v", resetLevel)
@@ -99,6 +111,7 @@ func TestBackfillLevels(t *testing.T) {
 	for attempt := 0; attempt < 5; attempt++ {
 		// give time to backfill difficulty
 		time.Sleep(1 * time.Second)
+		recordAccess(fingerprint, tnow)
 		actualDifficulty, actualLevel, _ = levels.DifficultyEx(ctx, fingerprint, prop, tnow)
 		if actualLevel > minBackfilledLevel {
 			backfilled = true

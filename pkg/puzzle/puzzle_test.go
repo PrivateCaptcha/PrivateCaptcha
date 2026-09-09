@@ -226,8 +226,8 @@ func TestValidityIntervalFromIndex(t *testing.T) {
 		{"4", 6 * time.Hour},
 		{"5", 12 * time.Hour},
 		{"6", 24 * time.Hour},
-		{"7", 2 * 24 * time.Hour},
-		{"8", 7 * 24 * time.Hour},
+		{"7", DefaultValidityPeriod},
+		{"8", DefaultValidityPeriod},
 		{"-1", DefaultValidityPeriod},
 		{"99", DefaultValidityPeriod},
 		{"invalid", DefaultValidityPeriod},
@@ -258,8 +258,8 @@ func TestValidityIntervalToIndex(t *testing.T) {
 		{6 * time.Hour, 4},
 		{12 * time.Hour, 5},
 		{24 * time.Hour, 6},
-		{2 * 24 * time.Hour, 7},
-		{7 * 24 * time.Hour, 8},
+		{2 * 24 * time.Hour, 3},
+		{7 * 24 * time.Hour, 3},
 		{99 * time.Hour, 3},
 	}
 
@@ -270,6 +270,20 @@ func TestValidityIntervalToIndex(t *testing.T) {
 				t.Errorf("ValidityIntervalToIndex(%v) = %d, want %d", tt.duration, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestComputePuzzleCapsValidity(t *testing.T) {
+	t.Parallel()
+
+	before := time.Now().UTC()
+	p := NewComputePuzzle(NextPuzzleID(), [PropertyIDSize]byte{}, 1)
+	if err := p.Init(48 * time.Hour); err != nil {
+		t.Fatal(err)
+	}
+
+	if expiration := p.Expiration(); expiration.After(before.Add(MaxValidityPeriod).Add(time.Second)) {
+		t.Errorf("expiration = %v, want at most %v after now", expiration, MaxValidityPeriod)
 	}
 }
 

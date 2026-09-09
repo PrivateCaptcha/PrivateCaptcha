@@ -162,14 +162,24 @@ func (ts *TimeSeriesDB) WriteAccessLogBatch(ctx context.Context, records []*comm
 		}
 	}()
 
-	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s (user_id, org_id, property_id, fingerprint, timestamp, rule_id) SETTINGS async_insert = 1, wait_for_async_insert = 1", AccessLogTableName))
+	batch, err := scope.Prepare(
+		fmt.Sprintf(
+			"INSERT INTO %s (user_id, org_id, property_id, fingerprint, timestamp, rule_id, puzzle_id, expires_at, ip_family, ip_prefix, browser, browser_major, os, device) SETTINGS async_insert = 1, wait_for_async_insert = 1",
+			AccessLogTableName,
+		),
+	)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
 		return err
 	}
 
 	for i, r := range records {
-		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.Fingerprint, r.Timestamp.UTC(), r.RuleID)
+		expiresAt := r.ExpiresAt
+		if expiresAt.IsZero() {
+			expiresAt = time.Unix(0, 0)
+		}
+		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.Fingerprint, r.Timestamp.UTC(), r.RuleID,
+			r.PuzzleID, expiresAt.UTC(), r.IPFamily, r.IPPrefix, r.Browser, r.BrowserMajor, r.OS, r.Device)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "index", i)
 			return err
@@ -211,14 +221,20 @@ func (ts *TimeSeriesDB) WriteVerifyLogBatch(ctx context.Context, records []*comm
 		}
 	}()
 
-	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s (user_id, org_id, property_id, puzzle_id, status, timestamp) SETTINGS async_insert = 1, wait_for_async_insert = 1", VerifyLogTableName))
+	batch, err := scope.Prepare(
+		fmt.Sprintf("INSERT INTO %s (user_id, org_id, property_id, puzzle_id, status, timestamp, expires_at) SETTINGS async_insert = 1, wait_for_async_insert = 1", VerifyLogTableName),
+	)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
 		return err
 	}
 
 	for i, r := range records {
-		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.PuzzleID, r.Status, r.Timestamp)
+		expiresAt := r.ExpiresAt
+		if expiresAt.IsZero() {
+			expiresAt = time.Unix(0, 0)
+		}
+		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.PuzzleID, r.Status, r.Timestamp.UTC(), expiresAt.UTC())
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "index", i)
 			return err
