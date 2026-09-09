@@ -587,11 +587,11 @@ components:
         - puzzle-expired
         - property-invalid
         - property-owner-mismatch
+        - property-org-scope
         - solution-verified-before
-        - property-test
         - maintenance-mode
+        - property-test
         - integrity-error
-        - org-scope-error
     VerifyResponse:
       type: object
       required:
