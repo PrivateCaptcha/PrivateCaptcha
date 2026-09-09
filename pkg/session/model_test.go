@@ -11,17 +11,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
-type payloadStoreStub struct {
-	update func(context.Context, string)
-}
-
 type payloadTestContextKey struct{}
-
-func (s payloadStoreStub) UpdatePayload(ctx context.Context, sid string) {
-	if s.update != nil {
-		s.update(ctx, sid)
-	}
-}
 
 func TestSessionAuthorityReturnsCopy(t *testing.T) {
 	authority := Authority{
@@ -33,7 +23,7 @@ func TestSessionAuthorityReturnsCopy(t *testing.T) {
 		ExpiresAt:      time.Now().Add(time.Hour),
 		LeaseUntil:     time.Now().Add(10 * time.Minute),
 	}
-	sess := NewSessionWithAuthority(authority, NewPayload("sid", payloadStoreStub{}))
+	sess := NewSessionWithAuthority(authority, NewPayload("sid", PayloadStoreStub{}))
 	if sess.ID() != "sid" {
 		t.Fatalf("Session ID = %q, want sid", sess.ID())
 	}
@@ -55,19 +45,19 @@ func TestSessionStoresCorrelationHash(t *testing.T) {
 	const sid = "session-secret"
 	want := common.HashSessionID(sid)
 
-	authoritative := NewSessionWithAuthority(Authority{}, NewPayload(sid, payloadStoreStub{}))
+	authoritative := NewSessionWithAuthority(Authority{}, NewPayload(sid, PayloadStoreStub{}))
 	if authoritative.Hash() != want {
 		t.Fatalf("authoritative Session hash = %q, want %q", authoritative.Hash().String(), want.String())
 	}
 
-	anonymous := NewAnonymousSession(sid, payloadStoreStub{})
+	anonymous := NewAnonymousSession(sid, PayloadStoreStub{})
 	if anonymous.Hash() != want {
 		t.Fatalf("anonymous Session hash = %q, want %q", anonymous.Hash().String(), want.String())
 	}
 }
 
 func TestPayloadReplaceRemovesMissingKeys(t *testing.T) {
-	payload := NewPayload("sid", payloadStoreStub{})
+	payload := NewPayload("sid", PayloadStoreStub{})
 	if err := payload.Set(t.Context(), KeyUserName, "old name"); err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +65,7 @@ func TestPayloadReplaceRemovesMissingKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	replacement := NewPayload("sid", payloadStoreStub{})
+	replacement := NewPayload("sid", PayloadStoreStub{})
 	if err := replacement.Set(t.Context(), KeyUserName, "new name"); err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +111,7 @@ func TestPayloadKeyNumericValuesRemainStable(t *testing.T) {
 	if err := gob.NewEncoder(&snapshot).Encode(legacy); err != nil {
 		t.Fatal(err)
 	}
-	payload := NewPayload("sid", payloadStoreStub{})
+	payload := NewPayload("sid", PayloadStoreStub{})
 	if err := payload.Replace(snapshot.Bytes()); err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +123,7 @@ func TestPayloadKeyNumericValuesRemainStable(t *testing.T) {
 }
 
 func TestAuthoritativeSessionAccessorsAllowOnlyPayloadKeys(t *testing.T) {
-	sess := NewSessionWithAuthority(Authority{State: StateAuthenticated, Version: 1}, NewPayload("sid", payloadStoreStub{}))
+	sess := NewSessionWithAuthority(Authority{State: StateAuthenticated, Version: 1}, NewPayload("sid", PayloadStoreStub{}))
 	ctx := t.Context()
 
 	allowed := []SessionKey{KeyUserEmail, KeyUserName, KeyNotificationID, KeyReturnURL, KeyOrgInviteID, KeyFirstSession, KeyAdhocNotification, KeyTip}
@@ -164,7 +154,7 @@ func TestAuthoritativeSessionAccessorsAllowOnlyPayloadKeys(t *testing.T) {
 }
 
 func TestPayloadReplaceRejectsAuthorityKeys(t *testing.T) {
-	payload := NewPayload("sid", payloadStoreStub{})
+	payload := NewPayload("sid", PayloadStoreStub{})
 	if err := payload.Set(t.Context(), KeyUserName, "unchanged"); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +175,7 @@ func TestPayloadUpdatesStoreAfterMutation(t *testing.T) {
 	var payload *Payload
 	notifications := 0
 	ctx := context.WithValue(t.Context(), payloadTestContextKey{}, "payload-test")
-	store := &payloadStoreStub{update: func(actualCtx context.Context, sid string) {
+	store := &PayloadStoreStub{Update: func(actualCtx context.Context, sid string) {
 		notifications++
 		if actualCtx != ctx {
 			t.Fatal("Payload store received a different context")
@@ -223,7 +213,7 @@ func TestSessionWithAuthorityRequiresPayload(t *testing.T) {
 }
 
 func TestAnonymousSessionCreatesEmptyPayload(t *testing.T) {
-	sess := NewAnonymousSession("sid", payloadStoreStub{})
+	sess := NewAnonymousSession("sid", PayloadStoreStub{})
 	if sess == nil || sess.ID() != "sid" {
 		t.Fatalf("anonymous session = %+v, want SID sid", sess)
 	}

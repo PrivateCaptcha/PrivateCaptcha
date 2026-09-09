@@ -25,7 +25,7 @@ type stubStore struct {
 func (s *stubStore) Start(ctx context.Context, interval time.Duration)        {}
 func (s *stubStore) EnqueueExpirationRenewal(ctx context.Context, sid string) {}
 func (s *stubStore) StartAnonymousSession(sid string) *Session {
-	return NewAnonymousSession(sid, payloadStoreStub{})
+	return NewAnonymousSession(sid, PayloadStoreStub{})
 }
 func (s *stubStore) Resolve(ctx context.Context, sid string) (*Session, error) {
 	return s.resolved, s.resolveErr
@@ -143,13 +143,13 @@ func TestManagerGetPreservesMissingAndInfrastructureErrors(t *testing.T) {
 func TestManagerIssueSignInChallengeSetsCookieOnlyAfterSuccess(t *testing.T) {
 	pending := NewSessionWithAuthority(
 		Authority{State: StatePending, Version: 1, ExpiresAt: time.Now().Add(3 * time.Hour)},
-		NewPayload(t.Name(), payloadStoreStub{}),
+		NewPayload(t.Name(), PayloadStoreStub{}),
 	)
 	store := &stubStore{issueSignIn: func(context.Context, SignInChallengeIssue) (*ChallengeResult, error) {
 		return &ChallengeResult{Outcome: TransitionSucceeded, Session: pending}, nil
 	}}
 	manager := &Manager{CookieName: "pcsid", Store: store, MaxLifetime: 3 * time.Hour, Path: "/"}
-	anonymous := NewAnonymousSession(t.Name(), payloadStoreStub{})
+	anonymous := NewAnonymousSession(t.Name(), PayloadStoreStub{})
 	req := httptest.NewRequest(http.MethodPost, "/login", nil)
 	w := httptest.NewRecorder()
 
@@ -187,7 +187,7 @@ func TestManagerTransitionFailuresPreserveCookie(t *testing.T) {
 		},
 	}
 	manager := &Manager{CookieName: "pcsid", Store: store, MaxLifetime: 3 * time.Hour, Path: "/"}
-	predecessor := NewAnonymousSession(t.Name(), payloadStoreStub{})
+	predecessor := NewAnonymousSession(t.Name(), PayloadStoreStub{})
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	req.AddCookie(&http.Cookie{Name: manager.CookieName, Value: predecessor.ID()})
 	tests := []struct {
@@ -223,12 +223,12 @@ func TestManagerTransitionFailuresPreserveCookie(t *testing.T) {
 func TestManagerConsumeSignInChallengeRotatesServerGeneratedSID(t *testing.T) {
 	predecessor := NewSessionWithAuthority(
 		Authority{State: StatePending, Version: 2, ExpiresAt: time.Now().Add(time.Hour)},
-		NewPayload("predecessor", payloadStoreStub{}),
+		NewPayload("predecessor", PayloadStoreStub{}),
 	)
 	store := &stubStore{consumeSignIn: func(_ context.Context, consume SignInChallengeConsume) (*ChallengeResult, error) {
 		successor := NewSessionWithAuthority(
 			Authority{State: StateAuthenticated, Version: 1, UserID: 42, ExpiresAt: time.Now().Add(3 * time.Hour)},
-			NewPayload(consume.SuccessorSessionID, payloadStoreStub{}),
+			NewPayload(consume.SuccessorSessionID, PayloadStoreStub{}),
 		)
 		return &ChallengeResult{Outcome: TransitionSucceeded, Session: successor}, nil
 	}}
@@ -298,7 +298,7 @@ func TestScheduleExpirationRenewalRefreshesCookieWithoutChangingAuthority(t *tes
 		ExpiresAt:  time.Now().Add(2 * time.Hour),
 		LeaseUntil: time.Now().Add(5 * time.Minute),
 	}
-	sess := NewSessionWithAuthority(authority, NewPayload(t.Name(), payloadStoreStub{}))
+	sess := NewSessionWithAuthority(authority, NewPayload(t.Name(), PayloadStoreStub{}))
 	req := httptest.NewRequest(http.MethodGet, "/portal/dashboard", nil)
 	w := httptest.NewRecorder()
 
@@ -330,7 +330,7 @@ func TestScheduleExpirationRenewalSkipsIneligibleSessions(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			store := &stubStore{}
 			manager := &Manager{CookieName: "pcsid", Store: store, MaxLifetime: 3 * time.Hour, Path: "/"}
-			sess := NewSessionWithAuthority(tt.authority, NewPayload(t.Name(), payloadStoreStub{}))
+			sess := NewSessionWithAuthority(tt.authority, NewPayload(t.Name(), PayloadStoreStub{}))
 			w := httptest.NewRecorder()
 
 			manager.ScheduleExpirationRenewal(w, httptest.NewRequest(http.MethodGet, "/", nil), sess)

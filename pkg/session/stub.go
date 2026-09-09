@@ -49,3 +49,13 @@ func (s *StubSessionStore) RevokeSession(context.Context, string) (*RevocationRe
 	return nil, nil
 }
 func (s *StubSessionStore) RevokeUserSessions(context.Context, int32) error { return nil }
+
+type PayloadStoreStub struct {
+	Update func(context.Context, string)
+}
+
+func (s PayloadStoreStub) UpdatePayload(ctx context.Context, sid string) {
+	if s.Update != nil {
+		s.Update(ctx, sid)
+	}
+}
