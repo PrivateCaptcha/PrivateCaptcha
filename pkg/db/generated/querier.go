@@ -126,7 +126,7 @@ type Querier interface {
 	RevokeUserSessions(ctx context.Context, userID pgtype.Int4) ([]*RevokeUserSessionsRow, error)
 	RotateAPIKey(ctx context.Context, arg *RotateAPIKeyParams) (*APIKey, error)
 	SearchOrg(ctx context.Context, arg *SearchOrgParams) ([]*SearchOrgRow, error)
-	SetVerifyRegistration(ctx context.Context, sessionID string) (*Session, error)
+	SetVerifyRegistration(ctx context.Context, arg *SetVerifyRegistrationParams) (*Session, error)
 	SoftDeleteForm(ctx context.Context, id int32) (*Form, error)
 	SoftDeleteProperties(ctx context.Context, arg *SoftDeletePropertiesParams) ([]*Property, error)
 	SoftDeleteProperty(ctx context.Context, id int32) (*Property, error)

@@ -87,7 +87,7 @@ func (q *staticSessionRevocationQuerier) RevokeSession(context.Context, string) 
 	return q.row, q.err
 }
 
-func (q *registrationVerificationQuerier) SetVerifyRegistration(context.Context, string) (*dbgen.Session, error) {
+func (q *registrationVerificationQuerier) SetVerifyRegistration(context.Context, *dbgen.SetVerifyRegistrationParams) (*dbgen.Session, error) {
 	return q.row, q.err
 }
 
@@ -411,7 +411,7 @@ func TestSessionStoreSetsRegistrationVerificationInCachedAuthority(t *testing.T)
 	originalAuthority, _ := original.Authority()
 
 	querier.row.VerifyRegistration = Bool(true)
-	if err := store.SetVerifyRegistration(t.Context(), sid); err != nil {
+	if err := store.SetVerifyRegistration(t.Context(), sid, true); err != nil {
 		t.Fatal(err)
 	}
 	updated, ok := store.sessionCache.GetIfPresent(sid)
@@ -467,7 +467,7 @@ func TestSessionStoreSetsRegistrationVerificationOnNewerCachedAuthority(t *testi
 		t.Fatal(err)
 	}
 
-	if err := store.SetVerifyRegistration(t.Context(), sid); err != nil {
+	if err := store.SetVerifyRegistration(t.Context(), sid, true); err != nil {
 		t.Fatal(err)
 	}
 	updated, ok := store.sessionCache.GetIfPresent(sid)

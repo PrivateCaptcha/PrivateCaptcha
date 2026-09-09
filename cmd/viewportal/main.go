@@ -51,7 +51,7 @@ func (s *stubSessionStore) IssueSignInChallenge(context.Context, session.SignInC
 func (s *stubSessionStore) IssueRegistrationChallenge(context.Context, session.RegistrationChallengeIssue) (*session.ChallengeResult, error) {
 	return nil, nil
 }
-func (s *stubSessionStore) SetVerifyRegistration(context.Context, string) error {
+func (s *stubSessionStore) SetVerifyRegistration(context.Context, string, bool) error {
 	return nil
 }
 func (s *stubSessionStore) ResendPendingChallenge(context.Context, session.PendingChallengeResend) (*session.ChallengeResult, error) {

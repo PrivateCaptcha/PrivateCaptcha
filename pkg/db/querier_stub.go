@@ -316,7 +316,7 @@ func (s *QuerierStub) IssueRegistrationChallenge(ctx context.Context, arg *dbgen
 func (s *QuerierStub) IssueSignInChallenge(ctx context.Context, arg *dbgen.IssueSignInChallengeParams) (*dbgen.Session, error) {
 	return nil, s.Error
 }
-func (s *QuerierStub) SetVerifyRegistration(ctx context.Context, sessionID string) (*dbgen.Session, error) {
+func (s *QuerierStub) SetVerifyRegistration(ctx context.Context, arg *dbgen.SetVerifyRegistrationParams) (*dbgen.Session, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) LinkOrgInviteToUser(ctx context.Context, arg *dbgen.LinkOrgInviteToUserParams) (*dbgen.OrganizationUser, error) {

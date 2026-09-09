@@ -93,7 +93,7 @@ RETURNING sessions.*;
 
 -- name: SetVerifyRegistration :one
 UPDATE backend.sessions AS sessions
-SET verify_registration = TRUE
+SET verify_registration = @value
 WHERE session_id = @session_id
   AND state = 'pending'
   AND challenge_kind = 'registration'

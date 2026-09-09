@@ -786,16 +786,21 @@ func (q *Queries) RevokeUserSessions(ctx context.Context, userID pgtype.Int4) ([
 
 const setVerifyRegistration = `-- name: SetVerifyRegistration :one
 UPDATE backend.sessions AS sessions
-SET verify_registration = TRUE
-WHERE session_id = $1
+SET verify_registration = $1
+WHERE session_id = $2
   AND state = 'pending'
   AND challenge_kind = 'registration'
   AND expires_at > NOW()
 RETURNING sessions.session_id, sessions.state, sessions.version, sessions.user_id, sessions.data, sessions.expires_at, sessions.challenge_kind, sessions.challenge_code, sessions.challenge_email, sessions.challenge_expires_at, sessions.failed_attempts, sessions.verify_registration, sessions.registration_invite_id
 `
 
-func (q *Queries) SetVerifyRegistration(ctx context.Context, sessionID string) (*Session, error) {
-	row := q.db.QueryRow(ctx, setVerifyRegistration, sessionID)
+type SetVerifyRegistrationParams struct {
+	Value     pgtype.Bool `db:"value" json:"value"`
+	SessionID string      `db:"session_id" json:"session_id"`
+}
+
+func (q *Queries) SetVerifyRegistration(ctx context.Context, arg *SetVerifyRegistrationParams) (*Session, error) {
+	row := q.db.QueryRow(ctx, setVerifyRegistration, arg.Value, arg.SessionID)
 	var i Session
 	err := row.Scan(
 		&i.SessionID,

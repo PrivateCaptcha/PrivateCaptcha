@@ -42,7 +42,7 @@ func (s *stubStore) IssueRegistrationChallenge(ctx context.Context, issue Regist
 	}
 	return nil, nil
 }
-func (s *stubStore) SetVerifyRegistration(context.Context, string) error { return nil }
+func (s *stubStore) SetVerifyRegistration(context.Context, string, bool) error { return nil }
 func (s *stubStore) ResendPendingChallenge(context.Context, PendingChallengeResend) (*ChallengeResult, error) {
 	return nil, nil
 }

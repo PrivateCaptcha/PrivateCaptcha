@@ -180,8 +180,8 @@ func (ss *SessionStore) IssueRegistrationChallenge(ctx context.Context, issue se
 	return ss.challengeResult(result)
 }
 
-func (ss *SessionStore) SetVerifyRegistration(ctx context.Context, sid string) error {
-	stored, err := ss.store.Impl().SetVerifyRegistration(ctx, sid)
+func (ss *SessionStore) SetVerifyRegistration(ctx context.Context, sid string, value bool) error {
+	stored, err := ss.store.Impl().SetVerifyRegistration(ctx, sid, value)
 	if err != nil {
 		return err
 	}
@@ -195,7 +195,7 @@ func (ss *SessionStore) SetVerifyRegistration(ctx context.Context, sid string) e
 		if !ok || authority.State != session.StatePending || authority.ChallengeKind != session.ChallengeKindRegistration || authority.VerifyRegistration {
 			return current, otter.CancelOp
 		}
-		authority.VerifyRegistration = true
+		authority.VerifyRegistration = value
 		return session.NewSessionWithAuthority(authority, current.Payload()), otter.WriteOp
 	})
 	return nil

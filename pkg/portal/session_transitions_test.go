@@ -447,7 +447,7 @@ func TestSessionRegistrationTransitions(t *testing.T) {
 	if beforeAuthority.VerifyRegistration {
 		t.Fatal("new registration unexpectedly requires verification")
 	}
-	if err := sessionStore.SetVerifyRegistration(ctx, requiredSID); err != nil {
+	if err := sessionStore.SetVerifyRegistration(ctx, requiredSID, true); err != nil {
 		t.Fatal(err)
 	}
 	marked, err := sessionStore.Resolve(ctx, requiredSID)
@@ -477,7 +477,7 @@ func TestSessionRegistrationTransitions(t *testing.T) {
 	if _, err := sessionStore.RevokeSession(ctx, requiredSID); err != nil {
 		t.Fatal(err)
 	}
-	if err := sessionStore.SetVerifyRegistration(ctx, requiredSID); !errors.Is(err, db.ErrRecordNotFound) {
+	if err := sessionStore.SetVerifyRegistration(ctx, requiredSID, true); !errors.Is(err, db.ErrRecordNotFound) {
 		t.Fatalf("late registration check error = %v, want %v", err, db.ErrRecordNotFound)
 	}
 	if _, err := sessionStore.Resolve(ctx, requiredSID); !errors.Is(err, session.ErrSessionMissing) {

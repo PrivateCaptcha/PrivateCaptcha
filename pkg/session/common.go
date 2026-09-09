@@ -83,7 +83,7 @@ type Store interface {
 	Resolve(ctx context.Context, sid string) (*Session, error)
 	IssueSignInChallenge(ctx context.Context, issue SignInChallengeIssue) (*ChallengeResult, error)
 	IssueRegistrationChallenge(ctx context.Context, issue RegistrationChallengeIssue) (*ChallengeResult, error)
-	SetVerifyRegistration(ctx context.Context, sid string) error
+	SetVerifyRegistration(ctx context.Context, sid string, value bool) error
 	ResendPendingChallenge(ctx context.Context, resend PendingChallengeResend) (*ChallengeResult, error)
 	ConsumeSignInChallenge(ctx context.Context, consume SignInChallengeConsume) (*ChallengeResult, error)
 	ConsumeRegistrationChallenge(ctx context.Context, consume RegistrationChallengeConsume) (*RegistrationConsumeResult, error)

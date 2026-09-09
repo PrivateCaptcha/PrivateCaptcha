@@ -421,7 +421,7 @@ func (impl *BusinessStoreImpl) IssueRegistrationChallenge(ctx context.Context, p
 	return &session.ChallengeIssueResult{Outcome: session.TransitionSucceeded, Session: storedDBSession(record)}, nil
 }
 
-func (impl *BusinessStoreImpl) SetVerifyRegistration(ctx context.Context, sid string) (*session.StoredSession, error) {
+func (impl *BusinessStoreImpl) SetVerifyRegistration(ctx context.Context, sid string, value bool) (*session.StoredSession, error) {
 	if sid == "" {
 		return nil, ErrInvalidInput
 	}
@@ -429,12 +429,15 @@ func (impl *BusinessStoreImpl) SetVerifyRegistration(ctx context.Context, sid st
 		return nil, ErrMaintenance
 	}
 
-	record, err := impl.querier.SetVerifyRegistration(ctx, sid)
+	record, err := impl.querier.SetVerifyRegistration(ctx, &dbgen.SetVerifyRegistrationParams{
+		Value:     Bool(value),
+		SessionID: sid,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrRecordNotFound
 	}
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to require registration verification", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to set registration verification", "value", value, common.ErrAttr(err))
 		return nil, err
 	}
 	return storedDBSession(record), nil

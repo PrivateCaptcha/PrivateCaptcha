@@ -117,7 +117,7 @@ func (j *registrationCheckJob) RunOnce(ctx context.Context, params any) error {
 
 	if strings.EqualFold(j.Email, spammerEmail) {
 		slog.WarnContext(ctx, "Requiring verification for registration", "reason", "email", common.SessionHashAttr(j.Sess.Hash()))
-		return j.SessionStore.SetVerifyRegistration(ctx, j.Sess.ID())
+		return j.SessionStore.SetVerifyRegistration(ctx, j.Sess.ID(), true)
 	}
 
 	return nil

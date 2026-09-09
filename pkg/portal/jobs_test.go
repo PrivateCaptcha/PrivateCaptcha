@@ -20,7 +20,7 @@ type registrationVerificationStoreStub struct {
 	sid string
 }
 
-func (s *registrationVerificationStoreStub) SetVerifyRegistration(_ context.Context, sid string) error {
+func (s *registrationVerificationStoreStub) SetVerifyRegistration(_ context.Context, sid string, value bool) error {
 	s.sid = sid
 	return nil
 }
