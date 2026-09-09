@@ -203,7 +203,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	completion.sess.Set(ctx, session.KeyTip, randv2.IntN(max(len(s.Tips), 0)))
+	_ = completion.sess.Set(ctx, session.KeyTip, randv2.IntN(max(len(s.Tips), 1)))
 
 	ctx = context.WithValue(ctx, common.SessionHashContextKey, completion.sess.Hash())
 
