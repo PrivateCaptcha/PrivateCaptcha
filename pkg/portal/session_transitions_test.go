@@ -238,11 +238,10 @@ func transitionTestUser(t *testing.T, prefix string) (int32, string) {
 	return userID, email
 }
 
-func transitionRegistrationPayload(t *testing.T, name string, inviteID int32) []byte {
+func transitionRegistrationPayload(t *testing.T, name string) []byte {
 	t.Helper()
 	values := map[session.SessionKey]session.SessionValue{
-		session.KeyUserName:    name,
-		session.KeyOrgInviteID: inviteID,
+		session.KeyUserName: name,
 	}
 	var data bytes.Buffer
 	if err := gob.NewEncoder(&data).Encode(values); err != nil {
@@ -433,7 +432,7 @@ func TestSessionRegistrationTransitions(t *testing.T) {
 
 	requiredSID := prefix + "-registration-required"
 	issued, err := impl.IssueRegistrationChallenge(ctx, &dbgen.IssueRegistrationChallengeParams{
-		SessionID: requiredSID, ChallengeEmail: db.Text(email), ChallengeCode: db.Text("111111"), Data: transitionRegistrationPayload(t, "Registrant", 42),
+		SessionID: requiredSID, ChallengeEmail: db.Text(email), ChallengeCode: db.Text("111111"), Data: transitionRegistrationPayload(t, "Registrant"),
 		InviteID: db.Int(42), SessionTtl: 3 * time.Hour, ChallengeTtl: 15 * time.Minute, MaxAttempts: 3,
 	})
 	if err != nil || issued.Outcome != session.TransitionSucceeded {
@@ -462,7 +461,7 @@ func TestSessionRegistrationTransitions(t *testing.T) {
 		t.Fatal("marking registration mutated the previous Authority snapshot")
 	}
 	issued, err = impl.IssueRegistrationChallenge(ctx, &dbgen.IssueRegistrationChallengeParams{
-		SessionID: requiredSID, ChallengeEmail: db.Text(email), ChallengeCode: db.Text("222222"), Data: transitionRegistrationPayload(t, "Registrant", 42),
+		SessionID: requiredSID, ChallengeEmail: db.Text(email), ChallengeCode: db.Text("222222"), Data: transitionRegistrationPayload(t, "Registrant"),
 		InviteID: db.Int(42), SessionTtl: 3 * time.Hour, ChallengeTtl: 15 * time.Minute, MaxAttempts: 3,
 	})
 	if err != nil || issued.Session == nil || !issued.Session.VerifyRegistration {
@@ -486,7 +485,7 @@ func TestSessionRegistrationTransitions(t *testing.T) {
 
 	sid := prefix + "-registration"
 	issued, err = impl.IssueRegistrationChallenge(ctx, &dbgen.IssueRegistrationChallengeParams{
-		SessionID: sid, ChallengeEmail: db.Text(email), ChallengeCode: db.Text("111111"), Data: transitionRegistrationPayload(t, "Registrant", 42),
+		SessionID: sid, ChallengeEmail: db.Text(email), ChallengeCode: db.Text("111111"), Data: transitionRegistrationPayload(t, "Registrant"),
 		InviteID: db.Int(42), SessionTtl: 3 * time.Hour, ChallengeTtl: 15 * time.Minute, MaxAttempts: 3,
 	})
 	if err != nil || issued.Outcome != session.TransitionSucceeded || issued.Session.VerifyRegistration {
@@ -500,14 +499,14 @@ func TestSessionRegistrationTransitions(t *testing.T) {
 	}
 
 	issued, err = impl.IssueRegistrationChallenge(ctx, &dbgen.IssueRegistrationChallengeParams{
-		SessionID: sid, ChallengeEmail: db.Text(email), ChallengeCode: db.Text("222222"), Data: transitionRegistrationPayload(t, "Registrant", 42),
+		SessionID: sid, ChallengeEmail: db.Text(email), ChallengeCode: db.Text("222222"), Data: transitionRegistrationPayload(t, "Registrant"),
 		InviteID: db.Int(42), SessionTtl: 3 * time.Hour, ChallengeTtl: 15 * time.Minute, MaxAttempts: 3,
 	})
 	if err != nil || issued.Session == nil {
 		t.Fatalf("reissue = (%+v, %v), want succeeded", issued, err)
 	}
 	updated, err := impl.UpdateSessionPayloads(ctx, []session.PayloadUpdate{{
-		SessionID: sid, ExpectedVersion: issued.Session.Version, Payload: transitionRegistrationPayload(t, "Registrant", 999),
+		SessionID: sid, ExpectedVersion: issued.Session.Version, Payload: transitionRegistrationPayload(t, "Registrant"),
 	}})
 	if err != nil || len(updated) != 1 {
 		t.Fatalf("Payload update = (%+v, %v), want one update", updated, err)
@@ -537,7 +536,7 @@ func TestSessionRegistrationTransitions(t *testing.T) {
 	userID, _ := transitionTestUser(t, prefix)
 	exhaustedSID := prefix + "-registration-exhausted"
 	if _, err := impl.IssueRegistrationChallenge(ctx, &dbgen.IssueRegistrationChallengeParams{
-		SessionID: exhaustedSID, ChallengeEmail: db.Text(email), ChallengeCode: db.Text("333333"), Data: transitionRegistrationPayload(t, "Registrant", 0),
+		SessionID: exhaustedSID, ChallengeEmail: db.Text(email), ChallengeCode: db.Text("333333"), Data: transitionRegistrationPayload(t, "Registrant"),
 		SessionTtl: 3 * time.Hour, ChallengeTtl: 15 * time.Minute, MaxAttempts: 2,
 	}); err != nil {
 		t.Fatal(err)

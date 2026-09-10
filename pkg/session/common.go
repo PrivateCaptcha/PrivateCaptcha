@@ -19,7 +19,6 @@ const (
 	KeyUserName          SessionKey = 4
 	KeyNotificationID    SessionKey = 6
 	KeyReturnURL         SessionKey = 7
-	KeyOrgInviteID       SessionKey = 9
 	KeyFirstSession      SessionKey = 10
 	KeyAdhocNotification SessionKey = 11
 	KeyTip               SessionKey = 12
@@ -33,7 +32,6 @@ func (key SessionKey) IsPayloadKey() bool {
 	case KeyUserName,
 		KeyNotificationID,
 		KeyReturnURL,
-		KeyOrgInviteID,
 		KeyFirstSession,
 		KeyAdhocNotification,
 		KeyTip:

@@ -137,7 +137,6 @@ func (s *Server) completeRegistrationChallenge(
 
 func (s *Server) orgInviteRedirectURL(ctx context.Context, sess *session.Session, orgInviteID int32) string {
 	slog.DebugContext(ctx, "Found org invite ID in session, redirecting to org", "inviteID", orgInviteID)
-	_ = sess.Delete(ctx, session.KeyOrgInviteID)
 
 	// we warmup the cache via registrationCheckJob so most of the time there should be no DB roundtrip
 	invite, err := s.Store.Impl().RetrieveOrgInviteByID(ctx, orgInviteID)
@@ -217,9 +216,6 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	}
 	go common.RunOneOffJob(jobCtx, job, job.NewParams())
 
-	if completion.orgInviteID <= 0 {
-		completion.orgInviteID, _ = completion.sess.Get(ctx, session.KeyOrgInviteID).(int32)
-	}
 	if completion.orgInviteID > 0 {
 		redirectURL := s.orgInviteRedirectURL(ctx, completion.sess, completion.orgInviteID)
 		if redirectURL != "" {

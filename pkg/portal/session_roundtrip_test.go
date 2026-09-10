@@ -278,7 +278,7 @@ func TestCriticalSessionAuthorityRoundtripBudgets(t *testing.T) {
 
 	t.Run("registrationCompletion", func(t *testing.T) {
 		f := newRoundtripFixture(t)
-		cookie := f.insertPending(t, "registration", session.ChallengeKindRegistration, transitionRegistrationPayload(t, "Registrant", 0))
+		cookie := f.insertPending(t, "registration", session.ChallengeKindRegistration, transitionRegistrationPayload(t, "Registrant"))
 		req := requestWithSessionCookie(http.MethodPost, "/portal/2fa", cookie)
 		pending, err := f.manager.Get(req)
 		if err != nil {
