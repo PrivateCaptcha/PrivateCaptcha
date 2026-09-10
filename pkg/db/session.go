@@ -192,7 +192,7 @@ func (ss *SessionStore) SetVerifyRegistration(ctx context.Context, sid string, v
 	// Payload persistence may have advanced the cache version while preserving the committed screening mark.
 	ss.sessionCache.ComputeIfPresent(sid, func(current *session.Session) (*session.Session, otter.ComputeOp) {
 		authority, ok := current.Authority()
-		if !ok || authority.State != session.StatePending || authority.ChallengeKind != session.ChallengeKindRegistration {
+		if !ok || authority.Version > stored.Version || authority.State != session.StatePending || authority.ChallengeKind != session.ChallengeKindRegistration {
 			return current, otter.CancelOp
 		}
 		authority.VerifyRegistration = value

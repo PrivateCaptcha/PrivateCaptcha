@@ -474,7 +474,7 @@ func TestSessionStoreClearsRegistrationVerificationInCachedAuthority(t *testing.
 	}
 }
 
-func TestSessionStoreSetsRegistrationVerificationOnNewerCachedAuthority(t *testing.T) {
+func TestSessionStoreKeepsNewerCachedRegistrationVerification(t *testing.T) {
 	sid := t.Name()
 	payload := session.NewPayload(sid, noopPayloadStore{})
 	data, err := payload.Snapshot()
@@ -509,8 +509,8 @@ func TestSessionStoreSetsRegistrationVerificationOnNewerCachedAuthority(t *testi
 		t.Fatal("updated registration session is absent from cache")
 	}
 	authority, ok := updated.Authority()
-	if !ok || authority.Version != newer.Version || !authority.VerifyRegistration {
-		t.Fatalf("updated Authority = %+v, want marked version %d", authority, newer.Version)
+	if !ok || authority.Version != newer.Version || authority.VerifyRegistration {
+		t.Fatalf("updated Authority = %+v, want unmarked version %d", authority, newer.Version)
 	}
 }
 
