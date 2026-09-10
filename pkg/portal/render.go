@@ -308,7 +308,8 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 			if tipAllowed, ok := ctx.Value(common.TipContextKey).(bool); ok && tipAllowed {
 				if tipIndex, ok := sess.Get(ctx, session.KeyTip).(int); ok && (tipIndex >= 0) && (tipIndex < len(s.Tips)) {
 					tip := s.Tips[tipIndex]
-					if slices.Contains(tip.Patterns, pathPattern) {
+					matchPath := common.RelURL("", pathPattern)
+					if slices.Contains(tip.Patterns, matchPath) {
 						reqCtx.Tip = tip
 						// we (attempt to) show tip only once
 						_ = sess.Delete(ctx, session.KeyTip)
