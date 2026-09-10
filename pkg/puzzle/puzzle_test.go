@@ -276,13 +276,13 @@ func TestValidityIntervalToIndex(t *testing.T) {
 func TestComputePuzzleCapsValidity(t *testing.T) {
 	t.Parallel()
 
-	before := time.Now().UTC()
 	p := NewComputePuzzle(NextPuzzleID(), [PropertyIDSize]byte{}, 1)
 	if err := p.Init(48 * time.Hour); err != nil {
 		t.Fatal(err)
 	}
+	after := time.Now().UTC()
 
-	if expiration := p.Expiration(); expiration.After(before.Add(MaxValidityPeriod).Add(time.Second)) {
+	if expiration := p.Expiration(); expiration.After(after.Truncate(time.Second).Add(MaxValidityPeriod)) {
 		t.Errorf("expiration = %v, want at most %v after now", expiration, MaxValidityPeriod)
 	}
 }

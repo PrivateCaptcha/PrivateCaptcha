@@ -216,56 +216,80 @@ func TestPuzzleStatsFinalization(t *testing.T) {
 		propertyID      = 778
 		otherPropertyID = 780
 	)
+	expiresOn := expiresAt.Format(time.DateOnly)
+	otherExpiresAt := expiresAt.Add(-24 * time.Hour)
+	fingerprintExpiresAt := now.Truncate(24 * time.Hour).Add(-47 * time.Hour)
+	expiresMonth := time.Date(expiresAt.Year(), expiresAt.Month(), 1, 0, 0, 0, 0, time.UTC).Format(time.DateOnly)
 
-	insertPuzzleOutcome(t, ctx, ts, expiresAt, 1, 2, propertyID, 1, 41, 4, 0xc00002, "Chrome", 120, []uint8{0, 1}, []uint64{1, 1})
-	insertPuzzleOutcome(t, ctx, ts, expiresAt, 1, 2, propertyID, 2, 42, 4, 0xc00002, "Chrome", 120, []uint8{1}, []uint64{1})
-	insertPuzzleOutcome(t, ctx, ts, expiresAt, 1, 2, propertyID, 3, 42, 0, 0, "Firefox", 121, []uint8{}, []uint64{})
-	insertPuzzleOutcome(t, ctx, ts, expiresAt, 4, 5, otherPropertyID, 1, 41, 4, 0xc00002, "Chrome", 120, []uint8{0}, []uint64{1})
-	insertPuzzleOutcome(t, ctx, ts, expiresAt, 1, 2, otherPropertyID, 2, 44, 4, 0xc00002, "Chrome", 121, []uint8{0}, []uint64{1})
-	if err := timeSeries.WriteAccessLogBatch(ctx, []*common.AccessRecord{{
-		Fingerprint: 43, UserID: 1, OrgID: 2, PropertyID: propertyID,
-		Timestamp: issuedAt, PuzzleID: 4, ExpiresAt: activeExpiresAt, IPFamily: 4, IPPrefix: 0xc00002,
-		Browser: "Chrome", BrowserMajor: 120, OS: "Linux", Device: "Desktop",
-	}}); err != nil {
-		t.Fatal(err)
-	}
+	if !t.Run("daily finalization", func(t *testing.T) {
+		insertPuzzleOutcome(t, ctx, ts, puzzleOutcomeRow{
+			expiresAt: expiresAt, userID: 1, orgID: 2, propertyID: propertyID,
+			puzzleID: 1, fingerprint: 41, ipFamily: 4, ipPrefix: 0xc00002,
+			browser: "Chrome", browserMajor: 120, statusCodes: []uint8{0, 1}, statusCounts: []uint64{1, 1},
+		})
+		insertPuzzleOutcome(t, ctx, ts, puzzleOutcomeRow{
+			expiresAt: expiresAt, userID: 1, orgID: 2, propertyID: propertyID,
+			puzzleID: 2, fingerprint: 42, ipFamily: 4, ipPrefix: 0xc00002,
+			browser: "Chrome", browserMajor: 120, statusCodes: []uint8{1}, statusCounts: []uint64{1},
+		})
+		insertPuzzleOutcome(t, ctx, ts, puzzleOutcomeRow{
+			expiresAt: expiresAt, userID: 1, orgID: 2, propertyID: propertyID,
+			puzzleID: 3, fingerprint: 42, browser: "Firefox", browserMajor: 121,
+			statusCodes: []uint8{}, statusCounts: []uint64{},
+		})
+		insertPuzzleOutcome(t, ctx, ts, puzzleOutcomeRow{
+			expiresAt: expiresAt, userID: 4, orgID: 5, propertyID: otherPropertyID,
+			puzzleID: 1, fingerprint: 41, ipFamily: 4, ipPrefix: 0xc00002,
+			browser: "Chrome", browserMajor: 120, statusCodes: []uint8{0}, statusCounts: []uint64{1},
+		})
+		insertPuzzleOutcome(t, ctx, ts, puzzleOutcomeRow{
+			expiresAt: expiresAt, userID: 1, orgID: 2, propertyID: otherPropertyID,
+			puzzleID: 2, fingerprint: 44, ipFamily: 4, ipPrefix: 0xc00002,
+			browser: "Chrome", browserMajor: 121, statusCodes: []uint8{0}, statusCounts: []uint64{1},
+		})
+		if err := timeSeries.WriteAccessLogBatch(ctx, []*common.AccessRecord{{
+			Fingerprint: 43, UserID: 1, OrgID: 2, PropertyID: propertyID,
+			Timestamp: issuedAt, PuzzleID: 4, ExpiresAt: activeExpiresAt, IPFamily: 4, IPPrefix: 0xc00002,
+			Browser: "Chrome", BrowserMajor: 120, OS: "Linux", Device: "Desktop",
+		}}); err != nil {
+			t.Fatal(err)
+		}
 
-	waitForPuzzleOutcomes(t, ctx, ts, propertyID, 4)
-	// Simulate publication succeeding before source partition cleanup fails.
-	if err := ts.PublishPuzzleStats(ctx, expiresAt); err != nil {
-		t.Fatal(err)
-	}
-	processed, err := ts.FinalizeNextPuzzleStats(ctx, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !processed {
-		t.Fatal("expected expired puzzle outcomes to be finalized")
-	}
-	var remainingOutcomes uint64
-	if err := ts.Clickhouse.QueryRowContext(ctx, `
+		waitForPuzzleOutcomes(t, ctx, ts, propertyID, 4)
+		// Publish first, then finalize, to prove finalization is idempotent after a completed publication.
+		if err := ts.PublishPuzzleStats(ctx, expiresAt); err != nil {
+			t.Fatal(err)
+		}
+		processed, err := ts.FinalizeNextPuzzleStats(ctx, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !processed {
+			t.Fatal("expected expired puzzle outcomes to be finalized")
+		}
+		var remainingOutcomes uint64
+		if err := ts.Clickhouse.QueryRowContext(ctx, `
 SELECT countDistinct(puzzle_id)
 FROM privatecaptcha.puzzle_outcomes_recent
 WHERE property_id = {property_id:UInt32}`,
-		clickhouse.Named("property_id", uint32(propertyID))).Scan(&remainingOutcomes); err != nil {
-		t.Fatal(err)
-	}
-	if remainingOutcomes != 1 {
-		t.Fatalf("remaining puzzle outcomes = %d, want 1 active puzzle", remainingOutcomes)
-	}
+			clickhouse.Named("property_id", uint32(propertyID))).Scan(&remainingOutcomes); err != nil {
+			t.Fatal(err)
+		}
+		if remainingOutcomes != 1 {
+			t.Fatalf("remaining puzzle outcomes = %d, want 1 active puzzle", remainingOutcomes)
+		}
 
-	expiresOn := expiresAt.Format(time.DateOnly)
-	assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_daily", `
+		assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_daily", `
 expires_on = {expires_on:Date}
     AND user_id = 1
     AND org_id = 2
     AND property_id = {property_id:UInt32}
     AND ip_family = 4
     AND ip_prefix = 0xc00002`, []any{
-		clickhouse.Named("expires_on", expiresOn),
-		clickhouse.Named("property_id", uint32(propertyID)),
-	}, 2, 2, 1)
-	assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_user_agent_daily", `
+			clickhouse.Named("expires_on", expiresOn),
+			clickhouse.Named("property_id", uint32(propertyID)),
+		}, 2, 2, 1)
+		assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_user_agent_daily", `
 expires_on = {expires_on:Date}
     AND user_id = 1
     AND org_id = 2
@@ -274,10 +298,10 @@ expires_on = {expires_on:Date}
     AND browser_major = 120
     AND os = 'Linux'
     AND device = 'Desktop'`, []any{
-		clickhouse.Named("expires_on", expiresOn),
-		clickhouse.Named("property_id", uint32(propertyID)),
-	}, 2, 2, 1)
-	assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_user_agent_daily", `
+			clickhouse.Named("expires_on", expiresOn),
+			clickhouse.Named("property_id", uint32(propertyID)),
+		}, 2, 2, 1)
+		assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_user_agent_daily", `
 expires_on = {expires_on:Date}
     AND user_id = 1
     AND org_id = 2
@@ -286,171 +310,218 @@ expires_on = {expires_on:Date}
     AND browser_major = 121
     AND os = 'Linux'
     AND device = 'Desktop'`, []any{
-		clickhouse.Named("expires_on", expiresOn),
-		clickhouse.Named("property_id", uint32(propertyID)),
-	}, 1, 0, 0)
-	assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_daily", `
+			clickhouse.Named("expires_on", expiresOn),
+			clickhouse.Named("property_id", uint32(propertyID)),
+		}, 1, 0, 0)
+		assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_daily", `
 expires_on = {expires_on:Date}
     AND user_id = 4
     AND org_id = 5
     AND property_id = {property_id:UInt32}
     AND ip_family = 4
     AND ip_prefix = 0xc00002`, []any{
-		clickhouse.Named("expires_on", expiresOn),
-		clickhouse.Named("property_id", uint32(otherPropertyID)),
-	}, 1, 1, 1)
+			clickhouse.Named("expires_on", expiresOn),
+			clickhouse.Named("property_id", uint32(otherPropertyID)),
+		}, 1, 1, 1)
+	}) {
+		t.FailNow()
+	}
 
-	otherExpiresAt := expiresAt.Add(-24 * time.Hour)
-	insertPuzzleOutcome(t, ctx, ts, otherExpiresAt, 1, 2, otherPropertyID, 3, 45, 4, 0xc00002, "Chrome", 122, []uint8{1}, []uint64{1})
-	processed, err = ts.FinalizeNextPuzzleStats(ctx, now)
-	if err != nil {
-		t.Fatal(err)
+	if !t.Run("second daily partition", func(t *testing.T) {
+		insertPuzzleOutcome(t, ctx, ts, puzzleOutcomeRow{
+			expiresAt: otherExpiresAt, userID: 1, orgID: 2, propertyID: otherPropertyID,
+			puzzleID: 3, fingerprint: 45, ipFamily: 4, ipPrefix: 0xc00002,
+			browser: "Chrome", browserMajor: 122, statusCodes: []uint8{1}, statusCounts: []uint64{1},
+		})
+		processed, err := ts.FinalizeNextPuzzleStats(ctx, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !processed {
+			t.Fatal("expected second daily partition to be finalized")
+		}
+	}) {
+		t.FailNow()
 	}
-	if !processed {
-		t.Fatal("expected second daily partition to be finalized")
-	}
-	fingerprintExpiresAt := now.Truncate(24 * time.Hour).Add(-47 * time.Hour)
-	insertPuzzleOutcome(t, ctx, ts, fingerprintExpiresAt, 1, 2, propertyID, 10, 41, 4, 0xc00002, "Chrome", 120, []uint8{0}, []uint64{1})
-	insertPuzzleOutcome(t, ctx, ts, fingerprintExpiresAt, 1, 2, otherPropertyID, 10, 41, 4, 0xc00002, "Chrome", 120, []uint8{0}, []uint64{1})
-	processed, err = ts.FinalizeNextPuzzleStats(ctx, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !processed {
-		t.Fatal("expected recent fingerprint partition to be finalized")
-	}
-	assertFingerprintPropertyUniq(t, ctx, ts, `
-expires_on = {expires_on:Date} AND fingerprint = 41`, []any{
-		clickhouse.Named("expires_on", fingerprintExpiresAt.Format(time.DateOnly)),
-	}, 2)
 
-	expiresMonth := time.Date(expiresAt.Year(), expiresAt.Month(), 1, 0, 0, 0, 0, time.UTC).Format(time.DateOnly)
-	assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_daily", `
+	if !t.Run("fingerprint partition", func(t *testing.T) {
+		insertPuzzleOutcome(t, ctx, ts, puzzleOutcomeRow{
+			expiresAt: fingerprintExpiresAt, userID: 1, orgID: 2, propertyID: propertyID,
+			puzzleID: 10, fingerprint: 41, ipFamily: 4, ipPrefix: 0xc00002,
+			browser: "Chrome", browserMajor: 120, statusCodes: []uint8{0}, statusCounts: []uint64{1},
+		})
+		insertPuzzleOutcome(t, ctx, ts, puzzleOutcomeRow{
+			expiresAt: fingerprintExpiresAt, userID: 1, orgID: 2, propertyID: otherPropertyID,
+			puzzleID: 10, fingerprint: 41, ipFamily: 4, ipPrefix: 0xc00002,
+			browser: "Chrome", browserMajor: 120, statusCodes: []uint8{0}, statusCounts: []uint64{1},
+		})
+		processed, err := ts.FinalizeNextPuzzleStats(ctx, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !processed {
+			t.Fatal("expected recent fingerprint partition to be finalized")
+		}
+		assertFingerprintPropertyUniq(t, ctx, ts, `
+		expires_on = {expires_on:Date} AND fingerprint = 41`, []any{
+			clickhouse.Named("expires_on", fingerprintExpiresAt.Format(time.DateOnly)),
+		}, 2)
+	}) {
+		t.FailNow()
+	}
+
+	if !t.Run("monthly finalization", func(t *testing.T) {
+		assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_daily", `
 expires_on >= {expires_on:Date}
     AND expires_on < addMonths({expires_on:Date}, 1)
     AND user_id = 1
     AND org_id = 2
     AND ip_family = 4
     AND ip_prefix = 0xc00002`, []any{
-		clickhouse.Named("expires_on", expiresMonth),
-	}, 4, 4, 2)
-	assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_monthly", `
+			clickhouse.Named("expires_on", expiresMonth),
+		}, 4, 4, 2)
+		assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_monthly", `
 expires_on = {expires_on:Date}`, []any{
-		clickhouse.Named("expires_on", expiresMonth),
-	}, 0, 0, 0)
-	processed, err = ts.FinalizeNextPuzzleStatsMonth(ctx, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !processed {
-		t.Fatal("expected sealed month to be finalized")
-	}
-	assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_monthly", `
+			clickhouse.Named("expires_on", expiresMonth),
+		}, 0, 0, 0)
+		processed, err := ts.FinalizeNextPuzzleStatsMonth(ctx, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !processed {
+			t.Fatal("expected sealed month to be finalized")
+		}
+		assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_monthly", `
 expires_on = {expires_on:Date}
     AND user_id = 1
     AND org_id = 2
     AND ip_family = 4
     AND ip_prefix = 0xc00002`, []any{
-		clickhouse.Named("expires_on", expiresMonth),
-	}, 1, 2, 2)
-	assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_user_agent_monthly", `
+			clickhouse.Named("expires_on", expiresMonth),
+		}, 1, 2, 2)
+		assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_user_agent_monthly", `
 expires_on = {expires_on:Date}
     AND user_id = 1
     AND org_id = 2
     AND browser = 'Chrome'
     AND os = 'Linux'
 	    AND device = 'Desktop'`, []any{
-		clickhouse.Named("expires_on", expiresMonth),
-	}, 1, 2, 2)
-	if _, err := ts.Clickhouse.ExecContext(ctx, `
+			clickhouse.Named("expires_on", expiresMonth),
+		}, 1, 2, 2)
+	}) {
+		t.FailNow()
+	}
+
+	if !t.Run("partial monthly replacement", func(t *testing.T) {
+		if _, err := ts.Clickhouse.ExecContext(ctx, `
 ALTER TABLE privatecaptcha.puzzle_stats_user_agent_monthly
 DROP PARTITION {expires_on:Date}`, clickhouse.Named("expires_on", expiresMonth)); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ts.Clickhouse.ExecContext(ctx, `
+			t.Fatal(err)
+		}
+		if _, err := ts.Clickhouse.ExecContext(ctx, `
 INSERT INTO privatecaptcha.puzzle_stats_user_agent_monthly
     (expires_on, user_id, org_id, browser, os, device, success_count, failure_count)
 VALUES ({expires_on:Date}, 1, 2, 'Chrome', 'Linux', 'Desktop', 1, 0)`,
-		clickhouse.Named("expires_on", expiresMonth)); err != nil {
-		t.Fatal(err)
-	}
-	processed, err = ts.FinalizeNextPuzzleStatsMonth(ctx, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !processed {
-		t.Fatal("expected partial monthly statistics to be replaced")
-	}
-	assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_monthly", `
+			clickhouse.Named("expires_on", expiresMonth)); err != nil {
+			t.Fatal(err)
+		}
+		processed, err := ts.FinalizeNextPuzzleStatsMonth(ctx, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !processed {
+			t.Fatal("expected partial monthly statistics to be replaced")
+		}
+		assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_monthly", `
 expires_on = {expires_on:Date}
     AND user_id = 1
     AND org_id = 2
     AND ip_family = 4
     AND ip_prefix = 0xc00002`, []any{
-		clickhouse.Named("expires_on", expiresMonth),
-	}, 1, 2, 2)
-	assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_user_agent_monthly", `
+			clickhouse.Named("expires_on", expiresMonth),
+		}, 1, 2, 2)
+		assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_user_agent_monthly", `
 expires_on = {expires_on:Date}
     AND user_id = 1
     AND org_id = 2
     AND browser = 'Chrome'
     AND os = 'Linux'
 	    AND device = 'Desktop'`, []any{
-		clickhouse.Named("expires_on", expiresMonth),
-	}, 1, 2, 2)
-	if _, err := ts.Clickhouse.ExecContext(ctx, `
+			clickhouse.Named("expires_on", expiresMonth),
+		}, 1, 2, 2)
+	}) {
+		t.FailNow()
+	}
+
+	if !t.Run("daily source retention", func(t *testing.T) {
+		if _, err := ts.Clickhouse.ExecContext(ctx, `
 ALTER TABLE privatecaptcha.puzzle_stats_ip_daily
 DROP PARTITION {expires_on:Date}`, clickhouse.Named("expires_on", otherExpiresAt.Format(time.DateOnly))); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := ts.Clickhouse.ExecContext(ctx, `
+			t.Fatal(err)
+		}
+		if _, err := ts.Clickhouse.ExecContext(ctx, `
 ALTER TABLE privatecaptcha.puzzle_stats_user_agent_daily
 DROP PARTITION {expires_on:Date}`, clickhouse.Named("expires_on", otherExpiresAt.Format(time.DateOnly))); err != nil {
-		t.Fatal(err)
-	}
-	processed, err = ts.FinalizeNextPuzzleStatsMonth(ctx, now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if processed {
-		t.Fatal("monthly statistics were rebuilt after daily source retention")
-	}
-
-	processed, err = ts.FinalizeNextPuzzleStats(ctx, now.Add(48*time.Hour))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if processed {
-		t.Fatal("ClickHouse watermark allowed an open cohort to be finalized")
+			t.Fatal(err)
+		}
+		processed, err := ts.FinalizeNextPuzzleStatsMonth(ctx, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if processed {
+			t.Fatal("monthly statistics were rebuilt after daily source retention")
+		}
+	}) {
+		t.FailNow()
 	}
 
-	if err := timeSeries.DeleteOrganizationsData(ctx, []int32{5}); err != nil {
-		t.Fatal(err)
+	if !t.Run("watermark guard", func(t *testing.T) {
+		processed, err := ts.FinalizeNextPuzzleStats(ctx, now.Add(48*time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if processed {
+			t.Fatal("ClickHouse watermark allowed an open cohort to be finalized")
+		}
+	}) {
+		t.FailNow()
 	}
-	assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_daily", `
+
+	if !t.Run("organization deletion", func(t *testing.T) {
+		if err := timeSeries.DeleteOrganizationsData(ctx, []int32{5}); err != nil {
+			t.Fatal(err)
+		}
+		assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_daily", `
 expires_on = {expires_on:Date} AND org_id = 5`, []any{
-		clickhouse.Named("expires_on", expiresOn),
-	}, 0, 0, 0)
-	assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_monthly", `
+			clickhouse.Named("expires_on", expiresOn),
+		}, 0, 0, 0)
+		assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_monthly", `
 expires_on = {expires_on:Date} AND org_id = 5`, []any{
-		clickhouse.Named("expires_on", expiresMonth),
-	}, 0, 0, 0)
-	assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_daily", `
+			clickhouse.Named("expires_on", expiresMonth),
+		}, 0, 0, 0)
+		assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_daily", `
 expires_on = {expires_on:Date} AND org_id = 2`, []any{
-		clickhouse.Named("expires_on", expiresOn),
-	}, 3, 3, 2)
-
-	if err := timeSeries.DeleteUsersData(ctx, []int32{1}); err != nil {
-		t.Fatal(err)
+			clickhouse.Named("expires_on", expiresOn),
+		}, 3, 3, 2)
+	}) {
+		t.FailNow()
 	}
-	assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_daily", `
+
+	if !t.Run("user deletion", func(t *testing.T) {
+		if err := timeSeries.DeleteUsersData(ctx, []int32{1}); err != nil {
+			t.Fatal(err)
+		}
+		assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_daily", `
 expires_on = {expires_on:Date} AND user_id = 1`, []any{
-		clickhouse.Named("expires_on", expiresOn),
-	}, 0, 0, 0)
-	assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_monthly", `
+			clickhouse.Named("expires_on", expiresOn),
+		}, 0, 0, 0)
+		assertPuzzleStatsMonthly(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_monthly", `
 expires_on = {expires_on:Date} AND user_id = 1`, []any{
-		clickhouse.Named("expires_on", expiresMonth),
-	}, 0, 0, 0)
+			clickhouse.Named("expires_on", expiresMonth),
+		}, 0, 0, 0)
+	}) {
+		t.FailNow()
+	}
 }
 
 func TestPuzzleStatsRejectsClosedCohortEvents(t *testing.T) {
@@ -466,9 +537,17 @@ func TestPuzzleStatsRejectsClosedCohortEvents(t *testing.T) {
 	ctx := common.TraceContext(t.Context(), t.Name())
 	now := time.Now().UTC().Truncate(time.Second)
 	expiresAt := now.Truncate(24 * time.Hour).Add(-73 * time.Hour)
-	const propertyID = 779
+	const (
+		userID     = 6
+		orgID      = 7
+		propertyID = 779
+	)
 
-	insertPuzzleOutcome(t, ctx, ts, expiresAt, 1, 2, propertyID, 1, 51, 4, 0xc00003, "Chrome", 120, []uint8{0}, []uint64{1})
+	insertPuzzleOutcome(t, ctx, ts, puzzleOutcomeRow{
+		expiresAt: expiresAt, userID: userID, orgID: orgID, propertyID: propertyID,
+		puzzleID: 1, fingerprint: 51, ipFamily: 4, ipPrefix: 0xc00003,
+		browser: "Chrome", browserMajor: 120, statusCodes: []uint8{0}, statusCounts: []uint64{1},
+	})
 	processed, err := ts.FinalizeNextPuzzleStats(ctx, now)
 	if err != nil {
 		t.Fatal(err)
@@ -478,14 +557,14 @@ func TestPuzzleStatsRejectsClosedCohortEvents(t *testing.T) {
 	}
 
 	if err := timeSeries.WriteAccessLogBatch(ctx, []*common.AccessRecord{{
-		Fingerprint: 52, UserID: 1, OrgID: 2, PropertyID: propertyID,
+		Fingerprint: 52, UserID: userID, OrgID: orgID, PropertyID: propertyID,
 		Timestamp: now, PuzzleID: 2, ExpiresAt: expiresAt, IPFamily: 4, IPPrefix: 0xc00003,
 		Browser: "Chrome", BrowserMajor: 120, OS: "Linux", Device: "Desktop",
 	}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := timeSeries.WriteVerifyLogBatch(ctx, []*common.VerifyRecord{{
-		UserID: 1, OrgID: 2, PropertyID: propertyID, PuzzleID: 1,
+		UserID: userID, OrgID: orgID, PropertyID: propertyID, PuzzleID: 1,
 		Timestamp: now, ExpiresAt: expiresAt, Status: 1,
 	}}); err != nil {
 		t.Fatal(err)
@@ -513,28 +592,32 @@ WHERE property_id = {property_id:UInt32}`,
 
 	assertPuzzleStats(t, ctx, ts, "privatecaptcha.puzzle_stats_ip_daily", `
 expires_on = {expires_on:Date}
+	AND user_id = {user_id:UInt32}
+	AND org_id = {org_id:UInt32}
     AND ip_family = 4
     AND ip_prefix = 0xc00003`, []any{
 		clickhouse.Named("expires_on", expiresAt.Format(time.DateOnly)),
+		clickhouse.Named("user_id", uint32(userID)),
+		clickhouse.Named("org_id", uint32(orgID)),
 	}, 1, 1, 1)
 }
 
-func insertPuzzleOutcome(
-	t *testing.T,
-	ctx context.Context,
-	ts *db.TimeSeriesDB,
-	expiresAt time.Time,
-	userID int32,
-	orgID int32,
-	propertyID int32,
-	puzzleID, fingerprint uint64,
-	ipFamily uint8,
-	ipPrefix uint64,
-	browser string,
-	browserMajor uint16,
-	statusCodes []uint8,
-	statusCounts []uint64,
-) {
+type puzzleOutcomeRow struct {
+	expiresAt    time.Time
+	userID       int32
+	orgID        int32
+	propertyID   int32
+	puzzleID     uint64
+	fingerprint  uint64
+	ipFamily     uint8
+	ipPrefix     uint64
+	browser      string
+	browserMajor uint16
+	statusCodes  []uint8
+	statusCounts []uint64
+}
+
+func insertPuzzleOutcome(t *testing.T, ctx context.Context, ts *db.TimeSeriesDB, row puzzleOutcomeRow) {
 	t.Helper()
 	_, err := ts.Clickhouse.ExecContext(ctx, `
 INSERT INTO privatecaptcha.puzzle_outcomes_recent
@@ -553,18 +636,18 @@ SELECT
     maxState('Desktop'),
     maxState(toUInt8(1)),
     sumMapState({status_codes:Array(UInt8)}, {status_counts:Array(UInt64)})`,
-		clickhouse.Named("expires_on", expiresAt.Format(time.DateOnly)),
-		clickhouse.Named("property_id", uint32(propertyID)),
-		clickhouse.Named("puzzle_id", puzzleID),
-		clickhouse.Named("user_id", uint32(userID)),
-		clickhouse.Named("org_id", uint32(orgID)),
-		clickhouse.Named("fingerprint", fingerprint),
-		clickhouse.Named("ip_family", ipFamily),
-		clickhouse.Named("ip_prefix", ipPrefix),
-		clickhouse.Named("browser", browser),
-		clickhouse.Named("browser_major", browserMajor),
-		clickhouse.Named("status_codes", statusCodes),
-		clickhouse.Named("status_counts", statusCounts),
+		clickhouse.Named("expires_on", row.expiresAt.Format(time.DateOnly)),
+		clickhouse.Named("property_id", uint32(row.propertyID)),
+		clickhouse.Named("puzzle_id", row.puzzleID),
+		clickhouse.Named("user_id", uint32(row.userID)),
+		clickhouse.Named("org_id", uint32(row.orgID)),
+		clickhouse.Named("fingerprint", row.fingerprint),
+		clickhouse.Named("ip_family", row.ipFamily),
+		clickhouse.Named("ip_prefix", row.ipPrefix),
+		clickhouse.Named("browser", row.browser),
+		clickhouse.Named("browser_major", row.browserMajor),
+		clickhouse.Named("status_codes", row.statusCodes),
+		clickhouse.Named("status_counts", row.statusCounts),
 	)
 	if err != nil {
 		t.Fatal(err)
