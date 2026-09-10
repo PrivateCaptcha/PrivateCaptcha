@@ -439,9 +439,10 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	jobs.Add(&maintenance.CleanupDBCacheJob{Store: businessDB})
 	jobs.Add(&maintenance.CleanupDeletedRecordsJob{Store: businessDB, Age: 365 * 24 * time.Hour})
 	jobs.AddLocked(24*time.Hour, &maintenance.GarbageCollectDataJob{
-		Age:        30 * 24 * time.Hour,
-		BusinessDB: businessDB,
-		TimeSeries: timeSeriesDB,
+		Age:                30 * 24 * time.Hour,
+		BusinessDB:         businessDB,
+		TimeSeries:         timeSeriesDB,
+		GradualDataCleanup: cfg.Get(common.GradualDataCleanupKey),
 	})
 	jobs.AddOneOff(&maintenance.WarmupPortalAuthJob{
 		Store:               businessDB,

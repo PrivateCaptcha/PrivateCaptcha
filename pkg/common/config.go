@@ -51,6 +51,7 @@ const (
 	WidgetNoticeKey
 	CacheDirKey
 	ClickHousePortKey
+	GradualDataCleanupKey
 	// Add new fields _above_
 	COMMON_CONFIG_KEYS_COUNT
 )

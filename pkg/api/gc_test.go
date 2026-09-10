@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
@@ -13,7 +14,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 )
 
-func gcPropertyDataTestSuite(ctx context.Context, property *dbgen.Property, deleter func(p *dbgen.Property) error, t *testing.T) {
+func gcPropertyDataTestSuite(ctx context.Context, property *dbgen.Property, deleter func(p *dbgen.Property) error, expectDeleted bool, t *testing.T) {
 	t.Helper()
 
 	const requests = 1000
@@ -72,12 +73,33 @@ func gcPropertyDataTestSuite(ctx context.Context, property *dbgen.Property, dele
 		}
 	}
 
-	if nonZeroStatsCount > 0 {
+	if expectDeleted && nonZeroStatsCount > 0 {
 		t.Errorf("There are %v stats found", nonZeroStatsCount)
+	}
+	if !expectDeleted && nonZeroStatsCount == 0 {
+		t.Error("There are no stats found")
+	}
+	if !expectDeleted {
+		job.GradualDataCleanup = config.NewStaticValue(common.GradualDataCleanupKey, "true")
+		if err := job.RunOnce(ctx, job.NewParams()); err != nil {
+			t.Fatal(err)
+		}
+
+		stats, err = timeSeries.RetrievePropertyStatsSince(ctx, request, from)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, s := range stats {
+			if s.Count > 0 {
+				t.Error("Stats remain after gradual data cleanup")
+				break
+			}
+		}
 	}
 }
 
-func gcFormDataTestSuite(ctx context.Context, form *dbgen.Form, deleter func(f *dbgen.Form) error, t *testing.T) {
+func gcFormDataTestSuite(ctx context.Context, form *dbgen.Form, deleter func(f *dbgen.Form) error, expectDeleted bool, t *testing.T) {
 	t.Helper()
 
 	const requests = 400
@@ -133,8 +155,34 @@ func gcFormDataTestSuite(ctx context.Context, form *dbgen.Form, deleter func(f *
 		}
 	}
 
-	if nonZeroStatsCount > 0 {
+	if expectDeleted && nonZeroStatsCount > 0 {
 		t.Errorf("There are %v stats found (sum %v)", nonZeroStatsCount, nonZeroStatsSum)
+	}
+	if !expectDeleted && nonZeroStatsCount == 0 {
+		t.Error("There are no stats found")
+	}
+	if !expectDeleted {
+		job.GradualDataCleanup = config.NewStaticValue(common.GradualDataCleanupKey, "true")
+		if err := job.RunOnce(ctx, job.NewParams()); err != nil {
+			t.Fatal(err)
+		}
+		if err := timeSeries.DropCache(ctx, "form_stats_period"); err != nil {
+			t.Error(err)
+		}
+		timeFrom := time.Now().UTC().AddDate(0, 0, -1).Truncate(1 * time.Hour)
+		_ = cache.Delete(ctx, db.FormStatsCacheKey(form.ID, timeFrom.Format(time.DateTime)))
+
+		stats, err = timeSeries.RetrieveFormStatsByPeriod(ctx, form.OrgID.Int32, form.ID, common.TimePeriodToday)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, s := range stats {
+			if s.SuccessCount > 0 || s.FailureCount > 0 {
+				t.Error("Stats remain after gradual data cleanup")
+				break
+			}
+		}
 	}
 }
 
@@ -161,7 +209,7 @@ func TestGCPropertyData(t *testing.T) {
 	gcPropertyDataTestSuite(ctx, property, func(p *dbgen.Property) error {
 		_, err := store.Impl().SoftDeleteProperty(ctx, p, org, user)
 		return err
-	}, t)
+	}, false, t)
 }
 
 func TestGCPropertyOrgData(t *testing.T) {
@@ -187,7 +235,7 @@ func TestGCPropertyOrgData(t *testing.T) {
 	gcPropertyDataTestSuite(ctx, property, func(p *dbgen.Property) error {
 		_, err := store.Impl().SoftDeleteOrganization(ctx, org, user)
 		return err
-	}, t)
+	}, false, t)
 }
 
 func TestGCUserData(t *testing.T) {
@@ -216,7 +264,7 @@ func TestGCUserData(t *testing.T) {
 			return []*common.AuditLogEvent{event}, err
 		})
 		return err
-	}, t)
+	}, true, t)
 }
 
 func TestGCFormData(t *testing.T) {
@@ -242,7 +290,7 @@ func TestGCFormData(t *testing.T) {
 	gcFormDataTestSuite(ctx, form, func(f *dbgen.Form) error {
 		_, err := store.Pool.Exec(ctx, "UPDATE backend.forms SET deleted_at = NOW() - INTERVAL '1 hour' WHERE id = $1", form.ID)
 		return err
-	}, t)
+	}, false, t)
 }
 
 func TestGCFormOrgData(t *testing.T) {
@@ -274,7 +322,7 @@ func TestGCFormOrgData(t *testing.T) {
 
 		_, err := store.Impl().SoftDeleteOrganization(ctx, org, user)
 		return err
-	}, t)
+	}, false, t)
 }
 
 func TestGCFormUserData(t *testing.T) {
@@ -306,5 +354,5 @@ func TestGCFormUserData(t *testing.T) {
 
 		_, err := store.Impl().SoftDeleteUser(ctx, user)
 		return err
-	}, t)
+	}, true, t)
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 )
 
@@ -18,9 +19,10 @@ const (
 )
 
 type GarbageCollectDataJob struct {
-	Age        time.Duration
-	BusinessDB db.Implementor
-	TimeSeries common.TimeSeriesStore
+	Age                time.Duration
+	BusinessDB         db.Implementor
+	TimeSeries         common.TimeSeriesStore
+	GradualDataCleanup common.ConfigItem
 }
 
 var _ common.PeriodicJob = (*GarbageCollectDataJob)(nil)
@@ -128,23 +130,21 @@ func (j *GarbageCollectDataJob) RunOnce(ctx context.Context, params any) error {
 	}
 
 	before := time.Now().UTC().Add(-p.Age)
-	if err := j.purgeForms(ctx, before); err != nil {
-		return err
+	if j.GradualDataCleanup != nil && config.AsBool(j.GradualDataCleanup) {
+		if err := j.purgeForms(ctx, before); err != nil {
+			return err
+		}
+
+		if err := j.purgeProperties(ctx, before); err != nil {
+			return err
+		}
+
+		if err := j.purgeOrganizations(ctx, before); err != nil {
+			return err
+		}
 	}
 
-	if err := j.purgeProperties(ctx, before); err != nil {
-		return err
-	}
-
-	if err := j.purgeOrganizations(ctx, before); err != nil {
-		return err
-	}
-
-	if err := j.purgeUsers(ctx, before); err != nil {
-		return err
-	}
-
-	return nil
+	return j.purgeUsers(ctx, before)
 }
 
 type ExpireInternalTrialsJob struct {

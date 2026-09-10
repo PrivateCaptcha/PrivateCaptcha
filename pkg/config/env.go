@@ -83,6 +83,7 @@ func init() {
 	configKeyToEnvName[common.FingerprintHeaderKey] = "PC_FINGERPRINT_HEADER"
 	configKeyToEnvName[common.WidgetNoticeKey] = "PC_WIDGET_NOTICE"
 	configKeyToEnvName[common.CacheDirKey] = "CACHE_DIRECTORY"
+	configKeyToEnvName[common.GradualDataCleanupKey] = "PC_GRADUAL_DATA_CLEANUP"
 
 	for i, v := range configKeyToEnvName {
 		if len(v) == 0 {
