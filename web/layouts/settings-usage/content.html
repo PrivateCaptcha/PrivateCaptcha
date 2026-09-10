@@ -42,4 +42,32 @@
             </svg>
         </div>
     </div>
+
+    <section class="mt-10">
+        <h2 class="pc-section-heading">Organization usage</h2>
+        <div class="mt-4 overflow-x-auto">
+            <table class="min-w-full border border-pc-grey-250">
+                <thead>
+                    <tr class="border-b border-dashed border-pc-grey-250 bg-pc-blue-50">
+                        <th scope="col" class="pc-table-head px-3 ">Organization</th>
+                        <th scope="col" class="pc-table-head px-3 !text-right">Members</th>
+                        <th scope="col" class="pc-table-head px-3 !text-right">Properties</th>
+                        <th scope="col" class="pc-table-head px-3 !text-right">Forms</th>
+                        <th scope="col" class="pc-table-head px-3 !text-right">Rules</th>
+                    </tr>
+                </thead>
+                <tbody class="pc-table-divide bg-white">
+                    {{ range .Params.OrganizationStats }}
+                    <tr>
+                        <td class="whitespace-nowrap py-4 px-3 text-sm font-medium"><a class="pc-docs-link underline hover:text-pc-green-hover" href="{{ partsURL $.Const.OrgEndpoint .ID }}">{{ .Name }}</a></td>
+                        <td class="whitespace-nowrap px-3 py-4 text-right text-sm text-pc-grey-600">{{ .Members }}</td>
+                        <td class="whitespace-nowrap px-3 py-4 text-right text-sm text-pc-grey-600">{{ .Properties }}</td>
+                        <td class="whitespace-nowrap px-3 py-4 text-right text-sm text-pc-grey-600">{{ .Forms }}</td>
+                        <td class="whitespace-nowrap px-3 py-4 text-right text-sm text-pc-grey-600">{{ .Rules }}</td>
+                    </tr>
+                    {{ end }}
+                </tbody>
+            </table>
+        </div>
+    </section>
 </main>

@@ -296,13 +296,17 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &settingsUsageRenderContext{
 					SettingsCommonRenderContext: settingsCommon(common.UsageEndpoint, a),
-					PropertiesCount:             5,
-					OrgsCount:                   2,
-					FormsCount:                  5,
-					IncludedPropertiesCount:     50,
-					IncludedOrgsCount:           10,
-					IncludedFormsCount:          10,
-					Limit:                       1000000,
+					OrganizationStats: []*organizationUsageStats{
+						{ID: "org1", Name: "Acme Corp", Members: 4, Properties: 3, Forms: 2, Rules: 5},
+						{ID: "org2", Name: "Other Org", Members: 2, Properties: 2, Forms: 1, Rules: 1},
+					},
+					PropertiesCount:         5,
+					OrgsCount:               2,
+					FormsCount:              5,
+					IncludedPropertiesCount: 50,
+					IncludedOrgsCount:       10,
+					IncludedFormsCount:      10,
+					Limit:                   1000000,
 				}
 			},
 		},

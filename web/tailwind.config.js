@@ -32,6 +32,7 @@ module.exports = {
                 },
                 'pc-blue': {
                     DEFAULT: '#709ecc',
+                    50: '#ecf1f7',
                     200: '#b3cae1',
                     500: '#5d7a93',
                     600: '#496175',

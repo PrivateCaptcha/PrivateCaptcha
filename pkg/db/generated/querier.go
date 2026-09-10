@@ -74,6 +74,7 @@ type Querier interface {
 	GetOrgPropertiesByNameDescending(ctx context.Context, arg *GetOrgPropertiesByNameDescendingParams) ([]*Property, error)
 	GetOrgPropertiesCount(ctx context.Context, orgID pgtype.Int4) (int64, error)
 	GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyByNameParams) (*Property, error)
+	GetOrganizationStats(ctx context.Context, dollar_1 []int32) ([]*GetOrganizationStatsRow, error)
 	GetOrganizationUsers(ctx context.Context, orgID int32) ([]*GetOrganizationUsersRow, error)
 	GetOrganizationUsersWithEmailInvites(ctx context.Context, orgID int32) ([]*GetOrganizationUsersWithEmailInvitesRow, error)
 	GetOrganizationWithAccess(ctx context.Context, arg *GetOrganizationWithAccessParams) (*GetOrganizationWithAccessRow, error)

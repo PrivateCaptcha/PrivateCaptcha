@@ -25,6 +25,7 @@ const (
 	// NOTE: this is the time during which changes to difficulty will propagate when we have multiple API nodes
 	propertyTTL              = 1 * time.Hour
 	formTTL                  = 1 * time.Hour
+	organizationStatsTTL     = 5 * time.Minute
 	apiKeyTTL                = 12 * time.Hour
 	asyncTaskTTL             = 1 * time.Minute
 	SubscriptionRefresh      = 10 * time.Minute
@@ -34,6 +35,7 @@ const (
 	maxPropertyNameLength    = 255
 	formPropertyNameSuffix   = " (form)"
 	MaxFormURLLength         = 1024
+	organizationStatsCacheID = "settings"
 )
 
 var (
@@ -70,8 +72,8 @@ func ParseOrgPropertiesSort(value string) OrgPropertiesSort {
 	}
 }
 
-func orgPropertiesCacheKey(orgID int32, sort OrgPropertiesSort) CacheKey {
-	return OrgPropertiesCacheKey(orgID, string(sort))
+func (impl *BusinessStoreImpl) invalidateOrganizationStatsCache(ctx context.Context, userID int32) {
+	_ = impl.cache.Delete(ctx, organizationStatsCacheKey(userID))
 }
 
 // NOTE: we must pass propertyID pointer non-nil ONLY in "public" APIs
@@ -958,6 +960,7 @@ func (impl *BusinessStoreImpl) CreateNewOrganization(ctx context.Context, name s
 
 		// invalidate user orgs in cache as we just created another one
 		_ = impl.cache.Delete(ctx, UserOrgsCacheKey(org.UserID.Int32))
+		impl.invalidateOrganizationStatsCache(ctx, org.UserID.Int32)
 
 		auditEvent = newOrgAuditLogEvent(userID, org, common.AuditLogActionCreate)
 	}
@@ -1358,6 +1361,47 @@ func (impl *BusinessStoreImpl) RetrieveUserOrganizations(ctx context.Context, us
 	return orgs, nil
 }
 
+func (impl *BusinessStoreImpl) RetrieveOrganizationStats(ctx context.Context, userID int32, orgIDs []int32) ([]*dbgen.GetOrganizationStatsRow, error) {
+	if userID <= 0 {
+		return nil, ErrInvalidInput
+	}
+	seen := make(map[int32]struct{}, len(orgIDs))
+	uniqueOrgIDs := make([]int32, 0, len(orgIDs))
+
+	for _, orgID := range orgIDs {
+		if orgID <= 0 {
+			return nil, ErrInvalidInput
+		}
+		if _, ok := seen[orgID]; ok {
+			continue
+		}
+		seen[orgID] = struct{}{}
+		uniqueOrgIDs = append(uniqueOrgIDs, orgID)
+	}
+	if len(uniqueOrgIDs) == 0 {
+		return []*dbgen.GetOrganizationStatsRow{}, nil
+	}
+	reader := &StoreArrayReader[[]int32, dbgen.GetOrganizationStatsRow]{
+		CacheKey:    organizationStatsCacheKey(userID),
+		Cache:       impl.cache,
+		TTL:         organizationStatsTTL,
+		DropInvalid: true,
+	}
+	if impl.querier != nil {
+		reader.QueryFunc = impl.querier.GetOrganizationStats
+		reader.QueryKeyFunc = func(CacheKey) ([]int32, error) {
+			return uniqueOrgIDs, nil
+		}
+	}
+
+	stats, err := reader.Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return stats, nil
+}
+
 func (impl *BusinessStoreImpl) retrieveOrganizationWithAccess(ctx context.Context, userID, orgID int32) (*dbgen.Organization, dbgen.NullAccessLevel, error) {
 	cacheKey := orgCacheKey(orgID)
 
@@ -1486,6 +1530,7 @@ func (impl *BusinessStoreImpl) deleteCachedProperty(ctx context.Context, propert
 	impl.invalidateOrgPropertiesCache(ctx, property.OrgID.Int32, &property.ID)
 
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(property.OrgID.Int32))
+	impl.invalidateOrganizationStatsCache(ctx, property.OrgOwnerID.Int32)
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.CreatorID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
 
@@ -1671,6 +1716,7 @@ func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *db
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.CreatorID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(property.OrgID.Int32))
+	impl.invalidateOrganizationStatsCache(ctx, property.OrgOwnerID.Int32)
 
 	impl.cacheProperty(ctx, property)
 
@@ -1726,6 +1772,7 @@ func (impl *BusinessStoreImpl) CreateNewForm(
 	impl.cacheForm(ctx, form)
 	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(property.OrgID.Int32))
 	_ = impl.cache.Delete(ctx, userFormsCountCacheKey(form.OrgOwnerID.Int32))
+	impl.invalidateOrganizationStatsCache(ctx, property.OrgOwnerID.Int32)
 
 	auditEvents := []*common.AuditLogEvent{auditEvent, newCreateFormAuditLogEvent(form, org)}
 	return form, property, auditEvents, nil
@@ -2324,6 +2371,7 @@ func (impl *BusinessStoreImpl) SoftDeleteOrganization(ctx context.Context, org *
 	// update caches
 	_ = impl.cache.SetMissing(ctx, orgCacheKey(org.ID))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(org.ID))
+	impl.invalidateOrganizationStatsCache(ctx, user.ID)
 	// invalidate user orgs in cache as we just deleted one
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(user.ID))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(user.ID))
@@ -3890,6 +3938,8 @@ func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *d
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(newOwner.ID))
 	_ = impl.cache.Delete(ctx, userFormsCountCacheKey(user.ID))
 	_ = impl.cache.Delete(ctx, userFormsCountCacheKey(newOwner.ID))
+	impl.invalidateOrganizationStatsCache(ctx, user.ID)
+	impl.invalidateOrganizationStatsCache(ctx, newOwner.ID)
 
 	auditEvents := []*common.AuditLogEvent{
 		newTransferOrgAuditLogEvent(user, org, newOwner),

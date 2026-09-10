@@ -417,6 +417,167 @@ func TestGetUsageSettings(t *testing.T) {
 	}
 }
 
+func TestGetUsageSettingsOrganizationStats(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"Member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+	if _, err := store.Impl().InviteUserToOrg(ctx, user, org, member); err != nil {
+		t.Fatalf("Failed to invite member to organization: %v", err)
+	}
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed to accept organization invite: %v", err)
+	}
+	pendingMember, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"Pending", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create pending member account: %v", err)
+	}
+	if _, err := store.Impl().InviteUserToOrg(ctx, user, org, pendingMember); err != nil {
+		t.Fatalf("Failed to invite pending member to organization: %v", err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "usage-stats.example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+	if _, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "usage-stats-form.example.com"),
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/usage-stats"),
+		org); err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+	if _, err := createOrgRuleUserAgent(ctx, user, org.ID, "Organization usage rule"); err != nil {
+		t.Fatalf("Failed to create organization rule: %v", err)
+	}
+	if _, err := createPropertyRuleUserAgent(ctx, user, property.ID, "Property usage rule"); err != nil {
+		t.Fatalf("Failed to create property rule: %v", err)
+	}
+
+	secondOrg, _, err := store.Impl().CreateNewOrganization(ctx, "Second usage organization", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create second organization: %v", err)
+	}
+	if _, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "second-usage-stats.example.com"), secondOrg); err != nil {
+		t.Fatalf("Failed to create second organization property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/settings/tab/usage", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	viewModel, err := server.getUsageSettings(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	renderCtx, ok := viewModel.Model.(*settingsUsageRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *settingsUsageRenderContext, got %T", viewModel.Model)
+	}
+	if len(renderCtx.OrganizationStats) != 2 {
+		t.Fatalf("Expected 2 organization statistics rows, got %d", len(renderCtx.OrganizationStats))
+	}
+
+	statsByName := make(map[string]struct {
+		ID         string
+		Members    int
+		Properties int
+		Forms      int
+		Rules      int
+	}, len(renderCtx.OrganizationStats))
+	for _, stats := range renderCtx.OrganizationStats {
+		statsByName[stats.Name] = struct {
+			ID         string
+			Members    int
+			Properties int
+			Forms      int
+			Rules      int
+		}{
+			ID:         stats.ID,
+			Members:    stats.Members,
+			Properties: stats.Properties,
+			Forms:      stats.Forms,
+			Rules:      stats.Rules,
+		}
+	}
+
+	if got := statsByName[org.Name]; got.Members != 3 || got.Properties != 2 || got.Forms != 1 || got.Rules != 2 {
+		t.Errorf("Stats for %q = %#v, want members=3 properties=2 forms=1 rules=2", org.Name, got)
+	}
+	if got := statsByName[secondOrg.Name]; got.Members != 1 || got.Properties != 1 || got.Forms != 0 || got.Rules != 0 {
+		t.Errorf("Stats for %q = %#v, want members=1 properties=1 forms=0 rules=0", secondOrg.Name, got)
+	}
+	if got := statsByName[org.Name].ID; got != server.IDHasher.Encrypt(int(org.ID)) {
+		t.Errorf("Organization stats ID = %q, want %q", got, server.IDHasher.Encrypt(int(org.ID)))
+	}
+
+	pendingCookie, err := portal_tests.AuthenticateSuite(ctx, pendingMember.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pendingReq := httptest.NewRequest(http.MethodGet, "/settings/tab/usage", nil)
+	pendingReq.AddCookie(pendingCookie)
+	pendingW := httptest.NewRecorder()
+	pendingViewModel, err := server.getUsageSettings(pendingW, pendingReq)
+	if err != nil {
+		t.Fatalf("Expected no error for pending member, got: %v", err)
+	}
+	pendingRenderCtx, ok := pendingViewModel.Model.(*settingsUsageRenderContext)
+	if !ok {
+		t.Fatalf("Expected pending member Model to be *settingsUsageRenderContext, got %T", pendingViewModel.Model)
+	}
+	if len(pendingRenderCtx.OrganizationStats) != 1 {
+		t.Fatalf("Expected pending member to see 1 organization statistics row, got %d", len(pendingRenderCtx.OrganizationStats))
+	}
+	if got := pendingRenderCtx.OrganizationStats[0].Name; got == org.Name {
+		t.Errorf("Pending member can see organization statistics for %q", org.Name)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/settings/tab/usage", nil)
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("Usage settings response status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	body := w.Body.String()
+	for _, heading := range []string{"Organization", "Members", "Properties", "Forms", "Rules"} {
+		if !strings.Contains(body, ">"+heading+"<") {
+			t.Errorf("Usage settings did not render %q column heading", heading)
+		}
+	}
+	for _, class := range []string{
+		"min-w-full border border-pc-grey-250",
+		"border-b border-dashed border-pc-grey-250 bg-pc-blue-50",
+		"pc-docs-link underline hover:text-pc-green-hover",
+	} {
+		if !strings.Contains(body, class) {
+			t.Errorf("Usage settings did not render %q", class)
+		}
+	}
+	if want := fmt.Sprintf("href=\"/org/%s\"", server.IDHasher.Encrypt(int(org.ID))); !strings.Contains(body, want) {
+		t.Errorf("Usage settings did not render organization link %q", want)
+	}
+}
+
 func TestGetNotificationsSettings(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

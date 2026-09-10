@@ -422,6 +422,7 @@ func init() {
 	gob.Register(&dbgen.NotificationTemplate{})
 	gob.Register([]*dbgen.DifficultyRule{})
 	gob.Register([]*dbgen.GetUserOrganizationsRow{})
+	gob.Register([]*dbgen.GetOrganizationStatsRow{})
 	gob.Register([]*dbgen.GetOrganizationUsersRow{})
 	gob.Register([]*dbgen.GetPropertyAuditLogsRow{})
 	gob.Register([]*dbgen.GetOrgAuditLogsRow{})
@@ -595,4 +596,10 @@ func formByIDCacheKey(formID int32) CacheKey {
 }
 func formAuditLogsCacheKey(propID int32) CacheKey {
 	return CacheKey{Prefix: formAuditLogsCacheKeyPrefix, IntValue: propID}
+}
+func orgPropertiesCacheKey(orgID int32, sort OrgPropertiesSort) CacheKey {
+	return OrgPropertiesCacheKey(orgID, string(sort))
+}
+func organizationStatsCacheKey(userID int32) CacheKey {
+	return userAccountStatsCacheKey(userID, organizationStatsCacheID)
 }

@@ -91,6 +91,16 @@ type settingsUsageRenderContext struct {
 	IncludedOrgsCount       int
 	IncludedFormsCount      int
 	Limit                   int64
+	OrganizationStats       []*organizationUsageStats
+}
+
+type organizationUsageStats struct {
+	ID         string
+	Name       string
+	Members    int
+	Properties int
+	Forms      int
+	Rules      int
 }
 
 type settingsGeneralRenderContext struct {
@@ -1001,19 +1011,47 @@ func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, st
 	}
 }
 
-func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User) *settingsUsageRenderContext {
+func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User, orgs []*dbgen.GetUserOrganizationsRow) *settingsUsageRenderContext {
+	const maxUsageStatsOrganizations = 50
+
 	renderCtx := &settingsUsageRenderContext{
 		SettingsCommonRenderContext: s.CreateSettingsCommonRenderContext(common.UsageEndpoint, user),
 	}
 
-	if orgs, err := s.Store.Impl().RetrieveUserOrganizations(ctx, user.ID); err == nil {
-		count := 0
-		for _, org := range orgs {
-			if org.Level == dbgen.AccessLevelOwner {
-				count++
+	count := 0
+	for _, org := range orgs {
+		if org.Level == dbgen.AccessLevelOwner {
+			count++
+		}
+	}
+	renderCtx.OrgsCount = count
+
+	statsOrgs := orgs[:min(len(orgs), maxUsageStatsOrganizations)]
+	orgIDs := make([]int32, 0, len(statsOrgs))
+	for _, org := range statsOrgs {
+		orgIDs = append(orgIDs, org.Organization.ID)
+	}
+
+	if stats, err := s.Store.Impl().RetrieveOrganizationStats(ctx, user.ID, orgIDs); err == nil {
+		statsByOrgID := make(map[int32]*dbgen.GetOrganizationStatsRow, len(stats))
+		for _, stat := range stats {
+			statsByOrgID[stat.OrgID] = stat
+		}
+		renderCtx.OrganizationStats = make([]*organizationUsageStats, 0, len(statsOrgs))
+		for _, org := range statsOrgs {
+			if stat, ok := statsByOrgID[org.Organization.ID]; ok {
+				renderCtx.OrganizationStats = append(renderCtx.OrganizationStats, &organizationUsageStats{
+					ID:         s.IDHasher.Encrypt(int(org.Organization.ID)),
+					Name:       org.Organization.Name,
+					Members:    int(stat.Members),
+					Properties: int(stat.Properties),
+					Forms:      int(stat.Forms),
+					Rules:      int(stat.Rules),
+				})
 			}
 		}
-		renderCtx.OrgsCount = count
+	} else {
+		slog.ErrorContext(ctx, "Failed to retrieve organization usage statistics", common.ErrAttr(err))
 	}
 
 	if count, err := s.Store.Impl().RetrieveUserPropertiesCount(ctx, user.ID); err == nil {
@@ -1067,7 +1105,17 @@ func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (*View
 		return nil, err
 	}
 
-	renderCtx := s.createUsageSettingsModel(ctx, user)
+	orgs, err := s.Store.Impl().RetrieveUserOrganizations(ctx, user.ID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve user organizations for usage settings", common.ErrAttr(err))
+	}
+	ownedOrgs := make([]*dbgen.GetUserOrganizationsRow, 0, len(orgs))
+	for _, org := range orgs {
+		if org.Level == dbgen.AccessLevelOwner {
+			ownedOrgs = append(ownedOrgs, org)
+		}
+	}
+	renderCtx := s.createUsageSettingsModel(ctx, user, ownedOrgs)
 
 	return &ViewModel{Model: renderCtx}, nil
 }

@@ -211,6 +211,9 @@ func (s *QuerierStub) GetOrganizationUsers(ctx context.Context, orgID int32) ([]
 func (s *QuerierStub) GetOrganizationUsersWithEmailInvites(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersWithEmailInvitesRow, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) GetOrganizationStats(ctx context.Context, dollar_1 []int32) ([]*dbgen.GetOrganizationStatsRow, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) GetOrganizationWithAccess(ctx context.Context, arg *dbgen.GetOrganizationWithAccessParams) (*dbgen.GetOrganizationWithAccessRow, error) {
 	return nil, s.Error
 }
