@@ -3,6 +3,7 @@ package maintenance
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -15,9 +16,51 @@ type UniquePeriodicJob struct {
 	// the usual logic is that we acquire lock for a longer duration than the job interval therefore
 	// when there are multiple workers, there's a higher chance of "stealing" the work
 	LockDuration time.Duration
+
+	// Local cooldown is intentionally best-effort:
+	// - it is lost on restart and is not shared by duplicate wrappers;
+	// - expiry waits for the next normal scheduler tick instead of waking it;
+	// - it only improves handoff odds when another server attempts during the window;
+	// - HTTP runs bypass it, while Trigger channel runs do not;
+	// - jobs outliving the DB lease can overlap and race with newer executions.
+	cooldownMu    sync.Mutex
+	cooldownUntil time.Time
 }
 
 var _ common.PeriodicJob = (*UniquePeriodicJob)(nil)
+
+const uniqueJobReleaseTimeout = 1 * time.Second
+
+type manualPeriodicRunContextKey struct{}
+
+// withManualPeriodicRun bypasses only the local handoff delay; the Postgres lock still applies.
+func withManualPeriodicRun(ctx context.Context) context.Context {
+	return context.WithValue(ctx, manualPeriodicRunContextKey{}, true)
+}
+
+// cooldownRemaining returns zero for manual runs so they only need to wait for the Postgres lock.
+func (j *UniquePeriodicJob) cooldownRemaining(ctx context.Context) time.Duration {
+	if manual, _ := ctx.Value(manualPeriodicRunContextKey{}).(bool); manual {
+		return 0
+	}
+
+	j.cooldownMu.Lock()
+	defer j.cooldownMu.Unlock()
+
+	return time.Until(j.cooldownUntil)
+}
+
+// setCooldown starts or clears the local delay that gives another server the next chance to run.
+func (j *UniquePeriodicJob) setCooldown(duration time.Duration) {
+	j.cooldownMu.Lock()
+	defer j.cooldownMu.Unlock()
+
+	if duration <= 0 {
+		j.cooldownUntil = time.Time{}
+		return
+	}
+	j.cooldownUntil = time.Now().Add(duration)
+}
 
 func (j *UniquePeriodicJob) Timeout() time.Duration {
 	return j.Job.Timeout()
@@ -69,16 +112,27 @@ func (j *UniquePeriodicJob) releaseLock(ctx context.Context, lockName string) er
 func (j *UniquePeriodicJob) RunOnce(ctx context.Context, params any) error {
 	var jerr error
 	lockName := j.Job.Name()
+	if remaining := j.cooldownRemaining(ctx); remaining > 0 {
+		slog.DebugContext(ctx, "Skipping periodic job during local cooldown", "name", lockName, "remaining", remaining)
+		return nil
+	}
 
 	// TODO: Acquire the lock incrementally instead of the full duration
 	// this will help to handle situations when we crash and don't release the lock
 	if err := j.acquireLock(ctx, lockName); err == nil {
+		// Give peers one full job jitter after this lease before this process competes again.
+		j.setCooldown(j.LockDuration + j.Job.Jitter())
 		jerr = j.Job.RunOnce(ctx, params)
 		if jerr != nil {
+			// Preserve the previous fast retry behavior when execution fails.
+			j.setCooldown(0)
 			// NOTE: in usual circumstances we do NOT release the lock, letting it expire by TTL, thus effectively
 			// preventing other possible maintenance jobs during the interval. The only use-case is when the job
 			// itself fails, then we want somebody to retry "sooner"
-			if rerr := j.releaseLock(ctx, lockName); rerr != nil {
+			// The job context may already be canceled, so cleanup gets its own bounded lifetime.
+			releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), uniqueJobReleaseTimeout)
+			defer cancel()
+			if rerr := j.releaseLock(releaseCtx, lockName); rerr != nil {
 				slog.ErrorContext(ctx, "Failed to release the lock for periodic job", "name", lockName, common.ErrAttr(rerr))
 			}
 		}
