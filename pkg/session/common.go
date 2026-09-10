@@ -26,21 +26,6 @@ const (
 	LastSessionKey SessionKey = KeyTip
 )
 
-// this is a relic of sessions migration to Postgres
-func (key SessionKey) IsPayloadKey() bool {
-	switch key {
-	case KeyUserName,
-		KeyNotificationID,
-		KeyReturnURL,
-		KeyFirstSession,
-		KeyAdhocNotification,
-		KeyTip:
-		return true
-	default:
-		return false
-	}
-}
-
 type SessionValue = interface{}
 
 type Session struct {

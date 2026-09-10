@@ -4,14 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
-	"errors"
 	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
-
-var ErrInvalidPayloadKey = errors.New("session key is not Payload data")
 
 type Authority struct {
 	State              State
@@ -55,9 +52,6 @@ func NewPayload(sid string, store PayloadStore) *Payload {
 }
 
 func (p *Payload) Get(key SessionKey) SessionValue {
-	if !key.IsPayloadKey() {
-		return nil
-	}
 	p.lock.RLock()
 	value := p.values[key]
 	p.lock.RUnlock()
@@ -65,9 +59,6 @@ func (p *Payload) Get(key SessionKey) SessionValue {
 }
 
 func (p *Payload) Set(ctx context.Context, key SessionKey, value SessionValue) error {
-	if !key.IsPayloadKey() {
-		return ErrInvalidPayloadKey
-	}
 	p.lock.Lock()
 	p.values[key] = value
 	p.lock.Unlock()
@@ -76,9 +67,6 @@ func (p *Payload) Set(ctx context.Context, key SessionKey, value SessionValue) e
 }
 
 func (p *Payload) Delete(ctx context.Context, key SessionKey) error {
-	if !key.IsPayloadKey() {
-		return ErrInvalidPayloadKey
-	}
 	p.lock.Lock()
 	delete(p.values, key)
 	p.lock.Unlock()
@@ -117,11 +105,6 @@ func decodePayload(data []byte) (map[SessionKey]SessionValue, error) {
 	if len(data) > 0 {
 		if err := gob.NewDecoder(bytes.NewReader(data)).Decode(&values); err != nil {
 			return nil, err
-		}
-	}
-	for key := range values {
-		if !key.IsPayloadKey() {
-			return nil, ErrInvalidPayloadKey
 		}
 	}
 	return values, nil
