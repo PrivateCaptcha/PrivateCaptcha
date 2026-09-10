@@ -43,6 +43,26 @@ type stubJobWithError struct {
 	name          string
 }
 
+type cancellationJob struct {
+	name    string
+	started chan struct{}
+}
+
+var _ common.PeriodicJob = (*cancellationJob)(nil)
+
+func (j *cancellationJob) Name() string             { return j.name }
+func (j *cancellationJob) Interval() time.Duration  { return time.Hour }
+func (j *cancellationJob) Timeout() time.Duration   { return time.Minute }
+func (j *cancellationJob) Jitter() time.Duration    { return 1 }
+func (j *cancellationJob) NewParams() any           { return struct{}{} }
+func (j *cancellationJob) Trigger() <-chan struct{} { return nil }
+
+func (j *cancellationJob) RunOnce(ctx context.Context, params any) error {
+	close(j.started)
+	<-ctx.Done()
+	return ctx.Err()
+}
+
 var _ common.PeriodicJob = (*stubJobWithError)(nil)
 
 func newStubJobWithError() *stubJobWithError {
@@ -204,6 +224,48 @@ func TestUniqueJobReleasesLockOnError(t *testing.T) {
 
 	if !innerJob2.wasExecuted() {
 		t.Error("Second inner job should have been executed after lock was released")
+	}
+}
+
+func TestUniqueJobReleasesLockOnCancellation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	innerJob := &cancellationJob{name: "test-cancellation-" + xid.New().String(), started: make(chan struct{})}
+	job := &maintenance.UniquePeriodicJob{
+		Job:          innerJob,
+		Store:        store,
+		LockDuration: 10 * time.Minute,
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- job.RunOnce(ctx, job.NewParams())
+	}()
+	select {
+	case <-innerJob.started:
+	case <-time.After(time.Second):
+		t.Fatal("job did not start")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("RunOnce() error = %v, want context cancellation", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("RunOnce did not return")
+	}
+
+	lock, err := store.Impl().RetrieveLock(t.Context(), innerJob.Name())
+	if err != nil && !errors.Is(err, db.ErrRecordNotFound) {
+		t.Fatalf("failed to verify released lock: %v", err)
+	}
+	if err == nil && lock.ExpiresAt.Valid && lock.ExpiresAt.Time.After(time.Now().UTC()) {
+		t.Fatal("lock should be released after cancellation")
 	}
 }
 
