@@ -440,7 +440,41 @@ func TestSessionStoreSetsRegistrationVerificationInCachedAuthority(t *testing.T)
 	}
 }
 
-func TestSessionStoreSetsRegistrationVerificationOnNewerCachedAuthority(t *testing.T) {
+func TestSessionStoreClearsRegistrationVerificationInCachedAuthority(t *testing.T) {
+	sid := t.Name()
+	payload := session.NewPayload(sid, noopPayloadStore{})
+	data, err := payload.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored := &dbgen.Session{
+		SessionID: sid, State: dbgen.SessionStatePending, Version: 1, Data: data,
+		ExpiresAt:      Timestampz(time.Now().Add(time.Hour)),
+		ChallengeKind:  dbgen.NullSessionChallengeKind{SessionChallengeKind: dbgen.SessionChallengeKindRegistration, Valid: true},
+		ChallengeEmail: Text("registrant@example.com"), VerifyRegistration: Bool(true),
+	}
+	querier := &registrationVerificationQuerier{QuerierStub: &QuerierStub{}, row: stored}
+	business := NewBusinessWithQuerier(nil, querier, NewStaticCache[CacheKey, any](100, &CacheMissingValue{}))
+	store := NewSessionStore(business, &sessionMetricsStub{})
+	if _, _, err := store.publishTransitionSession(storedDBSession(stored)); err != nil {
+		t.Fatal(err)
+	}
+
+	querier.row.VerifyRegistration = Bool(false)
+	if err := store.SetVerifyRegistration(t.Context(), sid, false); err != nil {
+		t.Fatal(err)
+	}
+	updated, ok := store.sessionCache.GetIfPresent(sid)
+	if !ok {
+		t.Fatal("updated registration session is absent from cache")
+	}
+	authority, ok := updated.Authority()
+	if !ok || authority.VerifyRegistration {
+		t.Fatalf("updated Authority = %+v, want registration verification cleared", authority)
+	}
+}
+
+func TestSessionStoreKeepsNewerCachedRegistrationVerification(t *testing.T) {
 	sid := t.Name()
 	payload := session.NewPayload(sid, noopPayloadStore{})
 	data, err := payload.Snapshot()
@@ -475,8 +509,8 @@ func TestSessionStoreSetsRegistrationVerificationOnNewerCachedAuthority(t *testi
 		t.Fatal("updated registration session is absent from cache")
 	}
 	authority, ok := updated.Authority()
-	if !ok || authority.Version != newer.Version || !authority.VerifyRegistration {
-		t.Fatalf("updated Authority = %+v, want marked version %d", authority, newer.Version)
+	if !ok || authority.Version != newer.Version || authority.VerifyRegistration {
+		t.Fatalf("updated Authority = %+v, want unmarked version %d", authority, newer.Version)
 	}
 }
 

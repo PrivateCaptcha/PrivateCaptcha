@@ -786,7 +786,8 @@ func (q *Queries) RevokeUserSessions(ctx context.Context, userID pgtype.Int4) ([
 
 const setVerifyRegistration = `-- name: SetVerifyRegistration :one
 UPDATE backend.sessions AS sessions
-SET verify_registration = $1
+SET verify_registration = $1,
+    version = sessions.version + 1
 WHERE session_id = $2
   AND state = 'pending'
   AND challenge_kind = 'registration'
