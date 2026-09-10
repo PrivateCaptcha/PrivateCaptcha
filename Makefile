@@ -85,10 +85,16 @@ stop-clickhouse-test-db:
 	@env CH_PORT=$(TEST_CH_PORT) CH_HTTP_PORT=$(TEST_CH_HTTP_PORT) $(DOCKER) compose -p $(CLICKHOUSE_TEST_DOCKER_COMPOSE_PROJECT) $(CLICKHOUSE_TEST_DOCKER_COMPOSE_FILES) down -v
 
 test-local-light: build-server-ee build-tests-ee
-	@PGPASSWORD="$${PGPASSWORD:-postgres}" PG_ADMIN_USER="$${PG_ADMIN_USER:-postgres}" PG_HOST="$${PG_HOST:-localhost}" PG_PORT="$(TEST_PG_PORT)" GIT_COMMIT="$(GIT_COMMIT)" bash scripts/test-local-postgres.sh ./docker/run-tests.sh
+	@log_file="$$(mktemp "$${TMPDIR:-/tmp}/privatecaptcha-tests.XXXXXX")"; \
+	if PGPASSWORD="$${PGPASSWORD:-postgres}" PG_ADMIN_USER="$${PG_ADMIN_USER:-postgres}" PG_HOST="$${PG_HOST:-localhost}" PG_PORT="$(TEST_PG_PORT)" GIT_COMMIT="$(GIT_COMMIT)" bash scripts/test-local-postgres.sh ./docker/run-tests.sh >"$$log_file" 2>&1; then \
+		echo "SUCCESS: $$log_file"; \
+	else status=$$?; echo "FAILURE: $$log_file"; exit $$status; fi
 
 test-local: build-server-ee build-tests-ee
-	@PGPASSWORD="$${PGPASSWORD:-postgres}" PG_ADMIN_USER="$${PG_ADMIN_USER:-postgres}" PG_HOST="$${PG_HOST:-localhost}" PG_PORT="$(TEST_PG_PORT)" CH_HOST="localhost" CH_PORT="$(TEST_CH_PORT)" CH_HTTP_PORT="$(TEST_CH_HTTP_PORT)" CH_ADMIN_PASSWORD="" CLICKHOUSE_CLIENT_CMD="$(CLICKHOUSE_TEST_CLIENT)" GIT_COMMIT="$(GIT_COMMIT)" bash scripts/test-local-postgres.sh bash scripts/test-local-clickhouse.sh ./docker/run-tests.sh
+	@log_file="$$(mktemp "$${TMPDIR:-/tmp}/privatecaptcha-tests.XXXXXX")"; \
+	if PGPASSWORD="$${PGPASSWORD:-postgres}" PG_ADMIN_USER="$${PG_ADMIN_USER:-postgres}" PG_HOST="$${PG_HOST:-localhost}" PG_PORT="$(TEST_PG_PORT)" CH_HOST="localhost" CH_PORT="$(TEST_CH_PORT)" CH_HTTP_PORT="$(TEST_CH_HTTP_PORT)" CH_ADMIN_PASSWORD="" CLICKHOUSE_CLIENT_CMD="$(CLICKHOUSE_TEST_CLIENT)" GIT_COMMIT="$(GIT_COMMIT)" bash scripts/test-local-postgres.sh bash scripts/test-local-clickhouse.sh ./docker/run-tests.sh >"$$log_file" 2>&1; then \
+		echo "SUCCESS: $$log_file"; \
+	else status=$$?; echo "FAILURE: $$log_file"; exit $$status; fi
 
 vendors:
 	go mod tidy
