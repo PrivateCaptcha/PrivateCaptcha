@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -14,6 +15,44 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 )
 
+func insertVerifyMonthlyGCRecord(t *testing.T, ctx context.Context, userID, orgID int32) {
+	t.Helper()
+	ts, ok := timeSeries.(*db.TimeSeriesDB)
+	if !ok {
+		t.Fatal("expected ClickHouse time-series store")
+	}
+	if _, err := ts.Clickhouse.ExecContext(ctx, `
+INSERT INTO privatecaptcha.verify_logs_1mo
+    (user_id, org_id, timestamp, success_count, failure_count)
+VALUES ({user_id:UInt32}, {org_id:UInt32}, {timestamp:DateTime}, 1, 1)`,
+		clickhouse.Named("user_id", uint32(userID)),
+		clickhouse.Named("org_id", uint32(orgID)),
+		clickhouse.DateNamed("timestamp", time.Now().UTC(), clickhouse.Seconds)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertVerifyMonthlyGCRows(t *testing.T, ctx context.Context, column string, id int32, want uint64) {
+	t.Helper()
+	ts, ok := timeSeries.(*db.TimeSeriesDB)
+	if !ok {
+		t.Fatal("expected ClickHouse time-series store")
+	}
+	if column != "user_id" && column != "org_id" {
+		t.Fatalf("unsupported verify monthly column %q", column)
+	}
+	var count uint64
+	if err := ts.Clickhouse.QueryRowContext(ctx, `
+SELECT count()
+FROM privatecaptcha.verify_logs_1mo
+WHERE `+column+` = {id:UInt32}`, clickhouse.Named("id", uint32(id))).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != want {
+		t.Fatalf("verify monthly rows for %s %d = %d, want %d", column, id, count, want)
+	}
+}
+
 func gcPropertyDataTestSuite(ctx context.Context, property *dbgen.Property, deleter func(p *dbgen.Property) error, expectDeleted bool, t *testing.T) {
 	t.Helper()
 
@@ -22,7 +61,16 @@ func gcPropertyDataTestSuite(ctx context.Context, property *dbgen.Property, dele
 	dp := difficulty.NewDBProperty(property)
 
 	for i := 0; i < requests; i++ {
-		server.Levels.Difficulty(ctx, common.RandomFingerprint(), dp, tnow.Add(time.Duration(i)*10*time.Second))
+		fingerprint := common.RandomFingerprint()
+		timestamp := tnow.Add(time.Duration(i) * 10 * time.Second)
+		_ = server.Levels.RecordAccess(ctx, &common.AccessRecord{
+			Fingerprint: fingerprint,
+			UserID:      dp.OwnerID(),
+			OrgID:       dp.OrgID(),
+			PropertyID:  dp.ID(),
+			Timestamp:   timestamp,
+		})
+		server.Levels.Difficulty(ctx, fingerprint, dp, timestamp)
 	}
 
 	// we need to wait for the timeout in the ProcessAccessLog()
@@ -232,10 +280,13 @@ func TestGCPropertyOrgData(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	insertVerifyMonthlyGCRecord(t, ctx, user.ID, org.ID)
+	assertVerifyMonthlyGCRows(t, ctx, "org_id", org.ID, 1)
 	gcPropertyDataTestSuite(ctx, property, func(p *dbgen.Property) error {
 		_, err := store.Impl().SoftDeleteOrganization(ctx, org, user)
 		return err
 	}, false, t)
+	assertVerifyMonthlyGCRows(t, ctx, "org_id", org.ID, 0)
 }
 
 func TestGCUserData(t *testing.T) {
@@ -258,6 +309,8 @@ func TestGCUserData(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	insertVerifyMonthlyGCRecord(t, ctx, user.ID, org.ID)
+	assertVerifyMonthlyGCRows(t, ctx, "user_id", user.ID, 1)
 	gcPropertyDataTestSuite(ctx, property, func(p *dbgen.Property) error {
 		_, err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
 			event, err := impl.SoftDeleteUser(ctx, user)
@@ -265,6 +318,7 @@ func TestGCUserData(t *testing.T) {
 		})
 		return err
 	}, true, t)
+	assertVerifyMonthlyGCRows(t, ctx, "user_id", user.ID, 0)
 }
 
 func TestGCFormData(t *testing.T) {
