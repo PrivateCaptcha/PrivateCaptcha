@@ -2426,6 +2426,7 @@ func (impl *BusinessStoreImpl) InviteUserToOrg(ctx context.Context, user *dbgen.
 	// invalidate relevant caches
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(inviteUser.ID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
+	impl.invalidateOrganizationStatsCache(ctx, org.UserID.Int32)
 
 	auditEvent := newOrgInviteAuditLogEvent(user, org, inviteUser)
 
@@ -2451,6 +2452,7 @@ func (impl *BusinessStoreImpl) InviteEmailToOrg(ctx context.Context, user *dbgen
 
 	// invalidate org users cache
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
+	impl.invalidateOrganizationStatsCache(ctx, org.UserID.Int32)
 
 	auditEvent := newOrgEmailInviteAuditLogEvent(user, org, email)
 
@@ -2602,6 +2604,7 @@ func (impl *BusinessStoreImpl) RemoveUserFromOrg(ctx context.Context, user *dbge
 	// invalidate relevant caches
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(userID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
+	impl.invalidateOrganizationStatsCache(ctx, org.UserID.Int32)
 
 	userEmail := ""
 	if cachedUser, err := FetchCachedOne[dbgen.User](ctx, impl.cache, UserCacheKey(userID)); err == nil {
@@ -2635,6 +2638,7 @@ func (impl *BusinessStoreImpl) RemoveEmailInviteFromOrg(ctx context.Context, use
 
 	_ = impl.cache.Delete(ctx, orgInviteCacheKey(inviteID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
+	impl.invalidateOrganizationStatsCache(ctx, org.UserID.Int32)
 
 	auditEvent := newOrgMemberDeleteAuditLogEvent(user, org, 0 /*no linked user ID for email-only invites*/, email.String)
 
@@ -4660,6 +4664,12 @@ func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *d
 		_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
 	}
 
+	// for UI (portal) codepath org will always be cached because we opened it first and we care about cache cleanup
+	// only for portal (even if we use this method from API and it's not cached - noone cares)
+	if org, err := FetchCachedOne[dbgen.Organization](ctx, impl.cache, orgCacheKey(rule.OrgID.Int32)); err == nil {
+		impl.invalidateOrganizationStatsCache(ctx, org.UserID.Int32)
+	}
+
 	_ = impl.cache.Set(ctx, DifficultyRuleCacheKey(rule.ID), rule)
 
 	auditEvent := &common.AuditLogEvent{
@@ -4848,6 +4858,7 @@ func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, org *db
 		_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
 	}
 	_ = impl.cache.SetMissing(ctx, DifficultyRuleCacheKey(rule.ID))
+	impl.invalidateOrganizationStatsCache(ctx, org.UserID.Int32)
 
 	auditEvent := newDeleteRuleAuditLogEvent(rule, user)
 
