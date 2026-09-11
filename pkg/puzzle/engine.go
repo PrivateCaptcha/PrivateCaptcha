@@ -14,6 +14,7 @@ type VerifyResult struct {
 	PuzzleID   uint64
 	Error      VerifyError
 	CreatedAt  time.Time
+	ExpiresAt  time.Time
 	Domain     string
 }
 

@@ -3,6 +3,8 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -168,6 +170,55 @@ func TestVerifyPuzzle(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
+	}
+}
+
+func TestVerifyRejectsUnsignedExpiration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	payload, _, _, err := setupVerifySuite(ctx, t.Name(), dbgen.ApiKeyScopePuzzle)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	parts := strings.Split(payload, ".")
+	if len(parts) != 3 {
+		t.Fatalf("verify payload has %d parts, want 3", len(parts))
+	}
+	puzzleBytes, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	const expirationOffset = 1 + puzzle.PropertyIDSize + 8 + 1 + 1
+	if len(puzzleBytes) < expirationOffset+4 {
+		t.Fatal("puzzle payload is too short")
+	}
+	futureExpiration := time.Now().UTC().AddDate(10, 0, 0).Truncate(time.Second)
+	binary.LittleEndian.PutUint32(puzzleBytes[expirationOffset:expirationOffset+4], uint32(futureExpiration.Unix()))
+	parts[1] = base64.StdEncoding.EncodeToString(puzzleBytes)
+
+	tamperedPayload, err := server.Verifier.ParseSolutionPayload(ctx, []byte(strings.Join(parts, ".")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tamperedPayload.NeedsExtraSalt() {
+		t.Fatal("expected property-salted puzzle")
+	}
+	result, err := server.Verifier.Verify(ctx, tamperedPayload, nil, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Error != puzzle.IntegrityError {
+		t.Fatalf("verification error = %v, want %v", result.Error, puzzle.IntegrityError)
+	}
+	if !result.ExpiresAt.IsZero() {
+		t.Errorf("ExpiresAt = %v, want zero for unsigned expiration %v", result.ExpiresAt, futureExpiration)
+	}
+	if result.Valid() {
+		t.Error("unsigned expiration produced a reportable verification result")
 	}
 }
 
@@ -1055,7 +1106,7 @@ func TestReportingVerifierCallsReportFunc(t *testing.T) {
 
 	// Track if report function was called
 	reportCalled := false
-	reportFunc := func(ctx context.Context, res *puzzle.VerifyResult) {
+	reportFunc := func(ctx context.Context, res *puzzle.VerifyResult, userAgent string) {
 		reportCalled = true
 		if res.PropertyID != result.PropertyID {
 			t.Errorf("Expected PropertyID %d, got %d", result.PropertyID, res.PropertyID)
@@ -1106,7 +1157,7 @@ func TestReportingVerifierNoReportOnError(t *testing.T) {
 
 	// Track if report function was called
 	reportCalled := false
-	reportFunc := func(ctx context.Context, res *puzzle.VerifyResult) {
+	reportFunc := func(ctx context.Context, res *puzzle.VerifyResult, userAgent string) {
 		reportCalled = true
 	}
 

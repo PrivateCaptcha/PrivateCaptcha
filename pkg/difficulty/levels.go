@@ -102,21 +102,21 @@ func (l *Levels) Shutdown() {
 }
 
 func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) (uint8, leakybucket.TLevel, error) {
-	err := l.recordAccess(ctx, fingerprint, p, tnow)
+	return l.difficultyEx(ctx, fingerprint, p, tnow)
+}
 
+func (l *Levels) difficultyEx(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) (uint8, leakybucket.TLevel, error) {
 	propertyAddResult := l.propertyBuckets.Add(p.ID(), 1, tnow)
+	var backfillErr error
 	if !propertyAddResult.Found {
-		if perr := l.backfillProperty(ctx, p); perr != nil {
-			// yes, we override, because it's not that important
-			err = perr
-		}
+		backfillErr = l.backfillProperty(ctx, p)
 	}
 
 	userAddResult := l.userBuckets.Add(fingerprint, 1, tnow)
 
 	difficulty := l.algorithm.Difficulty(&propertyAddResult, &userAddResult, p)
 
-	return difficulty, propertyAddResult.CurrLevel, err
+	return difficulty, propertyAddResult.CurrLevel, backfillErr
 }
 
 func (l *Levels) Difficulty(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) uint8 {
@@ -149,33 +149,15 @@ func (l *Levels) BackfillAccess(ctx context.Context, result *puzzle.VerifyResult
 		PropertyID:  result.PropertyID,
 		RuleID:      0,
 		Timestamp:   result.CreatedAt,
+		ExpiresAt:   result.ExpiresAt,
 	}
 
-	timer := time.NewTimer(l.backpressureTimeout)
-	defer timer.Stop()
-
-	select {
-	case l.accessChan <- ar:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return common.ErrBackpressure
-	}
+	return l.RecordAccess(ctx, ar)
 }
 
-func (l *Levels) recordAccess(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) error {
-	if (p == nil) || !p.Valid() {
+func (l *Levels) RecordAccess(ctx context.Context, ar *common.AccessRecord) error {
+	if ar == nil {
 		return nil
-	}
-
-	ar := &common.AccessRecord{
-		Fingerprint: fingerprint,
-		UserID:      p.OwnerID(),
-		OrgID:       p.OrgID(),
-		PropertyID:  p.ID(),
-		RuleID:      p.RuleID(),
-		Timestamp:   tnow,
 	}
 
 	timer := time.NewTimer(l.backpressureTimeout)

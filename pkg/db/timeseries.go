@@ -20,19 +20,26 @@ import (
 )
 
 const (
-	VerifyLogTableName        = "privatecaptcha.verify_logs"
-	VerifyLogTable1h          = "privatecaptcha.verify_logs_1h"
-	VerifyLogTable1d          = "privatecaptcha.verify_logs_1d"
-	AccessLogTableName        = "privatecaptcha.request_logs"
-	AccessLogTableName5m      = "privatecaptcha.request_logs_5m"
-	AccessLogTableName1h      = "privatecaptcha.request_logs_1h"
-	AccessLogTableName1d      = "privatecaptcha.request_logs_1d"
-	AccessLogTableName1mo     = "privatecaptcha.request_logs_1mo"
-	RulesLogsTableName1d      = "privatecaptcha.rules_logs_1d"
-	FormSubmitLogTableName    = "privatecaptcha.form_submit_logs"
-	FormSubmitLogTableName1h  = "privatecaptcha.form_submit_logs_1h"
-	FormSubmitLogTableName1d  = "privatecaptcha.form_submit_logs_1d"
-	FormSubmitLogTableName1mo = "privatecaptcha.form_submit_logs_1mo"
+	VerifyLogTableName               = "privatecaptcha.verify_logs"
+	VerifyLogTable1h                 = "privatecaptcha.verify_logs_1h"
+	VerifyLogTable1d                 = "privatecaptcha.verify_logs_1d"
+	VerifyLogTable1mo                = "privatecaptcha.verify_logs_1mo"
+	AccessLogTableName               = "privatecaptcha.request_logs"
+	AccessLogTableName5m             = "privatecaptcha.request_logs_5m"
+	AccessLogTableName1h             = "privatecaptcha.request_logs_1h"
+	AccessLogTableName1d             = "privatecaptcha.request_logs_1d"
+	AccessLogTableName1mo            = "privatecaptcha.request_logs_1mo"
+	RulesLogsTableName1d             = "privatecaptcha.rules_logs_1d"
+	FormSubmitLogTableName           = "privatecaptcha.form_submit_logs"
+	FormSubmitLogTableName1h         = "privatecaptcha.form_submit_logs_1h"
+	FormSubmitLogTableName1d         = "privatecaptcha.form_submit_logs_1d"
+	FormSubmitLogTableName1mo        = "privatecaptcha.form_submit_logs_1mo"
+	PuzzleStatsOutcomesTable         = "privatecaptcha.puzzle_outcomes_recent"
+	PuzzleStatsIPDailyTable          = "privatecaptcha.puzzle_stats_ip_daily"
+	PuzzleStatsIPMonthlyTable        = "privatecaptcha.puzzle_stats_ip_monthly"
+	PuzzleStatsUserAgentDailyTable   = "privatecaptcha.puzzle_stats_user_agent_daily"
+	PuzzleStatsUserAgentMonthlyTable = "privatecaptcha.puzzle_stats_user_agent_monthly"
+	PuzzleStatsFingerprintDailyTable = "privatecaptcha.puzzle_stats_fingerprint_daily"
 
 	statsRefresh = 15 * time.Minute
 )
@@ -166,14 +173,24 @@ func (ts *TimeSeriesDB) WriteAccessLogBatch(ctx context.Context, records []*comm
 		"async_insert":          1,
 		"wait_for_async_insert": 1,
 	}))
-	batch, err := scope.PrepareContext(insertCtx, fmt.Sprintf("INSERT INTO %s (user_id, org_id, property_id, fingerprint, timestamp, rule_id)", AccessLogTableName))
+	batch, err := scope.PrepareContext(insertCtx,
+		fmt.Sprintf(
+			"INSERT INTO %s (user_id, org_id, property_id, fingerprint, timestamp, rule_id, puzzle_id, expires_at, ip_family, ip_prefix, browser, browser_major, os, device)",
+			AccessLogTableName,
+		),
+	)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
 		return err
 	}
 
 	for i, r := range records {
-		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.Fingerprint, r.Timestamp.UTC(), r.RuleID)
+		expiresAt := r.ExpiresAt
+		if expiresAt.IsZero() {
+			expiresAt = time.Unix(0, 0)
+		}
+		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.Fingerprint, r.Timestamp.UTC(), r.RuleID,
+			r.PuzzleID, expiresAt.UTC(), r.IPFamily, r.IPPrefix, r.Browser, r.BrowserMajor, r.OS, r.Device)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "index", i)
 			return err
@@ -219,14 +236,19 @@ func (ts *TimeSeriesDB) WriteVerifyLogBatch(ctx context.Context, records []*comm
 		"async_insert":          1,
 		"wait_for_async_insert": 1,
 	}))
-	batch, err := scope.PrepareContext(insertCtx, fmt.Sprintf("INSERT INTO %s (user_id, org_id, property_id, puzzle_id, status, timestamp)", VerifyLogTableName))
+	batch, err := scope.PrepareContext(insertCtx, fmt.Sprintf("INSERT INTO %s (user_id, org_id, property_id, puzzle_id, status, timestamp, expires_at, user_agent)", VerifyLogTableName))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
 		return err
 	}
 
 	for i, r := range records {
-		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.PuzzleID, r.Status, r.Timestamp)
+		expiresAt := r.ExpiresAt
+		if expiresAt.IsZero() {
+			expiresAt = time.Unix(0, 0)
+		}
+		verifyClient := common.VerifyClientFromUserAgent(r.UserAgent)
+		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.PuzzleID, r.Status, r.Timestamp.UTC(), expiresAt.UTC(), string(verifyClient))
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "index", i)
 			return err
@@ -1578,6 +1600,7 @@ func (ts *TimeSeriesDB) DeletePropertiesData(ctx context.Context, propertyIDs []
 
 	// NOTE: access table for 1 month is not included as it does not have property_id column
 	tables := []string{
+		PuzzleStatsOutcomesTable, PuzzleStatsIPDailyTable, PuzzleStatsUserAgentDailyTable,
 		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d,
 		VerifyLogTable1h, VerifyLogTable1d, RulesLogsTableName1d,
 	}
@@ -1608,11 +1631,16 @@ func (ts *TimeSeriesDB) DeleteOrganizationsData(ctx context.Context, orgIDs []in
 	}
 
 	ids := idsToString(orgIDs)
+	if err := ts.lightDelete(ctx, []string{PuzzleStatsOutcomesTable}, "finalizeAggregation(org_id)", ids); err != nil {
+		return err
+	}
 
 	tables := []string{
 		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d, AccessLogTableName1mo,
-		VerifyLogTable1h, VerifyLogTable1d, RulesLogsTableName1d,
+		VerifyLogTable1h, VerifyLogTable1d, VerifyLogTable1mo, RulesLogsTableName1d,
 		FormSubmitLogTableName1h, FormSubmitLogTableName1d, FormSubmitLogTableName1mo,
+		PuzzleStatsIPDailyTable, PuzzleStatsIPMonthlyTable,
+		PuzzleStatsUserAgentDailyTable, PuzzleStatsUserAgentMonthlyTable,
 	}
 
 	return ts.lightDelete(ctx, tables, "org_id", ids)
@@ -1629,11 +1657,16 @@ func (ts *TimeSeriesDB) DeleteUsersData(ctx context.Context, userIDs []int32) er
 	}
 
 	ids := idsToString(userIDs)
+	if err := ts.lightDelete(ctx, []string{PuzzleStatsOutcomesTable}, "finalizeAggregation(user_id)", ids); err != nil {
+		return err
+	}
 
 	tables := []string{
 		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d, AccessLogTableName1mo,
-		VerifyLogTable1h, VerifyLogTable1d, RulesLogsTableName1d,
+		VerifyLogTable1h, VerifyLogTable1d, VerifyLogTable1mo, RulesLogsTableName1d,
 		FormSubmitLogTableName1h, FormSubmitLogTableName1d, FormSubmitLogTableName1mo,
+		PuzzleStatsIPDailyTable, PuzzleStatsIPMonthlyTable,
+		PuzzleStatsUserAgentDailyTable, PuzzleStatsUserAgentMonthlyTable,
 	}
 
 	return ts.lightDelete(ctx, tables, "user_id", ids)
@@ -2551,4 +2584,233 @@ func getStartTime(p common.TimePeriod) time.Time {
 	default:
 		return now
 	}
+}
+
+const insertPuzzleStats = `
+INSERT INTO privatecaptcha.puzzle_stats_finalized
+WITH outcomes AS
+(
+    SELECT
+        expires_on,
+        property_id,
+        puzzle_id,
+        argMaxMerge(user_id) AS user_id,
+        argMaxMerge(org_id) AS org_id,
+        maxMerge(fingerprint) AS fingerprint,
+        maxMerge(ip_family) AS ip_family,
+        maxMerge(ip_prefix) AS ip_prefix,
+        maxMerge(browser) AS browser,
+        maxMerge(browser_major) AS browser_major,
+        maxMerge(os) AS os,
+        maxMerge(device) AS device,
+        tupleElement(sumMapMerge(status_counts), 1) AS outcome_status_codes,
+        maxMerge(issued) AS issued
+    FROM privatecaptcha.puzzle_outcomes_recent
+    WHERE expires_on = {source_expires_on:Date}
+    GROUP BY expires_on, property_id, puzzle_id
+    HAVING issued = 1
+)
+SELECT
+    expires_on,
+    user_id,
+    org_id,
+    property_id,
+    fingerprint,
+    ip_family,
+    ip_prefix,
+    browser,
+    browser_major,
+    os,
+    device,
+    toUInt64(1) AS issued_puzzles,
+    toUInt64(length(outcome_status_codes) > 0) AS attempted_puzzles,
+    toUInt64(has(outcome_status_codes, toUInt8(0))) AS successful_puzzles
+FROM outcomes
+SETTINGS materialized_views_ignore_errors = 0`
+
+const insertPuzzleStatsIPMonthly = `
+INSERT INTO privatecaptcha.puzzle_stats_ip_monthly
+SELECT
+    {source_month:Date} AS expires_on,
+    user_id,
+    org_id,
+    ip_family,
+    ip_prefix,
+    successful_count AS success_count,
+    attempted_count - successful_count AS failure_count
+FROM
+(
+    SELECT
+        user_id,
+        org_id,
+        ip_family,
+        ip_prefix,
+        sum(attempted_puzzles) AS attempted_count,
+        sum(successful_puzzles) AS successful_count
+    FROM privatecaptcha.puzzle_stats_ip_daily
+    WHERE expires_on >= {source_month:Date}
+        AND expires_on < addMonths({source_month:Date}, 1)
+    GROUP BY user_id, org_id, ip_family, ip_prefix
+)
+WHERE attempted_count > 0`
+
+const insertPuzzleStatsUserAgentMonthly = `
+INSERT INTO privatecaptcha.puzzle_stats_user_agent_monthly
+SELECT
+    {source_month:Date} AS expires_on,
+    user_id,
+    org_id,
+    browser,
+    os,
+    device,
+    successful_count AS success_count,
+    attempted_count - successful_count AS failure_count
+FROM
+(
+    SELECT
+        user_id,
+        org_id,
+        browser,
+        os,
+        device,
+        sum(attempted_puzzles) AS attempted_count,
+        sum(successful_puzzles) AS successful_count
+    FROM privatecaptcha.puzzle_stats_user_agent_daily
+    WHERE expires_on >= {source_month:Date}
+        AND expires_on < addMonths({source_month:Date}, 1)
+    GROUP BY user_id, org_id, browser, os, device
+)
+WHERE attempted_count > 0`
+
+// FinalizeNextPuzzleStats publishes one fully elapsed UTC outcome partition.
+func (ts *TimeSeriesDB) FinalizeNextPuzzleStats(ctx context.Context, before time.Time) (bool, error) {
+	before = before.UTC().Truncate(24 * time.Hour)
+	var expiresOn time.Time
+	err := ts.Clickhouse.QueryRowContext(ctx, `
+SELECT expires_on
+FROM privatecaptcha.puzzle_outcomes_recent
+WHERE expires_on < {before:Date}
+	AND expires_on < toDate(now('UTC') - INTERVAL 2 HOUR, 'UTC')
+GROUP BY expires_on
+ORDER BY expires_on
+LIMIT 1`, clickhouse.Named("before", puzzleStatsDate(before))).Scan(&expiresOn)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	if err := ts.PublishPuzzleStats(ctx, expiresOn); err != nil {
+		return false, err
+	}
+	if err := ts.dropPuzzleStatsPartition(ctx, PuzzleStatsOutcomesTable, expiresOn); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// FinalizeNextPuzzleStatsMonth publishes one sealed UTC month that has no pending outcome partitions.
+func (ts *TimeSeriesDB) FinalizeNextPuzzleStatsMonth(ctx context.Context, before time.Time) (bool, error) {
+	before = puzzleStatsMonth(before)
+	var expiresMonth time.Time
+	err := ts.Clickhouse.QueryRowContext(ctx, `
+SELECT expires_month
+FROM
+(
+	SELECT
+		toStartOfMonth(expires_on) AS expires_month,
+		sum(attempted_puzzles) AS expected_count,
+		toUInt64(0) AS published_count
+	FROM privatecaptcha.puzzle_stats_user_agent_daily
+	GROUP BY expires_month
+
+	UNION ALL
+
+	SELECT
+		expires_on AS expires_month,
+		toUInt64(0) AS expected_count,
+		sum(success_count + failure_count) AS published_count
+	FROM privatecaptcha.puzzle_stats_user_agent_monthly
+	GROUP BY expires_month
+)
+WHERE expires_month < {before:Date}
+	AND expires_month < toStartOfMonth(toDate(now('UTC') - INTERVAL 2 HOUR, 'UTC'))
+	AND expires_month NOT IN
+	(
+		SELECT toStartOfMonth(expires_on)
+		FROM privatecaptcha.puzzle_outcomes_recent
+		GROUP BY toStartOfMonth(expires_on)
+	)
+GROUP BY expires_month
+HAVING sum(expected_count) > 0
+	AND sum(published_count) < sum(expected_count)
+ORDER BY expires_month
+LIMIT 1`, clickhouse.Named("before", puzzleStatsDate(before))).Scan(&expiresMonth)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	if err := ts.publishPuzzleStatsMonth(ctx, expiresMonth); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// PublishPuzzleStats replaces all daily aggregates for one outcome partition.
+func (ts *TimeSeriesDB) PublishPuzzleStats(ctx context.Context, expiresOn time.Time) error {
+	expiresOn = expiresOn.UTC().Truncate(24 * time.Hour)
+	for _, table := range []string{
+		PuzzleStatsIPDailyTable,
+		PuzzleStatsUserAgentDailyTable,
+		PuzzleStatsFingerprintDailyTable,
+	} {
+		if err := ts.dropPuzzleStatsPartition(ctx, table, expiresOn); err != nil {
+			return err
+		}
+	}
+
+	_, err := ts.Clickhouse.ExecContext(ctx, insertPuzzleStats,
+		clickhouse.Named("source_expires_on", puzzleStatsDate(expiresOn)))
+	return err
+}
+
+func (ts *TimeSeriesDB) publishPuzzleStatsMonth(ctx context.Context, expiresMonth time.Time) error {
+	expiresMonth = puzzleStatsMonth(expiresMonth)
+	for _, table := range []string{
+		PuzzleStatsUserAgentMonthlyTable,
+		PuzzleStatsIPMonthlyTable,
+	} {
+		if err := ts.dropPuzzleStatsPartition(ctx, table, expiresMonth); err != nil {
+			return err
+		}
+	}
+
+	for _, query := range []string{insertPuzzleStatsIPMonthly, insertPuzzleStatsUserAgentMonthly} {
+		if _, err := ts.Clickhouse.ExecContext(ctx, query,
+			clickhouse.Named("source_month", puzzleStatsDate(expiresMonth))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (ts *TimeSeriesDB) dropPuzzleStatsPartition(ctx context.Context, table string, expiresOn time.Time) error {
+	_, err := ts.Clickhouse.ExecContext(ctx,
+		"ALTER TABLE "+table+" DROP PARTITION {source_expires_on:Date}",
+		clickhouse.Named("source_expires_on", puzzleStatsDate(expiresOn)))
+	return err
+}
+
+func puzzleStatsDate(t time.Time) string {
+	return t.UTC().Format(time.DateOnly)
+}
+
+func puzzleStatsMonth(t time.Time) time.Time {
+	t = t.UTC()
+	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
 }
