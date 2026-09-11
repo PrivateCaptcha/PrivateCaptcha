@@ -22,6 +22,7 @@ const (
 	PropertyIDSize        = 16
 	UserDataSize          = 16
 	DefaultValidityPeriod = 30 * time.Minute
+	MaxValidityPeriod     = 24 * time.Hour
 	puzzleVersion         = 1
 )
 
@@ -68,7 +69,7 @@ func (p *ComputePuzzle) Init(validityPeriod time.Duration) error {
 		return err
 	}
 
-	p.expiration = time.Now().UTC().Add(validityPeriod)
+	p.expiration = time.Now().UTC().Truncate(time.Second).Add(min(validityPeriod, MaxValidityPeriod))
 
 	return nil
 }
@@ -303,8 +304,6 @@ var ValidityDurations = []time.Duration{
 	6 * time.Hour,
 	12 * time.Hour,
 	24 * time.Hour,
-	2 * 24 * time.Hour,
-	7 * 24 * time.Hour,
 }
 
 func ValidityIntervalToIndex(period time.Duration) int {

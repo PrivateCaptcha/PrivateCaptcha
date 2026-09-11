@@ -158,7 +158,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	businessDB := db.NewBusiness(pool)
 	timeSeriesDB := db.NewTimeSeries(clickhouse, businessDB.Cache)
 
-	puzzleVerifier := api.NewVerifier(cfg, businessDB, cfg.Get(common.FingerprintHeaderKey))
+	uaParser := useragent.NewParser()
+	puzzleVerifier := api.NewVerifier(cfg, businessDB, cfg.Get(common.FingerprintHeaderKey), uaParser)
 
 	metrics.RegisterPgxPoolStats(func() monitoring.PgxPoolStatProvider {
 		return pool.Stat()
@@ -168,7 +169,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	portalURLConfig := config.AsURL(ctx, cfg.Get(common.PortalBaseURLKey))
 
 	sender := email.NewMailSender(cfg)
-	uaParser := useragent.NewParser()
 	mailer := portal.NewPortalMailer("https:"+cdnURLConfig.URL(), "https:"+portalURLConfig.URL(), sender, cfg, uaParser)
 
 	rateLimitHeader := cfg.Get(common.RateLimitHeaderKey).Value()
@@ -291,7 +291,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		PlanService:        planService,
 		APIURL:             apiURLConfig.URL(),
 		CDNURL:             cdnURLConfig.URL(),
-		PuzzleEngine:       apiServer.ReportingVerifier(),
+		PuzzleEngine:       apiServer.ReportingVerifier(string(common.VerifyClientPortal)),
 		Metrics:            metrics,
 		Mailer:             mailer,
 		RateLimiter:        ipRateLimiter,
@@ -444,6 +444,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		TimeSeries:         timeSeriesDB,
 		GradualDataCleanup: cfg.Get(common.GradualDataCleanupKey),
 	})
+	jobs.AddLocked(2*time.Hour, &maintenance.PuzzleStatsFinalizationJob{Finalizer: timeSeriesDB})
 	jobs.AddOneOff(&maintenance.WarmupPortalAuthJob{
 		Store:               businessDB,
 		RegistrationAllowed: config.AsBool(cfg.Get(common.RegistrationAllowedKey)),

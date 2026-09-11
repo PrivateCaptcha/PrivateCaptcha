@@ -1055,7 +1055,7 @@ func TestReportingVerifierCallsReportFunc(t *testing.T) {
 
 	// Track if report function was called
 	reportCalled := false
-	reportFunc := func(ctx context.Context, res *puzzle.VerifyResult) {
+	reportFunc := func(ctx context.Context, res *puzzle.VerifyResult, userAgent string) {
 		reportCalled = true
 		if res.PropertyID != result.PropertyID {
 			t.Errorf("Expected PropertyID %d, got %d", result.PropertyID, res.PropertyID)
@@ -1106,7 +1106,7 @@ func TestReportingVerifierNoReportOnError(t *testing.T) {
 
 	// Track if report function was called
 	reportCalled := false
-	reportFunc := func(ctx context.Context, res *puzzle.VerifyResult) {
+	reportFunc := func(ctx context.Context, res *puzzle.VerifyResult, userAgent string) {
 		reportCalled = true
 	}
 

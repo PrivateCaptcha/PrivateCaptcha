@@ -351,15 +351,14 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var rulesPair *rules.RulesPair
-	var ri *rules.RequestInfo
+	countryCodeHeader := ""
+	if s.CountryCodeHeader != nil {
+		countryCodeHeader = s.CountryCodeHeader.Value()
+	}
+	ri := rules.NewRequestInfo(r, countryCodeHeader)
 
 	if property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property); ok && property != nil {
 		rulesPair = s.retrievePropertyRules(ctx, property)
-		countryCodeHeader := ""
-		if s.CountryCodeHeader != nil {
-			countryCodeHeader = s.CountryCodeHeader.Value()
-		}
-		ri = rules.NewRequestInfo(r, countryCodeHeader)
 
 		if rulesPair.IsRequestBlocked(ri) {
 			slog.Log(ctx, common.LevelTrace, "Request blocked by difficulty rules")
@@ -467,7 +466,7 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if result.Valid() {
-		s.addVerifyRecord(ctx, result)
+		s.addVerifyRecord(ctx, result, r.UserAgent())
 	}
 
 	if apiKey := ownerSource.cachedKey; apiKey != nil {
@@ -541,7 +540,7 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if result.Valid() {
-		s.addVerifyRecord(ctx, result)
+		s.addVerifyRecord(ctx, result, r.UserAgent())
 	}
 
 	if apiKey := ownerSource.cachedKey; apiKey != nil {
@@ -570,13 +569,15 @@ func newVerificationResponse(result *puzzle.VerifyResult, isExplicitTestSitekey 
 	return response
 }
 
-func (s *Server) addVerifyRecord(ctx context.Context, result *puzzle.VerifyResult) {
+func (s *Server) addVerifyRecord(ctx context.Context, result *puzzle.VerifyResult, userAgent string) {
 	vr := &common.VerifyRecord{
 		UserID:     result.UserID,
 		OrgID:      result.OrgID,
 		PropertyID: result.PropertyID,
 		PuzzleID:   result.PuzzleID,
 		Timestamp:  time.Now().UTC(),
+		ExpiresAt:  result.ExpiresAt,
+		UserAgent:  userAgent,
 		Status:     int8(result.Error),
 	}
 
@@ -601,16 +602,18 @@ func shouldBackfillVerifyAccess(result *puzzle.VerifyResult) bool {
 	return result.Success() && (result.PuzzleID == 0) && !result.CreatedAt.IsZero()
 }
 
-func (s *Server) ReportingVerifier() puzzle.Engine {
+func (s *Server) ReportingVerifier(userAgent string) puzzle.Engine {
 	return &reportingVerifier{
 		verifier:   s.Verifier,
 		reportFunc: s.addVerifyRecord,
+		userAgent:  userAgent,
 	}
 }
 
 type reportingVerifier struct {
 	verifier   puzzle.Engine
-	reportFunc func(context.Context, *puzzle.VerifyResult)
+	reportFunc func(context.Context, *puzzle.VerifyResult, string)
+	userAgent  string
 }
 
 var _ puzzle.Engine = (*reportingVerifier)(nil)
@@ -627,7 +630,7 @@ func (rv *reportingVerifier) ParseSolutionPayload(ctx context.Context, payload [
 func (rv *reportingVerifier) Verify(ctx context.Context, payload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, error) {
 	result, err := rv.verifier.Verify(ctx, payload, expectedOwner, tnow)
 	if err == nil && result.Valid() {
-		rv.reportFunc(ctx, result)
+		rv.reportFunc(ctx, result, rv.userAgent)
 	}
 	return result, err
 }

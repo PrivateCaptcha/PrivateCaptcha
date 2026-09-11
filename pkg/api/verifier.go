@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"strconv"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -19,6 +20,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/medama-io/go-useragent"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -31,6 +33,7 @@ type Verifier struct {
 	UserFingerprintKey   *userFingerprintKey
 	FingerprintHeaderKey common.ConfigItem
 	FingerprintHeader    string
+	UAParser             *useragent.Parser
 	Store                db.Implementor
 	TestPuzzle           puzzle.Puzzle
 	TestPuzzleData       *puzzle.PuzzlePayload
@@ -39,13 +42,18 @@ type Verifier struct {
 
 var _ puzzle.Engine = (*Verifier)(nil)
 
-func NewVerifier(cfg common.ConfigStore, store db.Implementor, fingerprintHeaderKey common.ConfigItem) *Verifier {
+func NewVerifier(cfg common.ConfigStore, store db.Implementor, fingerprintHeaderKey common.ConfigItem, uaParser *useragent.Parser) *Verifier {
+	if uaParser == nil {
+		uaParser = useragent.NewParser()
+	}
+
 	testPuzzle := puzzle.NewComputePuzzle(0 /*puzzle ID*/, db.TestPropertyUUID.Bytes, 0 /*difficulty*/)
 	return &Verifier{
 		Salt:                 NewPuzzleSalt(cfg.Get(common.APISaltKey)),
 		UserFingerprintKey:   NewUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
 		FingerprintHeaderKey: fingerprintHeaderKey,
 		FingerprintHeader:    fingerprintHeaderKey.Value(),
+		UAParser:             uaParser,
 		Store:                store,
 		TestPuzzle:           testPuzzle,
 		TestSolutions:        puzzle.NewStubPayload(testPuzzle),
@@ -213,13 +221,14 @@ func (v *Verifier) Verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 	result.SetError(perr)
 	if puzzleObject != nil && !puzzleObject.IsZero() {
 		result.PuzzleID = puzzleObject.PuzzleID()
+		result.ExpiresAt = puzzleObject.Expiration().UTC()
 		validityPeriod := puzzle.DefaultValidityPeriod
 		if property != nil && !puzzleObject.IsStub() {
 			// NOTE: user could have changed property validity interval of course in between but it should be an edge-case
 			// and it does not affect verification as we rely on expiration rather than creation
 			validityPeriod = property.ValidityInterval
 		}
-		result.CreatedAt = puzzleObject.Expiration().Add(-validityPeriod)
+		result.CreatedAt = result.ExpiresAt.Add(-min(validityPeriod, puzzle.MaxValidityPeriod))
 	}
 	if property != nil {
 		result.UserID = property.OrgOwnerID.Int32
@@ -348,8 +357,38 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 		slog.ErrorContext(ctx, "Failed to init puzzle", common.ErrAttr(err))
 	}
 
+	accessRecord := v.createPuzzleAccess(difficultyProperty, fingerprint, result, tnow, ri)
+	if accessErr := levels.RecordAccess(ctx, accessRecord); err == nil {
+		err = accessErr
+	}
+
 	slog.Log(ctx, common.LevelTrace, "Prepared new puzzle", "propID", property.ID, "difficulty", result.Difficulty(),
 		"puzzleID", result.PuzzleID(), "userID", property.OrgOwnerID.Int32)
 
 	return result, property, err
+}
+
+func (v *Verifier) createPuzzleAccess(difficultyProperty difficulty.Property, fingerprint common.TFingerprint, result puzzle.Puzzle, tnow time.Time, ri *rules.RequestInfo) *common.AccessRecord {
+	accessRecord := &common.AccessRecord{
+		Fingerprint: fingerprint,
+		UserID:      difficultyProperty.OwnerID(),
+		OrgID:       difficultyProperty.OrgID(),
+		PropertyID:  difficultyProperty.ID(),
+		RuleID:      difficultyProperty.RuleID(),
+		Timestamp:   tnow,
+		PuzzleID:    result.PuzzleID(),
+		ExpiresAt:   result.Expiration(),
+	}
+	if ri != nil {
+		parsedUA := ri.ParsedUserAgent(v.UAParser)
+		accessRecord.Browser = parsedUA.Browser().String()
+		accessRecord.OS = parsedUA.OS().String()
+		accessRecord.Device = parsedUA.Device().String()
+		if major, err := strconv.ParseUint(parsedUA.BrowserVersionMajor(), 10, 16); err == nil {
+			accessRecord.BrowserMajor = uint16(major)
+		}
+		accessRecord.IPFamily, accessRecord.IPPrefix = common.MaskedIPPrefix(ri.IPAddr())
+	}
+
+	return accessRecord
 }

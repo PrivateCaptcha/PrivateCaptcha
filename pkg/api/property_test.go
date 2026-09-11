@@ -100,6 +100,52 @@ func TestNormalizeApiPropertyInput(t *testing.T) {
 			},
 		},
 		{
+			name: "caps validity at one day",
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test Property",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: int((48 * time.Hour).Seconds()),
+					MaxReplayCount:  100,
+				},
+			},
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test Property",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: int(puzzle.MaxValidityPeriod.Seconds()),
+					MaxReplayCount:  100,
+				},
+			},
+		},
+		{
+			name: "caps validity before duration conversion",
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test Property",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: math.MaxInt,
+					MaxReplayCount:  100,
+				},
+			},
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test Property",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: int(puzzle.MaxValidityPeriod.Seconds()),
+					MaxReplayCount:  100,
+				},
+			},
+		},
+		{
 			name: "accepts all valid growth values",
 			input: apiCreatePropertyInput{
 				Domain: "example.com",
@@ -669,7 +715,7 @@ func TestApiUpdateProperties(t *testing.T) {
 				Name:            "Updated Property 1",
 				Level:           int(common.DifficultyLevelHigh),
 				Growth:          string(dbgen.DifficultyGrowthMedium),
-				ValiditySeconds: int(puzzle.ValidityDurations[7].Seconds()),
+				ValiditySeconds: int(puzzle.ValidityDurations[6].Seconds()),
 				AllowSubdomains: true,
 				AllowLocalhost:  false,
 				MaxReplayCount:  500,
@@ -1238,7 +1284,7 @@ func TestApiUpdatePropertiesReadOnlyKey(t *testing.T) {
 				Name:            "Updated Property 1",
 				Level:           int(common.DifficultyLevelHigh),
 				Growth:          string(dbgen.DifficultyGrowthMedium),
-				ValiditySeconds: int(puzzle.ValidityDurations[7].Seconds()),
+				ValiditySeconds: int(puzzle.ValidityDurations[6].Seconds()),
 				AllowSubdomains: true,
 				AllowLocalhost:  false,
 				MaxReplayCount:  500,

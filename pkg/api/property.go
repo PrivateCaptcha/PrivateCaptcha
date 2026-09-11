@@ -98,7 +98,9 @@ func (p *apiPropertySettings) Normalize() {
 	}
 
 	if p.ValiditySeconds > 0 {
-		validityIndex := puzzle.ValidityIntervalToIndex(time.Duration(p.ValiditySeconds) * time.Second)
+		validitySeconds := min(p.ValiditySeconds, int(puzzle.MaxValidityPeriod/time.Second))
+		validity := time.Duration(validitySeconds) * time.Second
+		validityIndex := puzzle.ValidityIntervalToIndex(validity)
 		p.ValiditySeconds = int(puzzle.ValidityDurations[validityIndex].Seconds())
 	} else {
 		const defaultValidityPeriod = 6 * time.Hour
