@@ -512,6 +512,7 @@ func (s *Server) getFormDashboard(w http.ResponseWriter, r *http.Request) (*View
 	slog.Log(ctx, common.LevelTrace, "Form tab was requested", "tab", tabParam)
 
 	var model Model
+	var event *common.AuditLogEvent
 	switch tabParam {
 	case common.IntegrationsEndpoint:
 		renderCtx, err := s.getFormIntegrations(w, r)
@@ -526,11 +527,12 @@ func (s *Server) getFormDashboard(w http.ResponseWriter, r *http.Request) (*View
 		}
 		model = renderCtx
 	case common.EventsEndpoint:
-		renderCtx, _, err := s.getFormAuditLogs(w, r)
+		renderCtx, ae, err := s.getFormAuditLogs(w, r)
 		if err != nil {
 			return nil, err
 		}
 		model = renderCtx
+		event = ae
 	case "", common.ReportsEndpoint:
 		renderCtx, _, err := s.getOrgForm(w, r)
 		if err != nil {
@@ -548,7 +550,7 @@ func (s *Server) getFormDashboard(w http.ResponseWriter, r *http.Request) (*View
 		model = renderCtx
 	}
 
-	return &ViewModel{Model: model, View: formDashboardTemplate, IsNew: true}, nil
+	return &ViewModel{Model: model, AuditEvents: singleAuditEvents(event), View: formDashboardTemplate, IsNew: true}, nil
 }
 
 func (s *Server) getFormReportsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
