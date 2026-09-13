@@ -278,7 +278,7 @@ func (j *CheckLicenseJob) checkLicense(ctx context.Context) error {
 				// truncating time will cause duplicate notification being rejected based on SQL constraint
 				notifTime := tnow.Truncate(24 * time.Hour)
 				notifDuration := 7 * 24 * time.Hour
-				text := fmt.Sprintf("Failed to renew license (%s): <i>%s</i>", tnow.Format(time.DateOnly), err.Error())
+				text := fmt.Sprintf("Failed to renew license (%s)", tnow.Format(time.DateOnly))
 				_, _ = j.store.Impl().CreateSystemNotification(ctx, text, notifTime, &notifDuration, &admin.ID)
 			} else {
 				slog.ErrorContext(ctx, "Failed to find admin user by email", "email", adminEmail, common.ErrAttr(aerr))
