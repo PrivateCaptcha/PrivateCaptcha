@@ -186,7 +186,7 @@ func (ul *UserAuditLog) initFromProperty(oldValue, newValue *db.AuditLogProperty
 			ul.Value = strconv.Itoa(int(newValue.MaxReplayCount))
 		} else if oldValue.ValidityIntervalSec != newValue.ValidityIntervalSec {
 			ul.Property = "Validity"
-			interval := time.Duration(newValue.ValidityIntervalSec) * time.Millisecond
+			interval := time.Duration(newValue.ValidityIntervalSec) * time.Second
 			ul.Value = fmt.Sprintf("%.2f hour(s)", interval.Hours())
 		} else if oldValue.AllowSubdomains != newValue.AllowSubdomains {
 			ul.Property = "Subdomains"

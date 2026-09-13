@@ -1509,3 +1509,41 @@ func TestNewUserAuditLogUserSettings(t *testing.T) {
 		t.Errorf("TableName = %v, want %v", ul.TableName, db.TableNameUserSettings)
 	}
 }
+
+func TestInitFromPropertyValidityChangeBuggyUnit(t *testing.T) {
+	ul := &UserAuditLog{}
+	oldValue := &db.AuditLogProperty{Name: "Test Property", ValidityIntervalSec: 3600}
+	newValue := &db.AuditLogProperty{Name: "Test Property", ValidityIntervalSec: 7200}
+	if err := ul.initFromProperty(oldValue, newValue); err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if ul.Property != "Validity" {
+		t.Errorf("Expected Property to be 'Validity', got '%s'", ul.Property)
+	}
+	const want = "2.00 hour(s)"
+	if ul.Value != want {
+		t.Errorf("Value: got %q, want %q (a 1h->2h validity change must render as 2.00 hour(s))", ul.Value, want)
+	}
+}
+
+func TestAuditLogPropertyValidityIntervalSecJSONRoundTrip(t *testing.T) {
+	original := &db.AuditLogProperty{Name: "Test Property", ValidityIntervalSec: 7200}
+	raw, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	decoded := &db.AuditLogProperty{}
+	if err := json.Unmarshal(raw, decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if decoded.ValidityIntervalSec != 7200 {
+		t.Errorf("ValidityIntervalSec after round-trip: got %d, want 7200 (raw=%s)", decoded.ValidityIntervalSec, raw)
+	}
+	ul := &UserAuditLog{}
+	if err := ul.initFromProperty(&db.AuditLogProperty{Name: "Test Property", ValidityIntervalSec: 3600}, decoded); err != nil {
+		t.Fatalf("initFromProperty: %v", err)
+	}
+	if ul.Value != "2.00 hour(s)" {
+		t.Errorf("Value after round-trip: got %q, want %q", ul.Value, "2.00 hour(s)")
+	}
+}
