@@ -1,11 +1,11 @@
 package main
 
 import (
+	"bufio"
 	_ "embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"io"
 	"os"
 	"sort"
 	"strings"
@@ -42,21 +42,24 @@ func main() {
 	}
 
 	var logs []LogEntry
-	decoder := json.NewDecoder(os.Stdin)
-
-	for {
-		// Decode into a generic map to handle varying field names
+	scanner := bufio.NewScanner(os.Stdin)
+	// allow very long slog lines (attrs can be large)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
 		var raw map[string]interface{}
-		if err := decoder.Decode(&raw); err == io.EOF {
-			break
-		} else if err != nil {
+		if err := json.Unmarshal([]byte(line), &raw); err != nil {
 			// Skip malformed lines
 			continue
 		}
-
-		// Normalize data
 		entry := normalizeLog(raw)
 		logs = append(logs, entry)
+	}
+	if err := scanner.Err(); err != nil {
+		panic(err)
 	}
 
 	if len(logs) == 0 {
