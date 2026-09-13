@@ -451,7 +451,7 @@ func (j *ScheduleReportsJob) buildMonthlyReport(ctx context.Context, userID int3
 
 	report := &email.UsageReportContext{
 		Period:        "monthly",
-		PeriodDate:    to.Format("Jan 2006"),
+		PeriodDate:    to.AddDate(0, 0, -1).Format("Jan 2006"),
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint + "&" + utm,
 		UTM:           utm,
 	}
