@@ -14,6 +14,8 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 const (
@@ -298,6 +300,8 @@ func (ul *UserAuditLog) initFromAccess(log *dbgen.AuditLog, payload *db.AuditLog
 	if payload == nil {
 		return errUnexpectedAuditLogPayload
 	}
+
+	englishCaser := cases.Title(language.English)
 
 	ul.Property = englishCaser.String(payload.View)
 

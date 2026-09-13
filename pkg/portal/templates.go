@@ -15,6 +15,8 @@ import (
 	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var (
@@ -91,7 +93,7 @@ func NewTemplatesBuilder() *TemplatesBuilder {
 		templateRootDir: "layouts",
 		functions: template.FuncMap{
 			"qescape":  url.QueryEscape,
-			"title":    englishCaser.String,
+			"title":    func(s string) string { return cases.Title(language.English).String(s) },
 			"safeHTML": func(s string) any { return template.HTML(s) },
 			"safeJS":   func(s string) any { return template.JS(s) },
 			"plus1":    func(x int) int { return x + 1 },

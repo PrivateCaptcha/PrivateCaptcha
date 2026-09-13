@@ -13,8 +13,6 @@ import (
 
 	"github.com/justinas/alice"
 	"github.com/rs/xid"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/api"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
@@ -36,8 +34,6 @@ var (
 	errPropertySoftDeleted = errors.New("property is deleted")
 	errFormSoftDeleted     = errors.New("form is deleted")
 	errLimitedFeature      = errors.New("feature is limited")
-
-	englishCaser = cases.Title(language.English)
 )
 
 const (
