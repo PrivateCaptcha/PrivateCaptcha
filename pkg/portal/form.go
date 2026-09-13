@@ -745,6 +745,9 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	if _, retry := r.Form[common.ParamRetryRequestCount]; retry {
 		retryRequestCount = 1
 	}
+	renderCtx.Form.Active = active
+	renderCtx.Form.RetryRequestCount = int(retryRequestCount)
+
 	rpmValue := r.FormValue(common.ParamRequestsPerMinute)
 	requestsPerMinute, err := parseRequestsPerMinute(ctx, rpmValue)
 	if err != nil {
@@ -752,6 +755,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 		renderCtx.ErrorMessage = "Failed to update settings."
 		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, IsNew: false}, nil
 	}
+	renderCtx.Form.RequestsPerMinute = int(requestsPerMinute)
 
 	var auditEvent *common.AuditLogEvent
 	if (name != form.Name) || (urlValue != form.URL) || (method != form.Method) || (active != form.Active) || (retryRequestCount != form.RetryRequestCount) ||
