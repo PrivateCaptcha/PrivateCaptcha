@@ -160,6 +160,10 @@ func (v *Verifier) verifyPuzzleValid(ctx context.Context, payload puzzle.Solutio
 				// Cannot verify signature without property salt - reject to prevent forgery attacks
 				return p, nil, puzzle.IntegrityError
 			}
+			if v.Store.CheckVerifiedPuzzle(ctx, p, 1 /*maxCount*/) {
+				slog.WarnContext(ctx, "Puzzle is already cached", "count", 1, common.PuzzleIDAttr(p.PuzzleID()))
+				return p, nil, puzzle.VerifiedBeforeError
+			}
 			return p, nil, puzzle.MaintenanceModeError
 		default:
 			slog.ErrorContext(ctx, "Failed to find property by sitekey", "sitekey", sitekey, common.PuzzleIDAttr(p.PuzzleID()), common.ErrAttr(err))
@@ -279,7 +283,7 @@ func (v *Verifier) Verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 		return result, nil
 	}
 
-	if (puzzleObject != nil) && (property != nil) && (property.MaxReplayCount > 0) {
+	if (puzzleObject != nil) && (((property != nil) && (property.MaxReplayCount > 0)) || (perr == puzzle.MaintenanceModeError)) {
 		v.Store.CacheVerifiedPuzzle(ctx, puzzleObject, tnow)
 	} else if puzzleObject != nil {
 		slog.Log(ctx, common.LevelTrace, "Skipping caching puzzle", "puzzleID", puzzleObject.PuzzleID())
