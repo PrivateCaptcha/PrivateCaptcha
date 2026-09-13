@@ -133,13 +133,22 @@ func (j *jobs) handlePeriodicJob(w http.ResponseWriter, r *http.Request) {
 		if job.Name() == jobName {
 			params := job.NewParams()
 			if r.Body != nil {
-				if buf, _ := io.ReadAll(r.Body); len(buf) > 0 {
+				buf, err := io.ReadAll(r.Body)
+				if err != nil {
+					status := http.StatusBadRequest
+					var maxBytesErr *http.MaxBytesError
+					if errors.As(err, &maxBytesErr) {
+						status = http.StatusRequestEntityTooLarge
+					}
+					slog.ErrorContext(ctx, "Failed to read params", "job", jobName, common.ErrAttr(err))
+					http.Error(w, http.StatusText(status), status)
+					return
+				}
+				if len(buf) > 0 {
 					if err := json.Unmarshal(buf, params); err != nil {
 						slog.ErrorContext(ctx, "Failed to decode params", "job", jobName, common.ErrAttr(err))
 						http.Error(w, err.Error(), http.StatusBadRequest)
 						return
-					} else {
-						slog.DebugContext(ctx, "Read job parameters from request", "size", len(buf))
 					}
 				}
 			}
