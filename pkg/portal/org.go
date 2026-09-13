@@ -931,9 +931,12 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMod
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
 	}
 
 	baseCtx := s.createPortalTabBaseContext(org, user, portalMembersTabIndex)
@@ -992,9 +995,12 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
 	}
 
 	baseCtx := s.createPortalTabBaseContext(org, user, portalSettingsTabIndex)
@@ -1039,9 +1045,12 @@ func (s *Server) getOrgAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
 	}
 
 	baseCtx := s.createPortalTabBaseContext(org, user, portalEventsTabIndex)
@@ -1106,9 +1115,12 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (*ViewModel, err
 		return nil, ErrInvalidRequestArg
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
 	}
 
 	baseCtx := s.createPortalTabBaseContext(org, user, portalSettingsTabIndex)
