@@ -413,7 +413,7 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if ownerSubscr != nil {
-		if ok, extra, err := s.SubscriptionLimits.CheckOrgMembersLimit(ctx, org.ID, ownerSubscr); err == nil && !ok {
+		if ok, extra, err := s.SubscriptionLimits.CheckOrgMembersLimit(ctx, org.ID, ownerSubscr); err == nil && !ok && extra > 0 {
 			slog.WarnContext(ctx, "Organization members limit check failed", "extra", extra, "orgID", org.ID, "subscriptionID", ownerSubscr.ID,
 				"internal", db.IsInternalSubscription(ownerSubscr.Source))
 			s.RedirectError(http.StatusPaymentRequired, w, r)
