@@ -14,6 +14,8 @@ import (
 	"github.com/maypok86/otter/v2"
 )
 
+var ErrCacheSaveTruncated = errors.New("cache was saved truncated")
+
 func SaveCacheToFile[TKey comparable, TValue any](
 	ctx context.Context,
 	dir, filename string,
@@ -54,8 +56,12 @@ func SaveCacheToFile[TKey comparable, TValue any](
 
 	count, err := SaveCacheToWriter(ctx, tmp, cache, maxItems, filter)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to save cache", "file", tmpPath, ErrAttr(err))
 		_ = tmp.Close()
+		if errors.Is(err, ErrCacheSaveTruncated) {
+			slog.WarnContext(ctx, "Keeping previous cache file after truncated save", "file", filePath, "count", count)
+			return nil // do NOT rename over the previously-good file
+		}
+		slog.ErrorContext(ctx, "Failed to save cache", "file", tmpPath, ErrAttr(err))
 		return err
 	}
 
@@ -107,7 +113,7 @@ func SaveCacheToWriter[TKey comparable, TValue any](
 		if err := ctx.Err(); err != nil {
 			slog.WarnContext(ctx, "Truncated cache due to context cancellation", ErrAttr(err))
 			// it's not reported as error because we care only about best-effort here
-			break
+			return count, ErrCacheSaveTruncated
 		}
 
 		if filter != nil && !filter(entry.Value) {
