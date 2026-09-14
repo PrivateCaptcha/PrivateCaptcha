@@ -92,7 +92,7 @@ Version is written only by PostgreSQL:
 | Stale, expired, exhausted, or verification-required result | Unchanged |
 | Successful sign-in | Old SID `+1`; successor starts at `1` |
 | Successful registration | Old SID `+1`; later successor starts at `1` |
-| Registration screening mark | Unchanged |
+| Registration screening mark | `+1` |
 | Payload persistence | `+1` |
 | First revocation | `+1` |
 | Read, lease refresh, expiration renewal, or repeated revocation | Unchanged |
