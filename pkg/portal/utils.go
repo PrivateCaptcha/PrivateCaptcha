@@ -47,7 +47,12 @@ func (s *Server) Org(user *dbgen.User, r *http.Request) (*dbgen.Organization, db
 			return nil, dbgen.NullAccessLevel{}, db.ErrPermissions
 		}
 
-		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
+		level := slog.LevelError
+		if err == db.ErrRecordNotFound || err == db.ErrNegativeCacheHit {
+			level = slog.LevelWarn
+		}
+		slog.Log(ctx, level, "Failed to find property by ID", common.ErrAttr(err))
+
 		return nil, dbgen.NullAccessLevel{}, err
 	}
 
@@ -86,7 +91,12 @@ func (s *Server) Property(org *dbgen.Organization, r *http.Request) (*dbgen.Prop
 			return nil, errPropertySoftDeleted
 		}
 
-		slog.ErrorContext(ctx, "Failed to find property by ID", common.ErrAttr(err))
+		level := slog.LevelError
+		if err == db.ErrRecordNotFound || err == db.ErrNegativeCacheHit {
+			level = slog.LevelWarn
+		}
+
+		slog.Log(ctx, level, "Failed to find property by ID", common.ErrAttr(err))
 		return nil, err
 	}
 
@@ -108,7 +118,11 @@ func (s *Server) Form(org *dbgen.Organization, r *http.Request) (*dbgen.Form, er
 			return nil, errFormSoftDeleted
 		}
 
-		slog.ErrorContext(ctx, "Failed to find form by ID", common.ErrAttr(err))
+		level := slog.LevelError
+		if err == db.ErrRecordNotFound || err == db.ErrNegativeCacheHit {
+			level = slog.LevelWarn
+		}
+		slog.Log(ctx, level, "Failed to find form by ID", common.ErrAttr(err))
 		return nil, err
 	}
 

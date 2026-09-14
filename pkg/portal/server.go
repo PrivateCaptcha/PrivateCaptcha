@@ -497,7 +497,7 @@ func (s *Server) Handler(modelFunc ViewModelHandler) http.Handler {
 				s.RedirectError(http.StatusNotAcceptable, w, r)
 			case db.ErrMaintenance:
 				s.RedirectError(http.StatusServiceUnavailable, w, r)
-			case errRegistrationDisabled:
+			case errRegistrationDisabled, db.ErrRecordNotFound, db.ErrNegativeCacheHit:
 				s.RedirectError(http.StatusNotFound, w, r)
 			case errLimitedFeature:
 				s.RedirectError(http.StatusPaymentRequired, w, r)
