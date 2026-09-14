@@ -67,8 +67,6 @@ func idsToString(ids []int32) string {
 }
 
 func NewTimeSeries(clickhouse *sql.DB, cache common.Cache[CacheKey, any]) *TimeSeriesDB {
-	// ClickHouse docs:
-	// The join (a search in the right table) is run before filtering in WHERE and before aggregation.
 	const statsQuery = `WITH requests AS
 (
 SELECT
@@ -89,11 +87,15 @@ GROUP BY agg_time
 ORDER BY agg_time
 )
 SELECT
-requests.agg_time AS agg_time,
-sum(requests.count) AS requests_count,
-sum(verifies.count) AS verifies_count
-FROM requests
-LEFT OUTER JOIN verifies ON verifies.agg_time = requests.agg_time
+agg_time,
+sum(requests_count) AS requests_count,
+sum(verifies_count) AS verifies_count
+FROM
+(
+SELECT agg_time, count AS requests_count, toUInt64(0) AS verifies_count FROM requests
+UNION ALL
+SELECT agg_time, toUInt64(0) AS requests_count, count AS verifies_count FROM verifies
+)
 GROUP BY agg_time
 ORDER BY agg_time WITH FILL FROM toDateTime({{.FillFrom}}) TO now() STEP {{.Interval}}
 SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save', query_cache_tag = 'property_stats_period'`

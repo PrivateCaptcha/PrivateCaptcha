@@ -439,6 +439,7 @@ func TestGetPropertyStats(t *testing.T) {
 	}
 
 	now := time.Now()
+	verifyOnlyTime := now.Add(-3 * time.Hour)
 	accessRecords := []*common.AccessRecord{
 		{
 			UserID:     user.ID,
@@ -473,6 +474,14 @@ func TestGetPropertyStats(t *testing.T) {
 			PropertyID: property.ID,
 			PuzzleID:   2,
 			Timestamp:  now.Add(-2 * time.Hour),
+			Status:     int8(puzzle.VerifyNoError),
+		},
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			PuzzleID:   3,
+			Timestamp:  verifyOnlyTime,
 			Status:     int8(puzzle.VerifyNoError),
 		},
 	}
@@ -539,8 +548,27 @@ func TestGetPropertyStats(t *testing.T) {
 				t.Errorf("Expected 2 total requested for %s period, got %d", p.endpoint, totalRequested)
 			}
 
-			if totalVerified != 2 {
-				t.Errorf("Expected 2 total verified for %s period, got %d", p.endpoint, totalVerified)
+			if totalVerified != 3 {
+				t.Errorf("Expected 3 total verified for %s period, got %d", p.endpoint, totalVerified)
+			}
+
+			if p.period == common.TimePeriodToday {
+				verifyOnlyBucket := verifyOnlyTime.Truncate(time.Hour).Unix()
+				requestedByDate := make(map[int64]int, len(stats.Requested))
+				verifiedByDate := make(map[int64]int, len(stats.Verified))
+				for _, pt := range stats.Requested {
+					requestedByDate[pt.Date] = pt.Value
+				}
+				for _, pt := range stats.Verified {
+					verifiedByDate[pt.Date] = pt.Value
+				}
+
+				if requested, ok := requestedByDate[verifyOnlyBucket]; !ok || requested != 0 {
+					t.Errorf("Expected 0 requested in verify-only bucket, got %d (present: %v)", requested, ok)
+				}
+				if verified, ok := verifiedByDate[verifyOnlyBucket]; !ok || verified != 1 {
+					t.Errorf("Expected 1 verified in verify-only bucket, got %d (present: %v)", verified, ok)
+				}
 			}
 		})
 	}
