@@ -24,7 +24,7 @@ func (m *Manager) sessionID() string {
 }
 
 func (m *Manager) expirationRenewalWindow() time.Duration {
-	return (m.MaxLifetime * 3) / 4
+	return (m.MaxLifetime * 5) / 6
 }
 
 func (m *Manager) setSessionCookie(w http.ResponseWriter, r *http.Request, sid string, maxAge int) {
