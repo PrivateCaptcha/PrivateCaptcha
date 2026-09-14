@@ -44,7 +44,7 @@ func main() {
 	var logs []LogEntry
 	scanner := bufio.NewScanner(os.Stdin)
 	// allow very long slog lines (attrs can be large)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -59,7 +59,7 @@ func main() {
 		logs = append(logs, entry)
 	}
 	if err := scanner.Err(); err != nil {
-		panic(err)
+		fmt.Fprintln(os.Stderr, "warning: scanner error:", err)
 	}
 
 	if len(logs) == 0 {
