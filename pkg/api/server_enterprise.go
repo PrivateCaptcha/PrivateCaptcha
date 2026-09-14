@@ -148,7 +148,7 @@ func (s *Server) requestProperty(org *dbgen.Organization, r *http.Request) (*dbg
 
 func (s *Server) sendHTTPErrorResponse(err error, w http.ResponseWriter) {
 	switch err {
-	case db.ErrRecordNotFound:
+	case db.ErrRecordNotFound, db.ErrNegativeCacheHit:
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 	case db.ErrInvalidInput:
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -158,7 +158,7 @@ func (s *Server) sendHTTPErrorResponse(err error, w http.ResponseWriter) {
 		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 	case errAPIKeyScope, errInvalidAPIKey, errAPIKeyNotSet, errAPIKeyReadOnly, db.ErrPermissions:
 		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-	case db.ErrSoftDeleted, db.ErrNegativeCacheHit:
+	case db.ErrSoftDeleted:
 		http.Error(w, http.StatusText(http.StatusConflict), http.StatusConflict)
 	case context.DeadlineExceeded:
 		http.Error(w, http.StatusText(http.StatusGatewayTimeout), http.StatusGatewayTimeout)
