@@ -521,11 +521,12 @@ func (s *Server) getFormDashboard(w http.ResponseWriter, r *http.Request) (*View
 		}
 		model = renderCtx
 	case common.SettingsEndpoint:
-		renderCtx, err := s.getOrgFormSettings(w, r)
+		renderCtx, ae, err := s.getOrgFormSettings(w, r)
 		if err != nil {
 			return nil, err
 		}
 		model = renderCtx
+		event = ae
 	case common.EventsEndpoint:
 		renderCtx, ae, err := s.getFormAuditLogs(w, r)
 		if err != nil {
@@ -634,18 +635,18 @@ func (s *Server) getFormAuditLogsTab(w http.ResponseWriter, r *http.Request) (*V
 	return &ViewModel{Model: renderCtx, View: formDashboardAuditLogsTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: true}, nil
 }
 
-func (s *Server) getOrgFormSettings(w http.ResponseWriter, r *http.Request) (*formSettingsRenderContext, error) {
+func (s *Server) getOrgFormSettings(w http.ResponseWriter, r *http.Request) (*formSettingsRenderContext, *common.AuditLogEvent, error) {
 	ctx := r.Context()
 	dashboardCtx, form, err := s.getOrgForm(w, r)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	renderCtx := &formSettingsRenderContext{formDashboardRenderContext: *dashboardCtx, Orgs: []*UserOrg{}, CanMove: false}
 
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if user.ID == form.CreatorID.Int32 {
@@ -661,17 +662,18 @@ func (s *Server) getOrgFormSettings(w http.ResponseWriter, r *http.Request) (*fo
 	}
 
 	renderCtx.Tab = formSettingsTabIndex
+	auditEvent := newAccessAuditLogEvent(user, db.TableNameForms, int64(form.ID), form.Name, common.SettingsEndpoint)
 
-	return renderCtx, nil
+	return renderCtx, auditEvent, nil
 }
 
 func (s *Server) getFormSettingsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
-	renderCtx, err := s.getOrgFormSettings(w, r)
+	renderCtx, event, err := s.getOrgFormSettings(w, r)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, IsNew: true}, nil
+	return &ViewModel{Model: renderCtx, AuditEvents: singleAuditEvents(event), View: formDashboardSettingsTemplate, IsNew: true}, nil
 }
 
 func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -686,7 +688,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 		return nil, ErrInvalidRequestArg
 	}
 
-	renderCtx, err := s.getOrgFormSettings(w, r)
+	renderCtx, _, err := s.getOrgFormSettings(w, r)
 	if err != nil {
 		return nil, err
 	}
@@ -820,7 +822,7 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 		return nil, err
 	}
 
-	renderCtx, err := s.getOrgFormSettings(w, r)
+	renderCtx, _, err := s.getOrgFormSettings(w, r)
 	if err != nil {
 		return nil, err
 	}
