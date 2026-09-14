@@ -19,7 +19,7 @@ func insertVerifyMonthlyGCRecord(t *testing.T, ctx context.Context, userID, orgI
 	t.Helper()
 	ts, ok := timeSeries.(*db.TimeSeriesDB)
 	if !ok {
-		t.Fatal("expected ClickHouse time-series store")
+		t.Skip("skipping ClickHouse integration test")
 	}
 	if _, err := ts.Clickhouse.ExecContext(ctx, `
 INSERT INTO privatecaptcha.verify_logs_1mo
@@ -36,7 +36,7 @@ func assertVerifyMonthlyGCRows(t *testing.T, ctx context.Context, column string,
 	t.Helper()
 	ts, ok := timeSeries.(*db.TimeSeriesDB)
 	if !ok {
-		t.Fatal("expected ClickHouse time-series store")
+		t.Skip("skipping ClickHouse integration test")
 	}
 	if column != "user_id" && column != "org_id" {
 		t.Fatalf("unsupported verify monthly column %q", column)
