@@ -283,7 +283,7 @@ func (v *Verifier) Verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 		return result, nil
 	}
 
-	if (puzzleObject != nil) && (((property != nil) && (property.MaxReplayCount > 0)) || (perr == puzzle.MaintenanceModeError)) {
+	if (puzzleObject != nil) && (property != nil) && (property.MaxReplayCount > 0) {
 		v.Store.CacheVerifiedPuzzle(ctx, puzzleObject, tnow)
 	} else if puzzleObject != nil {
 		slog.Log(ctx, common.LevelTrace, "Skipping caching puzzle", "puzzleID", puzzleObject.PuzzleID())
