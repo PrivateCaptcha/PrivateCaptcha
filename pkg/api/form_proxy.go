@@ -191,6 +191,7 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
+		s.Verifier.CacheVerification(ctx, result)
 		if form.RequestsPerMinute > 0 {
 			capacity := leakybucket.TLevel(form.RequestsPerMinute) + 10
 			leakInterval := time.Minute / time.Duration(form.RequestsPerMinute)
@@ -353,6 +354,7 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 		}
 
 		s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
+		s.Verifier.CacheVerification(ctx, result)
 	}
 
 	if err := s.FormURLVerifier.VerifyURL(ctx, f.URL); err != nil {

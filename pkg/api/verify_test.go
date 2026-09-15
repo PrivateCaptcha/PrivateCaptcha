@@ -756,6 +756,57 @@ func TestVerifyMaintenanceMode(t *testing.T) {
 	}
 }
 
+func TestVerifyMaintenanceModeReplay(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
+	keyParams.Scope = dbgen.ApiKeyScopePuzzle
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey))
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey))
+	payload := fmt.Sprintf("%s.%s", solutionsStr, puzzleStr)
+	apiKey := db.UUIDToSecret(apikey.ExternalID)
+
+	store.UpdateConfig(true /*maintenance mode*/)
+	defer store.UpdateConfig(false /*maintenance mode*/)
+
+	resp, err := verifySuite(payload, apiKey, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkVerifyError(resp, puzzle.MaintenanceModeError); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err = verifySuite(payload, apiKey, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkVerifyError(resp, puzzle.VerifiedBeforeError); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func verifyTestPropertySuite(t *testing.T, verifySitekey string, expectedCode puzzle.VerifyError) {
 	t.Helper()
 

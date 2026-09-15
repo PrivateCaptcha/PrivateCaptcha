@@ -217,9 +217,8 @@ func (v *Verifier) checkUserPermissions(ctx context.Context, property *dbgen.Pro
 }
 
 func (v *Verifier) Verify(ctx context.Context, verifyPayload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, error) {
-	result := &puzzle.VerifyResult{}
 	puzzleObject, property, perr := v.verifyPuzzleValid(ctx, verifyPayload, tnow)
-	result.SetError(perr)
+	result := puzzle.NewVerifyResult(perr, puzzleObject, tnow)
 	if puzzleObject != nil && !puzzleObject.IsZero() {
 		result.PuzzleID = puzzleObject.PuzzleID()
 		// The puzzle bytes are untrusted until their signature is verified (and we parse expiration/creation time from bytes)
@@ -280,13 +279,20 @@ func (v *Verifier) Verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 		return result, nil
 	}
 
-	if (puzzleObject != nil) && (property != nil) && (property.MaxReplayCount > 0) {
-		v.Store.CacheVerifiedPuzzle(ctx, puzzleObject, tnow)
-	} else if puzzleObject != nil {
-		slog.Log(ctx, common.LevelTrace, "Skipping caching puzzle", "puzzleID", puzzleObject.PuzzleID())
+	return result, nil
+}
+
+func (v *Verifier) CacheVerification(ctx context.Context, vr *puzzle.VerifyResult) {
+	if vr == nil {
+		return
 	}
 
-	return result, nil
+	puzzle := vr.Puzzle()
+	if puzzle == nil {
+		return
+	}
+
+	v.Store.CacheVerifiedPuzzle(ctx, puzzle, vr.VerificationTime())
 }
 
 func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, rulesPair *rules.RulesPair, ri *rules.RequestInfo) (puzzle.Puzzle, *dbgen.Property, error) {
