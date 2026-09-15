@@ -227,8 +227,8 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 				total += uint64(count.Count)
 			}
 			level := leakybucket.TLevel(min(total, uint64(math.MaxUint32)))
-			leakRate := float64(total) / float64(len(counts))
-			addResult := leakybucket.SeedVarBucket(l.propertyBuckets, r.PropertyID, level, leakRate, uint64(len(counts)), time.Now())
+			leakRate := float64(total) / float64(propertyBackfillIntervalCount)
+			addResult := leakybucket.SeedVarBucket(l.propertyBuckets, r.PropertyID, level, leakRate, propertyBackfillIntervalCount, time.Now())
 			blog.InfoContext(ctx, "Backfilled requests counts", "counts", len(counts), "level", addResult.CurrLevel)
 		}
 
