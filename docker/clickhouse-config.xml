@@ -2,6 +2,7 @@
 <clickhouse>
   <!-- {{ 2 * number_of_cpu_cores }} -->
   <max_concurrent_queries>4</max_concurrent_queries>
+  <background_pool_size>4</background_pool_size>
   <!--
   Lower mark cache size from 5GB to 1GB. 
   https://clickhouse.com/docs/en/operations/server-configuration-parameters/settings#mark_cache_size
