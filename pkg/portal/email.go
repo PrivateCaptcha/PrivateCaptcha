@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -31,6 +32,10 @@ func (ev *PortalEmailVerifier) VerifyEmail(ctx context.Context, email string) er
 
 	if at := strings.LastIndex(email, "@"); at != -1 {
 		domain := email[at+1:]
+
+		if _, err := netip.ParseAddr(domain); err == nil {
+			return errInvalidEmailDomain // IPv4 literals are not valid email domains
+		}
 
 		if !emailpkg.IsLikelyValidDomain(domain) {
 			return errInvalidEmailDomain
