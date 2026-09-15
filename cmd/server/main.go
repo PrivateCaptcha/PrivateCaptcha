@@ -276,6 +276,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	emailVerifier := &portal.PortalEmailVerifier{}
 	sessionStore := db.NewSessionStore(businessDB, metrics)
 	xsrfKey := cfg.Get(common.XSRFKeyKey)
+	if len(xsrfKey.Value()) == 0 {
+		return errors.New("XSRF key is empty")
+	}
 	portalServer := &portal.Server{
 		Stage:      stage,
 		Prefix:     portalURLConfig.Path(),
