@@ -155,6 +155,8 @@ func (v *Verifier) verifyPuzzleValid(ctx context.Context, payload puzzle.Solutio
 		switch err {
 		case db.ErrNegativeCacheHit, db.ErrRecordNotFound, db.ErrSoftDeleted:
 			return p, nil, puzzle.InvalidPropertyError
+		case db.ErrDisabled:
+			return p, nil, puzzle.VerifyErrorOther
 		case db.ErrMaintenance:
 			if payload.NeedsExtraSalt() {
 				// Cannot verify signature without property salt - reject to prevent forgery attacks
@@ -169,11 +171,6 @@ func (v *Verifier) verifyPuzzleValid(ctx context.Context, payload puzzle.Solutio
 			slog.ErrorContext(ctx, "Failed to find property by sitekey", "sitekey", sitekey, common.PuzzleIDAttr(p.PuzzleID()), common.ErrAttr(err))
 			return p, nil, puzzle.VerifyErrorOther
 		}
-	}
-
-	if (property != nil) && !property.Enabled {
-		slog.WarnContext(ctx, "Property is disabled", "propID", property.ID, common.PuzzleIDAttr(p.PuzzleID()))
-		return p, nil, puzzle.VerifyErrorOther
 	}
 
 	var maxCount uint32 = 1

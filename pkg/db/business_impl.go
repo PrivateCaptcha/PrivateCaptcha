@@ -1032,7 +1032,22 @@ func (impl *BusinessStoreImpl) RetrievePropertyBySitekey(ctx context.Context, si
 		reader.QueryKeyFunc = queryKeySitekeyUUID
 	}
 
-	return reader.Read(ctx)
+	property, err := reader.Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if !property.Enabled {
+		slog.WarnContext(ctx, "Property is disabled", "propID", property.ID)
+		return property, ErrDisabled
+	}
+
+	if property.DeletedAt.Valid {
+		slog.WarnContext(ctx, "Property is soft-deleted", "propID", property.ID, "deletedAt", property.DeletedAt.Time)
+		return property, ErrSoftDeleted
+	}
+
+	return property, nil
 }
 
 func (impl *BusinessStoreImpl) RetrievePropertiesBySitekey(ctx context.Context, sitekeys map[string]uint, minMissingCount uint) ([]*dbgen.Property, error) {
