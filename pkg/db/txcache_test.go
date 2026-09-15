@@ -12,7 +12,7 @@ import (
 func TestNewTxCache(t *testing.T) {
 	t.Parallel()
 
-	cache := NewTxCache()
+	cache := NewTxCache(nil)
 	if cache == nil {
 		t.Fatal("Expected non-nil cache")
 	}
@@ -25,7 +25,7 @@ func TestNewTxCache(t *testing.T) {
 func TestTxCacheHitRatio(t *testing.T) {
 	t.Parallel()
 
-	cache := NewTxCache()
+	cache := NewTxCache(nil)
 	if cache.HitRatio() != 0.0 {
 		t.Errorf("Expected HitRatio to return 0.0, got %v", cache.HitRatio())
 	}
@@ -34,7 +34,7 @@ func TestTxCacheHitRatio(t *testing.T) {
 func TestTxCacheMissing(t *testing.T) {
 	t.Parallel()
 
-	cache := NewTxCache()
+	cache := NewTxCache(nil)
 	if cache.Missing() != nil {
 		t.Errorf("Expected Missing to return nil, got %v", cache.Missing())
 	}
@@ -44,7 +44,7 @@ func TestTxCacheGet(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	cache := NewTxCache()
+	cache := NewTxCache(nil)
 
 	key := UserCacheKey(1)
 	_, err := cache.Get(ctx, key)
@@ -70,7 +70,7 @@ func TestTxCacheGetEx(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	cache := NewTxCache()
+	cache := NewTxCache(nil)
 
 	key := UserCacheKey(1)
 	expectedValue := "test-value"
@@ -95,7 +95,7 @@ func TestTxCacheSetMissing(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	cache := NewTxCache()
+	cache := NewTxCache(nil)
 
 	key := UserCacheKey(1)
 	err := cache.SetMissing(ctx, key)
@@ -113,7 +113,7 @@ func TestTxCacheSet(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	cache := NewTxCache()
+	cache := NewTxCache(nil)
 
 	key := UserCacheKey(1)
 	value := "test-value"
@@ -134,7 +134,7 @@ func TestTxCacheSetWithTTL(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	cache := NewTxCache()
+	cache := NewTxCache(nil)
 
 	key := UserCacheKey(1)
 	value := "test-value"
@@ -161,7 +161,7 @@ func TestTxCacheSetTTL(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	cache := NewTxCache()
+	cache := NewTxCache(nil)
 
 	key := UserCacheKey(1)
 	value := "test-value"
@@ -186,7 +186,7 @@ func TestTxCacheSetTTLNotFound(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	cache := NewTxCache()
+	cache := NewTxCache(nil)
 
 	key := UserCacheKey(999)
 	err := cache.SetTTL(ctx, key, 5*time.Minute)
@@ -200,7 +200,7 @@ func TestTxCacheDelete(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	cache := NewTxCache()
+	cache := NewTxCache(nil)
 
 	key := UserCacheKey(1)
 	result := cache.Delete(ctx, key)
@@ -295,8 +295,8 @@ func TestTxCacheCommit(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	txCache := NewTxCache()
 	realCache := newMockCache()
+	txCache := NewTxCache(realCache)
 
 	// Setup operations
 	setKey := UserCacheKey(1)
@@ -310,7 +310,7 @@ func TestTxCacheCommit(t *testing.T) {
 	_ = txCache.SetMissing(ctx, missingKey)
 
 	// Commit to real cache
-	txCache.Commit(ctx, realCache)
+	txCache.Commit(ctx)
 
 	// Verify deletes
 	if len(realCache.deleted) != 1 || realCache.deleted[0] != deleteKey {

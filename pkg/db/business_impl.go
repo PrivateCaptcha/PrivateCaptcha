@@ -131,13 +131,15 @@ type txCacheArg struct {
 }
 
 type TxCache struct {
+	cache   common.Cache[CacheKey, any]
 	set     map[CacheKey]*txCacheArg
 	del     map[CacheKey]struct{}
 	missing map[CacheKey]struct{}
 }
 
-func NewTxCache() *TxCache {
+func NewTxCache(cache common.Cache[CacheKey, any]) *TxCache {
 	return &TxCache{
+		cache:   cache,
 		set:     make(map[CacheKey]*txCacheArg),
 		del:     make(map[CacheKey]struct{}),
 		missing: make(map[CacheKey]struct{}),
@@ -160,6 +162,10 @@ func (c *TxCache) GetWithRefresh(_ context.Context, _ CacheKey) (any, bool, erro
 	return nil, false, errTransactionCache
 }
 func (c *TxCache) Get(ctx context.Context, key CacheKey) (any, error) {
+	if c.cache != nil {
+		return c.cache.Get(ctx, key)
+	}
+
 	return nil, errTransactionCache
 }
 func (c *TxCache) GetEx(ctx context.Context, key CacheKey, loader common.CacheLoader[CacheKey, any]) (any, error) {
@@ -203,15 +209,19 @@ func (c *TxCache) Delete(ctx context.Context, key CacheKey) bool {
 	return true
 }
 
-func (c *TxCache) Commit(ctx context.Context, cache common.Cache[CacheKey, any]) {
+func (c *TxCache) Commit(ctx context.Context) {
+	if c.cache == nil {
+		return
+	}
+
 	for key := range c.del {
-		if deleted := cache.Delete(ctx, key); !deleted {
+		if deleted := c.cache.Delete(ctx, key); !deleted {
 			slog.WarnContext(ctx, "Cache item to delete was not found", "key", key)
 		}
 	}
 
 	for key := range c.missing {
-		if err := cache.SetMissing(ctx, key); err != nil {
+		if err := c.cache.SetMissing(ctx, key); err != nil {
 			slog.ErrorContext(ctx, "Failed to set missing in cache", "key", key, common.ErrAttr(err))
 		}
 	}
@@ -227,9 +237,9 @@ func (c *TxCache) Commit(ctx context.Context, cache common.Cache[CacheKey, any])
 			if value.refresh > 0 {
 				refresh = value.refresh
 			}
-			err = cache.SetEx(ctx, key, value.item, ttl, refresh)
+			err = c.cache.SetEx(ctx, key, value.item, ttl, refresh)
 		} else {
-			err = cache.Set(ctx, key, value.item)
+			err = c.cache.Set(ctx, key, value.item)
 		}
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to set in cache", "key", key, common.ErrAttr(err))

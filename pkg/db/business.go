@@ -154,7 +154,7 @@ func (s *BusinessStore) WithTx(ctx context.Context, fn func(*BusinessStoreImpl) 
 	}()
 
 	db := dbgen.New(s.Pool)
-	tmpCache := NewTxCache()
+	tmpCache := NewTxCache(s.Cache)
 	impl := &BusinessStoreImpl{cache: tmpCache, querier: db.WithTx(tx)}
 	var auditEvents []*common.AuditLogEvent
 
@@ -169,7 +169,7 @@ func (s *BusinessStore) WithTx(ctx context.Context, fn func(*BusinessStoreImpl) 
 		return auditEvents, err
 	}
 
-	tmpCache.Commit(ctx, s.Cache)
+	tmpCache.Commit(ctx)
 
 	return auditEvents, nil
 }
