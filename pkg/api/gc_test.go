@@ -99,7 +99,7 @@ func gcPropertyDataTestSuite(ctx context.Context, property *dbgen.Property, dele
 	time.Sleep(100 * time.Millisecond)
 
 	job := &maintenance.GarbageCollectDataJob{
-		Age:        0,
+		Age:        -time.Minute, // Keep immediate cleanup independent of application/Postgres clock skew.
 		BusinessDB: store,
 		TimeSeries: timeSeries,
 	}
@@ -175,7 +175,7 @@ func gcFormDataTestSuite(ctx context.Context, form *dbgen.Form, deleter func(f *
 	time.Sleep(100 * time.Millisecond)
 
 	job := &maintenance.GarbageCollectDataJob{
-		Age:        0,
+		Age:        -time.Minute, // Keep immediate cleanup independent of application/Postgres clock skew.
 		BusinessDB: store,
 		TimeSeries: timeSeries,
 	}
