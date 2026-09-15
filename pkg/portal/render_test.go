@@ -60,7 +60,7 @@ func stubUser(name string, level dbgen.AccessLevel) *orgUser {
 		Name:      name,
 		ID:        "123",
 		Level:     string(level),
-		CreatedAt: common.JSONTimeNow().String(),
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 }
 
@@ -68,7 +68,7 @@ func stubAPIKey(name string) *userAPIKey {
 	return &userAPIKey{
 		ID:          "123",
 		Name:        name,
-		ExpiresAt:   common.JSONTimeNowAdd(1 * time.Hour).String(),
+		ExpiresAt:   time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339),
 		Secret:      "",
 		ExpiresSoon: false,
 	}

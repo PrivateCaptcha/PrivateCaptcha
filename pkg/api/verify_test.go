@@ -32,7 +32,7 @@ func TestSerializeResponse(t *testing.T) {
 		VerifyResponseRecaptchaV2: VerifyResponseRecaptchaV2{
 			Success:     false,
 			ErrorCodes:  []string{puzzle.VerifyErrorOther.String()},
-			ChallengeTS: common.JSONTimeNow(),
+			ChallengeTS: common.JSONTime(time.Now().UTC()),
 			Hostname:    "hostname.com",
 		},
 		Score:  0.5,
