@@ -6,15 +6,6 @@ type StatusCode int
 
 var extraStatusCodeStrings = map[StatusCode]string{}
 
-// RegisterStatusCodes allows external packages to register additional
-// status code string mappings that will be used by String() method.
-// This function should be called during program initialization (e.g. in init()).
-func RegisterStatusCodes(codes map[StatusCode]string) {
-	for k, v := range codes {
-		extraStatusCodeStrings[k] = v
-	}
-}
-
 const (
 	// common errors
 	StatusOK      StatusCode = 1000
