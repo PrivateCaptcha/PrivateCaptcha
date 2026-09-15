@@ -188,6 +188,10 @@ func (j *ExpireInternalTrialsJob) NewParams() any {
 	}
 }
 
+func (j *ExpireInternalTrialsJob) lookback(pastInterval time.Duration) time.Duration {
+	return pastInterval + j.Interval() + 2*j.Jitter()
+}
+
 func (j *ExpireInternalTrialsJob) RunOnce(ctx context.Context, params any) error {
 	p, ok := params.(*ExpireInternalTrialsParams)
 	if !ok || (p == nil) {
@@ -196,7 +200,7 @@ func (j *ExpireInternalTrialsJob) RunOnce(ctx context.Context, params any) error
 	}
 
 	to := time.Now().Add(-p.Age)
-	from := to.Add(-(p.PastInterval + j.Interval() + j.Jitter()))
+	from := to.Add(-j.lookback(p.PastInterval))
 	return j.BusinessDB.Impl().ExpireInternalTrials(ctx, from, to, j.PlanService.ActiveTrialStatus(), j.PlanService.ExpiredTrialStatus())
 }
 
