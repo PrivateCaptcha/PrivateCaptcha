@@ -289,9 +289,9 @@ func (s *Server) Shutdown() {
 
 	slog.Debug("Shutting down API server routines")
 	// background goroutines can call addFormSubmitRecord()/addVerifyRecord()  so we don't close channels here
-	close(s.VerifyLogChan)
-	close(s.FormSubmitLogChan)
-	close(s.FormSubmissionChan)
+	// close(s.VerifyLogChan)
+	// close(s.FormSubmitLogChan)
+	// close(s.FormSubmissionChan)
 }
 
 func (s *Server) setupWithPrefix(rg *common.RouteGenerator, apiCorsHandler, formCorsHandler, security alice.Constructor) {
