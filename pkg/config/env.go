@@ -92,28 +92,6 @@ func init() {
 	}
 }
 
-func RegisterEnvNameForConfigKey(key common.ConfigKey, s string) error {
-	if len(s) == 0 {
-		return errEmptyEnvName
-	}
-
-	configKeyStrMux.Lock()
-	defer configKeyStrMux.Unlock()
-
-	if int(key) >= len(configKeyToEnvName) {
-		newSlice := make([]string, int(key)+1)
-		copy(newSlice, configKeyToEnvName)
-		configKeyToEnvName = newSlice
-	}
-
-	if configKeyToEnvName[key] != "" {
-		return fmt.Errorf("config: duplicate env name registration for config key %v", key)
-	}
-
-	configKeyToEnvName[key] = s
-	return nil
-}
-
 func (v *envConfigValue) Key() common.ConfigKey {
 	return v.key
 }
