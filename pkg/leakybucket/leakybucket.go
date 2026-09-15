@@ -207,6 +207,17 @@ func (lb *VarLeakyBucket[TKey]) LeakRate() float64 {
 	return lb.leakRate
 }
 
+func (lb *VarLeakyBucket[TKey]) seed(tnow time.Time, historicalLevel TLevel, leakRate float64, sampleCount uint64) (TLevel, TLevel) {
+	currLevel := lb.Level(tnow)
+	nextLevel := min(int64(lb.capacity), int64(currLevel)+int64(historicalLevel))
+	lb.level = TLevel(nextLevel)
+	lb.lastAccessTime = tnow
+	lb.leakRate = leakRate
+	lb.count = max(sampleCount, 1)
+	// Historical traffic is represented by leakRate; pendingSum contains only live traffic.
+	return lb.level, lb.level - currLevel
+}
+
 func (lb *VarLeakyBucket[TKey]) Level(tnow time.Time) TLevel {
 	diff := tnow.Sub(lb.lastAccessTime)
 	var leaked = int64(lb.leakRate * float64(diff) / float64(lb.leakInterval))

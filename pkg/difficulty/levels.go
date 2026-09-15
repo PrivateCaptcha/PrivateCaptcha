@@ -18,8 +18,9 @@ var (
 )
 
 const (
-	userBucketsCacheFilename   = "user_buckets.gob"
-	defaultBackpressureTimeout = 10 * time.Millisecond
+	userBucketsCacheFilename      = "user_buckets.gob"
+	defaultBackpressureTimeout    = 10 * time.Millisecond
+	propertyBackfillIntervalCount = 12
 )
 
 type Levels struct {
@@ -187,8 +188,8 @@ func (l *Levels) retrievePropertyStatsSafe(ctx context.Context, r *common.Backfi
 		}
 	}()
 
-	// 12 because we keep last hour of 5-minute intervals in Clickhouse, so we grab all of them
-	timeFrom := time.Now().UTC().Add(-time.Duration(12) * l.propertyBuckets.LeakInterval())
+	// We keep the last hour of 5-minute intervals in ClickHouse.
+	timeFrom := time.Now().UTC().Add(-time.Duration(propertyBackfillIntervalCount) * l.propertyBuckets.LeakInterval())
 	return l.timeSeries.RetrievePropertyStatsSince(ctx, r, timeFrom)
 }
 
@@ -217,10 +218,17 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 		cache[cacheKey] = tnow
 
 		if len(counts) > 0 {
-			var addResult leakybucket.AddResult
-			for _, count := range counts {
-				addResult = l.propertyBuckets.Add(r.PropertyID, count.Count, count.Timestamp)
+			if len(counts) > propertyBackfillIntervalCount {
+				// Property stats are ordered oldest-first, so discard surplus oldest intervals.
+				counts = counts[len(counts)-propertyBackfillIntervalCount:]
 			}
+			var total uint64
+			for _, count := range counts {
+				total += uint64(count.Count)
+			}
+			level := leakybucket.TLevel(min(total, uint64(math.MaxUint32)))
+			leakRate := float64(total) / float64(len(counts))
+			addResult := leakybucket.SeedVarBucket(l.propertyBuckets, r.PropertyID, level, leakRate, uint64(len(counts)), time.Now())
 			blog.InfoContext(ctx, "Backfilled requests counts", "counts", len(counts), "level", addResult.CurrLevel)
 		}
 

@@ -91,6 +91,48 @@ func TestManagerAddDefault(t *testing.T) {
 	}
 }
 
+func TestSeedVarBucketPreservesLiveState(t *testing.T) {
+	const (
+		key           = int32(42)
+		capacity      = 1_000
+		historical    = 100
+		leakRate      = 10.0
+		sampleCount   = 4
+		pendingAmount = 5
+	)
+	interval := time.Minute
+	t0 := time.Now().Truncate(interval)
+	seedTime := t0.Add(interval / 2)
+	manager := NewManager[int32, VarLeakyBucket[int32]](8, capacity, interval)
+	manager.Add(key, pendingAmount, t0)
+
+	result := SeedVarBucket(manager, key, historical, leakRate, sampleCount, seedTime)
+	if result.CurrLevel != historical+pendingAmount {
+		t.Errorf("Seeded level = %v, want %v", result.CurrLevel, historical+pendingAmount)
+	}
+
+	bucket, found := manager.buckets.GetIfPresent(key)
+	if !found {
+		t.Fatal("Seeded bucket was not found")
+	}
+	if !bucket.lastAccessTime.Equal(seedTime) {
+		t.Errorf("Last access time = %v, want %v", bucket.lastAccessTime, seedTime)
+	}
+	if bucket.pendingSum != pendingAmount {
+		t.Errorf("Pending sum = %v, want %v", bucket.pendingSum, pendingAmount)
+	}
+	if bucket.count != sampleCount {
+		t.Errorf("Sample count = %v, want %v", bucket.count, sampleCount)
+	}
+
+	manager.Add(key, 1, seedTime.Add(interval))
+	result = manager.Add(key, 1, seedTime.Add(interval))
+	wantLeakRate := (leakRate*sampleCount + pendingAmount) / (sampleCount + 1)
+	if result.LeakRate != wantLeakRate {
+		t.Errorf("Leak rate after pending interval = %v, want %v", result.LeakRate, wantLeakRate)
+	}
+}
+
 func TestManagerConcurrentUpdate(t *testing.T) {
 	const maxBuckets = 8
 	const cap = 100

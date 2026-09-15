@@ -180,6 +180,42 @@ func (m *Manager[TKey, T, TBucket]) AddEx(key TKey, n TLevel, tnow time.Time, in
 	return bu.result
 }
 
+// SeedVarBucket atomically adds historical level and initializes the learned rate while preserving pending live traffic.
+func SeedVarBucket[TKey comparable](
+	m *Manager[TKey, VarLeakyBucket[TKey], *VarLeakyBucket[TKey]],
+	key TKey,
+	historicalLevel TLevel,
+	leakRate float64,
+	sampleCount uint64,
+	tnow time.Time,
+) AddResult {
+	m.mu.RLock()
+	capacity := m.capacity
+	leakInterval := m.leakInterval
+	m.mu.RUnlock()
+
+	var result AddResult
+	_, _ = m.buckets.Compute(key, func(bucket *VarLeakyBucket[TKey], found bool) (*VarLeakyBucket[TKey], otter.ComputeOp) {
+		result.Found = found
+		if !found {
+			bucket = NewVarBucket(key, capacity, leakInterval, tnow)
+		}
+
+		result.CurrLevel, result.Added = bucket.seed(tnow, historicalLevel, leakRate, sampleCount)
+		result.Capacity = bucket.Capacity()
+		result.LeakRate = bucket.LeakRate()
+		if result.Added > 0 {
+			result.ResetAfter = time.Duration(result.CurrLevel) * bucket.LeakInterval()
+		}
+		return bucket, otter.WriteOp
+	})
+
+	if !result.Found {
+		m.buckets.SetExpiresAfter(key, time.Duration(capacity)*leakInterval)
+	}
+	return result
+}
+
 func (m *Manager[TKey, T, TBucket]) Clear() {
 	m.buckets.InvalidateAll()
 }
