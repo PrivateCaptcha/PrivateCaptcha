@@ -13,16 +13,21 @@ ROLE_SUFFIX=""
 LOCK_FILE="${TMPDIR:-/tmp}/privatecaptcha-clickhouse-test.lock"
 
 acquire_lock() {
-    if ! command -v flock > /dev/null; then
-        echo "Error: flock is required to run local ClickHouse tests" >&2
+    if command -v flock > /dev/null; then
+        exec {LOCK_FD}> "$LOCK_FILE"
+        flock -n "$LOCK_FD" && return
+    elif command -v shlock > /dev/null; then
+        if shlock -f "$LOCK_FILE" -p "$$"; then
+            LOCK_WITH_SHLOCK=1
+            return
+        fi
+    else
+        echo "Error: flock or shlock is required to run local ClickHouse tests" >&2
         return 1
     fi
 
-    exec {LOCK_FD}> "$LOCK_FILE"
-    if ! flock -n "$LOCK_FD"; then
-        echo "Error: another local ClickHouse test run is active" >&2
-        return 1
-    fi
+    echo "Error: another local ClickHouse test run is active" >&2
+    return 1
 }
 
 cleanup() {
@@ -33,6 +38,10 @@ cleanup() {
         echo "Keeping ClickHouse test database because KEEP_CLICKHOUSE_TEST_DB=1"
     elif ! "$SCRIPT_DIR/cleanup-clickhouse.sh" "$DB_NAME" "$USER_NAME" "$ROLE_SUFFIX"; then
         echo "Warning: failed to clean up ClickHouse test database" >&2
+    fi
+
+    if [ "${LOCK_WITH_SHLOCK:-}" = "1" ]; then
+        rm -f "$LOCK_FILE"
     fi
 
     exit "$exit_code"
