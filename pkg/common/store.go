@@ -17,6 +17,8 @@ type IdentifierHasher interface {
 }
 
 // this is an exact copy of otter's Loader
+// Load is invoked synchronously on cache misses (cold load, blocking) but
+// asynchronously on stale hits (background refresh, non-blocking)
 type CacheLoader[K comparable, V any] interface {
 	Load(ctx context.Context, key K) (V, error)
 	Reload(ctx context.Context, key K, oldValue V) (V, error)

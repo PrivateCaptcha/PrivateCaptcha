@@ -348,6 +348,7 @@ func (sf *StoreOneReader[TKey, T]) Read(ctx context.Context) (*T, error) {
 	if t, ok := data.(*T); ok {
 		slog.Log(ctx, common.LevelTrace, "Read object through cache", "cacheKey", sf.CacheKey)
 
+		// NOTE: skipped on stale-hit background refresh; Load hasn't set flag yet (Load runs in background on Refresh only)
 		if atomic.LoadInt32(&sf.readFlag) == 1 {
 			if sf.TTL > 0 {
 				_ = sf.Cache.SetTTL(ctx, sf.CacheKey, sf.TTL)
