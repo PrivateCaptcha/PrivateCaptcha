@@ -185,6 +185,10 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if result.Success() && result.Error == puzzle.MaintenanceModeError {
+			s.Verifier.CacheVerification(ctx, result) // record single-use in maintenance mode (property is nil)
+		}
+
 		if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
@@ -346,6 +350,10 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
 			return err
+		}
+
+		if result.Success() && result.Error == puzzle.MaintenanceModeError {
+			s.Verifier.CacheVerification(ctx, result) // record single-use in maintenance mode (property is nil)
 		}
 
 		if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
