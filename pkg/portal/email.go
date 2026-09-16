@@ -33,7 +33,12 @@ func (ev *PortalEmailVerifier) VerifyEmail(ctx context.Context, email string) er
 	if at := strings.LastIndex(email, "@"); at != -1 {
 		domain := email[at+1:]
 
-		if _, err := netip.ParseAddr(domain); err == nil {
+		probe := domain
+		if len(probe) >= 2 && probe[0] == '[' && probe[len(probe)-1] == ']' {
+			probe = probe[1 : len(probe)-1]
+		}
+
+		if _, err := netip.ParseAddr(probe); err == nil {
 			return errInvalidEmailDomain // IPv4 literals are not valid email domains
 		}
 
