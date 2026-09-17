@@ -36,6 +36,10 @@ func (ev *PortalEmailVerifier) VerifyEmail(ctx context.Context, email string) er
 		probe := domain
 		if len(probe) >= 2 && probe[0] == '[' && probe[len(probe)-1] == ']' {
 			probe = probe[1 : len(probe)-1]
+
+			if len(probe) >= 6 && strings.EqualFold(probe[:5], "IPv6:") {
+				probe = probe[5:]
+			}
 		}
 
 		if _, err := netip.ParseAddr(probe); err == nil {
