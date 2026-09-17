@@ -114,7 +114,7 @@ func (a *SelfHostingAlgorithm) requestsToDifficulty(
 
 	// Raw pressure is measured in "work doubling units" (e.g. userRawPressure == 1 means "user component asks +100 work")
 	userRawPressure := log2p(u/userRef) * wu / totalWeight
-	propertyRawPressure := log2p(p/propertyRef+verificationRateDeviation(verificationRate)) * wp / totalWeight
+	propertyRawPressure := log2p(p/propertyRef+VerificationRateDeviation(verificationRate)) * wp / totalWeight
 	rawPressure := userRawPressure + propertyRawPressure
 
 	headroom := headroomDifficulty / 8.0
@@ -127,7 +127,7 @@ func (a *SelfHostingAlgorithm) requestsToDifficulty(
 	return uint8(difficulty)
 }
 
-func verificationRateDeviation(rate float64) float64 {
+func VerificationRateDeviation(rate float64) float64 {
 	const maxVerificationRateRatio = 8.0
 
 	if math.IsNaN(rate) || rate == 1.0 {
