@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"math"
 	"net/http/httptest"
 	"net/netip"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
@@ -145,6 +147,96 @@ func TestPuzzleRequestStats(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for access record")
+	}
+}
+
+type rateCapturingAlgorithm struct {
+	verificationRate float64
+}
+
+func (a *rateCapturingAlgorithm) Difficulty(_ *leakybucket.AddResult, _ *leakybucket.AddResult, _ difficulty.Property, verificationRate float64) uint8 {
+	a.verificationRate = verificationRate
+	return uint8(common.DifficultyLevelMedium)
+}
+
+func TestPuzzleForRequestUsesPropertyVerificationRate(t *testing.T) {
+	property := &dbgen.Property{
+		ID:               42,
+		ExternalID:       pgtype.UUID{Valid: true, Bytes: [16]byte{1}},
+		OrgID:            pgtype.Int4{Valid: true, Int32: 2},
+		OrgOwnerID:       pgtype.Int4{Valid: true, Int32: 3},
+		Level:            pgtype.Int2{Valid: true, Int16: int16(common.DifficultyLevelMedium)},
+		Growth:           dbgen.DifficultyGrowthMedium,
+		ValidityInterval: puzzle.MaxValidityPeriod,
+	}
+	algorithm := &rateCapturingAlgorithm{}
+	levels := difficulty.NewLevelsEx(db.NewMemoryTimeSeries(), algorithm, 1, time.Minute)
+	verifier := NewVerifier(testsConfigStore(), nil, config.NewStaticValue(common.FingerprintHeaderKey, ""), nil)
+	if err := verifier.Update(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	tnow := time.Now()
+	verifier.PropertyStats.RecordPuzzles(property.ID, 9, tnow)
+	verifier.PropertyStats.RecordVerifications(property.ID, 3, tnow)
+
+	ctx := context.WithValue(t.Context(), common.PropertyContextKey, property)
+	ctx = context.WithValue(ctx, common.RateLimitKeyContextKey, netip.MustParseAddr("192.0.2.1"))
+	req := httptest.NewRequest("GET", "/puzzle", nil).WithContext(ctx)
+	if _, _, err := verifier.PuzzleForRequest(req, levels, nil, rules.NewRequestInfo(req, "")); err != nil {
+		t.Fatal(err)
+	}
+
+	if algorithm.verificationRate != 3.0 {
+		t.Errorf("Verification rate passed to difficulty algorithm = %v, want 3", algorithm.verificationRate)
+	}
+}
+
+func TestVerifierRecordsPropertyStats(t *testing.T) {
+	verifier := NewVerifier(testsConfigStore(), nil, config.NewStaticValue(common.FingerprintHeaderKey, ""), nil)
+	tnow := time.Now()
+
+	for range 10 {
+		verifier.recordPuzzleStats(&dbgen.Property{ID: 42}, tnow)
+	}
+	if rate := verifier.PropertyStats.VerificationRate(42, tnow); !math.IsInf(rate, 1) {
+		t.Fatalf("Recorded puzzle-only verification rate = %v, want +Inf", rate)
+	}
+
+	for range 10 {
+		verifier.recordVerificationStats(&puzzle.VerifyResult{PropertyID: 42, PuzzleID: 1}, tnow)
+	}
+
+	if rate := verifier.PropertyStats.VerificationRate(42, tnow); rate != 1.0 {
+		t.Errorf("Recorded property verification rate = %v, want 1", rate)
+	}
+}
+
+func TestVerifierExcludesUnauthorizedPropertyStats(t *testing.T) {
+	verifier := NewVerifier(testsConfigStore(), nil, config.NewStaticValue(common.FingerprintHeaderKey, ""), nil)
+	tnow := time.Now()
+	verifier.PropertyStats.RecordPuzzles(42, 10, tnow)
+	verifier.PropertyStats.RecordVerifications(42, 10, tnow)
+
+	for range 10 {
+		verifier.recordVerificationStats(&puzzle.VerifyResult{PropertyID: 42, PuzzleID: 1, Error: puzzle.WrongOwnerError}, tnow)
+		verifier.recordVerificationStats(&puzzle.VerifyResult{PropertyID: 42, PuzzleID: 1, Error: puzzle.OrgScopeError}, tnow)
+	}
+
+	if rate := verifier.PropertyStats.VerificationRate(42, tnow); rate != 1.0 {
+		t.Errorf("Verification rate after unauthorized attempts = %v, want 1", rate)
+	}
+}
+
+func TestVerifierBalancesStubVerificationStats(t *testing.T) {
+	verifier := NewVerifier(testsConfigStore(), nil, config.NewStaticValue(common.FingerprintHeaderKey, ""), nil)
+	tnow := time.Now()
+
+	for range 10 {
+		verifier.recordVerificationStats(&puzzle.VerifyResult{PropertyID: 42}, tnow)
+	}
+
+	if rate := verifier.PropertyStats.VerificationRate(42, tnow); rate != 1.0 {
+		t.Errorf("Stub verification rate = %v, want 1", rate)
 	}
 }
 

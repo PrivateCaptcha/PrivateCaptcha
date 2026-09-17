@@ -17,6 +17,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -38,6 +39,7 @@ type Verifier struct {
 	TestPuzzle           puzzle.Puzzle
 	TestPuzzleData       *puzzle.PuzzlePayload
 	TestSolutions        puzzle.SolutionPayload
+	PropertyStats        *leakybucket.CircularBucketManager
 }
 
 var _ puzzle.Engine = (*Verifier)(nil)
@@ -57,6 +59,7 @@ func NewVerifier(cfg common.ConfigStore, store db.Implementor, fingerprintHeader
 		Store:                store,
 		TestPuzzle:           testPuzzle,
 		TestSolutions:        puzzle.NewStubPayload(testPuzzle),
+		PropertyStats:        leakybucket.NewCircularBucketManager(PropertyBucketSize),
 	}
 }
 
@@ -295,6 +298,23 @@ func (v *Verifier) CacheVerification(ctx context.Context, vr *puzzle.VerifyResul
 	v.Store.CacheVerifiedPuzzle(ctx, puzzle, vr.VerificationTime())
 }
 
+func (v *Verifier) recordPuzzleStats(property *dbgen.Property, tnow time.Time) {
+	if property != nil {
+		v.PropertyStats.RecordPuzzles(property.ID, 1, tnow)
+	}
+}
+
+func (v *Verifier) recordVerificationStats(result *puzzle.VerifyResult, tnow time.Time) {
+	if result == nil || result.PropertyID == 0 || result.Error == puzzle.WrongOwnerError || result.Error == puzzle.OrgScopeError {
+		return
+	}
+	if result.PuzzleID == 0 {
+		v.PropertyStats.RecordPuzzles(result.PropertyID, 1, tnow)
+	}
+	// NOTE: we don't filter out `result.Success()`, like in other places, because here we are interested in ALL attempts
+	v.PropertyStats.RecordVerifications(result.PropertyID, 1, tnow)
+}
+
 func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, rulesPair *rules.RulesPair, ri *rules.RequestInfo) (puzzle.Puzzle, *dbgen.Property, error) {
 	ctx := r.Context()
 	property, isProperty := ctx.Value(common.PropertyContextKey).(*dbgen.Property)
@@ -362,7 +382,8 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 		difficultyProperty = rulesPair.Apply(ri, difficultyProperty)
 	}
 
-	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, difficultyProperty, tnow)
+	verificationRate := v.PropertyStats.VerificationRate(property.ID, tnow)
+	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, difficultyProperty, tnow, verificationRate)
 
 	puzzleID := puzzle.NextPuzzleID()
 	result := v.Create(puzzleID, property.ExternalID.Bytes, puzzleDifficulty)

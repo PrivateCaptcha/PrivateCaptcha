@@ -70,7 +70,7 @@ func TestBackfillLevels(t *testing.T) {
 			fingerprint := fingerprints[rand.Intn(len(fingerprints))]
 			t := btime.Add(time.Duration(i) * diffInterval)
 			recordAccess(fingerprint, t)
-			diff, level, _ = levels.DifficultyEx(ctx, fingerprint, prop, t)
+			diff, level, _ = levels.DifficultyEx(ctx, fingerprint, prop, t, 1.0)
 			if (i+1)%250 == 0 {
 				slog.Debug("Simulating requests", "difficulty", diff, "level", level, "eventTime", t, "i", i, "bucket", bucket)
 			}
@@ -80,7 +80,7 @@ func TestBackfillLevels(t *testing.T) {
 	fingerprint := common.RandomFingerprint()
 	// reinit diff to neglect effect of other properties
 	recordAccess(fingerprint, tnow)
-	diff, level, _ = levels.DifficultyEx(ctx, fingerprint, prop, tnow)
+	diff, level, _ = levels.DifficultyEx(ctx, fingerprint, prop, tnow, 1.0)
 
 	if diff == uint8(common.DifficultyLevelSmall) {
 		t.Errorf("Difficulty did not grow: %v", diff)
@@ -94,7 +94,7 @@ func TestBackfillLevels(t *testing.T) {
 
 	// now this should cause the backfill request to be fired
 	recordAccess(fingerprint, tnow)
-	resetDifficulty, resetLevel, _ := levels.DifficultyEx(ctx, fingerprint, prop, tnow)
+	resetDifficulty, resetLevel, _ := levels.DifficultyEx(ctx, fingerprint, prop, tnow, 1.0)
 	if resetLevel != 1 {
 		t.Errorf("Unexpected level after stats reset: %v", resetLevel)
 	}
@@ -112,7 +112,7 @@ func TestBackfillLevels(t *testing.T) {
 		// give time to backfill difficulty
 		time.Sleep(1 * time.Second)
 		recordAccess(fingerprint, tnow)
-		actualDifficulty, actualLevel, _ = levels.DifficultyEx(ctx, fingerprint, prop, tnow)
+		actualDifficulty, actualLevel, _ = levels.DifficultyEx(ctx, fingerprint, prop, tnow, 1.0)
 		if actualLevel > minBackfilledLevel {
 			backfilled = true
 			break
