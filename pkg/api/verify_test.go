@@ -1163,6 +1163,13 @@ func TestReportingVerifierCallsReportFunc(t *testing.T) {
 			t.Errorf("Expected PropertyID %d, got %d", result.PropertyID, res.PropertyID)
 		}
 	}
+	statsCalled := false
+	statsFunc := func(res *puzzle.VerifyResult, _ time.Time) {
+		statsCalled = true
+		if res.PropertyID != result.PropertyID {
+			t.Errorf("Expected stats PropertyID %d, got %d", result.PropertyID, res.PropertyID)
+		}
+	}
 
 	// Create stub puzzle engine
 	stubEngine := &portal_tests.StubPuzzleEngine{
@@ -1173,6 +1180,7 @@ func TestReportingVerifierCallsReportFunc(t *testing.T) {
 	rv := &reportingVerifier{
 		verifier:   stubEngine,
 		reportFunc: reportFunc,
+		statsFunc:  statsFunc,
 	}
 
 	// Create a stub payload
@@ -1192,6 +1200,9 @@ func TestReportingVerifierCallsReportFunc(t *testing.T) {
 	// Verify report function was called for valid result
 	if !reportCalled {
 		t.Error("Expected report function to be called for valid result")
+	}
+	if !statsCalled {
+		t.Error("Expected stats function to be called after verification")
 	}
 }
 

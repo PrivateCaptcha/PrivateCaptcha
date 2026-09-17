@@ -70,7 +70,7 @@ func gcPropertyDataTestSuite(ctx context.Context, property *dbgen.Property, dele
 			PropertyID:  dp.ID(),
 			Timestamp:   timestamp,
 		})
-		server.Levels.Difficulty(ctx, fingerprint, dp, timestamp)
+		server.Levels.Difficulty(ctx, fingerprint, dp, timestamp, 1.0)
 	}
 
 	// we need to wait for the timeout in the ProcessAccessLog()

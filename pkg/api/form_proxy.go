@@ -178,7 +178,8 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 	// if form is cached, we verify captcha on the hot path
 	if form, ok := ctx.Value(common.FormContextKey).(*dbgen.Form); ok && form != nil {
 		ownerSource := &formOwnerSource{Store: s.BusinessDB, Form: form}
-		result, err := s.Verifier.Verify(ctx, payload, ownerSource, time.Now().UTC())
+		tnow := time.Now().UTC()
+		result, err := s.Verifier.Verify(ctx, payload, ownerSource, tnow)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -194,6 +195,7 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		s.Verifier.recordVerificationStats(result, tnow)
 		s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
 		s.Verifier.CacheVerification(ctx, result)
 		if form.RequestsPerMinute > 0 {
@@ -361,6 +363,7 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 			return errCaptchaVerificationFailed
 		}
 
+		s.Verifier.recordVerificationStats(result, sub.Time)
 		s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
 		s.Verifier.CacheVerification(ctx, result)
 	}

@@ -395,6 +395,7 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	s.Verifier.recordPuzzleStats(property, time.Now().UTC())
 
 	var extraSalt []byte
 	var userID int32 = -1
@@ -452,7 +453,8 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ownerSource := &apiKeyOwnerSource{Store: s.BusinessDB, Auth: s.Auth, scope: dbgen.ApiKeyScopePuzzle}
-	result, err := s.Verifier.Verify(ctx, payload, ownerSource, time.Now().UTC())
+	tnow := time.Now().UTC()
+	result, err := s.Verifier.Verify(ctx, payload, ownerSource, tnow)
 	if err != nil {
 		switch err {
 		case errPuzzleOwner, db.ErrDisabled:
@@ -464,7 +466,7 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 		}
 		return
 	}
-
+	s.Verifier.recordVerificationStats(result, tnow)
 	if result.Valid() {
 		s.addVerifyRecord(ctx, result, r.UserAgent())
 	}
@@ -529,7 +531,8 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ownerSource := &apiKeyOwnerSource{Store: s.BusinessDB, Auth: s.Auth, scope: dbgen.ApiKeyScopePuzzle}
-	result, err := s.Verifier.Verify(ctx, payload, ownerSource, time.Now().UTC())
+	tnow := time.Now().UTC()
+	result, err := s.Verifier.Verify(ctx, payload, ownerSource, tnow)
 	if err != nil {
 		switch err {
 		case errPuzzleOwner, db.ErrDisabled:
@@ -541,7 +544,7 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-
+	s.Verifier.recordVerificationStats(result, tnow)
 	if result.Valid() {
 		s.addVerifyRecord(ctx, result, r.UserAgent())
 	}
@@ -612,6 +615,7 @@ func (s *Server) ReportingVerifier(userAgent string) puzzle.Engine {
 	return &reportingVerifier{
 		verifier:   s.Verifier,
 		reportFunc: s.addVerifyRecord,
+		statsFunc:  s.Verifier.recordVerificationStats,
 		userAgent:  userAgent,
 	}
 }
@@ -619,6 +623,7 @@ func (s *Server) ReportingVerifier(userAgent string) puzzle.Engine {
 type reportingVerifier struct {
 	verifier   puzzle.Engine
 	reportFunc func(context.Context, *puzzle.VerifyResult, string)
+	statsFunc  func(*puzzle.VerifyResult, time.Time)
 	userAgent  string
 }
 
@@ -639,6 +644,9 @@ func (rv *reportingVerifier) CacheVerification(ctx context.Context, vr *puzzle.V
 func (rv *reportingVerifier) Verify(ctx context.Context, payload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, error) {
 	result, err := rv.verifier.Verify(ctx, payload, expectedOwner, tnow)
 	if err == nil {
+		if rv.statsFunc != nil {
+			rv.statsFunc(result, tnow)
+		}
 		if result.Valid() {
 			rv.reportFunc(ctx, result, rv.userAgent)
 		}

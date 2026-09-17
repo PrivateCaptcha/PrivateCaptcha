@@ -872,12 +872,16 @@ func TestFormProxyRejectsWrongPropertyCaptcha(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create second property: %v", err)
 	}
+	tnow := time.Now()
+	server.Verifier.PropertyStats.RecordPuzzles(property2.ID, 10, tnow)
+	server.Verifier.PropertyStats.RecordVerifications(property2.ID, 10, tnow)
 
 	sitekey2 := db.UUIDToSiteKey(property2.ExternalID)
 	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey2, property2.Domain)
 	if err != nil {
 		t.Fatal(err)
 	}
+	rateBefore := server.Verifier.PropertyStats.VerificationRate(property2.ID, time.Now())
 
 	body := url.Values{}
 	body.Set("email", "test@example.com")
@@ -886,6 +890,9 @@ func TestFormProxyRejectsWrongPropertyCaptcha(t *testing.T) {
 	resp := formProxySuite(t, form1, body)
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("Unexpected submit status code %d", resp.StatusCode)
+	}
+	if rate := server.Verifier.PropertyStats.VerificationRate(property2.ID, time.Now()); rate != rateBefore {
+		t.Errorf("Verification rate after rejected cross-property submission = %v, want %v", rate, rateBefore)
 	}
 }
 
@@ -924,6 +931,9 @@ func TestFormProxySubmitsForm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
+	tnow := time.Now()
+	server.Verifier.PropertyStats.RecordPuzzles(property.ID, 10, tnow)
+	server.Verifier.PropertyStats.RecordVerifications(property.ID, 10, tnow)
 
 	sitekey := db.UUIDToSiteKey(property.ExternalID)
 	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
@@ -964,5 +974,8 @@ func TestFormProxySubmitsForm(t *testing.T) {
 	}
 	if got := receivedHeaders.Get(common.HeaderContentType); got != common.ContentTypeURLEncoded {
 		t.Fatalf("expected downstream content type %q, got %q", common.ContentTypeURLEncoded, got)
+	}
+	if rate := server.Verifier.PropertyStats.VerificationRate(property.ID, time.Now()); rate != 1.0 {
+		t.Errorf("Verification rate after accepted form submission = %v, want 1", rate)
 	}
 }

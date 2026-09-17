@@ -9,6 +9,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 )
 
 func TestDifficultyFormula(t *testing.T) {
@@ -33,11 +34,79 @@ func TestDifficultyFormula(t *testing.T) {
 		t.Run(fmt.Sprintf("difficulty_%v", i), func(t *testing.T) {
 			a := NewDifficultyAlgorithm(5 * time.Minute)
 			growth := growthMultiplier(tc.growthLevel)
-			actual := a.requestsToDifficulty(tc.userLevel, tc.propertyLevel, 1.0, tc.minDifficulty, growth)
+			actual := a.requestsToDifficulty(tc.userLevel, tc.propertyLevel, 1.0, 1.0, tc.minDifficulty, growth)
 			if actual != tc.expected {
 				t.Errorf("Actual difficulty (%v) is different from expected (%v)", actual, tc.expected)
 			}
 		})
+	}
+}
+
+func TestDifficultyFormulaIncreasesForVerificationRateDeviation(t *testing.T) {
+	a := NewDifficultyAlgorithm(5 * time.Minute)
+
+	difficulty := func(rate float64) uint8 {
+		return a.requestsToDifficulty(0, 0, 1.0, rate, 100, 1.0)
+	}
+
+	neutral := difficulty(1.0)
+	if neutral != 100 {
+		t.Fatalf("Neutral verification rate difficulty = %d, want 100", neutral)
+	}
+
+	if slight, large := difficulty(1.2), difficulty(3.0); slight <= neutral || large <= slight {
+		t.Errorf("Increasing high-side deviation difficulties = %d, %d, %d; want strictly increasing", neutral, slight, large)
+	}
+	if slight, large := difficulty(0.8), difficulty(0.3); slight <= neutral || large <= slight {
+		t.Errorf("Increasing low-side deviation difficulties = %d, %d, %d; want strictly increasing", neutral, slight, large)
+	}
+	if high, low := difficulty(3.0), difficulty(1.0/3.0); high != low {
+		t.Errorf("Reciprocal verification rates produced difficulties %d and %d, want equal", high, low)
+	}
+}
+
+func TestDifficultyFormulaBoundsOneSidedVerificationRates(t *testing.T) {
+	a := NewDifficultyAlgorithm(5 * time.Minute)
+
+	for _, rate := range []float64{0, math.Inf(1)} {
+		actual := a.requestsToDifficulty(0, 0, 1.0, rate, 100, 1.0)
+		if actual <= 100 || actual >= 255 {
+			t.Errorf("Difficulty for verification rate %v = %d, want bounded increase", rate, actual)
+		}
+	}
+}
+
+func TestDifficultyUsesVerificationRate(t *testing.T) {
+	a := NewDifficultyAlgorithm(5 * time.Minute)
+	property := NewStubProperty(1, true, 1, 1, 100, dbgen.DifficultyGrowthMedium)
+	propertyData := &leakybucket.AddResult{LeakRate: 1.0}
+	userData := &leakybucket.AddResult{}
+
+	neutral := a.Difficulty(propertyData, userData, property, 1.0)
+	imbalanced := a.Difficulty(propertyData, userData, property, 3.0)
+	if imbalanced <= neutral {
+		t.Errorf("Imbalanced verification difficulty = %d, want greater than neutral difficulty %d", imbalanced, neutral)
+	}
+}
+
+type capturingAlgorithm struct {
+	verificationRate float64
+}
+
+func (a *capturingAlgorithm) Difficulty(_ *leakybucket.AddResult, _ *leakybucket.AddResult, _ Property, verificationRate float64) uint8 {
+	a.verificationRate = verificationRate
+	return 100
+}
+
+func TestLevelsForwardsVerificationRate(t *testing.T) {
+	algorithm := &capturingAlgorithm{}
+	levels := NewLevelsEx(nil, algorithm, 1, 5*time.Minute)
+	property := NewStubProperty(1, true, 1, 1, 100, dbgen.DifficultyGrowthMedium)
+
+	levels.DifficultyEx(t.Context(), 1, property, time.Now(), 3.0)
+
+	if algorithm.verificationRate != 3.0 {
+		t.Errorf("Algorithm verification rate = %v, want 3", algorithm.verificationRate)
 	}
 }
 

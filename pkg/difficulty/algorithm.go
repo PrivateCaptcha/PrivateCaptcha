@@ -10,7 +10,7 @@ import (
 )
 
 type Algorithm interface {
-	Difficulty(propertyData *leakybucket.AddResult, userData *leakybucket.AddResult, property Property) uint8
+	Difficulty(propertyData *leakybucket.AddResult, userData *leakybucket.AddResult, property Property, verificationRate float64) uint8
 }
 
 // Unlike SaaS version, self-hosting installation has no privilege of having enriched (or even aggregated) global
@@ -27,7 +27,7 @@ func NewDifficultyAlgorithm(propertyBucketSize time.Duration) *SelfHostingAlgori
 	}
 }
 
-func (a *SelfHostingAlgorithm) Difficulty(propertyData *leakybucket.AddResult, userData *leakybucket.AddResult, property Property) uint8 {
+func (a *SelfHostingAlgorithm) Difficulty(propertyData *leakybucket.AddResult, userData *leakybucket.AddResult, property Property, verificationRate float64) uint8 {
 	minDifficulty := float64(max(int16(common.MinDifficultyLevel), min(property.Level(), int16(common.MaxDifficultyLevel))))
 
 	growth := growthMultiplier(property.Growth())
@@ -38,6 +38,7 @@ func (a *SelfHostingAlgorithm) Difficulty(propertyData *leakybucket.AddResult, u
 	return a.requestsToDifficulty(userData.CurrLevel,
 		propertyData.CurrLevel,
 		propertyData.LeakRate,
+		verificationRate,
 		minDifficulty,
 		growth,
 	)
@@ -61,10 +62,10 @@ func (a *SelfHostingAlgorithm) Difficulty(propertyData *leakybucket.AddResult, u
 * e.g. If (u == U8), then each user request contributs one "doubling" unit of difficulty
 *
 * Finally, "The Model" for `work multiplier` (simplified) is:
-* F(u, p) = (1 + u/U8)^(g * wu) * (1 + p/P8)^(g * wp)
-* where `wp` and `wu` are respective weights of how much user and property levels measure
-* Both are multiplied to make user and property levels cross-dependent (e.g. a suspicious user during a property-wide spike affects more)
-* so if you "open" logarithm, it results in `wu*(1 + u/U8) + wp*(1 + p/P8)`
+* F(u, p, v) = (1 + u/U8)^(g * wu) * (1 + p/P8 + v)^(g * wp)
+* where v = min(max(verificationRate, 1/verificationRate), 8) - 1 measures bounded verification imbalance
+* and `wp` and `wu` are respective weights of how much user and property levels measure.
+* Both components are multiplied to make user and property levels cross-dependent (e.g. a suspicious user during a property-wide spike affects more).
 *
 * Also we don't simply "weight" them. To make sure we don't exceed 255, we calculate actual available "headspace"
 * (255 - minDifficulty) and fit it in.
@@ -84,6 +85,7 @@ func (a *SelfHostingAlgorithm) requestsToDifficulty(
 	userLevel leakybucket.TLevel,
 	propertyLevel leakybucket.TLevel,
 	propertyLeakRate float64,
+	verificationRate float64,
 	baseDifficulty float64,
 	growth float64,
 ) uint8 {
@@ -112,7 +114,7 @@ func (a *SelfHostingAlgorithm) requestsToDifficulty(
 
 	// Raw pressure is measured in "work doubling units" (e.g. userRawPressure == 1 means "user component asks +100 work")
 	userRawPressure := log2p(u/userRef) * wu / totalWeight
-	propertyRawPressure := log2p(p/propertyRef) * wp / totalWeight
+	propertyRawPressure := log2p(p/propertyRef+verificationRateDeviation(verificationRate)) * wp / totalWeight
 	rawPressure := userRawPressure + propertyRawPressure
 
 	headroom := headroomDifficulty / 8.0
@@ -123,6 +125,21 @@ func (a *SelfHostingAlgorithm) requestsToDifficulty(
 	}
 
 	return uint8(difficulty)
+}
+
+func verificationRateDeviation(rate float64) float64 {
+	const maxVerificationRateRatio = 8.0
+
+	if math.IsNaN(rate) || rate == 1.0 {
+		return 0
+	}
+	if rate <= 0 {
+		return maxVerificationRateRatio - 1.0
+	}
+	if rate < 1.0 {
+		rate = 1.0 / rate
+	}
+	return min(rate, maxVerificationRateRatio) - 1.0
 }
 
 func log2p(x float64) float64 {

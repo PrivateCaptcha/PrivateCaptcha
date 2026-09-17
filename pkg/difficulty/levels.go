@@ -102,11 +102,11 @@ func (l *Levels) Shutdown() {
 	close(l.backfillChan)
 }
 
-func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) (uint8, leakybucket.TLevel, error) {
-	return l.difficultyEx(ctx, fingerprint, p, tnow)
+func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time, verificationRate float64) (uint8, leakybucket.TLevel, error) {
+	return l.difficultyEx(ctx, fingerprint, p, tnow, verificationRate)
 }
 
-func (l *Levels) difficultyEx(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) (uint8, leakybucket.TLevel, error) {
+func (l *Levels) difficultyEx(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time, verificationRate float64) (uint8, leakybucket.TLevel, error) {
 	propertyAddResult := l.propertyBuckets.Add(p.ID(), 1, tnow)
 	var backfillErr error
 	if !propertyAddResult.Found {
@@ -115,13 +115,13 @@ func (l *Levels) difficultyEx(ctx context.Context, fingerprint common.TFingerpri
 
 	userAddResult := l.userBuckets.Add(fingerprint, 1, tnow)
 
-	difficulty := l.algorithm.Difficulty(&propertyAddResult, &userAddResult, p)
+	difficulty := l.algorithm.Difficulty(&propertyAddResult, &userAddResult, p, verificationRate)
 
 	return difficulty, propertyAddResult.CurrLevel, backfillErr
 }
 
-func (l *Levels) Difficulty(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) uint8 {
-	diff, _, _ := l.DifficultyEx(ctx, fingerprint, p, tnow)
+func (l *Levels) Difficulty(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time, verificationRate float64) uint8 {
+	diff, _, _ := l.DifficultyEx(ctx, fingerprint, p, tnow, verificationRate)
 	return diff
 }
 
