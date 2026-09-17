@@ -5,6 +5,12 @@
             "icon": "img/integrations/reactjs.svg",
             "link": "https://docs.privatecaptcha.com/docs/integrations/react/",
             "ready": true
+        },
+        {
+            "name": "Vue",
+            "icon": "img/integrations/vue.svg",
+            "link": "https://docs.privatecaptcha.com/docs/integrations/vue/",
+            "ready": true
         }
     ],
     "server": [
