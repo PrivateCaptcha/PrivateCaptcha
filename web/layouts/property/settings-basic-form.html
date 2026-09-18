@@ -66,43 +66,61 @@
         </div>
     </div>
 
-    <div class="col-span-full" x-data="{replayEnabled: {{ $.Params.Property.AllowReplay }}}">
-        <label for="{{ .Const.ValidityInterval }}" class="pc-internal-form-label tooltip" data-tooltip="Period during which a single captcha puzzle can be verified"> Verification window </label>
-        <div class="mt-2">
-            <select name="{{ .Const.ValidityInterval }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
-                <option value="0" {{ if eq $.Params.Property.ValidityInterval 0 }}selected="selected"{{end}}>5 minutes</option>
-                <option value="1" {{ if eq $.Params.Property.ValidityInterval 1 }}selected="selected"{{end}}>10 minutes</option>
-                <option value="2" {{ if eq $.Params.Property.ValidityInterval 2 }}selected="selected"{{end}}>30 minutes</option>
-                <option value="3" {{ if eq $.Params.Property.ValidityInterval 3 }}selected="selected"{{end}}>1 hour</option>
-                <option value="4" {{ if eq $.Params.Property.ValidityInterval 4 }}selected="selected"{{end}}>6 hours</option>
-                <option value="5" {{ if eq $.Params.Property.ValidityInterval 5 }}selected="selected"{{end}}>12 hours</option>
-                <option value="6" {{ if eq $.Params.Property.ValidityInterval 6 }}selected="selected"{{end}}>1 day</option>
-            </select>
-        </div>
+    <div class="pc-advanced-settings bg-pc-blue-10 col-span-full" x-data="{advancedOpen: false, advancedTransitioning: true, replayEnabled: {{ $.Params.Property.AllowReplay }}, toggleAdvanced() { if (this.advancedOpen && !this.$refs.maxReplayCount.checkValidity()) { this.$refs.maxReplayCount.reportValidity(); return; } this.advancedTransitioning = true; this.advancedOpen = !this.advancedOpen }}">
+        <h4>
+            <button type="button" class="pc-advanced-settings-trigger pc-subsubsection-title" @click="toggleAdvanced()" :aria-expanded="advancedOpen" aria-controls="advanced-property-settings">
+                <span>Advanced</span>
+                <span class="pc-advanced-settings-icon" aria-hidden="true"></span>
+            </button>
+        </h4>
 
-        <div class="mt-2 flex gap-3">
-            <div class="flex h-6 shrink-0 items-center">
-                <div class="group grid size-4 grid-cols-1">
-                    <input id="{{ .Const.AllowReplay }}" x-model="replayEnabled" aria-describedby="{{ .Const.AllowReplay }}-description" name="{{ .Const.AllowReplay }}" type="checkbox" class="col-start-1 row-start-1 pc-internal-form-checkbox">
-                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-pc-grey-950/25" viewBox="0 0 14 14" fill="none">
-                        <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                        <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
+        <div id="advanced-property-settings" class="grid" :class="advancedTransitioning ? 'overflow-hidden' : 'overflow-visible'" x-cloak x-show="advancedOpen"
+            x-on:transitionend="if (advancedOpen && $event.target === $el && $event.propertyName === 'grid-template-rows') advancedTransitioning = false"
+            x-transition:enter="transition-[grid-template-rows,opacity] duration-300 ease-out"
+            x-transition:enter-start="grid-rows-[0fr] opacity-0"
+            x-transition:enter-end="grid-rows-[1fr] opacity-100"
+            x-transition:leave="transition-[grid-template-rows,opacity] duration-200 ease-in"
+            x-transition:leave-start="grid-rows-[1fr] opacity-100"
+            x-transition:leave-end="grid-rows-[0fr] opacity-0">
+            <div class="min-h-0 px-4 pb-6 pt-1">
+                <label for="{{ .Const.ValidityInterval }}" class="pc-internal-form-label tooltip" data-tooltip="Period during which a single captcha puzzle can be verified"> Verification window </label>
+                <div class="mt-2">
+                    <select name="{{ .Const.ValidityInterval }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
+                        <option value="0" {{ if eq $.Params.Property.ValidityInterval 0 }}selected="selected"{{end}}>5 minutes</option>
+                        <option value="1" {{ if eq $.Params.Property.ValidityInterval 1 }}selected="selected"{{end}}>10 minutes</option>
+                        <option value="2" {{ if eq $.Params.Property.ValidityInterval 2 }}selected="selected"{{end}}>30 minutes</option>
+                        <option value="3" {{ if eq $.Params.Property.ValidityInterval 3 }}selected="selected"{{end}}>1 hour</option>
+                        <option value="4" {{ if eq $.Params.Property.ValidityInterval 4 }}selected="selected"{{end}}>6 hours</option>
+                        <option value="5" {{ if eq $.Params.Property.ValidityInterval 5 }}selected="selected"{{end}}>12 hours</option>
+                        <option value="6" {{ if eq $.Params.Property.ValidityInterval 6 }}selected="selected"{{end}}>1 day</option>
+                    </select>
+                </div>
+
+                <div class="mt-2 flex gap-3">
+                    <div class="flex h-6 shrink-0 items-center">
+                        <div class="group grid size-4 grid-cols-1">
+                            <input id="{{ .Const.AllowReplay }}" x-model="replayEnabled" aria-describedby="{{ .Const.AllowReplay }}-description" name="{{ .Const.AllowReplay }}" type="checkbox" class="col-start-1 row-start-1 pc-internal-form-checkbox">
+                            <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-pc-grey-950/25" viewBox="0 0 14 14" fill="none">
+                                <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="text-sm/6">
+                        <label for="{{ .Const.AllowReplay }}" class="pc-checkbox-label">Accept repeated solutions</label>
+                        <span id="{{ .Const.AllowReplay }}-description" class="sr-only">Accept repeated solutions during verification window</span>
+                        {{ if $.Params.Property.AllowReplay -}}
+                        <span class="pc-badge pc-badge-warn ml-3" aria-hidden="true">Security trade-off</span>
+                        {{- else -}}
+                        <span class="pc-checkbox-desc"><span class="sr-only">Accept repeated solutions </span>during verification window</span>
+                        {{- end }}
+                    </div>
+                </div>
+
+                <div class="mt-2">
+                    <input x-ref="maxReplayCount" type="number" :disabled="!replayEnabled" name="{{ .Const.MaxReplayCount }}" min="1" max="1000000" placeholder="2" value="{{ $.Params.Property.MaxReplayCount }}" class="w-full pc-internal-form-input-base" :class="replayEnabled ? 'pc-form-input-normal' : 'pc-form-input-disabled'" />
                 </div>
             </div>
-            <div class="text-sm/6">
-                <label for="{{ .Const.AllowReplay }}" class="pc-checkbox-label">Accept repeated solutions</label>
-                <span id="{{ .Const.AllowReplay }}-description" class="sr-only">Accept repeated solutions during verification window</span>
-                {{ if $.Params.Property.AllowReplay -}}
-                <span class="pc-badge pc-badge-warn ml-3" aria-hidden="true">Security trade-off</span>
-                {{- else -}}
-                <span class="pc-checkbox-desc"><span class="sr-only">Accept repeated solutions </span>during verification window</span>
-                {{- end }}
-            </div>
-        </div>
-
-        <div class="mt-2">
-            <input type="number" :disabled="!replayEnabled" name="{{ .Const.MaxReplayCount }}" min="1" max="1000000" placeholder="2" value="{{ $.Params.Property.MaxReplayCount }}" class="w-full pc-internal-form-input-base" :class="replayEnabled ? 'pc-form-input-normal' : 'pc-form-input-disabled'" />
         </div>
     </div>
 

@@ -372,6 +372,61 @@ body.pc-vertical-stretch {
     @apply font-sans;
 }
 
+.pc-advanced-settings {
+    @apply border-y;
+    @apply border-dashed;
+    @apply border-pc-grey-250;
+}
+
+.pc-advanced-settings-trigger {
+    @apply flex;
+    @apply w-full;
+    @apply cursor-pointer;
+    @apply items-center;
+    @apply justify-between;
+    @apply gap-6;
+    @apply px-4;
+    @apply py-2;
+    @apply text-left;
+    @apply text-pc-grey-950;
+    @apply transition-colors;
+    @apply duration-200;
+    @apply hover:text-pc-green-hover;
+    @apply focus:outline-none;
+    @apply focus-visible:outline;
+    @apply focus-visible:outline-2;
+    @apply focus-visible:outline-offset-2;
+    @apply focus-visible:outline-pc-green;
+}
+
+.pc-advanced-settings-icon {
+    position: relative;
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+}
+
+.pc-advanced-settings-icon::before,
+.pc-advanced-settings-icon::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 14px;
+    height: 1px;
+    @apply bg-pc-grey-950;
+    transform: translate(-50%, -50%);
+    transition: transform 200ms ease;
+}
+
+.pc-advanced-settings-icon::after {
+    transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.pc-advanced-settings-trigger[aria-expanded='true'] .pc-advanced-settings-icon::after {
+    transform: translate(-50%, -50%) rotate(0deg);
+}
+
 .pc-form-checkbox-label {
     @apply font-normal;
     @apply text-sm;
@@ -1054,6 +1109,10 @@ body.pc-vertical-stretch {
 
 .pc-subsection-title {
     @apply font-heading text-xl font-semibold leading-7 tracking-tight text-pc-grey-950;
+}
+
+.pc-subsubsection-title {
+    @apply font-heading text-base font-semibold leading-7 tracking-tight text-pc-grey-950;
 }
 
 .pc-section-heading {
