@@ -186,16 +186,13 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if result.Success() && result.Error == puzzle.MaintenanceModeError {
-			s.Verifier.CacheVerification(ctx, result) // record single-use in maintenance mode (property is nil)
+		if result.PropertyID == ownerSource.Form.PropertyID {
+			s.Verifier.recordVerificationStats(result, tnow)
 		}
-
 		if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
-
-		s.Verifier.recordVerificationStats(result, tnow)
 		s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
 		s.Verifier.CacheVerification(ctx, result)
 		if form.RequestsPerMinute > 0 {
