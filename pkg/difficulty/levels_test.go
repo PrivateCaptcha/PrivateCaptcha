@@ -139,6 +139,7 @@ func TestBackfillDifficultyTrainsLeakRate(t *testing.T) {
 			counts[0].Count = requests * 10
 
 			levels := NewLevels(&backfillTimeSeries{counts: counts}, 1, interval)
+			levels.propertyBuckets = leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32]](1, 100_000, interval)
 			levels.propertyBuckets.Add(propertyID, 1, tnow)
 			levels.backfillChan <- &common.BackfillRequest{PropertyID: propertyID}
 			close(levels.backfillChan)
@@ -180,6 +181,7 @@ func TestBackfillDifficultyCountsEmptyIntervals(t *testing.T) {
 		Timestamp: tnow.Add(-interval),
 		Count:     requests,
 	}}}, 1, interval)
+	levels.propertyBuckets = leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32]](1, 100_000, interval)
 	levels.propertyBuckets.Add(propertyID, 1, tnow)
 	levels.backfillChan <- &common.BackfillRequest{PropertyID: propertyID}
 	close(levels.backfillChan)

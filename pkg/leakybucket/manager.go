@@ -41,9 +41,17 @@ func (r *AddResult) Remaining() TLevel {
 func NewManager[TKey comparable, T any, TBucket BucketConstraint[TKey, T]](maxBuckets int, capacity TLevel, leakInterval time.Duration) *Manager[TKey, T, TBucket] {
 	return &Manager[TKey, T, TBucket]{
 		buckets: otter.Must(&otter.Options[TKey, TBucket]{
-			MaximumSize:      maxBuckets,
-			InitialCapacity:  max(100, maxBuckets/1000),
-			ExpiryCalculator: otter.ExpiryAccessing[TKey, TBucket](time.Duration(capacity) * leakInterval),
+			MaximumSize:     maxBuckets,
+			InitialCapacity: max(100, maxBuckets/1000),
+			ExpiryCalculator: otter.ExpiryAccessingFunc[TKey, TBucket](func(e otter.Entry[TKey, TBucket]) time.Duration {
+				b := e.Value
+				cap64 := int64(b.Capacity())
+				intervalNs := int64(b.LeakInterval())
+				if cap64 <= 0 || intervalNs <= 0 || cap64 > math.MaxInt64/intervalNs {
+					return time.Duration(math.MaxInt64)
+				}
+				return time.Duration(cap64 * intervalNs)
+			}),
 		}),
 		capacity:     capacity,
 		leakInterval: leakInterval,

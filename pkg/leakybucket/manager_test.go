@@ -371,3 +371,40 @@ func TestManagerCacheVarLeakyBucket(t *testing.T) {
 		t.Errorf("expected 2 level to leak to 0, got %v", lvl2b)
 	}
 }
+
+func TestStaleCalculatorRepro(t *testing.T) {
+	const initCap = 20
+	const initInterval = 1 * time.Second
+	manager := NewManager[int32, ConstLeakyBucket[int32]](8, initCap, initInterval)
+	now := time.Now().UTC().Truncate(1 * time.Millisecond)
+
+	// (A) New bucket: SetExpiresAfter applies the intended TTL
+	manager.Add(999, 1, now)
+	e, _ := manager.buckets.GetEntryQuietly(999)
+	ttl1 := e.ExpiresAt().Sub(now) // ~20s — matches calculator (20*1s) and intended (20*1s)
+	_ = ttl1
+
+	// (B) Update sets per-bucket TTL to 5s via SetExpiresAfter
+	manager.Update(999, 5, 1*time.Second, now.Add(1*time.Millisecond))
+	e, _ = manager.buckets.GetEntryQuietly(999)
+	ttl2 := e.ExpiresAt().Sub(now.Add(1 * time.Millisecond)) // ~5s — SetExpiresAfter took effect
+	_ = ttl2
+
+	// (C) Second Add on existing key: stale calculator re-stamps to 20s
+	manager.Add(999, 1, now.Add(2*time.Millisecond))
+	e, _ = manager.buckets.GetEntryQuietly(999)
+	ttl3 := e.ExpiresAt().Sub(now.Add(2 * time.Millisecond)) // ~20s — BUG: snapped back from 5s to 20s
+	_ = ttl3
+
+	// (D) SetGlobalLimits(5, 1s) then new key: momentary 5s, then snapped back
+	manager.SetGlobalLimits(5, 1*time.Second)
+	manager.Add(888, 1, now.Add(3*time.Millisecond))
+	e, _ = manager.buckets.GetEntryQuietly(888)
+	ttl4 := e.ExpiresAt().Sub(now.Add(3 * time.Millisecond)) // ~5s — SetExpiresAfter on new bucket
+	_ = ttl4
+
+	manager.Add(888, 1, now.Add(4*time.Millisecond))
+	e, _ = manager.buckets.GetEntryQuietly(888)
+	ttl5 := e.ExpiresAt().Sub(now.Add(4 * time.Millisecond)) // ~20s — BUG: snapped back to stale calculator
+	_ = ttl5
+}
