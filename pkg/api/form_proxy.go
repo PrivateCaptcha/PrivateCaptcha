@@ -186,6 +186,10 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if result.Success() && result.Error == puzzle.MaintenanceModeError {
+			// maintenance-mode returns Success() with PropertyID==0
+			s.Verifier.CacheVerification(ctx, result)
+		}
 		if result.PropertyID == ownerSource.Form.PropertyID {
 			s.Verifier.recordVerificationStats(result, tnow)
 		}
@@ -354,13 +358,14 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 		if result.Success() && result.Error == puzzle.MaintenanceModeError {
 			s.Verifier.CacheVerification(ctx, result) // record single-use in maintenance mode (property is nil)
 		}
-
+		if result.PropertyID == ownerSource.Form.PropertyID {
+			s.Verifier.recordVerificationStats(result, sub.Time)
+		}
 		if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
 			slog.WarnContext(ctx, "Skipping form submission due to captcha verification error", "result", result.Error.String())
 			return errCaptchaVerificationFailed
 		}
 
-		s.Verifier.recordVerificationStats(result, sub.Time)
 		s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
 		s.Verifier.CacheVerification(ctx, result)
 	}

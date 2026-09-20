@@ -979,3 +979,43 @@ func TestFormProxySubmitsForm(t *testing.T) {
 		t.Errorf("Verification rate after accepted form submission = %v, want 1", rate)
 	}
 }
+
+func TestFormProxyRecordsSamePropertyFailure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	form, property, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "fail-form.example.com"),
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tnow := time.Now()
+	server.Verifier.PropertyStats.RecordPuzzles(property.ID, 10, tnow)
+	server.Verifier.PropertyStats.RecordVerifications(property.ID, 10, tnow)
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	puzzleStr, _, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rateBefore := server.Verifier.PropertyStats.VerificationRate(property.ID, time.Now())
+
+	// Submit malformed solution data for the valid puzzle.
+	body := url.Values{}
+	body.Set("email", "test@example.com")
+	body.Set(common.ParamPrivateCaptchaSolution, fmt.Sprintf("AAAA.%s", puzzleStr))
+	resp := formProxySuite(t, form, body)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("got %d", resp.StatusCode)
+	}
+	rate := server.Verifier.PropertyStats.VerificationRate(property.ID, time.Now())
+	if rate >= rateBefore {
+		t.Errorf("same-property failure via form-proxy was not recorded: rate=%v, want < %v", rate, rateBefore)
+	}
+}
