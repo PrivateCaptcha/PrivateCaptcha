@@ -66,3 +66,20 @@ func TestTwoFactorEmailValidatesLocation(t *testing.T) {
 		})
 	}
 }
+
+func TestVerifyEmailBracketedNonIP(t *testing.T) {
+	v := &PortalEmailVerifier{}
+	for _, e := range []string{
+		"user@[some.host.com]", "user@[1.2.3]", "user@[a.b]",
+		"user@[1.2.3.4.5]", "user@[IPv6:not.a.ip]",
+	} {
+		if err := v.VerifyEmail(context.Background(), e); err == nil {
+			t.Errorf("VerifyEmail(%q) = nil, want error", e)
+		}
+	}
+	for _, e := range []string{"user@example.com"} {
+		if err := v.VerifyEmail(context.Background(), e); err != nil {
+			t.Errorf("VerifyEmail(%q) = %v, want nil", e, err)
+		}
+	}
+}

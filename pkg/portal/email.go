@@ -34,7 +34,8 @@ func (ev *PortalEmailVerifier) VerifyEmail(ctx context.Context, email string) er
 		domain := email[at+1:]
 
 		probe := domain
-		if len(probe) >= 2 && probe[0] == '[' && probe[len(probe)-1] == ']' {
+		bracketed := len(probe) >= 2 && probe[0] == '[' && probe[len(probe)-1] == ']'
+		if bracketed {
 			probe = probe[1 : len(probe)-1]
 
 			if len(probe) >= 6 && strings.EqualFold(probe[:5], "IPv6:") {
@@ -44,6 +45,11 @@ func (ev *PortalEmailVerifier) VerifyEmail(ctx context.Context, email string) er
 
 		if _, err := netip.ParseAddr(probe); err == nil {
 			return errInvalidEmailDomain // IPv4 literals are not valid email domains
+		}
+
+		if bracketed {
+			// RFC 5321: a bracketed domain literal must be a valid IP literal.
+			return errInvalidEmailDomain
 		}
 
 		if !emailpkg.IsLikelyValidDomain(domain) {
