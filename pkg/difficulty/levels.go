@@ -168,7 +168,12 @@ func (l *Levels) RecordAccess(ctx context.Context, ar *common.AccessRecord) erro
 	case l.accessChan <- ar:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		if errors.Is(ctx.Err(), context.Canceled) {
+			// genuine client disconnect
+			return ctx.Err()
+		}
+		// DeadlineExceeded on puzzle/verify path degrades to drop-and-serve
+		return common.ErrBackpressure
 	case <-timer.C:
 		return common.ErrBackpressure
 	}

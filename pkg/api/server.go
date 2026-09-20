@@ -303,7 +303,9 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, apiCorsHandler, form
 	recovered := common.Recovered(s.Metrics)
 	publicChain := alice.New(svc, recovered, security)
 	// NOTE: auth middleware provides rate limiting internally
-	puzzleChain := publicChain.Append(s.Metrics.APIHandler, s.RateLimiter.RateLimit, monitoring.Traced, common.SoftTimeoutHandler(1*time.Second))
+	const puzzlePreLevelsBudget = 200 * time.Millisecond
+	puzzleChain := publicChain.Append(s.Metrics.APIHandler, s.RateLimiter.RateLimit, monitoring.Traced,
+		common.SoftTimeoutHandler(min(1*time.Second, s.Levels.BackfillTimeout()+puzzlePreLevelsBudget)))
 	rg.Handle(rg.Get(common.PuzzleEndpoint), puzzleChain.Append(apiCorsHandler, s.Auth.Sitekey), http.HandlerFunc(s.puzzleHandler))
 	rg.Handle(rg.Options(common.PuzzleEndpoint), puzzleChain.Append(common.Cached, apiCorsHandler, s.Auth.SitekeyOptions), http.HandlerFunc(s.puzzlePreFlight))
 
