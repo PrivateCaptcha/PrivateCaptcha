@@ -3,10 +3,12 @@ package db
 import (
 	"bytes"
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/maypok86/otter/v2"
 )
 
@@ -292,5 +294,52 @@ func TestBusinessCacheMissingCompiledRulesRoundTrip(t *testing.T) {
 	}
 	if _, _, err := newImpl.GetCachedCompiledOrgRules(ctx, 456); err != ErrNegativeCacheHit {
 		t.Fatalf("expected negative cache hit for org rules after load, got %v", err)
+	}
+}
+
+func TestStoreOneReaderReadTxCacheMissingEntity(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	underlying, err := NewMemoryCache[CacheKey, any]("test", 1024, &CacheMissingValue{}, DefaultCacheTTL, defaultCacheRefresh, negativeCacheTTL)
+	if err != nil {
+		t.Fatalf("failed to create underlying memcache: %v", err)
+	}
+
+	txCache := NewTxCache(underlying) // same wrapping as BusinessStore.WithTx
+
+	reader := &StoreOneReader[int32, testCacheEntity]{
+		CacheKey:     UserCacheKey(42),
+		Cache:        txCache,
+		QueryKeyFunc: func(key CacheKey) (int32, error) { return key.IntValue, nil },
+		QueryFunc: func(ctx context.Context, key int32) (*testCacheEntity, error) {
+			return nil, pgx.ErrNoRows
+		},
+		DropInvalid: true,
+	}
+
+	if _, err := reader.Read(ctx); errors.Is(err, errInvalidCacheType) {
+		t.Fatalf("transactional missing-entity read returned errInvalidCacheType (=%v); expected ErrNegativeCacheHit or ErrRecordNotFound per the CacheLoader/Missing contract in pkg/common/store.go", err)
+	}
+}
+
+func TestStoreOneReaderReadMemcacheMissingEntity(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	underlying, _ := NewMemoryCache[CacheKey, any]("test2", 1024, &CacheMissingValue{}, DefaultCacheTTL, defaultCacheRefresh, negativeCacheTTL)
+
+	reader := &StoreOneReader[int32, testCacheEntity]{
+		CacheKey:     UserCacheKey(43),
+		Cache:        underlying,
+		QueryKeyFunc: func(key CacheKey) (int32, error) { return key.IntValue, nil },
+		QueryFunc: func(ctx context.Context, key int32) (*testCacheEntity, error) {
+			return nil, pgx.ErrNoRows
+		},
+		DropInvalid: true,
+	}
+
+	if _, err := reader.Read(ctx); !errors.Is(err, ErrNegativeCacheHit) {
+		t.Fatalf("expected ErrNegativeCacheHit from non-transactional missing-entity read, got %v", err)
 	}
 }

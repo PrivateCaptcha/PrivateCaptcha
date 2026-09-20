@@ -152,7 +152,12 @@ func (c *TxCache) LoadFrom(context.Context, io.Reader, time.Duration) error { re
 func (c *TxCache) SaveTo(context.Context, io.Writer, int) error             { return nil }
 
 func (c *TxCache) HitRatio() float64 { return 0.0 }
-func (c *TxCache) Missing() any      { return nil }
+func (c *TxCache) Missing() any {
+	if c.cache != nil {
+		return c.cache.Missing()
+	}
+	return nil
+}
 func (c *TxCache) Clear() {
 	c.set = make(map[CacheKey]*txCacheArg)
 	c.del = make(map[CacheKey]struct{})
@@ -169,7 +174,15 @@ func (c *TxCache) Get(ctx context.Context, key CacheKey) (any, error) {
 	return nil, errTransactionCache
 }
 func (c *TxCache) GetEx(ctx context.Context, key CacheKey, loader common.CacheLoader[CacheKey, any]) (any, error) {
-	return loader.Load(ctx, key)
+	v, err := loader.Load(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	if (c.cache != nil) && (v == c.cache.Missing()) {
+		_ = c.SetMissing(ctx, key)
+		return nil, ErrNegativeCacheHit
+	}
+	return v, nil
 }
 func (c *TxCache) SetMissing(ctx context.Context, key CacheKey) error {
 	c.missing[key] = struct{}{}
