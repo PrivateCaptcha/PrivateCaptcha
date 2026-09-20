@@ -1981,6 +1981,9 @@ func (impl *BusinessStoreImpl) MoveForm(
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(updatedProperty.OrgOwnerID.Int32))
 
+	impl.invalidateOrganizationStatsCache(ctx, form.OrgOwnerID.Int32)
+	impl.invalidateOrganizationStatsCache(ctx, updatedForm.OrgOwnerID.Int32)
+
 	impl.cacheForm(ctx, updatedForm)
 	impl.cacheProperty(ctx, updatedProperty)
 
@@ -3875,6 +3878,10 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(updatedProperty.OrgID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(updatedProperty.OrgOwnerID.Int32))
+
+	impl.invalidateOrganizationStatsCache(ctx, property.OrgOwnerID.Int32)
+	impl.invalidateOrganizationStatsCache(ctx, updatedProperty.OrgOwnerID.Int32)
+
 	// and cache property
 	impl.cacheProperty(ctx, updatedProperty)
 
