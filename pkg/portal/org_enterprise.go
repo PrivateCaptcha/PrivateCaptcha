@@ -484,13 +484,17 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 
 	org, _, err := s.Org(user, r)
 	if err != nil {
-		s.RedirectError(http.StatusInternalServerError, w, r)
+		code := http.StatusInternalServerError
+		if err == db.ErrPermissions {
+			code = http.StatusForbidden
+		}
+		s.RedirectError(code, w, r)
 		return
 	}
 
 	if org.UserID.Int32 != user.ID {
 		slog.ErrorContext(ctx, "Does not have permissions to delete org", "userID", user.ID, "orgUserID", org.UserID.Int32)
-		s.RedirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusForbidden, w, r)
 		return
 	}
 
@@ -623,14 +627,18 @@ func (s *Server) transferOrg(w http.ResponseWriter, r *http.Request) {
 
 	org, _, err := s.Org(user, r)
 	if err != nil {
-		s.RedirectError(http.StatusInternalServerError, w, r)
+		code := http.StatusInternalServerError
+		if err == db.ErrPermissions {
+			code = http.StatusForbidden
+		}
+		s.RedirectError(code, w, r)
 		return
 	}
 
 	// Only the current owner can transfer the organization
 	if org.UserID.Int32 != user.ID {
 		slog.ErrorContext(ctx, "Not enough permissions to transfer org", "userID", user.ID, "orgUserID", org.UserID.Int32)
-		s.RedirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusForbidden, w, r)
 		return
 	}
 
