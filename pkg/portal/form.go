@@ -431,7 +431,8 @@ func (s *Server) getFormStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	period := periodFromPath(ctx, r)
-	etag := common.GenerateETag(strconv.Itoa(int(user.ID)), strconv.Itoa(int(org.ID)), strconv.Itoa(int(form.ID)), period.String())
+	etagBucket := time.Now().UTC().Truncate(5 * time.Minute).Format(time.RFC3339)
+	etag := common.GenerateETag(strconv.Itoa(int(user.ID)), strconv.Itoa(int(org.ID)), strconv.Itoa(int(form.ID)), period.String(), etagBucket)
 	if etagHeader := r.Header.Get(common.HeaderIfNoneMatch); len(etagHeader) > 0 && (etagHeader == etag) {
 		w.WriteHeader(http.StatusNotModified)
 		return
