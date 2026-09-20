@@ -189,6 +189,10 @@ func (dal *DiscardAuditLog) RecordEvents(ctx context.Context, events []*common.A
 }
 
 func (dal *DiscardAuditLog) RecordEvent(ctx context.Context, event *common.AuditLogEvent, source common.AuditLogSource) {
+	if event == nil {
+		return
+	}
+
 	slog.WarnContext(ctx, "Discarded audit log event", "table", event.TableName, "entityID", event.EntityID, "action", event.Action)
 }
 
