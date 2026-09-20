@@ -78,7 +78,7 @@ func (s *Server) exportAuditLogsCSV(w http.ResponseWriter, r *http.Request) {
 
 	days := auditLogsDaysFromParam(ctx, r.URL.Query().Get(common.ParamDays))
 
-	logs, err := s.retrieveAuditLogs(ctx, user, days, days*1000 /*max logs*/)
+	logs, err := s.retrieveAuditLogs(ctx, user, days, days*1000 /*max logs*/, true /*skip cache*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve audit logs", common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
@@ -134,7 +134,7 @@ func (s *Server) CreateAuditLogsContext(ctx context.Context, user *dbgen.User, d
 		page = 0
 	}
 
-	allLogs, err := s.retrieveAuditLogs(ctx, user, days, maxLogs)
+	allLogs, err := s.retrieveAuditLogs(ctx, user, days, maxLogs, false /*skip cache*/)
 	if err != nil {
 		return nil, err
 	}

@@ -450,15 +450,20 @@ func (s *Server) newUserAuditLogs(ctx context.Context, logs []*dbgen.GetUserAudi
 	return result
 }
 
-func (s *Server) retrieveAuditLogs(ctx context.Context, user *dbgen.User, days int, maxLogs int) ([]*dbgen.GetUserAuditLogsRow, error) {
+func (s *Server) retrieveAuditLogs(ctx context.Context, user *dbgen.User, days int, maxLogs int, skipCache bool) ([]*dbgen.GetUserAuditLogsRow, error) {
 	slog.DebugContext(ctx, "About to retrieve audit logs", "days", days, "maxLogs", maxLogs, "userID", user.ID)
 	// cache-friendly (more stable) date
 	tnow := time.Now().UTC().Truncate(24 * time.Hour)
 	after := tnow.AddDate(0 /*years*/, 0 /*months*/, -days)
 
 	var allLogs []*dbgen.GetUserAuditLogsRow
+	var allCacheDays []int
 
-	for _, cacheDays := range []int{14, 30, 90, 180, 365} {
+	if !skipCache {
+		allCacheDays = []int{14, 30, 90, 180, 365}
+	}
+
+	for _, cacheDays := range allCacheDays {
 		if cacheDays >= days {
 			cachedAfter := tnow.AddDate(0 /*years*/, 0 /*months*/, -cacheDays)
 			if cached, err := s.Store.Impl().GetCachedAuditLogs(ctx, user, maxLogs, after, cachedAfter); err == nil {
