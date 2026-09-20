@@ -326,3 +326,27 @@ func TestVarLeakyBucketGob(t *testing.T) {
 		t.Errorf("count mismatch: %v != %v", b1.count, b2.count)
 	}
 }
+
+func TestOffGridUpdateSameIntervalAddLeaksPhantomInterval(t *testing.T) {
+	const cap = 3
+	key := int32(1)
+	interval := 1 * time.Second
+	manager := NewManager[int32, ConstLeakyBucket[int32]](8, cap, interval)
+
+	t0 := time.Now().Truncate(interval)
+	manager.Add(key, 1, t0)
+	manager.Add(key, 1, t0) // level 2
+
+	// Allowed request: middleware Add, then handler Update at an off-grid instant.
+	manager.Add(key, 1, t0.Add(100*time.Millisecond))
+	manager.Update(key, cap, interval, t0.Add(300*time.Millisecond)) // off-grid Update
+
+	// Rejected request: Add in same interval, no Update follows.
+	manager.Add(key, 1, t0.Add(500*time.Millisecond))
+
+	// Only 0.9s since Update (< 1s interval), so bucket should still be full and reject.
+	r3 := manager.Add(key, 1, t0.Add(1200*time.Millisecond))
+	if r3.Added > 0 {
+		t.Fatalf("BUG: allowed (Added=%v) but should be rejected (only 0.9s since Update)", r3.Added)
+	}
+}

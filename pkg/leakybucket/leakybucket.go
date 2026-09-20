@@ -116,7 +116,9 @@ func (lb *ConstLeakyBucket[TKey]) Add(tnow time.Time, n TLevel) (TLevel, TLevel)
 	// so it means that only the current level could have been larger
 	if diff > 0 {
 		// We took leekage into account at {leakRate} boundary so this is preserving the "unaccounted" part of a leak
-		lb.lastAccessTime = tnow.Truncate(lb.leakInterval)
+		// Advance by exactly the leaked intervals, preserving any off-grid residual
+		// that Update()/seed() wrote into lastAccessTime.
+		lb.lastAccessTime = lb.lastAccessTime.Add(time.Duration(leaked) * lb.leakInterval)
 	}
 
 	var currLevel = max(0, int64(lb.level)-leaked)
@@ -230,7 +232,7 @@ func (lb *VarLeakyBucket[TKey]) Add(tnow time.Time, n TLevel) (TLevel, TLevel) {
 	intervals := max(diff/lb.leakInterval, 0)
 	var leaked = int64(lb.leakRate * float64(intervals))
 	if diff > 0 {
-		lb.lastAccessTime = tnow.Truncate(lb.leakInterval)
+		lb.lastAccessTime = lb.lastAccessTime.Add(time.Duration(intervals) * lb.leakInterval)
 	}
 
 	var currLevel = max(0, int64(lb.level)-leaked)
