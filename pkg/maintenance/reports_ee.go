@@ -403,7 +403,7 @@ func (j *ScheduleReportsJob) buildWeeklyReport(ctx context.Context, userID int32
 
 	report := &email.UsageReportContext{
 		Period:        "weekly",
-		PeriodDate:    to.Format("02 Jan 2006"),
+		PeriodDate:    to.AddDate(0, 0, -1).Format("02 Jan 2006"),
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint + "&" + utm,
 		UTM:           utm,
 	}
