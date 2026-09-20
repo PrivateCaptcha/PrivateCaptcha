@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
@@ -3899,5 +3900,41 @@ func TestInviteRegistrationPreservesContinuationAcrossSessionStores(t *testing.T
 	_, level, err := store.Impl().RetrieveUserOrganization(ctx, user, org.ID)
 	if err != nil || !level.Valid || level.AccessLevel != dbgen.AccessLevelMember {
 		t.Fatalf("joined access level = (%v, %v), want member", level, err)
+	}
+}
+
+func TestSoftDeletedRedirectUsesHashedOrgID(t *testing.T) {
+	orgID := int32(42)
+	srv := &Server{
+		Stage:    common.StageTest,
+		Prefix:   "",
+		XSRF:     &common.XSRFMiddleware{Key: "key", Timeout: 0},
+		IDHasher: common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "regression-salt")),
+	}
+	encryptedOrg := srv.IDHasher.Encrypt(int(orgID))
+
+	req := httptest.NewRequest(http.MethodGet,
+		fmt.Sprintf("/org/%s/property/%s", encryptedOrg, encryptedOrg), nil)
+	req.SetPathValue(common.ParamOrg, encryptedOrg)
+	req.SetPathValue(common.ParamProperty, encryptedOrg)
+	w := httptest.NewRecorder()
+
+	srv.Handler(func(http.ResponseWriter, *http.Request) (*ViewModel, error) {
+		return nil, errPropertySoftDeleted
+	}).ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected StatusSeeOther redirect, got %d", resp.StatusCode)
+	}
+	loc := resp.Header.Get("Location")
+	want := fmt.Sprintf("/org/%s", encryptedOrg)
+	if loc != want {
+		t.Errorf("soft-deleted redirect Location = %q, want %q (hashed org id)", loc, want)
+	}
+
+	buggyReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%d", orgID), nil)
+	if _, _, err := common.IntPathArg(buggyReq, common.ParamOrg, srv.IDHasher); err == nil {
+		t.Errorf("buggy raw-integer Location unexpectedly decoded; salt should make it undecodable")
 	}
 }
