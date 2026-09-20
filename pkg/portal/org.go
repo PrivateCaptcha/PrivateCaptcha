@@ -442,6 +442,8 @@ func (s *Server) handlePortalError(orgID int32, err error, w http.ResponseWriter
 		s.RedirectError(http.StatusBadRequest, w, r)
 	} else if err == errLimitedFeature {
 		s.RedirectError(http.StatusPaymentRequired, w, r)
+	} else if err == db.ErrPermissions || err == db.ErrDisabled {
+		s.RedirectError(http.StatusForbidden, w, r)
 	} else {
 		s.RedirectError(http.StatusInternalServerError, w, r)
 	}
