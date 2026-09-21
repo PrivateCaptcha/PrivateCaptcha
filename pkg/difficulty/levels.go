@@ -136,7 +136,10 @@ func (l *Levels) backfillProperty(ctx context.Context, p Property) error {
 	case l.backfillChan <- br:
 		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return ctx.Err()
+		}
+		return common.ErrBackpressure
 	case <-time.After(l.backpressureTimeout):
 		return common.ErrBackpressure
 	}
