@@ -476,7 +476,7 @@ func (s *Server) retrieveAuditLogs(ctx context.Context, user *dbgen.User, days i
 
 	if len(allLogs) == 0 {
 		var err error
-		allLogs, err = s.Store.Impl().RetrieveUserAuditLogs(ctx, user, maxLogs, after)
+		allLogs, err = s.Store.Impl().RetrieveUserAuditLogs(ctx, user, maxLogs, after, skipCache)
 		if err != nil {
 			return nil, err
 		}

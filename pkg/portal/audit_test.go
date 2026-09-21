@@ -1299,7 +1299,7 @@ func TestNewUserAuditLogsArray(t *testing.T) {
 
 	// Retrieve audit logs
 	after := time.Now().UTC().AddDate(0, 0, -14)
-	logs, err := store.Impl().RetrieveUserAuditLogs(ctx, user, 100, after)
+	logs, err := store.Impl().RetrieveUserAuditLogs(ctx, user, 100, after, false)
 	if err != nil {
 		t.Fatalf("Failed to retrieve audit logs: %v", err)
 	}

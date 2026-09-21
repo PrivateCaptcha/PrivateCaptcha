@@ -4049,7 +4049,7 @@ func (impl *BusinessStoreImpl) GetCachedAuditLogs(ctx context.Context, user *dbg
 	}
 }
 
-func (impl *BusinessStoreImpl) RetrieveUserAuditLogs(ctx context.Context, user *dbgen.User, limit int, after time.Time) ([]*dbgen.GetUserAuditLogsRow, error) {
+func (impl *BusinessStoreImpl) RetrieveUserAuditLogs(ctx context.Context, user *dbgen.User, limit int, after time.Time, skipCache bool) ([]*dbgen.GetUserAuditLogsRow, error) {
 	if (limit <= 0) || after.IsZero() {
 		return nil, ErrInvalidInput
 	}
@@ -4073,7 +4073,11 @@ func (impl *BusinessStoreImpl) RetrieveUserAuditLogs(ctx context.Context, user *
 		reader.QueryFunc = impl.querier.GetUserAuditLogs
 	}
 
-	return reader.Read(ctx)
+	if skipCache {
+		return reader.Query(ctx)
+	} else {
+		return reader.Read(ctx)
+	}
 }
 
 func (impl *BusinessStoreImpl) RetrievePropertyAuditLogs(ctx context.Context, property *dbgen.Property, limit int) ([]*dbgen.GetPropertyAuditLogsRow, error) {

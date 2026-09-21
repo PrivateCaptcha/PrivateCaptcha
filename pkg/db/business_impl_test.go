@@ -2651,7 +2651,7 @@ func TestBusinessStoreImplGetCachedAuditLogs(t *testing.T) {
 func TestBusinessStoreImplRetrieveUserAuditLogs(t *testing.T) {
 	t.Run("InvalidInput", func(t *testing.T) {
 		store := setupTestStore(t, nil)
-		_, err := store.RetrieveUserAuditLogs(context.Background(), &dbgen.User{}, 0, time.Time{})
+		_, err := store.RetrieveUserAuditLogs(context.Background(), &dbgen.User{}, 0, time.Time{}, false)
 		if !errors.Is(err, ErrInvalidInput) {
 			t.Errorf("expected ErrInvalidInput, got %v", err)
 		}
