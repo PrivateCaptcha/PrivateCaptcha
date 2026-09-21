@@ -44,13 +44,18 @@ func NewManager[TKey comparable, T any, TBucket BucketConstraint[TKey, T]](maxBu
 			MaximumSize:     maxBuckets,
 			InitialCapacity: max(100, maxBuckets/1000),
 			ExpiryCalculator: otter.ExpiryAccessingFunc[TKey, TBucket](func(e otter.Entry[TKey, TBucket]) time.Duration {
+				maxSafeTTL := time.Duration(math.MaxInt64 - e.SnapshotAtNano)
 				b := e.Value
 				cap64 := int64(b.Capacity())
 				intervalNs := int64(b.LeakInterval())
 				if cap64 <= 0 || intervalNs <= 0 || cap64 > math.MaxInt64/intervalNs {
-					return time.Duration(math.MaxInt64)
+					return maxSafeTTL
 				}
-				return time.Duration(cap64 * intervalNs)
+				ttl := time.Duration(cap64 * intervalNs)
+				if int64(ttl) > int64(maxSafeTTL) {
+					return maxSafeTTL
+				}
+				return ttl
 			}),
 		}),
 		capacity:     capacity,
@@ -94,9 +99,6 @@ func (m *Manager[TKey, T, TBucket]) Update(key TKey, capacity TLevel, leakInterv
 		existing.Update(capacity, leakInterval, tnow)
 		return existing, otter.WriteOp
 	})
-	if found {
-		m.buckets.SetExpiresAfter(key, time.Duration(capacity)*leakInterval)
-	}
 	return found
 }
 
@@ -159,9 +161,6 @@ func (m *Manager[TKey, T, TBucket]) Add(key TKey, n TLevel, tnow time.Time) AddR
 	}
 
 	_, _ = m.buckets.Compute(key, bu.ComputeFunc)
-	if !bu.result.Found {
-		m.buckets.SetExpiresAfter(key, time.Duration(bu.capacity)*bu.leakInterval)
-	}
 
 	return bu.result
 }
@@ -180,10 +179,6 @@ func (m *Manager[TKey, T, TBucket]) AddEx(key TKey, n TLevel, tnow time.Time, in
 	}
 
 	_, _ = m.buckets.Compute(key, bu.ComputeFunc)
-
-	if !bu.result.Found {
-		m.buckets.SetExpiresAfter(key, time.Duration(bu.capacity)*bu.leakInterval)
-	}
 
 	return bu.result
 }
@@ -218,9 +213,6 @@ func SeedVarBucket[TKey comparable](
 		return bucket, otter.WriteOp
 	})
 
-	if !result.Found {
-		m.buckets.SetExpiresAfter(key, time.Duration(capacity)*leakInterval)
-	}
 	return result
 }
 

@@ -3,6 +3,7 @@ package leakybucket
 import (
 	"bytes"
 	"context"
+	"math"
 	"net/netip"
 	"sync"
 	"testing"
@@ -88,6 +89,46 @@ func TestManagerAddDefault(t *testing.T) {
 	}
 	if result.Added != 0 {
 		t.Errorf("Managed to add to full bucket")
+	}
+}
+
+func TestManagerAddRetainsConstBucketWithOverflowingTTL(t *testing.T) {
+	const key = int32(42)
+	manager := NewManager[int32, ConstLeakyBucket[int32]](8, math.MaxUint32, 5*time.Second)
+	tnow := time.Now()
+
+	for i := 1; i <= 4; i++ {
+		result := manager.Add(key, 1, tnow)
+		wantFound := i > 1
+		if result.Found != wantFound {
+			t.Errorf("Add %d: Found = %v, want %v", i, result.Found, wantFound)
+		}
+		if result.CurrLevel != TLevel(i) {
+			t.Errorf("Add %d: current level = %d, want %d", i, result.CurrLevel, i)
+		}
+		if result.Added != 1 {
+			t.Errorf("Add %d: added = %d, want 1", i, result.Added)
+		}
+	}
+}
+
+func TestManagerAddRetainsVarBucketWithOverflowingTTL(t *testing.T) {
+	const key = int32(42)
+	manager := NewManager[int32, VarLeakyBucket[int32]](8, math.MaxUint32, 5*time.Minute)
+	tnow := time.Now()
+
+	for i := 1; i <= 4; i++ {
+		result := manager.Add(key, 1, tnow)
+		wantFound := i > 1
+		if result.Found != wantFound {
+			t.Errorf("Add %d: Found = %v, want %v", i, result.Found, wantFound)
+		}
+		if result.CurrLevel != TLevel(i) {
+			t.Errorf("Add %d: current level = %d, want %d", i, result.CurrLevel, i)
+		}
+		if result.Added != 1 {
+			t.Errorf("Add %d: added = %d, want 1", i, result.Added)
+		}
 	}
 }
 
@@ -407,4 +448,27 @@ func TestStaleCalculatorRepro(t *testing.T) {
 	e, _ = manager.buckets.GetEntryQuietly(888)
 	ttl5 := e.ExpiresAt().Sub(now.Add(4 * time.Millisecond)) // ~20s — BUG: snapped back to stale calculator
 	_ = ttl5
+}
+
+func TestManagerAddOverflowingExpiry(t *testing.T) {
+	const key = int32(123)
+	manager := NewManager[int32, ConstLeakyBucket[int32]](8, math.MaxUint32, 5*time.Minute)
+	tnow := time.Now()
+
+	manager.Add(key, 1, tnow)
+	result := manager.Add(key, 1, tnow)
+	if !result.Found {
+		t.Fatal("Bucket with overflowing TTL was not retained")
+	}
+	if result.CurrLevel != 2 {
+		t.Fatalf("Unexpected level: %v", result.CurrLevel)
+	}
+
+	entry, found := manager.buckets.GetEntryQuietly(key)
+	if !found {
+		t.Fatal("Bucket with overflowing TTL was not found")
+	}
+	if entry.ExpiresAtNano != math.MaxInt64 {
+		t.Fatalf("Expiration = %v, want %v", entry.ExpiresAtNano, int64(math.MaxInt64))
+	}
 }
