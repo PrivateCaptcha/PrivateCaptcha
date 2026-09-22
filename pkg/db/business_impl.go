@@ -4030,6 +4030,9 @@ func (impl *BusinessStoreImpl) GetCachedAuditLogs(ctx context.Context, user *dbg
 	cacheKey := userAuditLogsCacheKey(user.ID, cachedAfter.Format(time.DateOnly))
 	if logs, err := FetchCachedArray[dbgen.GetUserAuditLogsRow](ctx, impl.cache, cacheKey); err == nil {
 		if after.Equal(cachedAfter) {
+			if limit > 0 && len(logs) > limit {
+				logs = logs[:limit]
+			}
 			return logs, nil
 		}
 
