@@ -61,7 +61,7 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
-	common.SetupLogs(common.StageTest, true)
+	common.SetupLogs("test", true)
 
 	cfg = testsConfigStore()
 
@@ -93,7 +93,7 @@ func TestMain(m *testing.M) {
 	testPlan = planService.GetInternalTrialPlan()
 
 	server = &Server{
-		Stage:               common.StageTest,
+		Stage:               "test",
 		BusinessDB:          store,
 		TimeSeries:          timeSeries,
 		RateLimiter:         &ratelimit.StubRateLimiter{Header: cfg.Get(common.RateLimitHeaderKey).Value()},
@@ -108,7 +108,7 @@ func TestMain(m *testing.M) {
 		Metrics:             metrics,
 		Levels:              difficulty.NewLevels(timeSeries, 100 /*levelsBatchSize*/, PropertyBucketSize),
 		VerifyLogCancel:     func() {},
-		SubscriptionLimits:  db.NewSubscriptionLimits(common.StageTest, store, planService),
+		SubscriptionLimits:  db.NewSubscriptionLimits("test", store, planService),
 		IDHasher:            common.NewIDHasher(cfg.Get(common.IDHasherSaltKey)),
 		AsyncTasks:          maintenance.NewAsyncTasksJob(store),
 		CountryCodeHeader:   cfg.Get(common.CountryCodeHeaderKey),
@@ -147,7 +147,7 @@ func TestAPIServerStoreErrors(t *testing.T) {
 	planService := billing.NewPlanService(nil)
 
 	srv := &Server{
-		Stage:               common.StageTest,
+		Stage:               "test",
 		BusinessDB:          store,
 		TimeSeries:          db.NewMemoryTimeSeries(),
 		RateLimiter:         &ratelimit.StubRateLimiter{Header: "X-Forwarded-For"},
@@ -161,7 +161,7 @@ func TestAPIServerStoreErrors(t *testing.T) {
 		Metrics:             metrics,
 		Levels:              difficulty.NewLevels(db.NewMemoryTimeSeries(), 100, PropertyBucketSize),
 		VerifyLogCancel:     func() {},
-		SubscriptionLimits:  db.NewSubscriptionLimits(common.StageTest, store, planService),
+		SubscriptionLimits:  db.NewSubscriptionLimits("test", store, planService),
 		IDHasher:            common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt")),
 		AsyncTasks:          maintenance.NewAsyncTasksJob(store),
 		CountryCodeHeader:   config.NewStaticValue(common.CountryCodeHeaderKey, "CF"),

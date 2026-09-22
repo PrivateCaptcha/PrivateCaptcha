@@ -26,7 +26,7 @@ func newScheduleReportsJob(usersLimit int32) *maintenance.ScheduleReportsJob {
 		PlanService: server.PlanService,
 		PortalURL:   reportPortalURL,
 		IDHasher:    server.IDHasher,
-		Stage:       common.StageTest,
+		Stage:       "test",
 		UsersLimit:  usersLimit,
 	}
 }

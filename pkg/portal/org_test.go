@@ -3906,7 +3906,7 @@ func TestInviteRegistrationPreservesContinuationAcrossSessionStores(t *testing.T
 func TestSoftDeletedRedirectUsesHashedOrgID(t *testing.T) {
 	orgID := int32(42)
 	srv := &Server{
-		Stage:    common.StageTest,
+		Stage:    "test",
 		Prefix:   "",
 		XSRF:     &common.XSRFMiddleware{Key: "key", Timeout: 0},
 		IDHasher: common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "regression-salt")),

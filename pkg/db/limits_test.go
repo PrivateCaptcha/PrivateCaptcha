@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
@@ -25,7 +24,7 @@ func TestSubscriptionLimitsCheckFormsLimit(t *testing.T) {
 	t.Run("BelowLimit", func(t *testing.T) {
 		querier := &retrieveUserFormsQuerierStub{QuerierStub: &QuerierStub{}, count: int64(plan.FormsLimit(true) - 1)}
 		store := NewBusinessWithQuerier(nil, querier, NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}))
-		limits := NewSubscriptionLimits(common.StageTest, store, planService)
+		limits := NewSubscriptionLimits("test", store, planService)
 
 		ok, extra, err := limits.CheckFormsLimit(context.Background(), 1, subscr)
 		if err != nil {
@@ -42,7 +41,7 @@ func TestSubscriptionLimitsCheckFormsLimit(t *testing.T) {
 	t.Run("AtLimit", func(t *testing.T) {
 		querier := &retrieveUserFormsQuerierStub{QuerierStub: &QuerierStub{}, count: int64(plan.FormsLimit(true))}
 		store := NewBusinessWithQuerier(nil, querier, NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}))
-		limits := NewSubscriptionLimits(common.StageTest, store, planService)
+		limits := NewSubscriptionLimits("test", store, planService)
 
 		ok, extra, err := limits.CheckFormsLimit(context.Background(), 1, subscr)
 		if err != nil {

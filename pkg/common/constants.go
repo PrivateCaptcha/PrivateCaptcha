@@ -10,7 +10,6 @@ const (
 	PrivateCaptchaTeam          = "Private Captcha Team"
 	StageDev                    = "dev"
 	StageStaging                = "staging"
-	StageTest                   = "test"
 	ContentTypePlain            = "text/plain"
 	ContentTypeHTML             = "text/html; charset=utf-8"
 	ContentTypeJSON             = "application/json"
@@ -28,7 +27,6 @@ const (
 	ParamDifficulty             = "difficulty"
 	ParamGrowth                 = "growth"
 	ParamTab                    = "tab"
-	ParamNew                    = "new"
 	ParamNever                  = "never"
 	ParamDays                   = "days"
 	ParamOrg                    = "org"
@@ -81,10 +79,7 @@ const (
 )
 
 var (
-	HeaderCDNTag              = http.CanonicalHeaderKey("CDN-Tag")
 	HeaderContentType         = http.CanonicalHeaderKey("Content-Type")
-	HeaderContentLength       = http.CanonicalHeaderKey("Content-Length")
-	HeaderAuthorization       = http.CanonicalHeaderKey("Authorization")
 	HeaderCSRFToken           = http.CanonicalHeaderKey("X-CSRF-Token")
 	HeaderCaptchaVersion      = http.CanonicalHeaderKey("X-PC-Captcha-Version")
 	HeaderCaptchaCompat       = http.CanonicalHeaderKey("X-Captcha-Compat-Version")

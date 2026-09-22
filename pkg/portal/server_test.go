@@ -81,7 +81,7 @@ func TestMain(m *testing.M) {
 		mailer := &email.StubMailer{}
 		portal_tests.SetTwoFactorCodeSource(mailer.TwoFactorCode)
 		server = &Server{
-			Stage:  common.StageTest,
+			Stage:  "test",
 			Store:  store,
 			Prefix: "",
 			XSRF:   &common.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
@@ -117,7 +117,7 @@ func TestMain(m *testing.M) {
 		os.Exit(exitCode)
 	}
 
-	common.SetupLogs(common.StageTest, true)
+	common.SetupLogs("test", true)
 
 	baseCfg := config.NewBaseConfig(config.NewEnvConfig(os.Getenv))
 	baseCfg.Add(config.NewStaticValue(common.ClickHouseOptionalKey, "true"))
@@ -152,7 +152,7 @@ func TestMain(m *testing.M) {
 	portal_tests.SetTwoFactorCodeSource(mailer.TwoFactorCode)
 
 	server = &Server{
-		Stage:      common.StageTest,
+		Stage:      "test",
 		Store:      store,
 		TimeSeries: timeSeries,
 		Prefix:     "",
@@ -173,7 +173,7 @@ func TestMain(m *testing.M) {
 		AdminEmail:         cfg.Get(common.AdminEmailKey),
 		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
 		UserLimiter:        api.NewUserLimiter(store, planService),
-		SubscriptionLimits: db.NewSubscriptionLimits(common.StageTest, store, planService),
+		SubscriptionLimits: db.NewSubscriptionLimits("test", store, planService),
 		EmailVerifier:      &PortalEmailVerifier{},
 		FormURLVerifier:    api.AllowAllFormURLVerifier{},
 		LicenseService:     &stubLicenseService{},
@@ -297,7 +297,7 @@ func TestPortalServerStoreErrors(t *testing.T) {
 	mailer := NewPortalMailer("https:"+cdnURLConfig.URL(), "https:"+portalURLConfig.URL(), &email.StubSender{}, baseCfg, useragent.NewParser())
 
 	srv := &Server{
-		Stage:      common.StageTest,
+		Stage:      "test",
 		Store:      store,
 		TimeSeries: db.NewMemoryTimeSeries(),
 		Prefix:     "",
@@ -318,7 +318,7 @@ func TestPortalServerStoreErrors(t *testing.T) {
 		AdminEmail:         config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
 		CountryCodeHeader:  config.NewStaticValue(common.CountryCodeHeaderKey, "CF"),
 		UserLimiter:        api.NewUserLimiter(store, planService),
-		SubscriptionLimits: db.NewSubscriptionLimits(common.StageTest, store, planService),
+		SubscriptionLimits: db.NewSubscriptionLimits("test", store, planService),
 		EmailVerifier:      &PortalEmailVerifier{},
 		LicenseService:     &stubLicenseService{},
 	}
