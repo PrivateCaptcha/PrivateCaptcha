@@ -22,17 +22,6 @@ func JSONTimeNowAdd(d time.Duration) JSONTime {
 	return JSONTime(time.Now().Add(d).UTC())
 }
 
-func JSONTimeFromString(s string) JSONTime {
-	s = strings.Trim(s, `"`)
-	nt, err := time.Parse(jsonTimeLayout, s)
-	if err != nil {
-		slog.Error("Failed to parse a json time", "string", s, ErrAttr(err))
-		return JSONTime{}
-	}
-
-	return JSONTime(nt)
-}
-
 // UnmarshalJSON will unmarshal using 2006-01-02T15:04:05+07:00 layout
 func (t *JSONTime) UnmarshalJSON(b []byte) error {
 	s := strings.Trim(string(b), `"`)
