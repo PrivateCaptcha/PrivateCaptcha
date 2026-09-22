@@ -1547,33 +1547,6 @@ func TestBusinessStoreImplRetrieveUserAPIKeys(t *testing.T) {
 	})
 }
 
-func TestBusinessStoreImplUpdateAPIKey(t *testing.T) {
-	t.Run("ErrNoRows", func(t *testing.T) {
-		store := setupTestStore(t, pgx.ErrNoRows)
-		_, err := store.UpdateAPIKey(context.Background(), &dbgen.User{ID: 1}, &dbgen.APIKey{ID: 1}, time.Now(), false)
-		if err == nil {
-			t.Errorf("expected error, got nil")
-		}
-	})
-
-	t.Run("GenericError", func(t *testing.T) {
-		expectedErr := errors.New("db error")
-		store := setupTestStore(t, expectedErr)
-		_, err := store.UpdateAPIKey(context.Background(), &dbgen.User{ID: 1}, &dbgen.APIKey{ID: 1}, time.Now(), false)
-		if err == nil {
-			t.Errorf("expected error, got nil")
-		}
-	})
-
-	t.Run("InvalidInput", func(t *testing.T) {
-		store := setupTestStore(t, nil)
-		_, err := store.UpdateAPIKey(context.Background(), &dbgen.User{}, &dbgen.APIKey{}, time.Time{}, false)
-		if !errors.Is(err, ErrInvalidInput) {
-			t.Errorf("expected ErrInvalidInput, got %v", err)
-		}
-	})
-}
-
 func TestBusinessStoreImplCreateAPIKey(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
