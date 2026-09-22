@@ -2778,44 +2778,6 @@ func (impl *BusinessStoreImpl) RetrieveUserAPIKeys(ctx context.Context, userID i
 	return keys, err
 }
 
-func (impl *BusinessStoreImpl) UpdateAPIKey(ctx context.Context, user *dbgen.User, oldKey *dbgen.APIKey, expiration time.Time, enabled bool) (*common.AuditLogEvent, error) {
-	if expiration.IsZero() {
-		return nil, ErrInvalidInput
-	}
-
-	if impl.querier == nil {
-		return nil, ErrMaintenance
-	}
-
-	updatedKey, err := impl.querier.UpdateAPIKey(ctx, &dbgen.UpdateAPIKeyParams{
-		ExpiresAt:  Timestampz(expiration),
-		Enabled:    Bool(enabled),
-		ExternalID: oldKey.ExternalID,
-	})
-
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to update API key", "externalID", UUIDToSecret(oldKey.ExternalID), common.ErrAttr(err))
-		return nil, err
-	}
-
-	slog.InfoContext(ctx, "Updated API key", "externalID", UUIDToSecret(oldKey.ExternalID))
-
-	var auditEvent *common.AuditLogEvent
-
-	if updatedKey != nil {
-		secret := UUIDToSecret(updatedKey.ExternalID)
-		cacheKey := APIKeyCacheKey(secret)
-		_ = impl.cache.SetEx(ctx, cacheKey, updatedKey, apiKeyTTL, defaultCacheRefresh)
-
-		// invalidate keys cache
-		_ = impl.cache.Delete(ctx, UserAPIKeysCacheKey(updatedKey.UserID.Int32))
-
-		auditEvent = newUpdateAPIKeyAuditLogEvent(user, oldKey, updatedKey)
-	}
-
-	return auditEvent, nil
-}
-
 func (impl *BusinessStoreImpl) CreateAPIKey(ctx context.Context, user *dbgen.User, params *dbgen.CreateAPIKeyParams) (*dbgen.APIKey, *common.AuditLogEvent, error) {
 	if len(params.Name) == 0 {
 		return nil, nil, ErrInvalidInput

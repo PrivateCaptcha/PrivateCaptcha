@@ -703,12 +703,7 @@ func TestVerifyExpiredKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = store.Impl().UpdateAPIKey(ctx, user, apikey, time.Now().AddDate(0, 0, -1), true)
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now().Add(-2*time.Hour), 1*time.Hour, 10.0 /*rps*/))
 	if err != nil {
 		t.Fatal(err)
 	}
