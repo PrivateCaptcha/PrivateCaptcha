@@ -12,11 +12,12 @@
   "scripts": {
     "build": "node esbuild.config.mjs",
     "test": "node esbuild.test.config.mjs && node --test test/bundle.test.js",
-    "lint": "eslint js/**/*.js"
+    "lint": "eslint js/**/*.js",
+    "bundle:measure": "node measure-bundle.mjs",
+    "bundle:analyze": "node analyze-bundle.mjs"
   },
   "dependencies": {
     "base64-arraybuffer": "^1.0.2",
-    "blake2b-wasm": "^2.4.0",
     "blakejs": "^1.2.1"
   }
 }

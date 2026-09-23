@@ -1,6 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert';
+import { readFile } from 'node:fs/promises';
 import { Window } from 'happy-dom';
+import { blake2b, blake2bInit, blake2bUpdate, blake2bFinal } from 'blakejs/blake2b.js';
+
+function fallbackHasher(outlen) {
+    const context = blake2bInit(outlen);
+    return {
+        update(input) {
+            blake2bUpdate(context, input);
+            return this;
+        },
+        digest(output) {
+            const result = blake2bFinal(context);
+            if (output) {
+                output.set(result);
+                return output;
+            }
+            return result;
+        },
+    };
+}
 
 const window = new Window({
     url: 'https://localhost:8080'
@@ -781,47 +801,133 @@ test('getPuzzle global timeout triggers with 2 attempts', async (t) => {
     console.log('✓ getPuzzle global timeout test passed');
 });
 
-test('worker findSolution implementations', async (t) => {
-    const blake2bModule = await import('../js/blake2-wrapper.js');
-    await new Promise(r => blake2bModule.ready(r));
-
+test('JS fallback finds a verifiable solution', async () => {
     const { findSolution, thresholdFromDifficulty, readUInt32LE } = await import('../js/puzzle.utils.js');
+    const puzzleBuffer = new Uint8Array(128);
+    globalThis.crypto.getRandomValues(puzzleBuffer);
+    const threshold = thresholdFromDifficulty(48);
+    const solution = findSolution(puzzleBuffer, threshold, 3, false, fallbackHasher);
+    assert.strictEqual(solution.length, 8);
+    assert.strictEqual(solution[0], 3);
+    assert.ok(readUInt32LE(blake2b(puzzleBuffer, null, 32), 0) <= threshold);
+});
 
-    const testCases = [
-        { name: 'JS fallback', hasher: blake2bModule.jsFallbackImpl, requiresWasm: false },
-        { name: 'WASM implementation', hasher: blake2bModule.impl, requiresWasm: true }
+test('scalar WASM hashes fixed 128-byte puzzles as BLAKE2b-256', async () => {
+    const scalarSolverWasm = await readFile(new URL('../wasm/blake2b-solver-scalar.wasm', import.meta.url));
+    assert.deepStrictEqual(WebAssembly.Module.imports(new WebAssembly.Module(scalarSolverWasm)), []);
+    const { instance } = await WebAssembly.instantiate(scalarSolverWasm);
+    const { memory, puzzle_ptr: puzzlePtr, digest_ptr: digestPtr, hash_puzzle: hashPuzzle } = instance.exports;
+    const wasmMemory = new Uint8Array(memory.buffer);
+    const puzzleOffset = puzzlePtr();
+    const digestOffset = digestPtr();
+
+    const puzzles = [
+        new Uint8Array(128),
+        new Uint8Array(128).fill(0xff),
+        Uint8Array.from({ length: 128 }, (_, index) => index),
     ];
 
-    for (const { name, hasher, requiresWasm } of testCases) {
-        await t.test(`uses blake2b ${name}`, async (t) => {
-            if (requiresWasm && !blake2bModule.WASM_SUPPORTED) {
-                t.skip('WASM not supported in this environment');
-                return;
-            }
-
-            if (requiresWasm) {
-                assert.strictEqual(blake2bModule.WASM_LOADED, true, 'WASM should be loaded');
-            }
-
-            const puzzleBuffer = new Uint8Array(128);
-            globalThis.crypto.getRandomValues(puzzleBuffer);
-
-            const difficulty = 120;
-            const threshold = thresholdFromDifficulty(difficulty);
-
-            const solution = findSolution(puzzleBuffer, threshold, requiresWasm ? 1 : 0, false, hasher);
-
-            assert.ok(solution, 'Should return a solution');
-            assert.strictEqual(solution.length, 8, 'Solution should be 8 bytes long');
-
-            const length = puzzleBuffer.length;
-            let hash = new Uint8Array(32);
-            hasher(hash.length).update(puzzleBuffer).digest(hash);
-            const prefix = readUInt32LE(hash, 0);
-
-            assert.ok(prefix <= threshold, 'The solution hash prefix should be less or equal to threshold');
-        });
+    let state = 0x6d2b79f5;
+    for (let puzzleIndex = 0; puzzleIndex < 8; puzzleIndex++) {
+        const puzzle = new Uint8Array(128);
+        for (let byteIndex = 0; byteIndex < puzzle.length; byteIndex++) {
+            state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+            puzzle[byteIndex] = state >>> 24;
+        }
+        puzzles.push(puzzle);
     }
 
-    console.log('✓ worker findSolution implementations test passed');
+    for (const puzzle of puzzles) {
+        wasmMemory.set(puzzle, puzzleOffset);
+        hashPuzzle();
+
+        const expected = blake2b(puzzle, null, 32);
+        const actual = wasmMemory.slice(digestOffset, digestOffset + 32);
+        assert.deepStrictEqual(actual, expected);
+    }
+});
+
+test('scalar WASM batch returns server-compatible solutions across nonce carries', async () => {
+    const { readUInt32LE } = await import('../js/puzzle.utils.js');
+    const wasm = await readFile(new URL('../wasm/blake2b-solver-scalar.wasm', import.meta.url));
+    const { instance } = await WebAssembly.instantiate(wasm);
+    const { memory, puzzle_ptr: puzzlePtr, prepare_puzzle: preparePuzzle,
+        solve_batch: solveBatch, get_solution_nonce: solutionNonce } = instance.exports;
+    assert.strictEqual(typeof preparePuzzle, 'function');
+    assert.strictEqual(typeof solveBatch, 'function');
+
+    const buffer = Uint8Array.from({ length: 128 }, (_, index) => index);
+    new Uint8Array(memory.buffer).set(buffer, puzzlePtr());
+    preparePuzzle();
+
+    for (const { puzzleIndex, nonceStart, count } of [
+        { puzzleIndex: 0, nonceStart: 0, count: 3 },
+        { puzzleIndex: 17, nonceStart: 254, count: 4 },
+        { puzzleIndex: 255, nonceStart: 65534, count: 4 },
+        { puzzleIndex: 99, nonceStart: 0xfffffffe, count: 2 },
+    ]) {
+        const prefixes = [];
+        for (let offset = 0; offset < count; offset++) {
+            const nonce = nonceStart + offset;
+            buffer[120] = puzzleIndex;
+            buffer[124] = nonce >>> 24;
+            buffer[125] = nonce >>> 16;
+            buffer[126] = nonce >>> 8;
+            buffer[127] = nonce;
+            prefixes.push(readUInt32LE(blake2b(buffer, null, 32), 0));
+        }
+        const threshold = Math.min(...prefixes);
+        const expectedOffset = prefixes.findIndex(prefix => prefix <= threshold);
+
+        assert.strictEqual(solveBatch(puzzleIndex, threshold, nonceStart, 0), 0);
+        assert.strictEqual(solveBatch(puzzleIndex, threshold, nonceStart, expectedOffset), 0);
+        assert.strictEqual(solveBatch(puzzleIndex, threshold, nonceStart, count), 1);
+        assert.strictEqual(solutionNonce() >>> 0, nonceStart + expectedOffset);
+
+        const solution = buffer.slice(120);
+        const nonce = solutionNonce() >>> 0;
+        solution[0] = puzzleIndex;
+        solution[4] = nonce >>> 24;
+        solution[5] = nonce >>> 16;
+        solution[6] = nonce >>> 8;
+        solution[7] = nonce;
+        buffer.set(solution, 120);
+        const prefix = readUInt32LE(blake2b(buffer, null, 32), 0);
+        assert.ok(prefix <= threshold);
+        assert.deepStrictEqual(solution.slice(1, 4), Uint8Array.of(121, 122, 123));
+    }
+});
+
+test('worker solver falls back to JS when scalar WASM fails while preserving solution bytes', async () => {
+    const { createSolver } = await import('../js/blake2-solver.js');
+    const { readUInt32LE } = await import('../js/puzzle.utils.js');
+    const puzzle = Uint8Array.from({ length: 128 }, (_, index) => index * 13 & 255);
+    const threshold = 0x7fffffff;
+    const index = 23;
+    let failedInstantiations = 0;
+    const rejectedWASM = {
+        instantiate: async () => {
+            failedInstantiations++;
+            throw new Error('CSP blocked WASM');
+        },
+    };
+
+    for (const [runtime, expected] of [
+        [{ instantiate: WebAssembly.instantiate }, 'scalar'],
+        [rejectedWASM, 'js'],
+        [null, 'js'],
+    ]) {
+        const solver = await createSolver(puzzle.slice(), runtime);
+        assert.strictEqual(solver.kind, expected);
+        assert.strictEqual(solver.wasm, expected !== 'js');
+        const solution = await solver.solve(threshold, index, false);
+        assert.strictEqual(solution.length, 8);
+        assert.strictEqual(solution[0], index);
+        assert.deepStrictEqual(solution.slice(1, 4), puzzle.slice(121, 124));
+        const verified = puzzle.slice();
+        verified.set(solution, 120);
+        const prefix = readUInt32LE(blake2b(verified, null, 32), 0);
+        assert.ok(prefix <= threshold);
+    }
+    assert.strictEqual(failedInstantiations, 1);
 });

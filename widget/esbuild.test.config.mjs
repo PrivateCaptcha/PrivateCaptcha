@@ -18,12 +18,13 @@ build({
     bundle: true,
     outfile: './test/bundle.test.js',
     format: 'esm',
-    loader: { '.css': 'text' },
-    external: ['node:test', 'node:assert', 'node:http', 'happy-dom'],
+    loader: { '.css': 'text', '.wasm': 'base64' },
+    external: ['node:test', 'node:assert', 'node:fs/promises', 'node:http', 'happy-dom'],
     plugins: [
         CSSMinifyPlugin,
         inlineWorkerPlugin({
-            minify: false
+            minify: false,
+            loader: { '.wasm': 'base64' },
         }),
     ],
     minify: false,
