@@ -46,13 +46,13 @@ build({
     bundle: true,
     outfile: outfileConfig,
     format: formatConfig,
-    loader: { '.css': 'text' },
+    loader: { '.css': 'text', '.wasm': 'base64' },
     plugins: [
         CSSMinifyPlugin,
         inlineWorkerPlugin({
-            minify: config[stage].minify
+            minify: config[stage].minify,
+            loader: { '.wasm': 'base64' },
         }),
     ],
     ...config[stage]
 }).catch(() => process.exit(1));
-
