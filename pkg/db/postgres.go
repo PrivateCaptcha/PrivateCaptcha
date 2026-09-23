@@ -157,10 +157,12 @@ type PostgresMigrateContext struct {
 	PortalLoginDifficulty    common.DifficultyLevel
 	PortalRegisterDifficulty common.DifficultyLevel
 	// levels have to be `int` because we use `sub` function
-	OldSmallLevel int
-	OldDelta      int
-	NewSmallLevel int
-	NewDelta      int
+	OldSmallLevel  int
+	OldDelta       int
+	NewSmallLevel  int
+	NewDelta       int
+	NextSmallLevel int
+	NextDelta      int
 }
 
 func NewPostgresMigrateContext(ctx context.Context, cfg common.ConfigStore, planService billing.PlanService) *PostgresMigrateContext {
@@ -173,6 +175,7 @@ func NewPostgresMigrateContext(ctx context.Context, cfg common.ConfigStore, plan
 	const (
 		oldSmallDifficultyLevel = 80
 		oldDelta                = 15
+		newSmallDifficultyLevel = 136
 	)
 
 	return &PostgresMigrateContext{
@@ -188,8 +191,10 @@ func NewPostgresMigrateContext(ctx context.Context, cfg common.ConfigStore, plan
 		PortalRegisterDifficulty: oldSmallDifficultyLevel,
 		OldSmallLevel:            oldSmallDifficultyLevel,
 		OldDelta:                 oldDelta,
-		NewSmallLevel:            int(common.DifficultyLevelSmall),
+		NewSmallLevel:            newSmallDifficultyLevel,
 		NewDelta:                 common.DifficultyDelta,
+		NextSmallLevel:           int(common.DifficultyLevelSmall),
+		NextDelta:                common.DifficultyDelta,
 	}
 }
 
