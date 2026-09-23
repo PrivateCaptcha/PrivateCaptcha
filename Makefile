@@ -1,4 +1,4 @@
-.PHONY: clean build deploy run-postgres-test-db stop-postgres-test-db run-clickhouse-test-db stop-clickhouse-test-db test-local-light test-local
+.PHONY: clean build deploy run-postgres-test-db stop-postgres-test-db run-clickhouse-test-db stop-clickhouse-test-db test-local-light test-local build-puzzle-compat-go build-puzzle-compat-js test-puzzle-compat
 
 STAGE ?= dev
 GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
@@ -126,6 +126,17 @@ build-loadtest:
 
 build-puzzledbg:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/puzzledbg cmd/puzzledbg/*.go
+
+build-puzzle-compat-go:
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -o bin/puzzlecompat ./cmd/puzzlecompat
+
+build-puzzle-compat-js:
+	cd widget && npm run build:puzzle-compat
+
+test-puzzle-compat: PUZZLE_COUNT ?= 10000
+test-puzzle-compat: PUZZLE_DIFFICULTY ?= 84
+test-puzzle-compat: build-puzzle-compat-go build-puzzle-compat-js
+	@bash -o pipefail -c './bin/puzzlecompat -mode generate -count "$(PUZZLE_COUNT)" -difficulty "$(PUZZLE_DIFFICULTY)" | node ./bin/puzzle-compat-solver.mjs | ./bin/puzzlecompat -mode verify -count "$(PUZZLE_COUNT)"'
 
 deploy:
 	@echo "Deploy target is not implemented. Please use your CI/CD pipeline or add deployment steps here."
