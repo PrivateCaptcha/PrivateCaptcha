@@ -56,8 +56,8 @@ github.com/go-faster/errors
 # github.com/go-gomail/gomail v0.0.0-20160411212932-81ebce5c23df
 ## explicit
 github.com/go-gomail/gomail
-# github.com/golang-migrate/migrate/v4 v4.19.1
-## explicit; go 1.24.0
+# github.com/golang-migrate/migrate/v4 v4.20.1
+## explicit; go 1.25.11
 github.com/golang-migrate/migrate/v4
 github.com/golang-migrate/migrate/v4/database
 github.com/golang-migrate/migrate/v4/database/clickhouse
