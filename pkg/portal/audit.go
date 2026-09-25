@@ -181,6 +181,9 @@ func (ul *UserAuditLog) initFromProperty(oldValue, newValue *db.AuditLogProperty
 		} else if oldValue.Growth != newValue.Growth {
 			ul.Property = "Growth"
 			ul.Value = newValue.Growth
+		} else if oldValue.Challenge != newValue.Challenge {
+			ul.Property = "Challenge type"
+			ul.Value = newValue.Challenge
 		} else if oldValue.MaxReplayCount != newValue.MaxReplayCount {
 			ul.Property = "Replay count"
 			ul.Value = strconv.Itoa(int(newValue.MaxReplayCount))

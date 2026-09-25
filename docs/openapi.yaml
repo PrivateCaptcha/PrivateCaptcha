@@ -57,6 +57,13 @@ paths:
           schema:
             type: string
           example: "example.com"
+        - name: X-PC-Captcha-Version
+          in: header
+          description: Version 1 requests Blake2b; version 2 supports the property's selected challenge type.
+          required: false
+          schema:
+            type: string
+            enum: ["1", "2"]
       responses:
         "200":
           description: Puzzle created
@@ -148,7 +155,7 @@ paths:
         "403":
           description: API key not found
         "429":
-          description: API key rate limited
+          description: API key rate limited or verification capacity exhausted
       security:
         - ApiKeyAuth: []
   /siteverify:
@@ -210,7 +217,7 @@ paths:
         "403":
           description: API key not found
         "429":
-          description: API key rate limited
+          description: API key rate limited or verification capacity exhausted
   /asynctask/{id}:
     get:
       tags:
@@ -677,6 +684,9 @@ components:
         name:
           type: string
           example: "Company Website"
+        challenge:
+          type: string
+          enum: [blake2b, argon2id]
         level:
           type: integer
           example: 95
@@ -694,14 +704,12 @@ components:
           example: 1
     CreatePropertyInput:
       allOf:
+        - $ref: "#/components/schemas/PropertySettings"
         - type: object
           properties:
             domain:
               type: string
               example: "example.com"
-            name:
-              type: string
-              example: "Company Website"
     UpdatePropertyInput:
       allOf:
         - $ref: "#/components/schemas/PropertySettings"

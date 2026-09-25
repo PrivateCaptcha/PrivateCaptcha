@@ -102,6 +102,7 @@ export class CaptchaWidget {
      * @param {Object} options
      */
     setOptions(options) {
+        this._callerOptions = { ...options };
         const euOnly = this._element.dataset["eu"] || null;
         const defaultEndpoint = euOnly ? PUZZLE_EU_ENDPOINT_URL : PUZZLE_ENDPOINT_URL;
 
@@ -182,7 +183,12 @@ export class CaptchaWidget {
             this.trace(`parsed puzzle buffer. isZero=${this._puzzle.isZero()} ttl=${expirationMillis / 1000}`);
             if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
             if (expirationMillis) { this._expiryTimeout = setTimeout(() => this.expire(), expirationMillis); }
-            this._workersPool.init(this._puzzle, startWorkers);
+            try {
+                this._workersPool.init(this._puzzle, startWorkers);
+            } catch (error) {
+                this._workersPool.onWorkerError(error);
+                return;
+            }
             this.signalInit();
         } catch (e) {
             console.error('[privatecaptcha]', e);
@@ -228,7 +234,7 @@ export class CaptchaWidget {
             this.setState(STATE_IN_PROGRESS);
             this._workersPool.solve(this._puzzle);
         } catch (e) {
-            console.error('[privatecaptcha]', e);
+            this._workersPool.onWorkerError(e);
         }
     }
 
@@ -302,7 +308,7 @@ export class CaptchaWidget {
         this._errorCode = errors.ERROR_NO_ERROR;
         this._internalError = null;
         this._notice = null;
-        this.setOptions(options);
+        this.setOptions({ ...this._callerOptions, ...options });
         this.setState(STATE_EMPTY);
         const pcElement = this._element.querySelector('private-captcha');
         if (pcElement) {
@@ -442,6 +448,7 @@ export class CaptchaWidget {
                 return;
         }
 
+        if (STATE_ERROR === this._state) { return; }
         this.setProgressState(progressState);
         if (finished) {
             this.saveSolutions();
@@ -476,8 +483,16 @@ export class CaptchaWidget {
      * @param {Error} error
      */
     onWorkerError(error) {
+        if (STATE_ERROR === this._state) { return; }
         console.error('[privatecaptcha] error in worker:', error)
         this._errorCode = errors.ERROR_SOLVE_PUZZLE;
+        this._internalError = error?.message ?? String(error);
+        if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); this._expiryTimeout = null; }
+        this._solution = null;
+        this.ensureNoSolutionField();
+        this.setState(STATE_ERROR);
+        this.setProgressState(STATE_ERROR);
+        this.signalErrored();
     }
 
     onWorkStarted() {

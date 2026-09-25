@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -15,7 +16,9 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	common_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -24,11 +27,116 @@ const (
 	testPropertyDomain = "example.com"
 )
 
+func createArgonAPIProperty(t *testing.T) (*dbgen.User, *dbgen.Organization, *dbgen.Property, string) {
+	t.Helper()
+	user, org, err := db_tests.CreateNewAccountForTest(t.Context(), store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	params := db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain)
+	params.Level = db.Int2(int16(common.DifficultyLevelSmall))
+	property, _, err := store.Impl().CreateNewProperty(t.Context(), params, org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return user, org, property, db.UUIDToSiteKey(property.ExternalID)
+}
+
+func setArgonAPIPropertyChallenge(t *testing.T, property *dbgen.Property, challenge dbgen.ChallengeType) *dbgen.Property {
+	t.Helper()
+	ctx := t.Context()
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	if _, err := store.Pool.Exec(ctx, "UPDATE backend.properties SET challenge = $1 WHERE id = $2", challenge, property.ID); err != nil {
+		t.Fatal(err)
+	}
+	cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey))
+	refreshed, err := store.Impl().RetrievePropertyBySitekey(ctx, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refreshed.Challenge != challenge {
+		t.Fatalf("cached challenge = %q, want %q", refreshed.Challenge, challenge)
+	}
+	return refreshed
+}
+
+func TestArgonPropertyIssuesVersionTwoPuzzle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	_, _, property, sitekey := createArgonAPIProperty(t)
+	if property.Challenge != dbgen.ChallengeTypeBlake2b {
+		t.Fatalf("new property challenge = %q", property.Challenge)
+	}
+	response, err := puzzleSuite(t.Context(), sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial, _, err := parsePuzzle(response)
+	if err != nil || initial.Challenge() != puzzle.ChallengeBlake2b || initial.PuzzleID() == 0 {
+		t.Fatalf("initial puzzle = %v, error = %v", initial, err)
+	}
+
+	setArgonAPIPropertyChallenge(t, property, dbgen.ChallengeTypeArgon2ID)
+	response, err = puzzleSuiteEx(t.Context(), http.MethodGet, sitekey, property.Domain, "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, _, err := parsePuzzle(response)
+	if err != nil || legacy.Challenge() != puzzle.ChallengeBlake2b || legacy.PuzzleID() == 0 {
+		t.Fatalf("legacy widget puzzle = %v, error = %v", legacy, err)
+	}
+	response, err = puzzleSuiteEx(t.Context(), http.MethodGet, sitekey, property.Domain, "2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	extended, _, err := parsePuzzle(response)
+	if err != nil || extended.Challenge() != puzzle.ChallengeArgon2ID {
+		t.Fatalf("extended widget puzzle = %v, error = %v", extended, err)
+	}
+	response, err = puzzleSuite(t.Context(), sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, _, err := parsePuzzle(response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := issued.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issued.Challenge() != puzzle.ChallengeArgon2ID || len(encoded) != 48 || issued.PuzzleID() == 0 || issued.SolutionsCount() != puzzle.Argon2IDSolutionsCount {
+		t.Fatalf("opted-in puzzle: challenge = %d, bytes = %d, ID = %d, count = %d", issued.Challenge(), len(encoded), issued.PuzzleID(), issued.SolutionsCount())
+	}
+
+	cache.Delete(t.Context(), db.PropertyBySitekeyCacheKey(sitekey))
+	response, err = puzzleSuite(t.Context(), sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stub, _, err := parsePuzzle(response)
+	if err != nil || stub.Challenge() != puzzle.ChallengeBlake2b || stub.PuzzleID() != 0 {
+		t.Fatalf("cache-miss stub = %v, error = %v", stub, err)
+	}
+	loaded, err := store.Impl().RetrievePropertyBySitekey(t.Context(), sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.WithValue(t.Context(), common.PropertyContextKey, loaded)
+	ctx = context.WithValue(ctx, common.RateLimitKeyContextKey, netip.MustParseAddr("192.0.2.1"))
+	levels := difficulty.NewLevelsEx(db.NewMemoryTimeSeries(), fixedPuzzleDifficulty(151), 1, time.Minute)
+	low, _, err := server.Verifier.PuzzleForRequest(httptest.NewRequest(http.MethodGet, "/puzzle", nil).WithContext(ctx), levels, nil, nil)
+	if err != nil || low.Challenge() != puzzle.ChallengeBlake2b || low.Difficulty() != 151 {
+		t.Fatalf("low-end fallback = %v, error = %v", low, err)
+	}
+}
+
 func puzzleSuite(ctx context.Context, sitekey, domain string) (*http.Response, error) {
 	return puzzleSuiteEx(ctx, http.MethodGet, sitekey, domain)
 }
 
-func puzzleSuiteEx(ctx context.Context, method, sitekey, domain string) (*http.Response, error) {
+func puzzleSuiteEx(ctx context.Context, method, sitekey, domain string, version ...string) (*http.Response, error) {
 	slog.Log(ctx, common.LevelTrace, "Running puzzle suite", "domain", domain, "sitekey", sitekey)
 	srv := http.NewServeMux()
 	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
@@ -42,6 +150,9 @@ func puzzleSuiteEx(ctx context.Context, method, sitekey, domain string) (*http.R
 
 	req.Header.Set("Origin", common_test.PrependProtocol(domain))
 	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+	if len(version) > 0 {
+		req.Header.Set(common.HeaderCaptchaVersion, version[0])
+	}
 
 	q := req.URL.Query()
 	q.Add(common.ParamSiteKey, sitekey)

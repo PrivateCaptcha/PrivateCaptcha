@@ -88,7 +88,8 @@ type formDashboardRenderContext struct {
 
 type formDashboardIntegrationsRenderContext struct {
 	formDashboardRenderContext
-	Sitekey string
+	Sitekey   string
+	Challenge string
 }
 
 type formSettingsRenderContext struct {
@@ -592,6 +593,7 @@ func (s *Server) getFormIntegrations(w http.ResponseWriter, r *http.Request) (*f
 	renderCtx := &formDashboardIntegrationsRenderContext{
 		formDashboardRenderContext: *dashboardCtx,
 		Sitekey:                    db.UUIDToSiteKey(property.ExternalID),
+		Challenge:                  string(property.Challenge),
 	}
 	renderCtx.Tab = formIntegrationsTabIndex
 

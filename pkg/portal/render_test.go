@@ -138,6 +138,12 @@ func TestRenderHTML(t *testing.T) {
 	previewOrg := stubOrg("123")
 	invitedOrg := stubOrgEx("123", dbgen.AccessLevelInvited)
 	memberOrg := stubOrgEx("456", dbgen.AccessLevelMember)
+	blakeProperty := stubProperty("Foo", "123")
+	blakeProperty.Challenge = string(dbgen.ChallengeTypeBlake2b)
+	argonProperty := stubProperty("Foo", "123")
+	argonProperty.Challenge = string(dbgen.ChallengeTypeArgon2ID)
+	integrationForm := stubForm("Contact", "123")
+	integrationForm.ExternalID = "form-uuid"
 	hostileOrgModel := &orgDashboardRenderContext{
 		portalBaseRenderContext: portalBaseRenderContext{
 			Orgs:       []*UserOrg{hostileOrg},
@@ -520,12 +526,75 @@ func TestRenderHTML(t *testing.T) {
 			model: &propertyIntegrationsRenderContext{
 				propertyDashboardRenderContext: propertyDashboardRenderContext{
 					CsrfRenderContext: stubToken(),
-					Property:          stubProperty("Foo", "123"),
+					Property:          blakeProperty,
 					Org:               stubOrg("123"),
 					CanEdit:           true,
 				},
 				Sitekey: "qwerty",
 			},
+			selector: "#snippet",
+			matches: []string{`<!-- Add this inside the <head> of your website -->
+<script defer src="https:/widget/js/privatecaptcha.js"></script>
+
+<!-- Add this inside your form -->
+<div class="private-captcha" data-sitekey="qwerty"></div>`},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.IntegrationsEndpoint},
+			template: propertyDashboardIntegrationsTemplate,
+			model: &propertyIntegrationsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{
+					CsrfRenderContext: stubToken(),
+					Property:          argonProperty,
+					Org:               stubOrg("123"),
+					CanEdit:           true,
+				},
+				Sitekey: "qwerty",
+			},
+			selector: "#snippet",
+			matches: []string{`<!-- Add this inside the <head> of your website -->
+<script defer src="https:/widget/js/privatecaptcha.js?v=ext"></script>
+
+<!-- Add this inside your form -->
+<div class="private-captcha" data-sitekey="qwerty"></div>`},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, "456", common.TabEndpoint, common.IntegrationsEndpoint},
+			template: formDashboardIntegrationsTemplate,
+			model: &formDashboardIntegrationsRenderContext{
+				formDashboardRenderContext: formDashboardRenderContext{Form: integrationForm, Org: stubOrg("123")},
+				Sitekey:                    "qwerty",
+				Challenge:                  string(dbgen.ChallengeTypeBlake2b),
+			},
+			selector: "#snippet",
+			matches: []string{`<!-- Add this inside the <head> of your website -->
+<script defer src="https:/widget/js/privatecaptcha.js"></script>
+
+<!-- Use this instead of your existing form -->
+<form method="POST" action="https:/form/form-uuid">
+  <!-- Existing form fields... -->
+  <div class="private-captcha" data-sitekey="qwerty"></div>
+  <!-- <input type="submit" disabled /> -->
+</form>`},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, "456", common.TabEndpoint, common.IntegrationsEndpoint},
+			template: formDashboardIntegrationsTemplate,
+			model: &formDashboardIntegrationsRenderContext{
+				formDashboardRenderContext: formDashboardRenderContext{Form: integrationForm, Org: stubOrg("123")},
+				Sitekey:                    "qwerty",
+				Challenge:                  string(dbgen.ChallengeTypeArgon2ID),
+			},
+			selector: "#snippet",
+			matches: []string{`<!-- Add this inside the <head> of your website -->
+<script defer src="https:/widget/js/privatecaptcha.js?v=ext"></script>
+
+<!-- Use this instead of your existing form -->
+<form method="POST" action="https:/form/form-uuid">
+  <!-- Existing form fields... -->
+  <div class="private-captcha" data-sitekey="qwerty"></div>
+  <!-- <input type="submit" disabled /> -->
+</form>`},
 		},
 		// same as above, but client setup wizard step
 		{
@@ -556,6 +625,26 @@ func TestRenderHTML(t *testing.T) {
 			},
 		},
 		// same as above, but property settings _template_
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: blakeProperty, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			selector: `select[name="challenge"] option[selected]`,
+			matches:  []string{"Compute-hard (default)"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: argonProperty, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			selector: `select[name="challenge"] option[selected]`,
+			matches:  []string{"Memory-hard (experimental)"},
+		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
 			template: propertyDashboardSettingsTemplate,

@@ -322,6 +322,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 
 	updateConfigFunc := func(ctx context.Context) {
 		cfg.Update(ctx)
+		apiServer.Update(ctx)
 		updateIPBuckets(cfg, ipRateLimiter)
 		maintenanceMode := config.AsBool(cfg.Get(common.MaintenanceModeKey))
 		businessDB.UpdateConfig(maintenanceMode)

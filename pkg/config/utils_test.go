@@ -1,10 +1,67 @@
 package config
 
 import (
+	"bytes"
+	"context"
+	"log/slog"
+	"math"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
+
+func TestArgon2IDMemoryBudget(t *testing.T) {
+	const (
+		kiBPerMiB      = int64(1024)
+		defaultKiB     = int64(256) * kiBPerMiB
+		profileMinimum = int64(16) * kiBPerMiB
+	)
+	maxBudgetMiB := int64(math.MaxInt64 / kiBPerMiB)
+
+	testCases := []struct {
+		name     string
+		value    string
+		expected int64
+		warn     bool
+	}{
+		{name: "missing", value: "", expected: defaultKiB, warn: true},
+		{name: "malformed", value: "invalid", expected: defaultKiB, warn: true},
+		{name: "zero", value: "0", expected: defaultKiB, warn: true},
+		{name: "negative", value: "-1", expected: defaultKiB, warn: true},
+		{name: "parse overflow", value: strconv.FormatUint(math.MaxUint64, 10), expected: defaultKiB, warn: true},
+		{name: "conversion overflow", value: strconv.FormatInt(maxBudgetMiB+1, 10), expected: defaultKiB, warn: true},
+		{name: "below profile minimum", value: "8", expected: defaultKiB, warn: true},
+		{name: "profile minimum", value: "16", expected: profileMinimum},
+		{name: "valid", value: "512", expected: 512 * kiBPerMiB},
+		{name: "largest valid", value: strconv.FormatInt(maxBudgetMiB, 10), expected: maxBudgetMiB * kiBPerMiB},
+	}
+
+	previousLogger := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+			cfg := NewEnvConfig(func(string) string { return tc.value })
+
+			if got := Argon2IDMemoryBudgetKiB(context.Background(), cfg.Get(common.Argon2IDMemoryBudgetKey), profileMinimum); got != tc.expected {
+				t.Fatalf("memory budget = %d KiB, want %d KiB", got, tc.expected)
+			}
+
+			warning := logs.String()
+			if tc.warn {
+				if !strings.Contains(warning, "fallbackMiB=256") {
+					t.Fatalf("warning = %q, want fallback", warning)
+				}
+			} else if warning != "" {
+				t.Fatalf("unexpected warning: %s", warning)
+			}
+		})
+	}
+}
 
 func TestSplitHostPort(t *testing.T) {
 	t.Parallel()

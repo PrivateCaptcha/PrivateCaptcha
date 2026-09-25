@@ -56,11 +56,11 @@ func TestZeroDifficulty(t *testing.T) {
 	solutions := &Solutions{Buffer: solution}
 
 	ctx := t.Context()
-	if count, _ := solutions.Verify(ctx, puzzleBytes, difficulty); count > 0 {
+	if count, _ := solutions.VerifyBlake2b(ctx, puzzleBytes, difficulty); count > 0 {
 		t.Fatal("Should have failed with random solutions")
 	}
 
-	if count, _ := solutions.Verify(ctx, puzzleBytes, 0 /*difficulty*/); count != puzzle.SolutionsCount() {
+	if count, _ := solutions.VerifyBlake2b(ctx, puzzleBytes, 0 /*difficulty*/); count != puzzle.SolutionsCount() {
 		t.Errorf("Zero difficulty should suffice. Solutions count %v, expected %v", count, puzzle.SolutionsCount())
 	}
 }
@@ -286,7 +286,7 @@ func TestSolutionsVerifyInvalidPuzzleBytes(t *testing.T) {
 	solutions := &Solutions{Buffer: make([]byte, SolutionLength)}
 
 	// Test with invalid puzzle bytes length
-	_, err := solutions.Verify(ctx, make([]byte, 10), 100)
+	_, err := solutions.VerifyBlake2b(ctx, make([]byte, 10), 100)
 	if err != ErrInvalidPuzzleBytes {
 		t.Errorf("Expected ErrInvalidPuzzleBytes, got: %v", err)
 	}

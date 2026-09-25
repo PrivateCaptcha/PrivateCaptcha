@@ -75,6 +75,11 @@ func fillAsyncTaskRequesterIP(ctx context.Context, ipStr string) context.Context
 
 func (p *apiPropertySettings) Normalize() {
 	p.Name = strings.TrimSpace(p.Name)
+	switch dbgen.ChallengeType(p.Challenge) {
+	case dbgen.ChallengeTypeBlake2b, dbgen.ChallengeTypeArgon2ID:
+	default:
+		p.Challenge = ""
+	}
 
 	const (
 		minDifficultyLevel = int(common.DifficultyLevelSmall - common.DifficultyDelta)
@@ -417,6 +422,7 @@ func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, proper
 		AllowSubdomains:  property.AllowSubdomains,
 		AllowLocalhost:   property.AllowLocalhost,
 		MaxReplayCount:   int32(property.MaxReplayCount),
+		Challenge:        dbgen.NullChallengeType{ChallengeType: dbgen.ChallengeType(property.Challenge), Valid: property.Challenge != ""},
 	}, org)
 	if err != nil {
 		tlog.ErrorContext(ctx, "Failed to create the property", common.ErrAttr(err))
@@ -890,6 +896,7 @@ func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, proper
 		AllowSubdomains:  propertyInput.AllowSubdomains,
 		AllowLocalhost:   propertyInput.AllowLocalhost,
 		MaxReplayCount:   int32(propertyInput.MaxReplayCount),
+		Challenge:        dbgen.NullChallengeType{ChallengeType: dbgen.ChallengeType(propertyInput.Challenge), Valid: propertyInput.Challenge != ""},
 	}
 
 	_, auditEvent, err := s.BusinessDB.Impl().UpdateProperty(ctx, org, user, params)
@@ -1050,6 +1057,7 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) {
 	data := &apiPropertyOutput{
 		ID:              s.IDHasher.Encrypt(int(property.ID)),
 		Name:            property.Name,
+		Challenge:       string(property.Challenge),
 		Domain:          property.Domain,
 		Sitekey:         db.UUIDToSiteKey(property.ExternalID),
 		Level:           int(property.Level.Int16),

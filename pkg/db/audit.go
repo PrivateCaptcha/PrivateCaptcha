@@ -343,6 +343,7 @@ func newOrgAuditLogEvent(userID int32, org *dbgen.Organization, action common.Au
 
 type AuditLogProperty struct {
 	Name                string `json:"name,omitempty"`
+	Challenge           string `json:"challenge,omitempty"`
 	OrgID               int32  `json:"org_id,omitempty"`
 	OrgName             string `json:"org_name,omitempty"`
 	OrgOwnerID          int32  `json:"org_owner_id,omitempty"`
@@ -430,6 +431,7 @@ func newAuditLogProperty(property *dbgen.Property, org *dbgen.Organization) *Aud
 
 	event := &AuditLogProperty{
 		Name:                property.Name,
+		Challenge:           string(property.Challenge),
 		OrgID:               property.OrgID.Int32,
 		OrgOwnerID:          property.OrgOwnerID.Int32,
 		CreatorID:           property.CreatorID.Int32,
@@ -456,6 +458,7 @@ func newAuditLogOldProperty(property *dbgen.Property, updateRow *dbgen.UpdatePro
 
 	event := &AuditLogProperty{
 		Name:                updateRow.OldName,
+		Challenge:           string(updateRow.OldChallenge),
 		OrgID:               property.OrgID.Int32,
 		OrgOwnerID:          property.OrgOwnerID.Int32,
 		CreatorID:           property.CreatorID.Int32,

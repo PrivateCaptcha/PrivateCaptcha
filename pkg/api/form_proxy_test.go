@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -283,7 +285,7 @@ func TestProcessFormSubmissionClonesClientWhenRedirectsEnabled(t *testing.T) {
 	}
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
-	if err := server.processFormSubmission(context.Background(), form, submission); err != nil {
+	if err := server.processFormSubmission(context.Background(), form, submission, false /*skip memory semaphore*/); err != nil {
 		t.Fatalf("expected redirect-enabled submission to succeed, got %v", err)
 	}
 	if redirectHits != 1 {
@@ -851,6 +853,120 @@ func TestFormProxyRejectsInvalidCaptcha(t *testing.T) {
 	}
 }
 
+func TestFormProxyQueuesWhenVerificationIsBusy(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	form, property := createFormProxyForTest(t.Context(), t, t.Name(), "busy-form.example.com")
+	setArgonAPIPropertyChallenge(t, property, dbgen.ChallengeTypeArgon2ID)
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	puzzleText, solutionsText, err := solutionsSuite(t.Context(), sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	capacity := server.Verifier.verificationCapacityKiB
+	if err := server.Verifier.verificationSemaphore.Acquire(t.Context(), capacity); err != nil {
+		t.Fatal(err)
+	}
+	defer server.Verifier.verificationSemaphore.Release(capacity)
+
+	body := url.Values{common.ParamPrivateCaptchaSolution: {solutionsText + "." + puzzleText}}
+	s := *server
+	s.FormSubmissionChan = make(chan *FormSubmission, 1)
+	rateLimiter := &ratelimit.StubRateLimiter{}
+	s.RateLimiter = rateLimiter
+	req := httptest.NewRequest(http.MethodPost, "/form/"+db.UUIDToString(form.ExternalID), strings.NewReader(body.Encode()))
+	req.SetPathValue(common.ParamForm, db.UUIDToString(form.ExternalID))
+	req = req.WithContext(context.WithValue(req.Context(), common.FormContextKey, form))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	s.formProxyHandler(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusAccepted)
+	}
+	if rateLimiter.UpdateCalls != 1 || rateLimiter.UpdatedCapacity != 70 || rateLimiter.UpdatedLeakInterval != time.Second {
+		t.Fatalf("busy form rate limit: calls = %d, capacity = %d, interval = %s", rateLimiter.UpdateCalls, rateLimiter.UpdatedCapacity, rateLimiter.UpdatedLeakInterval)
+	}
+	select {
+	case queued := <-s.FormSubmissionChan:
+		if queued.CaptchaSolution == nil {
+			t.Fatal("busy verification was not deferred")
+		}
+	default:
+		t.Fatal("busy verification was not queued")
+	}
+}
+
+func TestQueuedArgonFormSubmissionBypassesBusyCapacity(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	form, property := createFormProxyForTest(ctx, t, t.Name(), "queued-argon.example.com")
+	setArgonAPIPropertyChallenge(t, property, dbgen.ChallengeTypeArgon2ID)
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	puzzleText, solutionsText, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var delivered atomic.Int32
+	s := *server
+	s.FormSubmissionChan = make(chan *FormSubmission, 1)
+	s.FormSubmitLogChan = make(chan *common.FormSubmitRecord, 1)
+	s.FailingForms = common.NewExpiringCounterMap[int32]()
+	s.FormURLVerifier = &stubSubmitFormURLVerifier{}
+	s.FormsClient = &http.Client{Transport: submitFormRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		delivered.Add(1)
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header)}, nil
+	})}
+
+	values := url.Values{
+		"email":                            {"user@example.com"},
+		common.ParamPrivateCaptchaSolution: {solutionsText + "." + puzzleText},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/form/"+db.UUIDToString(form.ExternalID), strings.NewReader(values.Encode()))
+	req.SetPathValue(common.ParamForm, db.UUIDToString(form.ExternalID))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	s.formProxyHandler(w, req)
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("uncached form response = %d, want 202", w.Code)
+	}
+	submission := <-s.FormSubmissionChan
+	if submission.CaptchaSolution == nil {
+		t.Fatal("queued submission lost its captcha solution")
+	}
+
+	capacity := s.Verifier.verificationCapacityKiB
+	if err := s.Verifier.verificationSemaphore.Acquire(ctx, capacity); err != nil {
+		t.Fatal(err)
+	}
+	held := true
+	defer func() {
+		if held {
+			s.Verifier.verificationSemaphore.Release(capacity)
+		}
+	}()
+	done := make(chan error, 1)
+	go func() { done <- s.submitFormBatch(ctx, []*FormSubmission{submission}) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-ctx.Done():
+		t.Fatal("queued form was not processed while verification capacity was occupied")
+	}
+	if got := delivered.Load(); got != 1 {
+		t.Fatalf("form deliveries = %d, want 1", got)
+	}
+	s.Verifier.verificationSemaphore.Release(capacity)
+	held = false
+}
+
 func TestFormProxyRejectsWrongPropertyCaptcha(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -1006,10 +1122,14 @@ func TestFormProxyRecordsSamePropertyFailure(t *testing.T) {
 	}
 	rateBefore := server.Verifier.PropertyStats.VerificationRate(property.ID, time.Now())
 
-	// Submit malformed solution data for the valid puzzle.
+	// Submit an exact-count duplicate solution set for the valid puzzle.
 	body := url.Values{}
 	body.Set("email", "test@example.com")
-	body.Set(common.ParamPrivateCaptchaSolution, fmt.Sprintf("AAAA.%s", puzzleStr))
+	solutionsStr := (&puzzle.Solutions{
+		Buffer:   make([]byte, 24*puzzle.SolutionLength),
+		Metadata: &puzzle.Metadata{},
+	}).String()
+	body.Set(common.ParamPrivateCaptchaSolution, fmt.Sprintf("%s.%s", solutionsStr, puzzleStr))
 	resp := formProxySuite(t, form, body)
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("got %d", resp.StatusCode)

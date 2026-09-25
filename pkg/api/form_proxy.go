@@ -180,25 +180,28 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 		ownerSource := &formOwnerSource{Store: s.BusinessDB, Form: form}
 		tnow := time.Now().UTC()
 		result, err := s.Verifier.Verify(ctx, payload, ownerSource, tnow)
-		if err != nil {
+		if err != nil && err != errVerificationBusy {
 			slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
-		if result.Success() && result.Error == puzzle.MaintenanceModeError {
-			// maintenance-mode returns Success() with PropertyID==0
+		if err == nil {
+			if result.Success() && result.Error == puzzle.MaintenanceModeError {
+				// maintenance-mode returns Success() with PropertyID==0
+				s.Verifier.CacheVerification(ctx, result)
+			}
+			if result.PropertyID == ownerSource.Form.PropertyID {
+				s.Verifier.recordVerificationStats(result, tnow)
+			}
+			if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				return
+			}
+			s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
 			s.Verifier.CacheVerification(ctx, result)
+			payload = nil
 		}
-		if result.PropertyID == ownerSource.Form.PropertyID {
-			s.Verifier.recordVerificationStats(result, tnow)
-		}
-		if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
-			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-			return
-		}
-		s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
-		s.Verifier.CacheVerification(ctx, result)
 		if form.RequestsPerMinute > 0 {
 			capacity := leakybucket.TLevel(form.RequestsPerMinute) + 10
 			leakInterval := time.Minute / time.Duration(form.RequestsPerMinute)
@@ -206,7 +209,9 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			slog.WarnContext(ctx, "Skipping form rate limit update due to invalid RPM", "formID", form.ID, "requestsPerMinute", form.RequestsPerMinute)
 		}
-		payload = nil
+		if err == errVerificationBusy {
+			slog.DebugContext(ctx, "Deferring busy captcha verification to form submission queue", "formID", form.ID)
+		}
 	}
 
 	submission := s.createFormSubmission(ctx, r, payload)
@@ -222,11 +227,10 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusRequestTimeout), http.StatusRequestTimeout)
 	case <-timer.C:
 		if form, ok := getRequestedForm(ctx, s.BusinessDB); ok {
-			// at this stage it also means we have verified the captcha earlier (above)
 			// we limit retries on the hot path as by definition here we are already quite busy
 			formCopy := *form
 			formCopy.RetryRequestCount = 0
-			if err := s.processFormSubmission(ctx, &formCopy, submission); err == nil {
+			if err := s.processFormSubmission(ctx, &formCopy, submission, false /*skip memory semaphore*/); err == nil {
 				w.WriteHeader(http.StatusAccepted)
 			} else {
 				http.Error(w, http.StatusText(http.StatusNotAcceptable), http.StatusNotAcceptable)
@@ -301,9 +305,10 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 			}
 		}
 
-		// Keep delayed CAPTCHA verification serial because its replay check and cache update are separate operations.
+		// The single batch consumer verifies unverified submissions synchronously, so only one
+		// semaphore-bypassing verification runs at a time per server pipeline.
 		if submission.CaptchaSolution != nil {
-			if err := s.processFormSubmission(ctx, form, submission); err != nil {
+			if err := s.processFormSubmission(ctx, form, submission, true /*skip memory semaphore*/); err != nil {
 				slog.WarnContext(ctx, "Failed to submit the form", "formID", form.ID, "submitID", submission.ID, common.ErrAttr(err))
 			}
 			continue
@@ -322,7 +327,7 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 		go func(f *dbgen.Form, sub *FormSubmission) {
 			defer wg.Done()
 			defer func() { <-sem }() // Free up a spot in the semaphore when finished
-			if err := s.processFormSubmission(ctx, f, sub); err != nil {
+			if err := s.processFormSubmission(ctx, f, sub, false /*skip memory semaphore*/); err != nil {
 				slog.WarnContext(ctx, "Failed to submit the form", "formID", f.ID, "submitID", sub.ID, common.ErrAttr(err))
 			}
 		}(form, submission)
@@ -336,7 +341,7 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 	return nil
 }
 
-func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *FormSubmission) error {
+func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *FormSubmission, skipMemorySemaphore bool) error {
 	if !f.Enabled || !f.Active {
 		return errFormDisabled
 	}
@@ -349,7 +354,11 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 	// delayed captcha check if original form was not cached at the time of request
 	if sub.CaptchaSolution != nil {
 		ownerSource := &formOwnerSource{Store: s.BusinessDB, Form: f}
-		result, err := s.Verifier.Verify(ctx, sub.CaptchaSolution, ownerSource, sub.Time)
+		verify := s.Verifier.Verify
+		if skipMemorySemaphore {
+			verify = s.Verifier.VerifyUnsafe
+		}
+		result, err := verify(ctx, sub.CaptchaSolution, ownerSource, sub.Time)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
 			return err

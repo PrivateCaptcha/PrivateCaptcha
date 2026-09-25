@@ -755,6 +755,29 @@ func TestInitFromPropertyGrowthChange(t *testing.T) {
 	}
 }
 
+func TestInitFromPropertyChallengeChange(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		old  dbgen.ChallengeType
+		new  dbgen.ChallengeType
+	}{
+		{name: "Argon2id", old: dbgen.ChallengeTypeBlake2b, new: dbgen.ChallengeTypeArgon2ID},
+		{name: "Blake2b", old: dbgen.ChallengeTypeArgon2ID, new: dbgen.ChallengeTypeBlake2b},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ul := &UserAuditLog{}
+			oldValue := &db.AuditLogProperty{Name: "Test Property", Challenge: string(tc.old)}
+			newValue := &db.AuditLogProperty{Name: "Test Property", Challenge: string(tc.new)}
+			if err := ul.initFromProperty(oldValue, newValue); err != nil {
+				t.Fatal(err)
+			}
+			if ul.Resource != "Property 'Test Property'" || ul.Property != "Challenge type" || ul.Value != string(tc.new) {
+				t.Fatalf("audit log = (%q, %q, %q), want challenge type %q", ul.Resource, ul.Property, ul.Value, tc.new)
+			}
+		})
+	}
+}
+
 func TestInitFromPropertyMaxReplayCountChange(t *testing.T) {
 	ul := &UserAuditLog{}
 

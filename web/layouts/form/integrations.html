@@ -29,7 +29,7 @@
                 <div class="grow">
                     <code class="pc-code-block">
                         <textarea id="snippet" readonly x-init="$el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'">{{ `<!-- Add this inside the <head> of your website -->` }}
-{{ `<script defer src="https:` }}{{$.Ctx.CDN}}{{ `/widget/js/privatecaptcha.js"></script>` }}
+{{ `<script defer src="https:` }}{{$.Ctx.CDN}}{{ `/widget/js/privatecaptcha.js` }}{{ if eq .Params.Challenge .Const.ChallengeTypeArgon2ID }}?v=ext{{ end }}{{ `"></script>` }}
 
 {{ `<!-- Use this instead of your existing form -->` }}
 {{ `<form method="POST" action="https:`}}{{$.Ctx.API}}{{ "/form/" }}{{ .Params.Form.ExternalID }}{{ `">
