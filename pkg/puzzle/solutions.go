@@ -245,7 +245,7 @@ func (s *Solutions) checkUniqueArray() error {
 	return nil
 }
 
-func (s *Solutions) Verify(ctx context.Context, puzzleBytes []byte, difficulty uint8) (int, error) {
+func (s *Solutions) VerifyBlake2b(ctx context.Context, puzzleBytes []byte, difficulty uint8) (int, error) {
 	if len(puzzleBytes) != PuzzleBytesLength {
 		slog.WarnContext(ctx, "Puzzle bytes buffer invalid", "size", len(puzzleBytes))
 		return 0, ErrInvalidPuzzleBytes

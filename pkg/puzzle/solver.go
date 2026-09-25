@@ -3,6 +3,7 @@ package puzzle
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -12,6 +13,45 @@ import (
 )
 
 type ComputeSolver struct {
+}
+
+var ErrArgon2IDExhausted = errors.New("Argon2id nonce space exhausted")
+
+func solveArgon2IDOne(ctx context.Context, body []byte, lane byte, threshold uint32, limit uint64, hash func([]byte, []byte, uint32) (uint32, error)) ([]byte, error) {
+	nonce := make([]byte, SolutionLength)
+	nonce[0] = lane
+	for counter := uint64(0); counter < limit; counter++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		binary.BigEndian.PutUint32(nonce[4:], uint32(counter))
+		value, err := hash(nonce, body, Argon2IDMemoryKiB)
+		if err != nil {
+			return nil, err
+		}
+		if value <= threshold {
+			return nonce, nil
+		}
+	}
+	return nil, ErrArgon2IDExhausted
+}
+
+func (s *ComputeSolver) solveArgon2ID(ctx context.Context, p Puzzle, body []byte) (*Solutions, error) {
+	if len(body) != puzzleV2Size || p.SolutionsCount() != Argon2IDSolutionsCount {
+		return nil, ErrInvalidArgon2IDInput
+	}
+	started := time.Now()
+	solutions := emptySolutions(Argon2IDSolutionsCount)
+	threshold := argon2IDThresholdFromDifficulty(p.Difficulty())
+	for lane := range Argon2IDSolutionsCount {
+		nonce, err := solveArgon2IDOne(ctx, body, byte(lane), threshold, 1<<32, Argon2IDCandidateValue)
+		if err != nil {
+			return nil, err
+		}
+		copy(solutions.Buffer[lane*SolutionLength:], nonce)
+	}
+	solutions.Metadata.elapsedMillis = uint32(time.Since(started).Milliseconds())
+	return solutions, nil
 }
 
 func (s *ComputeSolver) solveOne(ctx context.Context, buf []byte, threshold uint32, solution []byte) error {
@@ -63,13 +103,16 @@ func normalizePuzzleBuffer(buf []byte) []byte {
 }
 
 func (s *ComputeSolver) Solve(ctx context.Context, p Puzzle) (*Solutions, error) {
-	if p.IsZero() {
+	if p.IsZero() && p.Challenge() == ChallengeBlake2b {
 		return emptySolutions(p.SolutionsCount()), nil
 	}
 
 	buf, err := p.MarshalBinary()
 	if err != nil {
 		return nil, err
+	}
+	if p.Challenge() == ChallengeArgon2ID {
+		return s.solveArgon2ID(ctx, p, buf)
 	}
 
 	buf = normalizePuzzleBuffer(buf)

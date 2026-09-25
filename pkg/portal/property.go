@@ -69,6 +69,7 @@ type userProperty struct {
 	Sitekey          string
 	Level            int
 	Growth           int
+	Challenge        string
 	ValidityInterval int
 	MaxReplayCount   int
 	HasDomain        bool
@@ -157,6 +158,7 @@ func propertyToUserProperty(p *dbgen.Property, hasher common.IdentifierHasher) *
 		HasDomain:        len(p.Domain) > 0,
 		Level:            int(p.Level.Int16),
 		Growth:           growthLevelToIndex(p.Growth),
+		Challenge:        string(p.Challenge),
 		Sitekey:          db.UUIDToSiteKey(p.ExternalID),
 		ValidityInterval: puzzle.ValidityIntervalToIndex(p.ValidityInterval),
 		AllowReplay:      (p.MaxReplayCount > 1),
@@ -843,6 +845,10 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty), renderCtx.MinLevel, renderCtx.MaxLevel)
 	growth := growthLevelFromValue(ctx, r.FormValue(common.ParamGrowth))
 	validityInterval := puzzle.ValidityIntervalFromIndex(ctx, r.FormValue(common.ParamValidityInterval))
+	challenge := dbgen.ChallengeType(r.FormValue(common.ParamChallenge))
+	if challenge != dbgen.ChallengeTypeBlake2b && challenge != dbgen.ChallengeTypeArgon2ID {
+		challenge = property.Challenge
+	}
 	_, allowSubdomains := r.Form[common.ParamAllowSubdomains]
 	_, allowLocalhost := r.Form[common.ParamAllowLocalhost]
 
@@ -856,6 +862,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 	if (name != property.Name) ||
 		(int16(difficulty) != property.Level.Int16) ||
 		(growth != property.Growth) ||
+		(challenge != property.Challenge) ||
 		(validityInterval != property.ValidityInterval) ||
 		(maxReplayCount != property.MaxReplayCount) ||
 		(allowSubdomains != property.AllowSubdomains) ||
@@ -865,6 +872,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 			Name:             name,
 			Level:            db.Int2(int16(difficulty)),
 			Growth:           growth,
+			Challenge:        dbgen.NullChallengeType{ChallengeType: challenge, Valid: true},
 			ValidityInterval: validityInterval,
 			AllowSubdomains:  allowSubdomains,
 			AllowLocalhost:   allowLocalhost,

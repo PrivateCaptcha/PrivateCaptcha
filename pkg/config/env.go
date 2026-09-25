@@ -84,6 +84,7 @@ func init() {
 	configKeyToEnvName[common.WidgetNoticeKey] = "PC_WIDGET_NOTICE"
 	configKeyToEnvName[common.CacheDirKey] = "CACHE_DIRECTORY"
 	configKeyToEnvName[common.GradualDataCleanupKey] = "PC_GRADUAL_DATA_CLEANUP"
+	configKeyToEnvName[common.Argon2IDMemoryBudgetKey] = "PC_ARGON2_MEMORY_BUDGET_MIB"
 
 	for i, v := range configKeyToEnvName {
 		if len(v) == 0 {

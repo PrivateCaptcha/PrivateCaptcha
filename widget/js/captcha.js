@@ -29,7 +29,7 @@ function getBaseOptions() {
     let scriptTag;
     const scripts = document.getElementsByTagName('script');
     for (let script of scripts) {
-        if (script.src.includes('widget/js/privatecaptcha.js')) {
+        if (script.src.includes('widget/js/privatecaptcha.js') || script.src.includes('widget/js/privatecaptcha-ext.js')) {
             scriptTag = script;
             break;
         }

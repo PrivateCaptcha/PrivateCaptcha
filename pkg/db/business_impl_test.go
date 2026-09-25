@@ -1037,6 +1037,16 @@ func TestCreateFormFromUpdatePreservesRedirectCount(t *testing.T) {
 	}
 }
 
+func TestCreatePropertyFromUpdatePreservesChallenge(t *testing.T) {
+	updated := createPropertyFromUpdate(&dbgen.UpdatePropertyRow{
+		Challenge: dbgen.ChallengeTypeArgon2ID,
+	})
+
+	if updated.Challenge != dbgen.ChallengeTypeArgon2ID {
+		t.Fatalf("challenge = %q, want %q", updated.Challenge, dbgen.ChallengeTypeArgon2ID)
+	}
+}
+
 func TestBusinessStoreImplUpdateProperty(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)

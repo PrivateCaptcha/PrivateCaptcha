@@ -27,6 +27,7 @@ const (
 	ParamDomain                 = "domain"
 	ParamDifficulty             = "difficulty"
 	ParamGrowth                 = "growth"
+	ParamChallenge              = "challenge"
 	ParamTab                    = "tab"
 	ParamNew                    = "new"
 	ParamNever                  = "never"

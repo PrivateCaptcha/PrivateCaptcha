@@ -8,8 +8,8 @@ SELECT * from backend.properties WHERE id = ANY($1::INT[]);
 SELECT * from backend.properties WHERE external_id = $1;
 
 -- name: CreateProperty :one
-INSERT INTO backend.properties (name, org_id, creator_id, org_owner_id, domain, level, growth, validity_interval, allow_subdomains, allow_localhost, max_replay_count)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO backend.properties (name, org_id, creator_id, org_owner_id, domain, level, growth, validity_interval, allow_subdomains, allow_localhost, max_replay_count, challenge)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE(sqlc.narg(challenge)::backend.challenge_type, 'blake2b'::backend.challenge_type))
 RETURNING *;
 
 -- name: UpdateProperty :one
@@ -27,6 +27,7 @@ upd AS (
         allow_subdomains = $6,
         allow_localhost = $7,
         max_replay_count = $8,
+        challenge = COALESCE(sqlc.narg(challenge)::backend.challenge_type, p.challenge),
         updated_at = NOW()
     WHERE p.id = (SELECT id FROM old)
     RETURNING * -- This ensures the final SELECT only returns data if the update actually happened
@@ -39,7 +40,8 @@ SELECT
     old.validity_interval AS old_validity_interval,
     old.allow_subdomains AS old_allow_subdomains,
     old.allow_localhost AS old_allow_localhost,
-    old.max_replay_count AS old_max_replay_count
+    old.max_replay_count AS old_max_replay_count,
+    old.challenge AS old_challenge
 FROM upd
 CROSS JOIN old;
 

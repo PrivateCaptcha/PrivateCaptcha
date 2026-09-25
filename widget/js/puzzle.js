@@ -4,6 +4,12 @@ import { decode } from 'base64-arraybuffer';
 import { readUInt32LE } from './puzzle.utils.js';
 
 const PUZZLE_BUFFER_LENGTH = 128;
+const PUZZLE_V1_LENGTH = 47;
+const PUZZLE_V2_LENGTH = 48;
+const PUZZLE_VERSION_1 = 1;
+const PUZZLE_VERSION_2 = 2;
+export const CHALLENGE_BLAKE2B = 0;
+export const CHALLENGE_ARGON2ID = 1;
 // RequestTimeout, Conflict, TooManyRequests
 const ACCEPTABLE_CLIENT_ERRORS = [408, 409, 429];
 const DEFAULT_TIMEOUT_MS = 5000;
@@ -11,8 +17,9 @@ const DEFAULT_GLOBAL_TIMEOUT_MS = 30000;
 
 export async function getPuzzle(endpoint, sitekey, options = {}) {
     try {
-        const response = await fetchWithBackoff(`${endpoint}?sitekey=${sitekey}`, {
-            fetchOptions: { headers: [["x-pc-captcha-version", "1"]], mode: "cors" },
+        const separator = endpoint.includes('?') ? '&' : '?';
+        const response = await fetchWithBackoff(`${endpoint}${separator}sitekey=${encodeURIComponent(sitekey)}`, {
+            fetchOptions: { headers: [["x-pc-captcha-version", globalThis.__privateCaptchaExtended === true ? "2" : "1"]], mode: "cors" },
             maxAttempts: options.attempts ?? 5,
             initialDelay: 800,
             maxDelay: 6000,
@@ -148,7 +155,10 @@ function readUInt64LE(binaryData, offset) {
 export class Puzzle {
     constructor(rawData) {
         this.puzzleBuffer = null;
+        this.puzzleBytes = null;
 
+        this.version = null;
+        this.challenge = null;
         this.ID = null;
         this.difficulty = null;
         this.solutionsCount = null;
@@ -171,9 +181,33 @@ export class Puzzle {
         this.signature = parts[1];
 
         const data = new Uint8Array(decode(buffer));
-        let offset = 0;
+        if (data.length < 1) {
+            throw new Error('Puzzle body is empty');
+        }
 
-        offset += 1; // version
+        this.version = data[0];
+        let expectedLength;
+        let offset = 1;
+        switch (this.version) {
+            case PUZZLE_VERSION_1:
+                expectedLength = PUZZLE_V1_LENGTH;
+                this.challenge = CHALLENGE_BLAKE2B;
+                break;
+            case PUZZLE_VERSION_2:
+                expectedLength = PUZZLE_V2_LENGTH;
+                this.challenge = data[offset++];
+                if (this.challenge !== CHALLENGE_BLAKE2B && this.challenge !== CHALLENGE_ARGON2ID) {
+                    throw new Error(`Unknown puzzle challenge: ${this.challenge}`);
+                }
+                break;
+            default:
+                throw new Error(`Unknown puzzle version: ${this.version}`);
+        }
+        if (data.length !== expectedLength) {
+            throw new Error(`Invalid puzzle body length: ${data.length}`);
+        }
+
+        this.puzzleBytes = data.slice();
         offset += 16; // propertyID
 
         this.ID = readUInt64LE(data, offset);
@@ -188,13 +222,13 @@ export class Puzzle {
         this.expirationTimestamp = readUInt32LE(data, offset);
         offset += 4;
 
-        offset += 4; // AccountID
-
         const userDataSize = 16;
-        this.userData = data.slice(offset, offset + userDataSize);
-        offset += userDataSize;
+        const userDataStart = offset;
+        offset += 4; // AccountID is the first four bytes of userData
+        this.userData = data.slice(userDataStart, userDataStart + userDataSize);
+        offset += userDataSize - 4;
 
-        let sourceBuffer = data;
+        let sourceBuffer = this.puzzleBytes;
         if (sourceBuffer.length < PUZZLE_BUFFER_LENGTH) {
             const enlargedBuffer = new Uint8Array(PUZZLE_BUFFER_LENGTH);
             enlargedBuffer.set(sourceBuffer);

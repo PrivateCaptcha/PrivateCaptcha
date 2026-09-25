@@ -21,6 +21,7 @@ bin
 
 secrets.yml
 node_modules
+widget-wasm/
 
 web/static/*
 !web/static/img
@@ -31,6 +32,8 @@ widget/lib/*.js
 widget/lib/*.js.map
 widget/test/bundle.test.js
 widget/test/bundle.test.js.map
+widget/test/bundle.bench.js
+widget/test/bundle.bench.js.map
 
 pkg/db/migrations/postgres/000000_sqlc_fix.sql
 pc.env

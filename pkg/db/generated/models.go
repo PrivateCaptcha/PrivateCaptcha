@@ -8,9 +8,9 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"net/netip"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"time"
 )
 
 type AccessLevel string
@@ -188,6 +188,48 @@ func (ns NullAuditLogSource) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.AuditLogSource), nil
+}
+
+type ChallengeType string
+
+const (
+	ChallengeTypeBlake2b  ChallengeType = "blake2b"
+	ChallengeTypeArgon2ID ChallengeType = "argon2id"
+)
+
+func (e *ChallengeType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ChallengeType(s)
+	case string:
+		*e = ChallengeType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ChallengeType: %T", src)
+	}
+	return nil
+}
+
+type NullChallengeType struct {
+	ChallengeType ChallengeType `json:"backend_challenge_type"`
+	Valid         bool          `json:"valid"` // Valid is true if ChallengeType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullChallengeType) Scan(value interface{}) error {
+	if value == nil {
+		ns.ChallengeType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ChallengeType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullChallengeType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ChallengeType), nil
 }
 
 type DifficultyGrowth string
@@ -698,6 +740,7 @@ type Property struct {
 	DeletedAt        pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	ValidityInterval time.Duration      `db:"validity_interval" json:"validity_interval"`
 	MaxReplayCount   int32              `db:"max_replay_count" json:"max_replay_count"`
+	Challenge        ChallengeType      `db:"challenge" json:"challenge"`
 	AllowSubdomains  bool               `db:"allow_subdomains" json:"allow_subdomains"`
 	AllowLocalhost   bool               `db:"allow_localhost" json:"allow_localhost"`
 	Enabled          bool               `db:"enabled" json:"enabled"`

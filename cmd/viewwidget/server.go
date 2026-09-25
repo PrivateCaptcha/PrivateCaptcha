@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	greenPage = `<!DOCTYPE html><html><body style="background-color: green;"></body></html>`
-	redPage   = `<!DOCTYPE html><html><body style="background-color: red;"></body></html>`
+	greenPage = `<!DOCTYPE html><html><head><link rel="icon" href="/assets/img/favicon.png"></head><body style="background-color: green;"></body></html>`
+	redPage   = `<!DOCTYPE html><html><head><link rel="icon" href="/assets/img/favicon.png"></head><body style="background-color: red;"></body></html>`
 )
 
 var (
@@ -83,14 +83,39 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	p := puzzle.NewComputePuzzle(0 /*puzzle ID*/, [16]byte{}, uint8(level))
+	requested := r.URL.Query().Get("challenge")
+	challenge := puzzle.ChallengeArgon2ID
+	switch requested {
+	case "", "argon2id":
+	case "blake2b":
+		challenge = puzzle.ChallengeBlake2b
+	default:
+		http.Error(w, "Unknown challenge", http.StatusBadRequest)
+		return
+	}
+	wireDifficulty := uint8(level)
+	fallback := false
+	if challenge == puzzle.ChallengeArgon2ID {
+		if wire, ok := puzzle.Argon2IDWireDifficulty(wireDifficulty); ok {
+			wireDifficulty = wire
+		} else {
+			fallback = true
+			challenge = puzzle.ChallengeBlake2b
+		}
+	}
+	p, err := puzzle.NewComputePuzzleForChallenge(puzzle.NextPuzzleID(), [16]byte{}, wireDifficulty, challenge)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
 	if err := p.Init(puzzle.DefaultValidityPeriod); err != nil {
 		slog.ErrorContext(ctx, "Failed to create puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	slog.DebugContext(ctx, "Serving puzzle", "level", level)
+	slog.DebugContext(ctx, "Serving puzzle", "logicalDifficulty", level, "wireDifficulty", wireDifficulty,
+		"requestedChallenge", requested, "challenge", challenge, "fallback", fallback)
 
 	if len(s.notice) > 0 {
 		w.Header().Set(common.HeaderWidgetNotice, s.notice)
@@ -143,7 +168,11 @@ func (s *server) submit(w http.ResponseWriter, r *http.Request) {
 
 	p := verifyPayload.Puzzle()
 
-	if p.IsStub() {
+	if p.IsStub() && p.Challenge() == puzzle.ChallengeBlake2b && p.PropertyID() == db.TestPropertyUUID.Bytes {
+		if verifyPayload.VerifySignature(ctx, s.salt, nil) != nil {
+			fmt.Fprintln(w, redPage)
+			return
+		}
 		fmt.Fprintln(w, greenPage)
 		return
 	}

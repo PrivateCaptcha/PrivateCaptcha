@@ -1841,6 +1841,7 @@ func createPropertyFromUpdate(row *dbgen.UpdatePropertyRow) *dbgen.Property {
 		MaxReplayCount:   row.MaxReplayCount,
 		Enabled:          row.Enabled,
 		ShowNotice:       row.ShowNotice,
+		Challenge:        row.Challenge,
 	}
 }
 

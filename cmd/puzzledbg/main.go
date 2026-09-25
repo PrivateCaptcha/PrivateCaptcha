@@ -45,36 +45,48 @@ func main() {
 		os.Exit(3)
 	}
 
-	if *solveFlag {
-		solver := &puzzle.ComputeSolver{}
-		solutions, err := solver.Solve(context.Background(), p)
-		if err != nil {
+	out, err := puzzleOutput(context.Background(), p, responseStr, *solveFlag)
+	if err != nil {
+		if *solveFlag {
 			fmt.Fprintf(os.Stderr, "Error solving puzzle: %v\n", err)
 			os.Exit(5)
 		}
-
-		fmt.Printf("%s.%s", solutions.String(), responseStr)
-	} else {
-		m := make(map[string]interface{})
-		propertyID := p.PropertyID()
-		var propertyUUID pgtype.UUID
-		propertyUUID.Valid = true
-		copy(propertyUUID.Bytes[:], propertyID[:])
-
-		m["PuzzleID"] = p.PuzzleID()
-		m["PropertyID"] = propertyUUID.String()
-		m["Difficulty"] = p.Difficulty()
-		m["SolutionsCount"] = p.SolutionsCount()
-		m["Expiration"] = p.Expiration()
-		m["IsStub"] = p.IsStub()
-		m["IsZero"] = p.IsZero()
-
-		out, err := json.MarshalIndent(m, "", "  ")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error marshalling puzzle: %v\n", err)
-			os.Exit(4)
-		}
-
-		fmt.Print(string(out))
+		fmt.Fprintf(os.Stderr, "Error marshalling puzzle: %v\n", err)
+		os.Exit(4)
 	}
+	fmt.Print(out)
+}
+
+func puzzleOutput(ctx context.Context, p *puzzle.ComputePuzzle, responseStr string, solve bool) (string, error) {
+	if solve {
+		solutions, err := (&puzzle.ComputeSolver{}).Solve(ctx, p)
+		if err != nil {
+			return "", err
+		}
+		return solutions.String() + "." + responseStr, nil
+	}
+
+	body, err := p.MarshalBinary()
+	if err != nil {
+		return "", err
+	}
+	propertyID := p.PropertyID()
+	propertyUUID := pgtype.UUID{Valid: true, Bytes: propertyID}
+	challenge := "blake2b"
+	if p.Challenge() == puzzle.ChallengeArgon2ID {
+		challenge = "argon2id"
+	}
+	m := map[string]interface{}{
+		"Version":        body[0],
+		"Challenge":      challenge,
+		"PuzzleID":       p.PuzzleID(),
+		"PropertyID":     propertyUUID.String(),
+		"Difficulty":     p.Difficulty(),
+		"SolutionsCount": p.SolutionsCount(),
+		"Expiration":     p.Expiration(),
+		"IsStub":         p.IsStub(),
+		"IsZero":         p.IsZero(),
+	}
+	out, err := json.MarshalIndent(m, "", "  ")
+	return string(out), err
 }

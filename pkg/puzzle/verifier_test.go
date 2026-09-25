@@ -1,10 +1,111 @@
 package puzzle
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha1"
 	"encoding/base64"
 	"testing"
 )
+
+func newVerifyPayloadBytes(t *testing.T, challenge Challenge) ([]byte, *ComputePuzzle, *Salt) {
+	t.Helper()
+
+	p, err := NewComputePuzzleForChallenge(123, [PropertyIDSize]byte{1}, 0, challenge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	salt := NewSalt([]byte("test-salt"))
+	puzzlePayload, err := p.Serialize(t.Context(), salt, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var payload bytes.Buffer
+	payload.WriteString(emptySolutions(p.SolutionsCount()).String())
+	payload.WriteByte('.')
+	if err := puzzlePayload.Write(&payload); err != nil {
+		t.Fatal(err)
+	}
+	return payload.Bytes(), p, salt
+}
+
+func TestSolutionsArgon2IDSignedRoundTrip(t *testing.T) {
+	p, err := NewComputePuzzleForChallenge(123, [PropertyIDSize]byte{1}, 0, ChallengeArgon2ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Init(DefaultValidityPeriod); err != nil {
+		t.Fatal(err)
+	}
+	solutions, err := (&ComputeSolver{}).Solve(t.Context(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	salt := NewSalt([]byte("test-salt"))
+	signed, err := p.Serialize(t.Context(), salt, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var encoded bytes.Buffer
+	encoded.WriteString(solutions.String())
+	encoded.WriteByte('.')
+	if err := signed.Write(&encoded); err != nil {
+		t.Fatal(err)
+	}
+	vp, err := ParseVerifyPayload[ComputePuzzle, *ComputePuzzle](t.Context(), encoded.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := vp.VerifySignature(t.Context(), salt, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, result := vp.VerifySolutions(t.Context()); result != VerifyNoError {
+		t.Fatalf("verification = %v, want %v", result, VerifyNoError)
+	}
+
+	parsed := vp.puzzle.(*ComputePuzzle)
+	parsed.solutionsCount++
+	if _, result := vp.VerifySolutions(t.Context()); result == VerifyNoError {
+		t.Fatal("wrong signed Argon solution count passed verification")
+	}
+}
+
+func mutateEncodedPayloadPart(t *testing.T, payload []byte, part int, mutate func([]byte) []byte) []byte {
+	t.Helper()
+
+	parts := bytes.Split(bytes.Clone(payload), dotBytes)
+	if len(parts) != 3 {
+		t.Fatalf("payload parts = %d, want 3", len(parts))
+	}
+	decoded, err := base64.StdEncoding.DecodeString(string(parts[part]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts[part] = []byte(base64.StdEncoding.EncodeToString(mutate(decoded)))
+	return bytes.Join(parts, dotBytes)
+}
+
+func aliasBase64Padding(t *testing.T, encoded []byte) []byte {
+	t.Helper()
+
+	aliased := bytes.Clone(encoded)
+	padding := 0
+	for aliased[len(aliased)-1-padding] == '=' {
+		padding++
+	}
+	if padding == 0 {
+		t.Fatal("base64 value has no padding")
+	}
+	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+	index := len(aliased) - padding - 1
+	value := bytes.IndexByte([]byte(alphabet), aliased[index])
+	if value < 0 || value == len(alphabet)-1 {
+		t.Fatal("cannot alias base64 padding bits")
+	}
+	aliased[index] = alphabet[value+1]
+	return aliased
+}
 
 func TestVerifyErrorString(t *testing.T) {
 	t.Parallel()
@@ -154,6 +255,141 @@ func TestParseVerifyPayloadInvalidPuzzleBytes(t *testing.T) {
 	// Should fail to unmarshal the puzzle
 	if err == nil {
 		t.Error("Expected error for invalid puzzle bytes")
+	}
+}
+
+func TestParseVerifyPayloadRejectsNonCanonicalComponents(t *testing.T) {
+	t.Parallel()
+
+	payload, _, _ := newVerifyPayloadBytes(t, ChallengeArgon2ID)
+	if _, err := ParseVerifyPayload[ComputePuzzle](t.Context(), payload); err != nil {
+		t.Fatalf("valid payload failed: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		part int
+		edit func([]byte) []byte
+	}{
+		{"PuzzleTrailingData", 1, func(data []byte) []byte { return append(data, 0) }},
+		{"SignatureVersion", 2, func(data []byte) []byte { data[0]++; return data }},
+		{"SignatureFlags", 2, func(data []byte) []byte { data[1] = 1; return data }},
+		{"SignatureTrailingData", 2, func(data []byte) []byte { return append(data, 0) }},
+		{"MetadataVersion", 0, func(data []byte) []byte { data[0]++; return data }},
+		{"SolutionsUnderCount", 0, func(data []byte) []byte { return data[:len(data)-SolutionLength] }},
+		{"SolutionsOverCount", 0, func(data []byte) []byte { return append(data, make([]byte, SolutionLength)...) }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			invalid := mutateEncodedPayloadPart(t, payload, tt.part, tt.edit)
+			if _, err := ParseVerifyPayload[ComputePuzzle](t.Context(), invalid); err == nil {
+				t.Fatal("non-canonical payload parsed successfully")
+			}
+		})
+	}
+}
+
+func TestParseVerifyPayloadAcceptsEquivalentBase64(t *testing.T) {
+	t.Parallel()
+
+	payload, _, _ := newVerifyPayloadBytes(t, ChallengeBlake2b)
+	parts := bytes.Split(payload, dotBytes)
+	tests := []struct {
+		name string
+		part int
+		edit func([]byte) []byte
+	}{
+		{"PuzzlePaddingBits", 1, func(data []byte) []byte { return aliasBase64Padding(t, data) }},
+		{"SignaturePaddingBits", 2, func(data []byte) []byte { return aliasBase64Padding(t, data) }},
+		{"SolutionsPaddingBits", 0, func(data []byte) []byte { return aliasBase64Padding(t, data) }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			invalidParts := make([][]byte, len(parts))
+			for i := range parts {
+				invalidParts[i] = bytes.Clone(parts[i])
+			}
+			invalidParts[tt.part] = tt.edit(invalidParts[tt.part])
+			if _, err := ParseVerifyPayload[ComputePuzzle](t.Context(), bytes.Join(invalidParts, dotBytes)); err != nil {
+				t.Fatalf("equivalent base64 payload failed: %v", err)
+			}
+		})
+	}
+}
+
+func TestVerifyPayloadRejectsWrongCountBeforeHashing(t *testing.T) {
+	t.Parallel()
+
+	p := NewComputePuzzle(123, [PropertyIDSize]byte{}, 1)
+	for _, count := range []int{p.SolutionsCount() - 1, p.SolutionsCount() + 1} {
+		vp := &VerifyPayload{
+			puzzle:     p,
+			puzzleData: nil,
+			solutions: &Solutions{
+				Buffer:   make([]byte, count*SolutionLength),
+				Metadata: &Metadata{},
+			},
+		}
+		_, result := vp.VerifySolutions(t.Context())
+		if result != ParseResponseError {
+			t.Fatalf("count %d result = %v, want %v", count, result, ParseResponseError)
+		}
+	}
+}
+
+func TestSignatureRejectsNonCanonicalData(t *testing.T) {
+	t.Parallel()
+
+	valid := append([]byte{signatureVersion, flagWithExtra, 42}, make([]byte, sha1.Size)...)
+	var parsed signature
+	if err := parsed.UnmarshalBinary(valid); err != nil {
+		t.Fatalf("valid signature failed: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		data func() []byte
+	}{
+		{"Short", func() []byte { return bytes.Clone(valid[:len(valid)-1]) }},
+		{"TrailingData", func() []byte { return append(bytes.Clone(valid), 0) }},
+		{"UnknownVersion", func() []byte { data := bytes.Clone(valid); data[0]++; return data }},
+		{"UnknownFlags", func() []byte { data := bytes.Clone(valid); data[1] = 1; return data }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var s signature
+			if err := s.UnmarshalBinary(tt.data()); err == nil {
+				t.Fatal("non-canonical signature parsed successfully")
+			}
+		})
+	}
+}
+
+func TestSignatureRejectsTamperedChallenge(t *testing.T) {
+	t.Parallel()
+
+	payload, _, salt := newVerifyPayloadBytes(t, ChallengeArgon2ID)
+	parts := bytes.Split(payload, dotBytes)
+	puzzleData, err := base64.StdEncoding.DecodeString(string(parts[1]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	signatureData, err := base64.StdEncoding.DecodeString(string(parts[2]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s signature
+	if err := s.UnmarshalBinary(signatureData); err != nil {
+		t.Fatal(err)
+	}
+
+	puzzleData[1] = byte(ChallengeBlake2b)
+	vp := &VerifyPayload{signature: &s, puzzleData: puzzleData}
+	if err := vp.VerifySignature(t.Context(), salt, nil); err != errSignatureMismatch {
+		t.Fatalf("tampered challenge error = %v, want %v", err, errSignatureMismatch)
 	}
 }
 

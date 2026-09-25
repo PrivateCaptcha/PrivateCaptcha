@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
 
 //go:embed *.html
@@ -32,6 +33,11 @@ func staticHandler() http.Handler {
 		extension := filepath.Ext(path)
 		switch extension {
 		case ".html":
+			challenge := r.URL.Query().Get("challenge")
+			if challenge != "" && challenge != "blake2b" && challenge != "argon2id" {
+				http.Error(w, "Unknown challenge", http.StatusBadRequest)
+				return
+			}
 			w.Header().Set("Content-Type", "text/html")
 			tmpl, err := template.New("webpage").Parse(string(data))
 			if err != nil {
@@ -40,17 +46,26 @@ func staticHandler() http.Handler {
 			}
 
 			data := struct {
-				Echo   bool
-				Debug  bool
-				Level  string
-				Mode   string
-				Compat string
+				Echo       bool
+				Debug      bool
+				Level      string
+				Mode       string
+				Compat     string
+				Challenge  string
+				CSSVersion string
 			}{
-				Echo:   r.URL.Query().Get("echo") == "true",
-				Debug:  r.URL.Query().Get("debug") == "true",
-				Mode:   r.URL.Query().Get("mode"),
-				Compat: r.URL.Query().Get("compat"),
-				Level:  r.URL.Query().Get("level"),
+				Echo:       r.URL.Query().Get("echo") == "true",
+				Debug:      r.URL.Query().Get("debug") == "true",
+				Mode:       r.URL.Query().Get("mode"),
+				Compat:     r.URL.Query().Get("compat"),
+				Level:      r.URL.Query().Get("level"),
+				CSSVersion: web.AssetVersion(),
+			}
+			if !data.Echo && challenge == "blake2b" {
+				data.Challenge = "blake2b"
+			}
+			if data.Echo {
+				data.Level = ""
 			}
 
 			err = tmpl.Execute(w, &data)

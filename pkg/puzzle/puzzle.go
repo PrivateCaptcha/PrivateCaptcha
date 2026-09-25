@@ -8,6 +8,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"hash/fnv"
 	"io"
 	"log/slog"
@@ -23,15 +24,33 @@ const (
 	UserDataSize          = 16
 	DefaultValidityPeriod = 30 * time.Minute
 	MaxValidityPeriod     = 24 * time.Hour
-	puzzleVersion         = 1
+	puzzleVersion1        = 1
+	puzzleVersion2        = 2
+	puzzleV1Size          = 47
+	puzzleV2Size          = 48
 )
 
 var (
-	dotBytes = []byte(".")
+	dotBytes                  = []byte(".")
+	errInvalidPuzzleVersion   = errors.New("invalid puzzle version")
+	errInvalidPuzzleChallenge = errors.New("invalid puzzle challenge")
+	errInvalidPuzzleLength    = errors.New("invalid puzzle length")
 )
+
+type Challenge uint8
+
+const (
+	ChallengeBlake2b Challenge = iota
+	ChallengeArgon2ID
+)
+
+func (c Challenge) valid() bool {
+	return c == ChallengeBlake2b || c == ChallengeArgon2ID
+}
 
 type ComputePuzzle struct {
 	version        uint8
+	challenge      Challenge
 	difficulty     uint8
 	solutionsCount uint8
 	propertyID     [PropertyIDSize]byte
@@ -54,13 +73,29 @@ func NewComputePuzzle(puzzleID uint64, propertyID [PropertyIDSize]byte, difficul
 	}
 
 	return &ComputePuzzle{
-		version:        puzzleVersion,
+		version:        puzzleVersion1,
+		challenge:      ChallengeBlake2b,
 		difficulty:     difficulty,
 		solutionsCount: solutionsCount,
 		propertyID:     propertyID,
 		puzzleID:       puzzleID,
 		userData:       make([]byte, UserDataSize),
 		expiration:     time.Time{},
+	}
+}
+
+func NewComputePuzzleForChallenge(puzzleID uint64, propertyID [PropertyIDSize]byte, difficulty uint8, challenge Challenge) (*ComputePuzzle, error) {
+	p := NewComputePuzzle(puzzleID, propertyID, difficulty)
+	switch challenge {
+	case ChallengeBlake2b:
+		return p, nil
+	case ChallengeArgon2ID:
+		p.version = puzzleVersion2
+		p.challenge = challenge
+		p.solutionsCount = Argon2IDSolutionsCount
+		return p, nil
+	default:
+		return nil, errInvalidPuzzleChallenge
 	}
 }
 
@@ -74,7 +109,13 @@ func (p *ComputePuzzle) Init(validityPeriod time.Duration) error {
 	return nil
 }
 
-func (p *ComputePuzzle) PuzzleID() uint64                 { return p.puzzleID }
+func (p *ComputePuzzle) PuzzleID() uint64 { return p.puzzleID }
+func (p *ComputePuzzle) Challenge() Challenge {
+	if p.version == puzzleVersion1 {
+		return ChallengeBlake2b
+	}
+	return p.challenge
+}
 func (p *ComputePuzzle) Difficulty() uint8                { return p.difficulty }
 func (p *ComputePuzzle) SolutionsCount() int              { return int(p.solutionsCount) }
 func (p *ComputePuzzle) Expiration() time.Time            { return p.expiration }
@@ -112,10 +153,23 @@ func (p *ComputePuzzle) IsZero() bool {
 
 func (p *ComputePuzzle) WriteTo(w io.Writer) (int64, error) {
 	var n int64
+	if p.version != puzzleVersion1 && p.version != puzzleVersion2 {
+		return n, errInvalidPuzzleVersion
+	}
+	if !p.challenge.valid() || (p.version == puzzleVersion1 && p.challenge != ChallengeBlake2b) {
+		return n, errInvalidPuzzleChallenge
+	}
+
 	if err := binary.Write(w, binary.LittleEndian, p.version); err != nil {
 		return n, err
 	}
 	n++
+	if p.version == puzzleVersion2 {
+		if err := binary.Write(w, binary.LittleEndian, p.challenge); err != nil {
+			return n, err
+		}
+		n++
+	}
 
 	if nn, err := w.Write(p.propertyID[:]); err != nil {
 		return n + int64(nn), err
@@ -163,14 +217,37 @@ func (p *ComputePuzzle) MarshalBinary() ([]byte, error) {
 }
 
 func (p *ComputePuzzle) UnmarshalBinary(data []byte) error {
-	if len(data) < (PropertyIDSize + 8 + UserDataSize + 7) {
+	if len(data) < 1 {
 		return io.ErrShortBuffer
 	}
 
-	var offset int
+	version := data[0]
+	expectedSize := 0
+	switch version {
+	case puzzleVersion1:
+		expectedSize = puzzleV1Size
+	case puzzleVersion2:
+		expectedSize = puzzleV2Size
+	default:
+		return errInvalidPuzzleVersion
+	}
+	if len(data) < expectedSize {
+		return io.ErrShortBuffer
+	}
+	if len(data) > expectedSize {
+		return errInvalidPuzzleLength
+	}
 
-	p.version = data[0]
-	offset += 1
+	p.version = version
+	p.challenge = ChallengeBlake2b
+	offset := 1
+	if version == puzzleVersion2 {
+		p.challenge = Challenge(data[offset])
+		if !p.challenge.valid() {
+			return errInvalidPuzzleChallenge
+		}
+		offset++
+	}
 
 	copy(p.propertyID[:], data[offset:offset+PropertyIDSize])
 	offset += PropertyIDSize
@@ -185,13 +262,13 @@ func (p *ComputePuzzle) UnmarshalBinary(data []byte) error {
 	offset += 1
 
 	unixExpiration := int64(binary.LittleEndian.Uint32(data[offset : offset+4]))
+	p.expiration = time.Time{}
 	if unixExpiration != 0 {
-		p.expiration = time.Unix(unixExpiration, 0)
+		p.expiration = time.Unix(unixExpiration, 0).UTC()
 	}
 	offset += 4
 
-	p.userData = make([]byte, UserDataSize)
-	copy(p.userData, data[offset:offset+UserDataSize])
+	p.userData = data[offset : offset+UserDataSize]
 	//offset += UserDataSize
 
 	return nil

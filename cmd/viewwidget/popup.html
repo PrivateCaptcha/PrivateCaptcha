@@ -5,9 +5,9 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Private Captcha</title>
-    <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="stylesheet" href="/assets/css/style.css?v={{.CSSVersion}}">
     <link rel="shortcut icon" type="image/png" href="/assets/img/favicon.png">
-    <script src="/widget/js/privatecaptcha.js"></script>
+    <script src="/widget/js/privatecaptcha-ext.js"></script>
     <script type="text/javascript">
         function onCaptchaSolved() {
             // setTimeout(() => document.getElementById('pcWidget')._privateCaptcha.reset(), 2000);
@@ -45,7 +45,7 @@
                                     id="pcWidget"
                                     data-display-mode="popup"
                                     data-sitekey="your-sitekey"
-                                    data-puzzle-endpoint="/{{if .Echo}}echo{{end}}puzzle"
+                                    data-puzzle-endpoint="/{{if .Echo}}echo{{end}}puzzle{{if .Level}}/{{.Level}}{{end}}{{if .Challenge}}?challenge={{.Challenge}}{{end}}"
                                     data-started-callback="onCaptchaStarted" 
                                     data-finished-callback="onCaptchaSolved"
                                     data-errored-callback="onCaptchaErrored"

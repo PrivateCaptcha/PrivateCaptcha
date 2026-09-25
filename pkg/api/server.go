@@ -229,6 +229,10 @@ func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 	return nil
 }
 
+func (s *Server) Update(ctx context.Context) {
+	s.Verifier.UpdateMemoryBudget(ctx)
+}
+
 func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) *common.RouteGenerator {
 	apiCorsOpts := cors.Options{
 		// NOTE: due to the implementation of rs/cors, we need not to set "*" as AllowOrigin as this will ruin the response
@@ -463,6 +467,8 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 			// "late" auth check (we postpone API key check in case it's not cached in Auth)
 			// in this case we also automatically set "API key" (or whatever is passed) as missing in cache
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		case errVerificationBusy:
+			http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
 		default:
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
@@ -541,6 +547,8 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 			// "late" auth check (we postpone API key check in case it's not cached in Auth)
 			// in this case we also automatically set "API key" (or whatever is passed) as missing in cache
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		case errVerificationBusy:
+			http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
 		default:
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}

@@ -1,6 +1,6 @@
 import scalarBase64 from '../wasm/blake2b-solver-scalar.wasm';
 import { blake2bInit, blake2bUpdate, blake2bFinal } from 'blakejs/blake2b.js';
-import { findSolution } from './puzzle.utils.js';
+import { findBlake2bSolution } from './puzzle.utils.js';
 
 const BATCH_SIZE = 65536;
 const NONCE_SPACE = 0x100000000;
@@ -64,7 +64,7 @@ export async function createSolver(puzzle, runtime = globalThis.WebAssembly) {
         kind: 'js',
         wasm: false,
         async solve(threshold, puzzleIndex, debug) {
-            return findSolution(puzzle, threshold, puzzleIndex, debug, jsHash).slice();
+            return findBlake2bSolution(puzzle, threshold, puzzleIndex, debug, jsHash).slice();
         },
     };
 }

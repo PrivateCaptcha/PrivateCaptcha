@@ -11,7 +11,7 @@ export function thresholdFromDifficulty(d) {
     return (Math.pow(2, (255.999 - d) / 8.0)) >>> 0;
 }
 
-export function findSolution(buffer, threshold, puzzleIndex, debug, hasher) {
+export function findBlake2bSolution(buffer, threshold, puzzleIndex, debug, hasher) {
     const length = buffer.length;
     if (debug) {
         console.debug(`[privatecaptcha][worker] looking for a solution. threshold=${threshold} puzzleID=${puzzleIndex} length=${length}`);
