@@ -2,9 +2,61 @@ package puzzle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 )
+
+func TestSolverArgon2ID(t *testing.T) {
+	p, err := NewComputePuzzleForChallenge(123, [PropertyIDSize]byte{1}, 0, ChallengeArgon2ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Init(DefaultValidityPeriod); err != nil {
+		t.Fatal(err)
+	}
+	if p.SolutionsCount() != Argon2IDSolutionsCount {
+		t.Fatalf("solution count = %d, want %d", p.SolutionsCount(), Argon2IDSolutionsCount)
+	}
+	solutions, err := (&ComputeSolver{}).Solve(t.Context(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(solutions.Buffer) != Argon2IDSolutionsCount*SolutionLength {
+		t.Fatalf("solution bytes = %d", len(solutions.Buffer))
+	}
+	if err := solutions.CheckUnique(); err != nil {
+		t.Fatal(err)
+	}
+	body, err := p.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for lane := range Argon2IDSolutionsCount {
+		nonce := solutions.Buffer[lane*SolutionLength : (lane+1)*SolutionLength]
+		if nonce[0] != byte(lane) || nonce[1] != 0 || nonce[2] != 0 || nonce[3] != 0 {
+			t.Errorf("lane %d nonce = %x", lane, nonce)
+		}
+		value, err := Argon2IDCandidateValue(nonce, body, Argon2IDMemoryKiB)
+		if err != nil || value > argon2IDThresholdFromDifficulty(p.Difficulty()) {
+			t.Errorf("lane %d invalid Argon value %d: %v", lane, value, err)
+		}
+	}
+}
+
+func TestSolverArgon2IDExhaustion(t *testing.T) {
+	body := make([]byte, puzzleV2Size)
+	const threshold = uint32(0)
+	hash := func([]byte, []byte, uint32) (uint32, error) { return 1, nil }
+	if _, err := solveArgon2IDOne(t.Context(), body, 0, threshold, 1, hash); !errors.Is(err, ErrArgon2IDExhausted) {
+		t.Fatalf("exhaustion error = %v, want %v", err, ErrArgon2IDExhausted)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := solveArgon2IDOne(ctx, body, 0, threshold, 1, hash); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancellation error = %v, want %v", err, context.Canceled)
+	}
+}
 
 func TestDifficultyToThreshold(t *testing.T) {
 	t.Parallel()
@@ -60,7 +112,7 @@ func TestSolver(t *testing.T) {
 
 			puzzleBytes, _ := p.MarshalBinary()
 			puzzleBytes = normalizePuzzleBuffer(puzzleBytes)
-			found, err := solutions.Verify(t.Context(), puzzleBytes, difficulty)
+			found, err := solutions.VerifyBlake2b(t.Context(), puzzleBytes, difficulty)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -108,7 +160,7 @@ func TestSolverWorkerCounts(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			found, err := solutions.Verify(t.Context(), normalizePuzzleBuffer(puzzleBytes), p.Difficulty())
+			found, err := solutions.VerifyBlake2b(t.Context(), normalizePuzzleBuffer(puzzleBytes), p.Difficulty())
 			if err != nil || found != int(count) {
 				t.Fatalf("verified %d of %d solutions: %v", found, count, err)
 			}
@@ -131,7 +183,7 @@ func benchmarkDifficulty(difficulty uint8, b *testing.B) {
 
 		puzzleBytes, _ := p.MarshalBinary()
 		puzzleBytes = normalizePuzzleBuffer(puzzleBytes)
-		_, err = solutions.Verify(b.Context(), puzzleBytes, difficulty)
+		_, err = solutions.VerifyBlake2b(b.Context(), puzzleBytes, difficulty)
 		if err != nil {
 			b.Fatal(err)
 		}

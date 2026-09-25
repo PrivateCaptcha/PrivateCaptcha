@@ -110,6 +110,12 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(in *jlex
 			} else {
 				out.Name = string(in.String())
 			}
+		case "challenge":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Challenge = string(in.String())
+			}
 		case "domain":
 			if in.IsNull() {
 				in.Skip()
@@ -181,6 +187,11 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(out *jwr
 		const prefix string = ",\"name\":"
 		out.RawString(prefix)
 		out.String(string(in.Name))
+	}
+	{
+		const prefix string = ",\"challenge\":"
+		out.RawString(prefix)
+		out.String(string(in.Challenge))
 	}
 	{
 		const prefix string = ",\"domain\":"

@@ -3,11 +3,178 @@ package puzzle
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"io"
 	"math/rand"
 	"testing"
 	"time"
 )
+
+type protocolFixture struct {
+	Version        uint8
+	Challenge      uint8
+	PropertyID     string
+	PuzzleID       uint64
+	Difficulty     uint8
+	SolutionsCount uint8
+	ExpirationUnix uint32
+	UserData       string
+	Body           string
+}
+
+type protocolFixtures struct {
+	V1 protocolFixture
+	V2 protocolFixture
+}
+
+func loadProtocolFixtures(t *testing.T) protocolFixtures {
+	t.Helper()
+	const (
+		propertyID = "000102030405060708090a0b0c0d0e0f"
+		userData   = "101112131415161718191a1b1c1d1e1f"
+	)
+	return protocolFixtures{
+		V1: protocolFixture{
+			Version: 1, Challenge: 0, PropertyID: propertyID, PuzzleID: 72623859790382856,
+			Difficulty: 152, SolutionsCount: 24, ExpirationUnix: 1735689600, UserData: userData,
+			Body: "01000102030405060708090a0b0c0d0e0f0807060504030201981880857467101112131415161718191a1b1c1d1e1f",
+		},
+		V2: protocolFixture{
+			Version: 2, Challenge: 1, PropertyID: propertyID, PuzzleID: 72623859790382856,
+			Difficulty: 152, SolutionsCount: 24, ExpirationUnix: 1735689600, UserData: userData,
+			Body: "0201000102030405060708090a0b0c0d0e0f0807060504030201981880857467101112131415161718191a1b1c1d1e1f",
+		},
+	}
+}
+
+func decodeFixtureHex(t *testing.T, value, field string, size int) []byte {
+	t.Helper()
+	decoded, err := hex.DecodeString(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded) != size {
+		t.Fatalf("%s length = %d, want %d", field, len(decoded), size)
+	}
+	return decoded
+}
+
+func puzzleFromFixture(t *testing.T, fixture protocolFixture) *ComputePuzzle {
+	t.Helper()
+	propertyID := decodeFixtureHex(t, fixture.PropertyID, "property ID", PropertyIDSize)
+	userData := decodeFixtureHex(t, fixture.UserData, "user data", UserDataSize)
+
+	var propertyIDArray [PropertyIDSize]byte
+	copy(propertyIDArray[:], propertyID)
+	p, err := NewComputePuzzleForChallenge(fixture.PuzzleID, propertyIDArray, fixture.Difficulty, Challenge(fixture.Challenge))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.version != fixture.Version {
+		t.Fatalf("version = %d, want %d", p.version, fixture.Version)
+	}
+	p.solutionsCount = fixture.SolutionsCount
+	p.expiration = time.Unix(int64(fixture.ExpirationUnix), 0).UTC()
+	p.userData = userData
+	return p
+}
+
+func fixtureBody(t *testing.T, fixture protocolFixture) []byte {
+	t.Helper()
+	body, err := hex.DecodeString(fixture.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
+func TestComputePuzzleV1GoldenBytes(t *testing.T) {
+	t.Parallel()
+	fixture := loadProtocolFixtures(t).V1
+	p := puzzleFromFixture(t, fixture)
+
+	actual, err := p.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := fixtureBody(t, fixture)
+	if len(expected) != 47 {
+		t.Fatalf("golden body length = %d, want 47", len(expected))
+	}
+	if !bytes.Equal(actual, expected) {
+		t.Fatalf("v1 body = %x, want %x", actual, expected)
+	}
+}
+
+func TestComputePuzzleV1ImplicitlyUsesBlake2b(t *testing.T) {
+	t.Parallel()
+	fixture := loadProtocolFixtures(t).V1
+
+	var p ComputePuzzle
+	if err := p.UnmarshalBinary(fixtureBody(t, fixture)); err != nil {
+		t.Fatal(err)
+	}
+	if p.Challenge() != ChallengeBlake2b {
+		t.Fatalf("challenge = %d, want %d", p.Challenge(), ChallengeBlake2b)
+	}
+}
+
+func TestComputePuzzleV2GoldenBytes(t *testing.T) {
+	t.Parallel()
+	fixture := loadProtocolFixtures(t).V2
+	p := puzzleFromFixture(t, fixture)
+
+	actual, err := p.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := fixtureBody(t, fixture)
+	if len(expected) != 48 {
+		t.Fatalf("golden body length = %d, want 48", len(expected))
+	}
+	if !bytes.Equal(actual, expected) {
+		t.Fatalf("v2 body = %x, want %x", actual, expected)
+	}
+
+	var decoded ComputePuzzle
+	if err := decoded.UnmarshalBinary(expected); err != nil {
+		t.Fatal(err)
+	}
+	checkPuzzles(p, &decoded, t)
+}
+
+func TestComputePuzzleRejectsInvalidWireValues(t *testing.T) {
+	t.Parallel()
+	fixtures := loadProtocolFixtures(t)
+	v1 := fixtureBody(t, fixtures.V1)
+	v2 := fixtureBody(t, fixtures.V2)
+
+	unknownVersion := bytes.Clone(v1)
+	unknownVersion[0] = 3
+	unknownChallenge := bytes.Clone(v2)
+	unknownChallenge[1] = 255
+
+	tests := []struct {
+		name string
+		body []byte
+	}{
+		{"UnknownVersion", unknownVersion},
+		{"UnknownChallenge", unknownChallenge},
+		{"ShortV1", v1[:len(v1)-1]},
+		{"TrailingV1", append(bytes.Clone(v1), 0)},
+		{"ShortV2", v2[:len(v2)-1]},
+		{"TrailingV2", append(bytes.Clone(v2), 0)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var p ComputePuzzle
+			if err := p.UnmarshalBinary(tt.body); err == nil {
+				t.Fatal("expected invalid puzzle body to fail")
+			}
+		})
+	}
+}
 
 // limitedWriter is an io.Writer that returns an error after writing N bytes
 type limitedWriter struct {
@@ -86,6 +253,9 @@ func checkPuzzles(oldPuzzle, newPuzzle *ComputePuzzle, t *testing.T) {
 	if oldPuzzle.version != newPuzzle.version {
 		t.Errorf("Version does not match")
 	}
+	if oldPuzzle.Challenge() != newPuzzle.Challenge() {
+		t.Errorf("Challenge does not match")
+	}
 
 	if oldPuzzle.IsStub() != newPuzzle.IsStub() {
 		t.Errorf("Stub flag does not match")
@@ -122,11 +292,7 @@ func TestPuzzleMarshalling(t *testing.T) {
 
 func TestZeroPuzzleMarshalling(t *testing.T) {
 	t.Parallel()
-	// Create a sample Puzzle
-	puzzle := new(ComputePuzzle)
-	puzzle.userData = make([]byte, UserDataSize)
-
-	//puzzle.Init(propertyID, 123)
+	puzzle := NewComputePuzzle(0, [PropertyIDSize]byte{}, 0)
 
 	// Marshal the Puzzle to a byte slice
 	data, err := puzzle.MarshalBinary()

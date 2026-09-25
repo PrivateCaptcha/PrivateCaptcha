@@ -41,6 +41,9 @@ type RenderConstants struct {
 	Domain                          string
 	Difficulty                      string
 	Growth                          string
+	Challenge                       string
+	ChallengeTypeBlake2b            string
+	ChallengeTypeArgon2ID           string
 	Stats                           string
 	DeleteEndpoint                  string
 	MembersEndpoint                 string
@@ -154,6 +157,9 @@ func NewRenderConstants() *RenderConstants {
 		Domain:                          common.ParamDomain,
 		Difficulty:                      common.ParamDifficulty,
 		Growth:                          common.ParamGrowth,
+		Challenge:                       common.ParamChallenge,
+		ChallengeTypeBlake2b:            string(dbgen.ChallengeTypeBlake2b),
+		ChallengeTypeArgon2ID:           string(dbgen.ChallengeTypeArgon2ID),
 		Stats:                           common.StatsEndpoint,
 		TabEndpoint:                     common.TabEndpoint,
 		ReportsEndpoint:                 common.ReportsEndpoint,

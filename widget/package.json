@@ -11,13 +11,15 @@
   },
   "scripts": {
     "build": "node esbuild.config.mjs",
+    "benchmark": "node esbuild.test.config.mjs && node --expose-gc test/bundle.bench.js",
     "build:puzzle-compat": "esbuild solve-puzzles.js --bundle --platform=node --format=esm --loader:.wasm=base64 --outfile=../bin/puzzle-compat-solver.mjs",
-    "test": "node esbuild.test.config.mjs && node --test test/bundle.test.js",
-    "lint": "eslint js/**/*.js",
+    "test": "node esbuild.config.mjs && node esbuild.test.config.mjs && node --test test/bundle.test.js test/build.test.js",
+    "lint": "eslint js/**/*.js test/widget.bench.js test/benchmark.utils.js esbuild*.mjs",
     "bundle:measure": "node measure-bundle.mjs",
     "bundle:analyze": "node analyze-bundle.mjs"
   },
   "dependencies": {
+    "@noble/hashes": "2.4.0",
     "base64-arraybuffer": "^1.0.2",
     "blakejs": "^1.2.1"
   }

@@ -319,7 +319,10 @@ func TestStoreOneReaderReadTxCacheMissingEntity(t *testing.T) {
 	}
 
 	if _, err := reader.Read(ctx); errors.Is(err, errInvalidCacheType) {
-		t.Fatalf("transactional missing-entity read returned errInvalidCacheType (=%v); expected ErrNegativeCacheHit or ErrRecordNotFound per the CacheLoader/Missing contract in pkg/common/store.go", err)
+		t.Fatalf(
+			"transactional missing-entity read returned errInvalidCacheType (=%v); expected ErrNegativeCacheHit or ErrRecordNotFound per the CacheLoader/Missing contract in pkg/common/store.go",
+			err,
+		)
 	}
 }
 

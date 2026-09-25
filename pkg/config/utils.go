@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"strconv"
 	"strings"
@@ -11,6 +12,41 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
+
+const (
+	defaultArgon2IDMemoryBudgetMiB = int64(512)
+	kiBPerMiB                      = int64(1024)
+)
+
+// Argon2IDMemoryBudgetKiB validates the process-wide capacity from a config item.
+func Argon2IDMemoryBudgetKiB(ctx context.Context, item common.ConfigItem, minimumKiB int64) int64 {
+	value := item.Value()
+	budgetMiB, err := strconv.ParseInt(value, 10, 64)
+	reason := ""
+
+	switch {
+	case value == "":
+		reason = "value is missing"
+	case err != nil:
+		reason = "value is not a valid integer"
+	case budgetMiB <= 0:
+		reason = "value must be positive"
+	case budgetMiB > math.MaxInt64/kiBPerMiB:
+		reason = "value overflows the semaphore capacity"
+	case budgetMiB*kiBPerMiB < minimumKiB:
+		reason = "value is below the selected profile minimum"
+	default:
+		return budgetMiB * kiBPerMiB
+	}
+
+	slog.WarnContext(ctx, "Invalid Argon2id memory budget; using fallback",
+		"environment", "PC_ARGON2_MEMORY_BUDGET_MIB",
+		"value", value,
+		"reason", reason,
+		"minimumKiB", minimumKiB,
+		"fallbackMiB", defaultArgon2IDMemoryBudgetMiB)
+	return defaultArgon2IDMemoryBudgetMiB * kiBPerMiB
+}
 
 func AsInt(item common.ConfigItem, fallback int) int {
 	s := item.Value()

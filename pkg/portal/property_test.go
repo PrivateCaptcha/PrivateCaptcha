@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -1162,6 +1163,16 @@ func TestDifficultyLevelFromValue(t *testing.T) {
 	}
 }
 
+type echoPuzzleCapture struct {
+	*portal_tests.StubPuzzleEngine
+	puzzle puzzle.Puzzle
+}
+
+func (e *echoPuzzleCapture) Write(_ context.Context, p puzzle.Puzzle, _ []byte, _ http.ResponseWriter) error {
+	e.puzzle = p
+	return nil
+}
+
 func TestEchoPuzzle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -1180,6 +1191,10 @@ func TestEchoPuzzle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	previousEngine := server.PuzzleEngine
+	capture := &echoPuzzleCapture{StubPuzzleEngine: &portal_tests.StubPuzzleEngine{}}
+	server.PuzzleEngine = capture
+	t.Cleanup(func() { server.PuzzleEngine = previousEngine })
 
 	req := httptest.NewRequest("GET", "/echopuzzle/5", nil)
 	req.AddCookie(cookie)
@@ -1189,6 +1204,16 @@ func TestEchoPuzzle(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+	if capture.puzzle == nil {
+		t.Fatal("portal echo issued no puzzle")
+	}
+	body, err := capture.puzzle.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) != 47 || body[0] != 1 || capture.puzzle.Challenge() != puzzle.ChallengeBlake2b || !capture.puzzle.IsStub() {
+		t.Fatalf("portal echo puzzle = %+v, bytes = %x; want Blake v1 stub", capture.puzzle, body)
 	}
 }
 
@@ -2016,6 +2041,100 @@ func TestPutPropertyChangeDifficulty(t *testing.T) {
 
 	if renderCtx.SuccessMessage == "" {
 		t.Error("Expected SuccessMessage to be set after updating property")
+	}
+}
+
+func TestPortalPropertyUpdatesChallenge(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "portal-challenge.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	propertyID := server.IDHasher.Encrypt(int(property.ID))
+	settingsReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/property/%s/tab/settings", orgID, propertyID), nil)
+	settingsReq.AddCookie(cookie)
+	settingsResponse := httptest.NewRecorder()
+	srv.ServeHTTP(settingsResponse, settingsReq)
+	if settingsResponse.Code != http.StatusOK {
+		t.Fatalf("settings status = %d, want %d", settingsResponse.Code, http.StatusOK)
+	}
+	if !strings.Contains(settingsResponse.Body.String(), `name="challenge"`) ||
+		!strings.Contains(settingsResponse.Body.String(), `value="blake2b" selected="selected"`) ||
+		!strings.Contains(settingsResponse.Body.String(), `value="argon2id"`) {
+		t.Fatal("property settings did not show the challenge selector and current value")
+	}
+	checkSnippet := func(wantExtended bool) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/property/%s/tab/integrations", orgID, propertyID), nil)
+		req.AddCookie(cookie)
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("integrations status = %d, want %d", w.Code, http.StatusOK)
+		}
+		_, snippet, ok := strings.Cut(w.Body.String(), `<textarea id="snippet"`)
+		if !ok {
+			t.Fatal("integration snippet missing")
+		}
+		snippet, _, ok = strings.Cut(snippet, `</textarea>`)
+		if !ok {
+			t.Fatal("integration snippet incomplete")
+		}
+		if got := strings.Contains(snippet, "/widget/js/privatecaptcha.js?v=ext"); got != wantExtended {
+			t.Fatalf("snippet includes extended widget = %t, want %t", got, wantExtended)
+		}
+	}
+	checkSnippet(false)
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, property.Name)
+	form.Set(common.ParamDifficulty, strconv.Itoa(int(property.Level.Int16)))
+	form.Set(common.ParamGrowth, "2")
+	form.Set(common.ParamValidityInterval, "4")
+	form.Set(common.ParamChallenge, string(dbgen.ChallengeTypeArgon2ID))
+
+	updateReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/property/%s/edit", orgID, propertyID), strings.NewReader(form.Encode()))
+	updateReq.AddCookie(cookie)
+	updateReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	updateResponse := httptest.NewRecorder()
+	srv.ServeHTTP(updateResponse, updateReq)
+	if updateResponse.Code != http.StatusOK {
+		t.Fatalf("update status = %d, want %d", updateResponse.Code, http.StatusOK)
+	}
+
+	updatedProperty, err := server.Store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedProperty.Challenge != dbgen.ChallengeTypeArgon2ID {
+		t.Fatalf("updated property challenge = %q, want %q", updatedProperty.Challenge, dbgen.ChallengeTypeArgon2ID)
+	}
+	checkSnippet(true)
+
+	var persistedChallenge string
+	if err := store.Pool.QueryRow(ctx, "SELECT challenge FROM backend.properties WHERE id = $1", property.ID).Scan(&persistedChallenge); err != nil {
+		t.Fatal(err)
+	}
+	if dbgen.ChallengeType(persistedChallenge) != dbgen.ChallengeTypeArgon2ID {
+		t.Fatalf("persisted challenge = %q, want %q", persistedChallenge, dbgen.ChallengeTypeArgon2ID)
 	}
 }
 
