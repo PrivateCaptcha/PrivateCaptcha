@@ -76,6 +76,7 @@ type Puzzle interface {
 	HashKey() uint64
 	IsStub() bool
 	IsZero() bool
+	Challenge() Challenge
 	Difficulty() uint8
 	SolutionsCount() int
 	PuzzleID() uint64

@@ -11,9 +11,11 @@ import (
 	"net/http"
 	"net/netip"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
@@ -23,23 +25,30 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/medama-io/go-useragent"
 	"golang.org/x/crypto/blake2b"
+	"golang.org/x/sync/semaphore"
 )
 
 var (
-	errUninitialized = errors.New("not initialized")
+	errUninitialized            = errors.New("not initialized")
+	errInvalidPropertyChallenge = errors.New("invalid property challenge")
+	errVerificationBusy         = errors.New("verification capacity exhausted")
 )
 
 type Verifier struct {
-	Salt                 *puzzleSalt
-	UserFingerprintKey   *userFingerprintKey
-	FingerprintHeaderKey common.ConfigItem
-	FingerprintHeader    string
-	UAParser             *useragent.Parser
-	Store                db.Implementor
-	TestPuzzle           puzzle.Puzzle
-	TestPuzzleData       *puzzle.PuzzlePayload
-	TestSolutions        puzzle.SolutionPayload
-	PropertyStats        *leakybucket.CircularBucketManager
+	Salt                    *puzzleSalt
+	UserFingerprintKey      *userFingerprintKey
+	FingerprintHeaderKey    common.ConfigItem
+	Argon2IDMemoryBudgetKey common.ConfigItem
+	FingerprintHeader       string
+	UAParser                *useragent.Parser
+	Store                   db.Implementor
+	TestPuzzle              puzzle.Puzzle
+	TestPuzzleData          *puzzle.PuzzlePayload
+	TestSolutions           puzzle.SolutionPayload
+	PropertyStats           *leakybucket.CircularBucketManager
+	verificationMu          sync.RWMutex
+	verificationSemaphore   *semaphore.Weighted
+	verificationCapacityKiB int64
 }
 
 var _ puzzle.Engine = (*Verifier)(nil)
@@ -50,16 +59,21 @@ func NewVerifier(cfg common.ConfigStore, store db.Implementor, fingerprintHeader
 	}
 
 	testPuzzle := puzzle.NewComputePuzzle(0 /*puzzle ID*/, db.TestPropertyUUID.Bytes, 0 /*difficulty*/)
+	budgetKey := cfg.Get(common.Argon2IDMemoryBudgetKey)
+	capacity := config.Argon2IDMemoryBudgetKiB(context.Background(), budgetKey, int64(puzzle.Argon2IDMemoryKiB))
 	return &Verifier{
-		Salt:                 NewPuzzleSalt(cfg.Get(common.APISaltKey)),
-		UserFingerprintKey:   NewUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
-		FingerprintHeaderKey: fingerprintHeaderKey,
-		FingerprintHeader:    fingerprintHeaderKey.Value(),
-		UAParser:             uaParser,
-		Store:                store,
-		TestPuzzle:           testPuzzle,
-		TestSolutions:        puzzle.NewStubPayload(testPuzzle),
-		PropertyStats:        leakybucket.NewCircularBucketManager(PropertyBucketSize),
+		Salt:                    NewPuzzleSalt(cfg.Get(common.APISaltKey)),
+		UserFingerprintKey:      NewUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
+		FingerprintHeaderKey:    fingerprintHeaderKey,
+		Argon2IDMemoryBudgetKey: budgetKey,
+		FingerprintHeader:       fingerprintHeaderKey.Value(),
+		UAParser:                uaParser,
+		Store:                   store,
+		TestPuzzle:              testPuzzle,
+		TestSolutions:           puzzle.NewStubPayload(testPuzzle),
+		PropertyStats:           leakybucket.NewCircularBucketManager(PropertyBucketSize),
+		verificationSemaphore:   semaphore.NewWeighted(capacity),
+		verificationCapacityKiB: capacity,
 	}
 }
 
@@ -86,7 +100,20 @@ func (v *Verifier) Update(ctx context.Context) error {
 		slog.DebugContext(ctx, "Using fingerprint header", "header", v.FingerprintHeader)
 	}
 
+	v.UpdateMemoryBudget(ctx)
+
 	return nil
+}
+
+// UpdateMemoryBudget applies the current budget to future verifications.
+func (v *Verifier) UpdateMemoryBudget(ctx context.Context) {
+	capacity := config.Argon2IDMemoryBudgetKiB(ctx, v.Argon2IDMemoryBudgetKey, int64(puzzle.Argon2IDMemoryKiB))
+	v.verificationMu.Lock()
+	defer v.verificationMu.Unlock()
+	if v.verificationSemaphore == nil || capacity != v.verificationCapacityKiB {
+		v.verificationSemaphore = semaphore.NewWeighted(capacity)
+		v.verificationCapacityKiB = capacity
+	}
 }
 
 func (v *Verifier) WriteTestPuzzle(w io.Writer) error {
@@ -185,7 +212,6 @@ func (v *Verifier) verifyPuzzleValid(ctx context.Context, payload puzzle.Solutio
 		slog.WarnContext(ctx, "Puzzle is already cached", "count", maxCount, common.PuzzleIDAttr(p.PuzzleID()))
 		return p, nil, puzzle.VerifiedBeforeError
 	}
-
 	if payload.NeedsExtraSalt() {
 		if serr := payload.VerifySignature(ctx, v.Salt.Value(), property.Salt); serr != nil {
 			return p, nil, puzzle.IntegrityError
@@ -270,7 +296,11 @@ func (v *Verifier) Verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 		}
 	}
 
-	if metadata, verr := verifyPayload.VerifySolutions(ctx); verr != puzzle.VerifyNoError {
+	metadata, verr, err := v.verifyPayload(ctx, verifyPayload)
+	if err != nil {
+		return nil, err
+	}
+	if verr != puzzle.VerifyNoError {
 		// NOTE: unlike solutions/puzzle, diagnostics bytes can be totally tampered
 		vlog := slog.With("result", verr.String(), "clientError", metadata.ErrorCode(), "elapsedMillis", metadata.ElapsedMillis(), "puzzleID", puzzleObject.PuzzleID())
 		if property != nil {
@@ -283,6 +313,32 @@ func (v *Verifier) Verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 	}
 
 	return result, nil
+}
+
+func (v *Verifier) verifyPayload(ctx context.Context, payload puzzle.SolutionPayload) (*puzzle.Metadata, puzzle.VerifyError, error) {
+	if payload.Puzzle().Challenge() != puzzle.ChallengeArgon2ID {
+		metadata, result := payload.VerifySolutions(ctx)
+		return metadata, result, nil
+	}
+	v.verificationMu.RLock()
+	defer v.verificationMu.RUnlock()
+	if v.verificationSemaphore == nil {
+		return nil, puzzle.VerifyNoError, errUninitialized
+	}
+	weight := int64(puzzle.Argon2IDMemoryKiB)
+	if ctx.Err() != nil {
+		return nil, puzzle.VerifyNoError, ctx.Err()
+	}
+	if !v.verificationSemaphore.TryAcquire(weight) {
+		slog.WarnContext(ctx, "Verification capacity exhausted", "weightKiB", weight, "capacityKiB", v.verificationCapacityKiB)
+		return nil, puzzle.VerifyNoError, errVerificationBusy
+	}
+	defer v.verificationSemaphore.Release(weight)
+	if ctx.Err() != nil {
+		return nil, puzzle.VerifyNoError, ctx.Err()
+	}
+	metadata, result := payload.VerifySolutions(ctx)
+	return metadata, result, nil
 }
 
 func (v *Verifier) CacheVerification(ctx context.Context, vr *puzzle.VerifyResult) {
@@ -313,6 +369,20 @@ func (v *Verifier) recordVerificationStats(result *puzzle.VerifyResult, tnow tim
 	}
 	// NOTE: we don't filter out `result.Success()`, like in other places, because here we are interested in ALL attempts
 	v.PropertyStats.RecordVerifications(result.PropertyID, 1, tnow)
+}
+
+func selectPropertyChallenge(selected dbgen.ChallengeType, logical uint8) (challenge puzzle.Challenge, wireDifficulty uint8, fallback bool, err error) {
+	switch selected {
+	case "", dbgen.ChallengeTypeBlake2b:
+		return puzzle.ChallengeBlake2b, logical, false, nil
+	case dbgen.ChallengeTypeArgon2ID:
+		if wire, ok := puzzle.Argon2IDWireDifficulty(logical); ok {
+			return puzzle.ChallengeArgon2ID, wire, false, nil
+		}
+		return puzzle.ChallengeBlake2b, logical, true, nil
+	default:
+		return 0, 0, false, errInvalidPropertyChallenge
+	}
 }
 
 func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, rulesPair *rules.RulesPair, ri *rules.RequestInfo) (puzzle.Puzzle, *dbgen.Property, error) {
@@ -384,9 +454,17 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 
 	verificationRate := v.PropertyStats.VerificationRate(property.ID, tnow)
 	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, difficultyProperty, tnow, verificationRate)
+	challenge, wireDifficulty, fallback, challengeErr := selectPropertyChallenge(property.Challenge, puzzleDifficulty)
+	if challengeErr != nil {
+		slog.ErrorContext(ctx, "Invalid property challenge", "propID", property.ID, "challenge", property.Challenge, common.ErrAttr(challengeErr))
+		return nil, property, challengeErr
+	}
 
 	puzzleID := puzzle.NextPuzzleID()
-	result := v.Create(puzzleID, property.ExternalID.Bytes, puzzleDifficulty)
+	result, challengeErr := puzzle.NewComputePuzzleForChallenge(puzzleID, property.ExternalID.Bytes, wireDifficulty, challenge)
+	if challengeErr != nil {
+		return nil, property, challengeErr
+	}
 	if err := result.Init(property.ValidityInterval); err != nil {
 		slog.ErrorContext(ctx, "Failed to init puzzle", common.ErrAttr(err))
 	}
@@ -396,7 +474,9 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 		err = accessErr
 	}
 
-	slog.Log(ctx, common.LevelTrace, "Prepared new puzzle", "propID", property.ID, "difficulty", result.Difficulty(),
+	slog.Log(ctx, common.LevelTrace, "Prepared new puzzle", "propID", property.ID, "requestedChallenge", property.Challenge,
+		"challenge", result.Challenge(), "logicalDifficulty", puzzleDifficulty, "wireDifficulty", wireDifficulty,
+		"blakeFallback", fallback,
 		"puzzleID", result.PuzzleID(), "userID", property.OrgOwnerID.Int32)
 
 	return result, property, err

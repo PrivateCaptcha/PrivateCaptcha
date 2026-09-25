@@ -181,8 +181,13 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 		tnow := time.Now().UTC()
 		result, err := s.Verifier.Verify(ctx, payload, ownerSource, tnow)
 		if err != nil {
-			slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			switch err {
+			case errVerificationBusy:
+				http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+			default:
+				slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
 			return
 		}
 

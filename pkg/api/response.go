@@ -69,6 +69,7 @@ type apiOrgPropertyOutput struct {
 
 type apiPropertySettings struct {
 	Name            string `json:"name"`
+	Challenge       string `json:"challenge,omitempty"`
 	Level           int    `json:"level,omitempty"`
 	Growth          string `json:"growth,omitempty"`
 	ValiditySeconds int    `json:"validity_seconds,omitempty"`

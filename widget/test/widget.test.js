@@ -2,6 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert';
 import { readFile } from 'node:fs/promises';
 import { Window } from 'happy-dom';
+import { encode } from 'base64-arraybuffer';
+import './providers.test.js';
+import './argon2-wasm.test.js';
+import './argon2-search.test.js';
+import './benchmark.test.js';
+import './workerspool.test.js';
+import { createWorkerSolver as createBlake2bWorkerSolver } from '../js/worker-solver-blake2b.js';
 import { blake2b, blake2bInit, blake2bUpdate, blake2bFinal } from 'blakejs/blake2b.js';
 
 function fallbackHasher(outlen) {
@@ -48,6 +55,36 @@ window.fetch = patchedFetch;
 globalThis.fetch = patchedFetch;
 
 const testSitekey = 'aaaaaaaabbbbccccddddeeeeeeeeeeee';
+
+test('Blake2b worker solves Blake2b and rejects Argon2id', async () => {
+    const body = new Uint8Array(128);
+    const solver = await createBlake2bWorkerSolver(0, body);
+    assert.strictEqual(typeof solver.solve, 'function');
+    await assert.rejects(createBlake2bWorkerSolver(1, body), /Unsupported puzzle challenge: 1/);
+});
+
+const protocolFixtures = {
+    v1: {
+        version: 1, challenge: 0, userData: '101112131415161718191a1b1c1d1e1f',
+        body: '01000102030405060708090a0b0c0d0e0f0807060504030201981880857467101112131415161718191a1b1c1d1e1f',
+    },
+    v2: {
+        version: 2, challenge: 1, userData: '101112131415161718191a1b1c1d1e1f',
+        body: '0201000102030405060708090a0b0c0d0e0f0807060504030201981880857467101112131415161718191a1b1c1d1e1f',
+    },
+};
+
+function bytesFromHex(value) {
+    return Uint8Array.from(value.match(/.{2}/g), (byte) => Number.parseInt(byte, 16));
+}
+
+function hexFromBytes(value) {
+    return Array.from(value, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function puzzlePayload(body) {
+    return `${encode(body.buffer)}.signature`;
+}
 
 // we have to mock worker too
 global.Worker = class Worker {
@@ -679,6 +716,288 @@ test('captcha.js getResponse returns widget solution', async (t) => {
     console.log('✓ getResponse test passed');
 });
 
+test('Puzzle parses canonical v1 and v2 fixtures', async () => {
+    const { Puzzle, CHALLENGE_BLAKE2B, CHALLENGE_ARGON2ID } = await import('../js/puzzle.js');
+    const fixtures = [
+        { fixture: protocolFixtures.v1, challenge: CHALLENGE_BLAKE2B, length: 47 },
+        { fixture: protocolFixtures.v2, challenge: CHALLENGE_ARGON2ID, length: 48 },
+    ];
+
+    for (const { fixture, challenge, length } of fixtures) {
+        const body = bytesFromHex(fixture.body);
+        const puzzle = new Puzzle(puzzlePayload(body));
+
+        assert.strictEqual(puzzle.version, fixture.version);
+        assert.strictEqual(puzzle.challenge, challenge);
+        assert.strictEqual(puzzle.puzzleBytes.length, length);
+        assert.deepStrictEqual(Array.from(puzzle.puzzleBytes), Array.from(body));
+        assert.strictEqual(hexFromBytes(puzzle.userData), fixture.userData);
+        assert.strictEqual(puzzle.puzzleBuffer.length, 128);
+    }
+});
+
+test('Puzzle rejects unknown and non-canonical records', async () => {
+    const { Puzzle } = await import('../js/puzzle.js');
+    const v1 = bytesFromHex(protocolFixtures.v1.body);
+    const v2 = bytesFromHex(protocolFixtures.v2.body);
+    const unknownVersion = v1.slice();
+    unknownVersion[0] = 3;
+    const unknownChallenge = v2.slice();
+    unknownChallenge[1] = 255;
+
+    const invalidBodies = [
+        unknownVersion,
+        unknownChallenge,
+        v1.slice(0, -1),
+        Uint8Array.from([...v1, 0]),
+        v2.slice(0, -1),
+        Uint8Array.from([...v2, 0]),
+    ];
+
+    for (const body of invalidBodies) {
+        assert.throws(() => new Puzzle(puzzlePayload(body)));
+    }
+});
+
+test('CaptchaWidget reports Argon2id provider initialization errors', async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { STATE_ERROR, STATE_LOADING } = await import('../js/html.js');
+    document.body.innerHTML = '<form><div class="private-captcha"></div></form>';
+    const element = document.querySelector('.private-captcha');
+    const widget = new CaptchaWidget(element, { sitekey: testSitekey });
+    let errored = 0;
+    let finished = 0;
+    element.addEventListener('privatecaptcha:error', () => { errored++; });
+    element.addEventListener('privatecaptcha:finish', () => { finished++; });
+    widget._apiTriggered = true;
+    widget.setState(STATE_LOADING);
+    widget._solution = 'stale proof';
+    element.insertAdjacentHTML('beforeend', '<input name="private-captcha-solution" type="hidden" value="stale proof">');
+    widget.onWorkerError(new Error('Argon2id provider unavailable'));
+    widget.onWorkerError(new Error('late worker failure'));
+    assert.strictEqual(widget._state, STATE_ERROR);
+    assert.strictEqual(element.querySelector('private-captcha')._state, STATE_ERROR);
+    assert.strictEqual(errored, 1);
+    assert.strictEqual(finished, 0);
+    assert.strictEqual(widget.solution(), null);
+    assert.strictEqual(element.querySelector('input[name="private-captcha-solution"]'), null);
+    assert.ok(widget._errorCode > 0);
+});
+
+for (const mode of ['wasm', 'noble', 'blake']) {
+    test(`CaptchaWidget ${mode} search failure after partial work emits only error and permits retry`, async () => {
+        const { CaptchaWidget } = await import('../js/widget.js');
+        const { WorkersPool } = await import('../js/workerspool.js');
+        const { createWorkerSolver } = await import('../js/worker-solver.js');
+        const { STATE_ERROR, STATE_VERIFIED } = await import('../js/html.js');
+        const isBlake = mode === 'blake';
+        const body = bytesFromHex(isBlake ? protocolFixtures.v1.body : protocolFixtures.v2.body);
+        const solutionCountOffset = isBlake ? 26 : 27;
+        body[solutionCountOffset] = 8;
+        body.fill(0, solutionCountOffset + 1, solutionCountOffset + 5);
+        const previousFetch = globalThis.fetch;
+        globalThis.fetch = async () => ({
+            ok: true, text: async () => puzzlePayload(body), headers: { get: () => null },
+        });
+        document.body.innerHTML = `<form><div class="private-captcha-anchor"><div class="private-captcha"
+            data-display-mode="popup" data-finished-callback="testSearchFinished"
+            data-errored-callback="testSearchErrored"></div></div></form>`;
+        const element = document.querySelector('.private-captcha');
+        let finished = 0;
+        let errored = 0;
+        let finishedCallbacks = 0;
+        let errorCallbacks = 0;
+        let submitted = 0;
+        element.closest('form').addEventListener('submit', (event) => { event.preventDefault(); submitted++; });
+        element.addEventListener('privatecaptcha:finish', () => { finished++; });
+        element.addEventListener('privatecaptcha:error', () => { errored++; });
+        window.testSearchFinished = () => {
+            finishedCallbacks++;
+            element.closest('form').dispatchEvent(new window.Event('submit', { cancelable: true }));
+        };
+        window.testSearchErrored = () => { errorCallbacks++; };
+        const workers = [];
+        let fail = true;
+        class SearchWorker {
+            constructor() {
+                this.terminated = false;
+                workers.push(this);
+            }
+
+            postMessage({ command, argument }) {
+                if (command === 'init') {
+                    this.puzzleID = argument.id;
+                    const failSearch = (index) => {
+                        if (fail && index === 1) { throw new Error(`${mode} search failed`); }
+                        return Uint8Array.of(index, 0, 0, 0, 0, 0, 0, 1);
+                    };
+                    this.solver = createWorkerSolver(argument.challenge, argument.buffer, {
+                        blake: async () => ({ wasm: true, solve: async (_threshold, index) => failSearch(index) }),
+                        argon: async () => mode === 'wasm'
+                            ? { wasm: true, solve: (_body, _threshold, index) => failSearch(index) }
+                            : { wasm: false, hash(nonce, _body, output) {
+                                if (fail && nonce[0] === 1) { throw new Error('noble search failed'); }
+                                output.fill(0);
+                            } },
+                    });
+                    void this.solver.then(() => this.onmessage?.({ data: { command: 'init' } }));
+                } else if (command === 'solve') {
+                    void this.solver.then((solver) => solver.solve(0xffffffff, argument.puzzleIndex))
+                        .then((solution) => {
+                            if (!this.terminated) {
+                                this.onmessage?.({ data: { command: 'solve', argument: {
+                                    id: this.puzzleID, solution, wasm: mode !== 'noble',
+                                } } });
+                            }
+                        }, (error) => {
+                            if (!this.terminated) { this.onmessage?.({ data: { command: 'error', error: error.message } }); }
+                        });
+                }
+            }
+
+            terminate() { this.terminated = true; }
+        }
+
+        try {
+            const widget = new CaptchaWidget(element, { sitekey: testSitekey });
+            widget._workersPool = new WorkersPool({
+                workersReady: widget.onWorkersReady.bind(widget),
+                workerError: widget.onWorkerError.bind(widget),
+                workStarted: widget.onWorkStarted.bind(widget),
+                workCompleted: widget.onWorkCompleted.bind(widget),
+                progress: widget.onWorkProgress.bind(widget),
+            }, false, SearchWorker);
+            const errorEvent = new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error(`${mode} error event timed out`)), 1000);
+                element.addEventListener('privatecaptcha:error', () => { clearTimeout(timeout); resolve(); }, { once: true });
+            });
+            widget.execute();
+            await errorEvent;
+
+            assert.strictEqual(widget._state, STATE_ERROR);
+            assert.strictEqual(element.querySelector('private-captcha')._state, STATE_ERROR);
+            assert.strictEqual(errored, 1);
+            assert.strictEqual(errorCallbacks, 1);
+            assert.strictEqual(widget.solution(), null);
+            assert.strictEqual(element.querySelector('input[name="private-captcha-solution"]'), null);
+            assert.ok(workers.every((worker) => worker.terminated));
+            if (!isBlake) { assert.strictEqual(widget._workersPool._solutions.length, 1); }
+            await new Promise((resolve) => setTimeout(resolve, 550));
+            assert.strictEqual(finished, 0);
+            assert.strictEqual(finishedCallbacks, 0);
+            assert.strictEqual(submitted, 0);
+
+            widget.reset();
+            fail = false;
+            const finishedEvent = new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => reject(new Error(`${mode} retry timed out`)), 2000);
+                element.addEventListener('privatecaptcha:finish', () => { clearTimeout(timeout); resolve(); }, { once: true });
+            });
+            widget.execute();
+            await finishedEvent;
+            assert.strictEqual(widget._state, STATE_VERIFIED);
+            assert.ok(widget.solution());
+            assert.ok(element.querySelector('input[name="private-captcha-solution"]'));
+            assert.strictEqual(errored, 1);
+            assert.strictEqual(finished, 1);
+            assert.strictEqual(finishedCallbacks, 1);
+            assert.strictEqual(submitted, 1);
+        } finally {
+            globalThis.fetch = previousFetch;
+        }
+    });
+}
+
+test('CaptchaWidget handles synchronous solve dispatch failures without leaving a spinner', async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { WorkersPool } = await import('../js/workerspool.js');
+    const { STATE_ERROR, STATE_READY } = await import('../js/html.js');
+    document.body.innerHTML = '<form><div class="private-captcha"></div></form>';
+    const element = document.querySelector('.private-captcha');
+    const widget = new CaptchaWidget(element, { sitekey: testSitekey });
+    let errors = 0;
+    let finished = 0;
+    element.addEventListener('privatecaptcha:error', () => { errors++; });
+    element.addEventListener('privatecaptcha:finish', () => { finished++; });
+    const workers = [];
+    class ThrowingWorker {
+        constructor() { workers.push(this); this.terminated = false; }
+        postMessage({ command }) { if (command === 'solve') { throw new Error('postMessage failed'); } }
+        terminate() { this.terminated = true; }
+    }
+    widget._workersPool = new WorkersPool({ workerError: widget.onWorkerError.bind(widget) }, false, ThrowingWorker);
+    const work = { ID: 42, challenge: 0, puzzleBuffer: new Uint8Array(128), solutionsCount: 8,
+        difficulty: 136, isZero: () => false };
+    widget._puzzle = work;
+    widget._workersPool.init(work, false);
+    widget.setState(STATE_READY);
+    widget.execute();
+
+    assert.strictEqual(errors, 1);
+    assert.strictEqual(finished, 0);
+    assert.strictEqual(widget._state, STATE_ERROR);
+    assert.strictEqual(element.querySelector('private-captcha')._state, STATE_ERROR);
+    assert.strictEqual(widget.solution(), null);
+    assert.ok(workers.every((worker) => worker.terminated));
+});
+
+test('CaptchaWidget handles synchronous worker initialization failures as worker errors', async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { WorkersPool } = await import('../js/workerspool.js');
+    const { ERROR_SOLVE_PUZZLE } = await import('../js/errors.js');
+    const { STATE_ERROR } = await import('../js/html.js');
+    const body = bytesFromHex(protocolFixtures.v2.body);
+    body[27] = 8;
+    body.fill(0, 28, 32);
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = async () => ({
+        ok: true, text: async () => puzzlePayload(body), headers: { get: () => null },
+    });
+    document.body.innerHTML = '<form><div class="private-captcha"></div></form>';
+    const element = document.querySelector('.private-captcha');
+    const widget = new CaptchaWidget(element, { sitekey: testSitekey });
+    let errors = 0;
+    let finished = 0;
+    element.addEventListener('privatecaptcha:error', () => { errors++; });
+    element.addEventListener('privatecaptcha:finish', () => { finished++; });
+    const workers = [];
+    class ThrowingWorker {
+        constructor() { workers.push(this); this.terminated = false; }
+        postMessage() { throw new Error('worker initialization failed'); }
+        terminate() { this.terminated = true; }
+    }
+    widget._workersPool = new WorkersPool({ workerError: widget.onWorkerError.bind(widget) }, false, ThrowingWorker);
+    try {
+        await widget.init(true);
+        assert.strictEqual(errors, 1);
+        assert.strictEqual(finished, 0);
+        assert.strictEqual(widget._state, STATE_ERROR);
+        assert.strictEqual(element.querySelector('private-captcha')._state, STATE_ERROR);
+        assert.strictEqual(widget._errorCode, ERROR_SOLVE_PUZZLE);
+        assert.strictEqual(widget.solution(), null);
+        assert.strictEqual(element.querySelector('input[name="private-captcha-solution"]'), null);
+        assert.ok(workers.every((worker) => worker.terminated));
+    } finally {
+        globalThis.fetch = previousFetch;
+    }
+});
+
+test('getPuzzle preserves the challenge query when adding the sitekey', async () => {
+    const { getPuzzle } = await import('../js/puzzle.js');
+    const previousFetch = globalThis.fetch;
+    let requestedURL;
+    globalThis.fetch = async (url) => {
+        requestedURL = url;
+        return { ok: true, text: async () => 'puzzle.signature', headers: { get: () => null } };
+    };
+    try {
+        await getPuzzle('/puzzle/152?challenge=blake2b', testSitekey, { attempts: 1 });
+        assert.strictEqual(requestedURL, `/puzzle/152?challenge=blake2b&sitekey=${testSitekey}`);
+    } finally {
+        globalThis.fetch = previousFetch;
+    }
+});
+
 test('getPuzzle per-call timeout triggers with 1 attempt', async (t) => {
     const http = await import('node:http');
     const { getPuzzle } = await import('../js/puzzle.js');
@@ -802,11 +1121,11 @@ test('getPuzzle global timeout triggers with 2 attempts', async (t) => {
 });
 
 test('JS fallback finds a verifiable solution', async () => {
-    const { findSolution, thresholdFromDifficulty, readUInt32LE } = await import('../js/puzzle.utils.js');
+    const { findBlake2bSolution, thresholdFromDifficulty, readUInt32LE } = await import('../js/puzzle.utils.js');
     const puzzleBuffer = new Uint8Array(128);
     globalThis.crypto.getRandomValues(puzzleBuffer);
     const threshold = thresholdFromDifficulty(48);
-    const solution = findSolution(puzzleBuffer, threshold, 3, false, fallbackHasher);
+    const solution = findBlake2bSolution(puzzleBuffer, threshold, 3, false, fallbackHasher);
     assert.strictEqual(solution.length, 8);
     assert.strictEqual(solution[0], 3);
     assert.ok(readUInt32LE(blake2b(puzzleBuffer, null, 32), 0) <= threshold);

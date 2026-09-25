@@ -1,5 +1,6 @@
 import { build, transform } from 'esbuild';
 import { readFile } from "fs/promises"
+import { resolve } from 'node:path';
 import inlineWorkerPlugin from 'esbuild-plugin-inline-worker';
 
 const stage = process.env.STAGE || 'dev';
@@ -27,32 +28,41 @@ let CSSMinifyPlugin = {
     }
 };
 
-let entryPointsConfig;
-let outfileConfig;
-let formatConfig;
+const blake2bWorkerSolverPlugin = {
+    name: 'blake2b-worker-solver',
+    setup(build) {
+        build.onResolve({ filter: /^\.\/worker-solver\.js$/ }, () => ({
+            path: resolve('./js/worker-solver-blake2b.js'),
+        }));
+    },
+};
 
-if (buildTarget === 'library') {
-  entryPointsConfig = ['./js/widget.js'];
-  outfileConfig = './lib/index.js';
-  formatConfig = 'esm';
-} else { // 'default'
-  entryPointsConfig = ['./js/captcha.js'];
-  outfileConfig = './static/js/privatecaptcha.js';
-  formatConfig = 'iife';
+async function buildBundle(entryPoint, outfile, format, blake2bOnly = false) {
+    await build({
+        entryPoints: [entryPoint],
+        bundle: true,
+        outfile,
+        format,
+        loader: { '.css': 'text', '.wasm': 'base64' },
+        plugins: [
+            CSSMinifyPlugin,
+            inlineWorkerPlugin({
+                minify: config[stage].minify,
+                loader: { '.wasm': 'base64' },
+                plugins: blake2bOnly ? [blake2bWorkerSolverPlugin] : [],
+            }),
+        ],
+        ...config[stage],
+    });
 }
 
-build({
-    entryPoints: entryPointsConfig,
-    bundle: true,
-    outfile: outfileConfig,
-    format: formatConfig,
-    loader: { '.css': 'text', '.wasm': 'base64' },
-    plugins: [
-        CSSMinifyPlugin,
-        inlineWorkerPlugin({
-            minify: config[stage].minify,
-            loader: { '.wasm': 'base64' },
-        }),
-    ],
-    ...config[stage]
-}).catch(() => process.exit(1));
+async function main() {
+    if (buildTarget === 'library') {
+        await buildBundle('./js/widget.js', './lib/index.js', 'esm');
+    } else {
+        await buildBundle('./js/captcha.js', './static/js/privatecaptcha.js', 'iife', true);
+        await buildBundle('./js/captcha.js', './static/js/privatecaptcha-ext.js', 'iife');
+    }
+}
+
+main().catch(() => process.exit(1));

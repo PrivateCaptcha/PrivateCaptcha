@@ -262,6 +262,7 @@ func TestApiPostProperties(t *testing.T) {
 			Domain: fmt.Sprintf("example%d.com", i),
 		})
 	}
+	inputs[0].Challenge = string(dbgen.ChallengeTypeArgon2ID)
 
 	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, inputs,
 		http.MethodPost,
@@ -315,6 +316,9 @@ func TestApiPostProperties(t *testing.T) {
 
 		if properties[i].Domain != inputs[i].Domain {
 			t.Errorf("Property domain does not match at %v", i)
+		}
+		if i == 0 && properties[i].Challenge != dbgen.ChallengeTypeArgon2ID {
+			t.Errorf("Property challenge = %q, want %q", properties[i].Challenge, dbgen.ChallengeTypeArgon2ID)
 		}
 	}
 }
@@ -677,6 +681,61 @@ func verifyPropertyUpdate(t *testing.T, property *dbgen.Property, expected *apiU
 	}
 }
 
+func TestPropertyChallengeLifecycle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	existingProperty, err := server.BusinessDB.Impl().RetrievePropertyBySitekey(ctx, db.PortalLoginSitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if existingProperty.Challenge != dbgen.ChallengeTypeBlake2b {
+		t.Fatalf("existing property challenge = %q, want %q", existingProperty.Challenge, dbgen.ChallengeTypeBlake2b)
+	}
+
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "challenge-lifecycle.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if property.Challenge != dbgen.ChallengeTypeBlake2b {
+		t.Fatalf("new property challenge = %q, want %q", property.Challenge, dbgen.ChallengeTypeBlake2b)
+	}
+
+	var selectedChallenge string
+	if err := store.Pool.QueryRow(ctx,
+		"UPDATE backend.properties SET challenge = $1 WHERE id = $2 RETURNING challenge",
+		dbgen.ChallengeTypeArgon2ID, property.ID,
+	).Scan(&selectedChallenge); err != nil {
+		t.Fatal(err)
+	}
+	if dbgen.ChallengeType(selectedChallenge) != dbgen.ChallengeTypeArgon2ID {
+		t.Fatalf("selected challenge = %q, want %q", selectedChallenge, dbgen.ChallengeTypeArgon2ID)
+	}
+
+	updatedProperty, _, err := server.BusinessDB.Impl().UpdateProperty(ctx, org, user, &dbgen.UpdatePropertyParams{
+		ID:               property.ID,
+		Name:             property.Name + " updated",
+		Level:            property.Level,
+		Growth:           property.Growth,
+		ValidityInterval: property.ValidityInterval,
+		AllowSubdomains:  property.AllowSubdomains,
+		AllowLocalhost:   property.AllowLocalhost,
+		MaxReplayCount:   property.MaxReplayCount,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedProperty.Challenge != dbgen.ChallengeTypeArgon2ID {
+		t.Fatalf("updated property challenge = %q, want %q", updatedProperty.Challenge, dbgen.ChallengeTypeArgon2ID)
+	}
+}
+
 func TestApiUpdateProperties(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -713,6 +772,7 @@ func TestApiUpdateProperties(t *testing.T) {
 			ID: server.IDHasher.Encrypt(int(p1.ID)),
 			apiPropertySettings: apiPropertySettings{
 				Name:            "Updated Property 1",
+				Challenge:       string(dbgen.ChallengeTypeArgon2ID),
 				Level:           int(common.DifficultyLevelHigh),
 				Growth:          string(dbgen.DifficultyGrowthMedium),
 				ValiditySeconds: int(puzzle.ValidityDurations[6].Seconds()),
@@ -777,6 +837,9 @@ func TestApiUpdateProperties(t *testing.T) {
 		t.Fatal(err)
 	}
 	verifyPropertyUpdate(t, updatedP1, updates[0])
+	if updatedP1.Challenge != dbgen.ChallengeTypeArgon2ID {
+		t.Fatalf("updated challenge = %q, want %q", updatedP1.Challenge, dbgen.ChallengeTypeArgon2ID)
+	}
 
 	// Verify P2 updated
 	updatedP2, err := server.BusinessDB.Impl().RetrieveOrgProperty(ctx, org2, p2.ID)

@@ -2,13 +2,22 @@ package puzzle
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"encoding/binary"
+	"errors"
 	"io"
 )
 
 const (
 	signatureVersion       = 1
-	flagWithExtra    uint8 = 1 << iota
+	flagWithExtra    uint8 = 1 << 1
+	signatureSize          = 3 + sha1.Size
+)
+
+var (
+	errInvalidSignatureVersion = errors.New("invalid signature version")
+	errInvalidSignatureFlags   = errors.New("invalid signature flags")
+	errInvalidSignatureLength  = errors.New("invalid signature length")
 )
 
 type signature struct {
@@ -64,21 +73,22 @@ func (s *signature) MarshalBinary() ([]byte, error) {
 }
 
 func (s *signature) UnmarshalBinary(data []byte) error {
-	if len(data) < 3 {
+	if len(data) < signatureSize {
 		return io.ErrShortBuffer
 	}
-
-	var offset int
+	if len(data) > signatureSize {
+		return errInvalidSignatureLength
+	}
+	if data[0] != signatureVersion {
+		return errInvalidSignatureVersion
+	}
+	if data[1]&^flagWithExtra != 0 {
+		return errInvalidSignatureFlags
+	}
 
 	s.Version = data[0]
-	offset += 1
-
-	s.Flags = data[offset]
-	offset += 1
-
-	s.Fingerprint = data[offset]
-	offset += 1
-
-	s.Hash = data[offset:]
+	s.Flags = data[1]
+	s.Fingerprint = data[2]
+	s.Hash = data[3:]
 	return nil
 }

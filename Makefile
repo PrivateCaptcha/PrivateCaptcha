@@ -1,4 +1,4 @@
-.PHONY: clean build deploy run-postgres-test-db stop-postgres-test-db run-clickhouse-test-db stop-clickhouse-test-db test-local-light test-local build-puzzle-compat-go build-puzzle-compat-js test-puzzle-compat
+.PHONY: clean build deploy run-postgres-test-db stop-postgres-test-db run-clickhouse-test-db stop-clickhouse-test-db test-local-light test-local widget-size lint-widget bench-puzzle bench-widget bench-puzzle-solver build-puzzle-compat-go build-puzzle-compat-js test-puzzle-compat
 
 STAGE ?= dev
 GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
@@ -32,6 +32,9 @@ setup-docker: docker/pc.env
 lint:
 	$(GOPATH)/bin/golangci-lint run
 
+lint-widget:
+	cd widget && env STAGE="$(STAGE)" npm run lint
+
 format:
 	$(GOPATH)/bin/golangci-lint fmt
 
@@ -60,6 +63,12 @@ test-widget-unit:
 
 bench-unit:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -tags enterprise -bench=. -benchtime=20s -short ./...
+
+bench-puzzle:
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -tags enterprise -run '^$$' -bench '^BenchmarkArgon2IDVerification$$' -benchtime=$(or $(BENCH_TIME),1x) -benchmem ./pkg/puzzle
+
+bench-widget:
+	cd widget && env STAGE="$(STAGE)" npm run benchmark -- $(BENCH_ARGS)
 
 bench-puzzle-solver:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -tags enterprise -run '^$$' -bench '^BenchmarkSolver' -benchtime=1s -count=3 -benchmem $(EXTRA_TEST_FLAGS) ./pkg/puzzle
@@ -155,6 +164,11 @@ build-js:
 build-widget-script:
 	rm -fv widget/static/js/* || echo 'Nothing to remove'
 	cd widget && env STAGE="$(STAGE)" npm run build
+
+widget-size:
+	@raw_size="$$(wc -c < "widget/static/js/privatecaptcha.js" | tr -d '[:space:]')"; \
+	gzip_size="$$(gzip -9 -c -n "widget/static/js/privatecaptcha.js" | wc -c | tr -d '[:space:]')"; \
+	printf 'widget_raw_bytes=%s\nwidget_gzip_bytes=%s\n' "$$raw_size" "$$gzip_size"
 
 build-widget-library:
 	rm -fv widget/lib/*.js widget/lib/*.js.map || echo 'Nothing to remove'

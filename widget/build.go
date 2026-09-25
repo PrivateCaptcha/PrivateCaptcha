@@ -38,6 +38,10 @@ func Static(gitHash string) http.HandlerFunc {
 		common.WriteHeaders(w, widgetCachedHeaders)
 		common.WriteHeaders(w, common.CorsAllowAllHeaders)
 		common.WriteHeaders(w, etagHeaders)
+		if r.URL.Path == "/js/privatecaptcha.js" && r.URL.Query().Get("v") == "ext" {
+			r = r.Clone(r.Context())
+			r.URL.Path = "/js/privatecaptcha-ext.js"
+		}
 		srv.ServeHTTP(w, r)
 	}
 }

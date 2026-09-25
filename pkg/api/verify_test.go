@@ -173,6 +173,152 @@ func TestVerifyPuzzle(t *testing.T) {
 	}
 }
 
+func argonAPIKeyForTest(t *testing.T, user *dbgen.User) string {
+	t.Helper()
+	params := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), time.Hour, 10)
+	params.Scope = dbgen.ApiKeyScopePuzzle
+	key, _, err := store.Impl().CreateAPIKey(t.Context(), user, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db.UUIDToSecret(key.ExternalID)
+}
+
+func checkArgonAPIVerification(t *testing.T, payload, secret, sitekey string, expected puzzle.VerifyError) {
+	t.Helper()
+	resp, err := verifySuite(payload, secret, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("verify status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if err := checkVerifyError(resp, expected); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestArgonPuzzleVerifiesThroughAPI(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	user, _, property, sitekey := createArgonAPIProperty(t)
+	setArgonAPIPropertyChallenge(t, property, dbgen.ChallengeTypeArgon2ID)
+	secret := argonAPIKeyForTest(t, user)
+	puzzleText, solutionsText, err := solutionsSuite(t.Context(), sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encodedPuzzle, _, _ := strings.Cut(puzzleText, ".")
+	body, err := base64.StdEncoding.DecodeString(encodedPuzzle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) != 48 || body[1] != byte(puzzle.ChallengeArgon2ID) || body[27] != byte(puzzle.Argon2IDSolutionsCount) {
+		t.Fatalf("issued puzzle: length = %d, challenge = %d, solutions = %d", len(body), body[1], body[27])
+	}
+	parts := strings.Split(solutionsText+"."+puzzleText, ".")
+	tampered := bytes.Clone(body)
+	tampered[1] = byte(puzzle.ChallengeBlake2b)
+	parts[1] = base64.StdEncoding.EncodeToString(tampered)
+	checkArgonAPIVerification(t, strings.Join(parts, "."), secret, sitekey, puzzle.IntegrityError)
+	checkArgonAPIVerification(t, solutionsText+"."+puzzleText, secret, sitekey, puzzle.VerifyNoError)
+	checkArgonAPIVerification(t, strings.Join(parts, "."), secret, sitekey, puzzle.VerifiedBeforeError)
+
+	decodedSolutions, err := base64.StdEncoding.DecodeString(parts[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts[1] = encodedPuzzle
+	for _, invalid := range [][]byte{decodedSolutions[:len(decodedSolutions)-puzzle.SolutionLength], append(bytes.Clone(decodedSolutions), make([]byte, puzzle.SolutionLength)...)} {
+		parts[0] = base64.StdEncoding.EncodeToString(invalid)
+		if _, err := server.Verifier.ParseSolutionPayload(t.Context(), []byte(strings.Join(parts, "."))); err == nil {
+			t.Fatal("incorrect Argon solution count passed API preflight")
+		}
+	}
+}
+
+func TestArgonAdmissionReturnsTooManyRequests(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	user, _, property, sitekey := createArgonAPIProperty(t)
+	setArgonAPIPropertyChallenge(t, property, dbgen.ChallengeTypeArgon2ID)
+	secret := argonAPIKeyForTest(t, user)
+	puzzleText, solutionsText, err := solutionsSuite(t.Context(), sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof := solutionsText + "." + puzzleText
+	capacity := server.Verifier.verificationCapacityKiB
+	if err := server.Verifier.verificationSemaphore.Acquire(t.Context(), capacity); err != nil {
+		t.Fatal(err)
+	}
+	defer server.Verifier.verificationSemaphore.Release(capacity)
+
+	srv := http.NewServeMux()
+	server.Setup("", true, common.NoopMiddleware).Register(srv)
+	for _, tc := range []struct {
+		name, path, body, contentType string
+	}{
+		{name: "Private", path: "/" + common.VerifyEndpoint, body: proof},
+		{name: "Recaptcha", path: "/" + common.SiteVerifyEndpoint, body: url.Values{
+			common.ParamSecret: {secret}, common.ParamResponse: {proof}, common.ParamSiteKey: {sitekey},
+		}.Encode(), contentType: common.ContentTypeURLEncoded},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body)).WithContext(ctx)
+			req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+			if tc.contentType != "" {
+				req.Header.Set(common.HeaderContentType, tc.contentType)
+			} else {
+				req.Header.Set(common.HeaderAPIKey, secret)
+				req.Header.Set(common.HeaderSitekey, sitekey)
+			}
+			response := httptest.NewRecorder()
+			srv.ServeHTTP(response, req)
+			if response.Code != http.StatusTooManyRequests {
+				t.Fatalf("status = %d, want %d", response.Code, http.StatusTooManyRequests)
+			}
+		})
+	}
+}
+
+func TestIssuedPuzzleChallengeSurvivesPropertyChange(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	user, _, property, sitekey := createArgonAPIProperty(t)
+	secret := argonAPIKeyForTest(t, user)
+	blakePuzzle, blakeSolutions, err := solutionsSuite(t.Context(), sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setArgonAPIPropertyChallenge(t, property, dbgen.ChallengeTypeArgon2ID)
+	checkArgonAPIVerification(t, blakeSolutions+"."+blakePuzzle, secret, sitekey, puzzle.VerifyNoError)
+
+	argonPuzzle, argonSolutions, err := solutionsSuite(t.Context(), sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued := &puzzle.ComputePuzzle{}
+	first, _, _ := strings.Cut(argonPuzzle, ".")
+	encoded, err := base64.StdEncoding.DecodeString(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := issued.UnmarshalBinary(encoded); err != nil {
+		t.Fatal(err)
+	}
+	if issued.Challenge() != puzzle.ChallengeArgon2ID {
+		t.Fatalf("opted property issued challenge %d", issued.Challenge())
+	}
+	setArgonAPIPropertyChallenge(t, property, dbgen.ChallengeTypeBlake2b)
+	checkArgonAPIVerification(t, argonSolutions+"."+argonPuzzle, secret, sitekey, puzzle.VerifyNoError)
+}
+
 func TestVerifyRejectsUnsignedExpiration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -219,6 +365,65 @@ func TestVerifyRejectsUnsignedExpiration(t *testing.T) {
 	}
 	if result.Valid() {
 		t.Error("unsigned expiration produced a reportable verification result")
+	}
+}
+
+func TestVerifyReplayCheckedBeforeTamperedChallenge(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := puzzle.NewComputePuzzleForChallenge(puzzle.NextPuzzleID(), property.ExternalID.Bytes, 0, puzzle.ChallengeArgon2ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Init(puzzle.DefaultValidityPeriod); err != nil {
+		t.Fatal(err)
+	}
+	puzzlePayload, err := p.Serialize(ctx, server.Verifier.Salt.Value(), property.Salt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	solutions, err := (&puzzle.ComputeSolver{}).Solve(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var payload bytes.Buffer
+	payload.WriteString(solutions.String())
+	payload.WriteByte('.')
+	if err := puzzlePayload.Write(&payload); err != nil {
+		t.Fatal(err)
+	}
+	tnow := time.Now().UTC()
+	server.Verifier.CacheVerification(ctx, puzzle.NewVerifyResult(puzzle.VerifyNoError, p, tnow))
+
+	parts := strings.Split(payload.String(), ".")
+	puzzleBytes, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	puzzleBytes[1] = byte(puzzle.ChallengeBlake2b)
+	parts[1] = base64.StdEncoding.EncodeToString(puzzleBytes)
+	tampered, err := server.Verifier.ParseSolutionPayload(ctx, []byte(strings.Join(parts, ".")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := server.Verifier.Verify(ctx, tampered, nil, tnow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Error != puzzle.VerifiedBeforeError {
+		t.Fatalf("verification error = %v, want %v", result.Error, puzzle.VerifiedBeforeError)
 	}
 }
 
@@ -593,7 +798,7 @@ func TestVerifyCachePriority(t *testing.T) {
 	}
 }
 
-func TestVerifyInvalidSolutions(t *testing.T) {
+func TestVerifyRejectsInvalidSolutionCount(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -636,12 +841,8 @@ func TestVerifyInvalidSolutions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("Unexpected verify status code %d", resp.StatusCode)
-	}
-
-	if err := checkVerifyError(resp, puzzle.InvalidSolutionError); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -882,6 +1083,60 @@ func TestVerifyTestShortcut(t *testing.T) {
 
 	if result, _ := server.Verifier.Verify(ctx, payload, nil /*expectedOwner*/, time.Now().UTC()); result.Error != puzzle.TestPropertyError {
 		t.Errorf("Unexpected verification result: %v", result.Error.String())
+	}
+}
+
+func TestParseVerifyPayloadTestPuzzleFastPath(t *testing.T) {
+	t.Parallel()
+
+	testPuzzle := puzzle.NewComputePuzzle(0, db.TestPropertyUUID.Bytes, 0)
+	puzzlePayload, err := testPuzzle.Serialize(t.Context(), puzzle.NewSalt([]byte("test-salt")), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	solutions, err := (&puzzle.ComputeSolver{}).Solve(t.Context(), testPuzzle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	solutionsData, err := base64.StdEncoding.DecodeString(solutions.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	verifier := &Verifier{
+		TestPuzzle:     testPuzzle,
+		TestPuzzleData: puzzlePayload,
+		TestSolutions:  puzzle.NewStubPayload(testPuzzle),
+	}
+	makePayload := func(data []byte) []byte {
+		var payload bytes.Buffer
+		payload.WriteString(base64.StdEncoding.EncodeToString(data))
+		payload.WriteByte('.')
+		if err := puzzlePayload.Write(&payload); err != nil {
+			t.Fatal(err)
+		}
+		return payload.Bytes()
+	}
+
+	if _, err := verifier.ParseSolutionPayload(t.Context(), makePayload(solutionsData)); err != nil {
+		t.Fatalf("valid test payload failed: %v", err)
+	}
+	invalidVersion := bytes.Clone(solutionsData)
+	invalidVersion[0]++
+	invalidFlag := bytes.Clone(solutionsData)
+	invalidFlag[2] = 2
+	unchecked := [][]byte{
+		invalidVersion,
+		invalidFlag,
+		append(bytes.Clone(solutionsData), make([]byte, puzzle.SolutionLength)...),
+	}
+	for _, data := range unchecked {
+		if payload, err := verifier.ParseSolutionPayload(t.Context(), makePayload(data)); err != nil || payload != verifier.TestSolutions {
+			t.Fatalf("test fast path result = %v, error = %v", payload, err)
+		}
+	}
+	if _, err := verifier.ParseSolutionPayload(t.Context(), makePayload(solutionsData[:len(solutionsData)-2*puzzle.SolutionLength])); err != errTestSolutions {
+		t.Fatalf("short test solutions error = %v, want %v", err, errTestSolutions)
 	}
 }
 

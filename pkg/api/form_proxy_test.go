@@ -20,6 +20,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -851,6 +852,30 @@ func TestFormProxyRejectsInvalidCaptcha(t *testing.T) {
 	}
 }
 
+func TestFormProxyReturnsTooManyRequestsWhenVerificationIsBusy(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	form, property := createFormProxyForTest(t.Context(), t, t.Name(), "busy-form.example.com")
+	setArgonAPIPropertyChallenge(t, property, dbgen.ChallengeTypeArgon2ID)
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	puzzleText, solutionsText, err := solutionsSuite(t.Context(), sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	capacity := server.Verifier.verificationCapacityKiB
+	if err := server.Verifier.verificationSemaphore.Acquire(t.Context(), capacity); err != nil {
+		t.Fatal(err)
+	}
+	defer server.Verifier.verificationSemaphore.Release(capacity)
+
+	body := url.Values{common.ParamPrivateCaptchaSolution: {solutionsText + "." + puzzleText}}
+	response := formProxySuite(t, form, body)
+	if response.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusTooManyRequests)
+	}
+}
+
 func TestFormProxyRejectsWrongPropertyCaptcha(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -1006,10 +1031,14 @@ func TestFormProxyRecordsSamePropertyFailure(t *testing.T) {
 	}
 	rateBefore := server.Verifier.PropertyStats.VerificationRate(property.ID, time.Now())
 
-	// Submit malformed solution data for the valid puzzle.
+	// Submit an exact-count duplicate solution set for the valid puzzle.
 	body := url.Values{}
 	body.Set("email", "test@example.com")
-	body.Set(common.ParamPrivateCaptchaSolution, fmt.Sprintf("AAAA.%s", puzzleStr))
+	solutionsStr := (&puzzle.Solutions{
+		Buffer:   make([]byte, 24*puzzle.SolutionLength),
+		Metadata: &puzzle.Metadata{},
+	}).String()
+	body.Set(common.ParamPrivateCaptchaSolution, fmt.Sprintf("%s.%s", solutionsStr, puzzleStr))
 	resp := formProxySuite(t, form, body)
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("got %d", resp.StatusCode)

@@ -44,6 +44,9 @@ sql:
           backend_difficulty_growth_slow: DifficultyGrowthSlow
           backend_difficulty_growth_medium: DifficultyGrowthMedium
           backend_difficulty_growth_fast: DifficultyGrowthFast
+          backend_challenge_type: ChallengeType
+          backend_challenge_type_blake2b: ChallengeTypeBlake2b
+          backend_challenge_type_argon2id: ChallengeTypeArgon2ID
           backend_access_level_member: AccessLevelMember
           backend_access_level_invited: AccessLevelInvited
           backend_access_level_owner: AccessLevelOwner

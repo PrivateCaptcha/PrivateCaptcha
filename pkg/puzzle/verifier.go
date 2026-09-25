@@ -20,6 +20,8 @@ var (
 	errEmptyPayloadPart  = errors.New("payload part is empty")
 	errEmptySignature    = errors.New("empty signature")
 	errEmptyPuzzle       = errors.New("empty puzzle")
+	errInvalidEncoding   = errors.New("invalid payload encoding")
+	errInvalidSolutions  = errors.New("invalid solutions encoding or count")
 	errStubPayload       = errors.New("stub payload")
 	ErrSignKeyMismatch   = errors.New("signature fingerprint mismatch")
 )
@@ -84,7 +86,7 @@ type OwnerIDSource interface {
 type VerifyPayload struct {
 	puzzle     Puzzle
 	signature  *signature
-	solutions  []byte
+	solutions  *Solutions
 	puzzleData []byte
 }
 
@@ -120,6 +122,11 @@ func ParseVerifyPayload[T any, TPuzzle PuzzleConstraint[T]](ctx context.Context,
 		)
 		return nil, errEmptyPayloadPart
 	}
+	if (len(puzzleBytesB64) != base64.StdEncoding.EncodedLen(puzzleV1Size) &&
+		len(puzzleBytesB64) != base64.StdEncoding.EncodedLen(puzzleV2Size)) ||
+		len(signatureBytesB64) != base64.StdEncoding.EncodedLen(signatureSize) {
+		return nil, errInvalidEncoding
+	}
 
 	puzzleBytesLength := base64.StdEncoding.DecodedLen(len(puzzleBytesB64))
 	puzzleBytes := make([]byte, puzzleBytesLength)
@@ -134,6 +141,26 @@ func ParseVerifyPayload[T any, TPuzzle PuzzleConstraint[T]](ctx context.Context,
 		return nil, errEmptyPuzzle
 	}
 
+	t := new(T)
+	p := TPuzzle(t)
+
+	if uerr := p.UnmarshalBinary(puzzleBytes); uerr != nil {
+		slog.ErrorContext(ctx, "Failed to unmarshal binary puzzle", common.ErrAttr(uerr))
+		return nil, uerr
+	}
+	if len(solutionsBytes) != base64.StdEncoding.EncodedLen(metadataLength+p.SolutionsCount()*SolutionLength) {
+		return nil, errInvalidSolutions
+	}
+	solutions, err := NewSolutions(solutionsBytes)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to decode solutions bytes", common.ErrAttr(err))
+		return nil, err
+	}
+	if len(solutions.Buffer) != p.SolutionsCount()*SolutionLength {
+		slog.WarnContext(ctx, "Invalid solutions encoding or count", "expected", p.SolutionsCount(), "actual", len(solutions.Buffer)/SolutionLength)
+		return nil, errInvalidSolutions
+	}
+
 	signatureBytesLength := base64.StdEncoding.DecodedLen(len(signatureBytesB64))
 	signatureBytes := make([]byte, signatureBytesLength)
 	n, err = base64.StdEncoding.Decode(signatureBytes, signatureBytesB64)
@@ -146,14 +173,6 @@ func ParseVerifyPayload[T any, TPuzzle PuzzleConstraint[T]](ctx context.Context,
 		return nil, errEmptySignature
 	}
 
-	t := new(T)
-	p := TPuzzle(t)
-
-	if uerr := p.UnmarshalBinary(puzzleBytes); uerr != nil {
-		slog.ErrorContext(ctx, "Failed to unmarshal binary puzzle", common.ErrAttr(uerr))
-		return nil, uerr
-	}
-
 	s := new(signature)
 	if uerr := s.UnmarshalBinary(signatureBytes); uerr != nil {
 		slog.ErrorContext(ctx, "Failed to unmashal binary signature", common.ErrAttr(uerr))
@@ -161,7 +180,7 @@ func ParseVerifyPayload[T any, TPuzzle PuzzleConstraint[T]](ctx context.Context,
 	}
 
 	return &VerifyPayload{
-		solutions:  solutionsBytes,
+		solutions:  solutions,
 		puzzleData: puzzleBytes,
 		puzzle:     p,
 		signature:  s,
@@ -207,9 +226,10 @@ func (vp *VerifyPayload) Puzzle() Puzzle {
 }
 
 func (vp *VerifyPayload) VerifySolutions(ctx context.Context) (*Metadata, VerifyError) {
-	solutions, err := NewSolutions(vp.solutions)
-	if err != nil {
-		slog.WarnContext(ctx, "Failed to decode solutions bytes", common.ErrAttr(err))
+	solutions := vp.solutions
+	if solutions == nil || len(solutions.Buffer) != vp.puzzle.SolutionsCount()*SolutionLength ||
+		(vp.puzzle.Challenge() == ChallengeArgon2ID && vp.puzzle.SolutionsCount() != Argon2IDSolutionsCount) {
+		slog.WarnContext(ctx, "Invalid solutions count")
 		return nil, ParseResponseError
 	}
 
@@ -218,14 +238,19 @@ func (vp *VerifyPayload) VerifySolutions(ctx context.Context) (*Metadata, Verify
 		return solutions.Metadata, DuplicateSolutionsError
 	}
 
-	puzzleBytes := vp.puzzleData
-	if len(puzzleBytes) < PuzzleBytesLength {
-		extendedPuzzleBytes := make([]byte, PuzzleBytesLength)
-		copy(extendedPuzzleBytes, puzzleBytes)
-		puzzleBytes = extendedPuzzleBytes
+	var solutionsActual int
+	var err error
+	if vp.puzzle.Challenge() == ChallengeArgon2ID {
+		solutionsActual, err = solutions.VerifyArgon2ID(ctx, vp.puzzleData, vp.puzzle.Difficulty(), Argon2IDMemoryKiB)
+	} else {
+		puzzleBytes := vp.puzzleData
+		if len(puzzleBytes) < PuzzleBytesLength {
+			extendedPuzzleBytes := make([]byte, PuzzleBytesLength)
+			copy(extendedPuzzleBytes, puzzleBytes)
+			puzzleBytes = extendedPuzzleBytes
+		}
+		solutionsActual, err = solutions.VerifyBlake2b(ctx, puzzleBytes, vp.puzzle.Difficulty())
 	}
-
-	solutionsActual, err := solutions.Verify(ctx, puzzleBytes, vp.puzzle.Difficulty())
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to verify solutions", common.ErrAttr(err))
 		return solutions.Metadata, InvalidSolutionError

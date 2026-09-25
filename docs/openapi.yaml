@@ -148,7 +148,7 @@ paths:
         "403":
           description: API key not found
         "429":
-          description: API key rate limited
+          description: API key rate limited or verification capacity exhausted
       security:
         - ApiKeyAuth: []
   /siteverify:
@@ -210,7 +210,7 @@ paths:
         "403":
           description: API key not found
         "429":
-          description: API key rate limited
+          description: API key rate limited or verification capacity exhausted
   /asynctask/{id}:
     get:
       tags:
