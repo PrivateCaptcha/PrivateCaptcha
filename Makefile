@@ -61,6 +61,9 @@ test-widget-unit:
 bench-unit:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -tags enterprise -bench=. -benchtime=20s -short ./...
 
+bench-puzzle-solver:
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -tags enterprise -run '^$$' -bench '^BenchmarkSolver' -benchtime=1s -count=3 -benchmem $(EXTRA_TEST_FLAGS) ./pkg/puzzle
+
 test-docker:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose $(TEST_DOCKER_COMPOSE_FILES) down -v --remove-orphans
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose $(TEST_DOCKER_COMPOSE_FILES) run --build --remove-orphans --rm migration

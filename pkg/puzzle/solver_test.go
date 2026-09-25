@@ -92,6 +92,30 @@ func TestSolverCancellation(t *testing.T) {
 	}
 }
 
+func TestSolverWorkerCounts(t *testing.T) {
+	for _, count := range []uint8{0, 1, 3} {
+		t.Run(fmt.Sprintf("count-%d", count), func(t *testing.T) {
+			p := NewComputePuzzle(1, [16]byte{}, 100)
+			p.solutionsCount = count
+			solutions, err := (&ComputeSolver{}).Solve(t.Context(), p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(solutions.Buffer) != int(count)*SolutionLength {
+				t.Fatalf("got %d solution bytes for %d solutions", len(solutions.Buffer), count)
+			}
+			puzzleBytes, err := p.MarshalBinary()
+			if err != nil {
+				t.Fatal(err)
+			}
+			found, err := solutions.Verify(t.Context(), normalizePuzzleBuffer(puzzleBytes), p.Difficulty())
+			if err != nil || found != int(count) {
+				t.Fatalf("verified %d of %d solutions: %v", found, count, err)
+			}
+		})
+	}
+}
+
 func benchmarkDifficulty(difficulty uint8, b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		p := NewComputePuzzle(0, [16]byte{}, difficulty)
@@ -140,4 +164,30 @@ func BenchmarkDifficulty165(b *testing.B) {
 
 func BenchmarkDifficulty180(b *testing.B) {
 	benchmarkDifficulty(180, b)
+}
+
+func BenchmarkSolverSearch(b *testing.B) {
+	buf := make([]byte, PuzzleBytesLength)
+	buf[0] = 1
+	solver := &ComputeSolver{}
+	threshold := thresholdFromDifficulty(130)
+	var solution [SolutionLength]byte
+	b.ReportAllocs()
+	for n := 0; n < b.N; n++ {
+		if err := solver.solveOne(b.Context(), buf, threshold, solution[:]); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkSolverFull(b *testing.B) {
+	p := NewComputePuzzle(0, [16]byte{}, 100)
+	p.userData[0] = 1
+	solver := &ComputeSolver{}
+	b.ReportAllocs()
+	for n := 0; n < b.N; n++ {
+		if _, err := solver.Solve(b.Context(), p); err != nil {
+			b.Fatal(err)
+		}
+	}
 }
