@@ -6,7 +6,7 @@
   "devDependencies": {
     "esbuild": "^0.28.0",
     "esbuild-plugin-inline-worker": "^0.1.1",
-    "eslint": "^9.23.0",
+    "eslint": "^10.0.0",
     "happy-dom": "^20.0.2"
   },
   "scripts": {
