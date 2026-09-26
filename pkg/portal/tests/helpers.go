@@ -44,10 +44,6 @@ func (f *StubPuzzleEngine) Write(ctx context.Context, p puzzle.Puzzle, extraSalt
 func (f *StubPuzzleEngine) Verify(ctx context.Context, payload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, error) {
 	return f.Result, nil
 }
-func (f *StubPuzzleEngine) CacheVerification(ctx context.Context, vr *puzzle.VerifyResult) {
-	// bump
-}
-
 func wrapScriptContentsWithCDATA(input []byte) []byte {
 	re := regexp.MustCompile(`(?s)(<script[^>]*>)(.*?)(</script>)`)
 

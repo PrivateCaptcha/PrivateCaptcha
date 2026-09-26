@@ -68,13 +68,17 @@ type admissionTestPayload struct {
 	calls   int
 }
 
+func (p *admissionTestPayload) VerifySignature(context.Context, *puzzle.Salt, []byte) error {
+	return nil
+}
+
 func (p *admissionTestPayload) VerifySolutions(context.Context) (*puzzle.Metadata, puzzle.VerifyError) {
 	p.calls++
 	if p.started != nil {
 		close(p.started)
 		<-p.release
 	}
-	return nil, p.result
+	return &puzzle.Metadata{}, p.result
 }
 
 func TestVerificationAdmission(t *testing.T) {
@@ -105,6 +109,10 @@ func TestVerificationAdmission(t *testing.T) {
 	waiting := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p)}
 	if _, result, err := verifier.verifyPayload(t.Context(), waiting, false); err != errVerificationBusy || result != puzzle.VerifyNoError || waiting.calls != 0 {
 		t.Fatalf("full admission: result = %v, err = %v, calls = %d", result, err, waiting.calls)
+	}
+	unsafe := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p)}
+	if _, result, err := verifier.verifyPayload(t.Context(), unsafe, true); err != nil || result != puzzle.VerifyNoError || unsafe.calls != 1 {
+		t.Fatalf("bypassed admission: result = %v, err = %v, calls = %d", result, err, unsafe.calls)
 	}
 	close(first.release)
 	if outcome := <-done; outcome.result != puzzle.VerifyNoError || outcome.err != nil {
@@ -183,6 +191,85 @@ func (owner argonOwner) OwnerID(context.Context, time.Time) (int32, *int32, erro
 	return owner.id, nil, nil
 }
 
+func TestArgon2IDConcurrentReplay(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	ctx := t.Context()
+	user, org, err := dbtests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := store.Impl().CreateNewProperty(ctx, dbtests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier := NewVerifier(testsConfigStore(), store, config.NewStaticValue(common.FingerprintHeaderKey, ""), nil)
+	if err := verifier.Update(ctx); err != nil {
+		t.Fatal(err)
+	}
+	newPayload := func() *admissionTestPayload {
+		p, err := puzzle.NewComputePuzzleForChallenge(puzzle.NextPuzzleID(), property.ExternalID.Bytes, 0, puzzle.ChallengeArgon2ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := p.Init(property.ValidityInterval); err != nil {
+			t.Fatal(err)
+		}
+		return &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p)}
+	}
+	owner := argonOwner{user.ID}
+	first := newPayload()
+	first.started, first.release = make(chan struct{}), make(chan struct{})
+	defer func() {
+		select {
+		case <-first.release:
+		default:
+			close(first.release)
+		}
+	}()
+	type outcome struct {
+		result *puzzle.VerifyResult
+		err    error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		result, err := verifier.Verify(ctx, first, owner, time.Now().UTC())
+		done <- outcome{result, err}
+	}()
+	<-first.started
+	second := &admissionTestPayload{SolutionPayload: first.SolutionPayload}
+	result, err := verifier.Verify(ctx, second, owner, time.Now().UTC())
+	if err != nil || result.Error != puzzle.VerifiedBeforeError || second.calls != 0 {
+		t.Fatalf("concurrent replay: result = %+v, err = %v", result, err)
+	}
+	close(first.release)
+	firstOutcome := <-done
+	if firstOutcome.err != nil || firstOutcome.result.Error != puzzle.VerifyNoError {
+		t.Fatalf("first verification: result = %+v, err = %v", firstOutcome.result, firstOutcome.err)
+	}
+	result, err = verifier.Verify(ctx, second, owner, time.Now().UTC())
+	if err != nil || result.Error != puzzle.VerifiedBeforeError {
+		t.Fatalf("serial replay: result = %+v, err = %v", result, err)
+	}
+
+	invalid := newPayload()
+	invalid.result = puzzle.InvalidSolutionError
+	result, err = verifier.Verify(ctx, invalid, owner, time.Now().UTC())
+	if err != nil || result.Error != puzzle.InvalidSolutionError {
+		t.Fatalf("invalid solution: result = %+v, err = %v", result, err)
+	}
+	valid := &admissionTestPayload{SolutionPayload: invalid.SolutionPayload}
+	result, err = verifier.Verify(ctx, valid, owner, time.Now().UTC())
+	if err != nil || result.Error != puzzle.VerifyNoError {
+		t.Fatalf("retry after invalid solution: result = %+v, err = %v", result, err)
+	}
+	result, err = verifier.Verify(ctx, valid, owner, time.Now().UTC())
+	if err != nil || result.Error != puzzle.VerifiedBeforeError {
+		t.Fatalf("replay after retry: result = %+v, err = %v", result, err)
+	}
+}
+
 func TestArgon2IDAdmissionAfterValidation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("requires PostgreSQL")
@@ -227,10 +314,6 @@ func TestArgon2IDAdmissionAfterValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := verifier.Verify(ctx, payload, argonOwner{user.ID}, time.Now().UTC()); err != nil || result.Error != puzzle.VerifyNoError {
-		t.Fatalf("uncontended verification: result = %+v, err = %v", result, err)
-	}
-
 	if err := verifier.verificationSemaphore.Acquire(ctx, int64(puzzle.Argon2IDMemoryKiB)); err != nil {
 		t.Fatal(err)
 	}
@@ -239,9 +322,6 @@ func TestArgon2IDAdmissionAfterValidation(t *testing.T) {
 	defer cancel()
 	if result, err := verifier.Verify(shortCtx, payload, argonOwner{user.ID}, time.Now().UTC()); err != errVerificationBusy || result != nil {
 		t.Fatalf("contended verification: result = %+v, err = %v", result, err)
-	}
-	if result, err := verifier.VerifyUnsafe(ctx, payload, argonOwner{user.ID}, time.Now().UTC()); err != nil || result.Error != puzzle.VerifyNoError {
-		t.Fatalf("unmetered verification: result = %+v, err = %v", result, err)
 	}
 	if result, err := verifier.Verify(ctx, payload, argonOwner{-1}, time.Now().UTC()); err != nil || result.Error != puzzle.WrongOwnerError {
 		t.Fatalf("wrong owner: result = %+v, err = %v", result, err)
@@ -296,5 +376,8 @@ func TestArgon2IDAdmissionAfterValidation(t *testing.T) {
 		if _, err := verifier.ParseSolutionPayload(ctx, bytes.Join([][]byte{encodedWrong, parts[1], parts[2]}, []byte{'.'})); err == nil {
 			t.Fatal("wrong-count Argon payload parsed")
 		}
+	}
+	if result, err := verifier.VerifyUnsafe(ctx, payload, argonOwner{user.ID}, time.Now().UTC()); err != nil || result.Error != puzzle.VerifyNoError {
+		t.Fatalf("unmetered verification: result = %+v, err = %v", result, err)
 	}
 }

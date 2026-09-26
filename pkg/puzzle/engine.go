@@ -15,17 +15,11 @@ type VerifyResult struct {
 	Error      VerifyError
 	CreatedAt  time.Time
 	ExpiresAt  time.Time
-	now        time.Time
 	Domain     string
-	puzzle     Puzzle
 }
 
-func NewVerifyResult(verr VerifyError, puzzle Puzzle, tnow time.Time) *VerifyResult {
-	return &VerifyResult{
-		Error:  verr,
-		puzzle: puzzle,
-		now:    tnow,
-	}
+func NewVerifyResult(verr VerifyError) *VerifyResult {
+	return &VerifyResult{Error: verr}
 }
 
 func (vr *VerifyResult) Valid() bool {
@@ -44,14 +38,6 @@ func (vr *VerifyResult) Success() bool {
 
 func (vr *VerifyResult) SetError(verr VerifyError) {
 	vr.Error = verr
-}
-
-func (vr *VerifyResult) Puzzle() Puzzle {
-	return vr.puzzle
-}
-
-func (vr *VerifyResult) VerificationTime() time.Time {
-	return vr.now
 }
 
 func (vr *VerifyResult) ErrorsToStrings() []string {
@@ -97,5 +83,4 @@ type Engine interface {
 	Write(ctx context.Context, p Puzzle, extraSalt []byte, w http.ResponseWriter) error
 	ParseSolutionPayload(ctx context.Context, payload []byte) (SolutionPayload, error)
 	Verify(ctx context.Context, payload SolutionPayload, expectedOwner OwnerIDSource, tnow time.Time) (*VerifyResult, error)
-	CacheVerification(ctx context.Context, vr *VerifyResult)
 }

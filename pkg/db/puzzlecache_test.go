@@ -8,32 +8,40 @@ import (
 )
 
 func TestPuzzleCacheRaceCondition(t *testing.T) {
-	pc := newPuzzleCache(30 * time.Minute)
+	pc := newPuzzleCache(time.Hour)
 	ctx := context.Background()
-	key := uint64(12345)
-	maxCount := uint32(10)
-
+	const key uint64 = 12345
+	const limit uint32 = 2
+	const workers = 32
+	start := make(chan struct{})
+	results := make(chan *PuzzleReservation, workers)
 	var wg sync.WaitGroup
-	numGoroutines := 100
-	numIterations := 100
-
-	for i := 0; i < numGoroutines; i++ {
-		wg.Add(2)
-
+	for range workers {
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < numIterations; j++ {
-				pc.Inc(ctx, key, 30*time.Minute)
-			}
-		}()
-
-		go func() {
-			defer wg.Done()
-			for j := 0; j < numIterations; j++ {
-				pc.CheckCount(ctx, key, maxCount)
+			<-start
+			reservation, ok := pc.Reserve(ctx, key, limit, time.Hour)
+			if ok {
+				results <- reservation
 			}
 		}()
 	}
-
+	close(start)
 	wg.Wait()
+	close(results)
+	var reservations []*PuzzleReservation
+	for reservation := range results {
+		reservations = append(reservations, reservation)
+	}
+	if len(reservations) != int(limit) {
+		t.Fatalf("reserved %d slots, want %d", len(reservations), limit)
+	}
+	if _, ok := pc.Reserve(ctx, key, limit, time.Hour); ok {
+		t.Fatal("full puzzle cache should reject another verification")
+	}
+	reservations[0].Release()
+	if _, ok := pc.Reserve(ctx, key, limit, time.Hour); !ok {
+		t.Fatal("released reservation was not available for retry")
+	}
 }
