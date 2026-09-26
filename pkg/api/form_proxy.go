@@ -221,19 +221,36 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 	case <-ctx.Done():
 		http.Error(w, http.StatusText(http.StatusRequestTimeout), http.StatusRequestTimeout)
 	case <-timer.C:
-		if form, ok := getRequestedForm(ctx, s.BusinessDB); ok {
-			// we limit retries on the hot path as by definition here we are already quite busy
-			formCopy := *form
-			formCopy.RetryRequestCount = 0
-			if err := s.processFormSubmission(ctx, &formCopy, submission, false /*skip memory semaphore*/); err == nil {
-				w.WriteHeader(http.StatusAccepted)
-			} else {
-				http.Error(w, http.StatusText(http.StatusNotAcceptable), http.StatusNotAcceptable)
-			}
-		} else {
-			s.Metrics.ObserveEventDropped(common.FormEventType)
+		s.processInlineFormSubmission(ctx, w, submission)
+	}
+}
+
+func (s *Server) processInlineFormSubmission(ctx context.Context, w http.ResponseWriter, submission *FormSubmission) {
+	form, ok := getRequestedForm(ctx, s.BusinessDB)
+	if !ok {
+		s.Metrics.ObserveEventDropped(common.FormEventType)
+		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		return
+	}
+
+	// we limit retries on the hot path as by definition here we are already quite busy
+	formCopy := *form
+	formCopy.RetryRequestCount = 0
+	skipMemorySemaphore := submission.CaptchaSolution != nil && submission.CaptchaSolution.Puzzle().Challenge() == puzzle.ChallengeArgon2ID
+	if skipMemorySemaphore {
+		select {
+		case s.formInlineBypassSlot <- struct{}{}:
+			defer func() { <-s.formInlineBypassSlot }()
+		default:
+			slog.WarnContext(ctx, "Inline form verification capacity exhausted", "formID", form.ID)
 			http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
 		}
+	}
+	if err := s.processFormSubmission(ctx, &formCopy, submission, skipMemorySemaphore); err == nil {
+		w.WriteHeader(http.StatusAccepted)
+	} else {
+		http.Error(w, http.StatusText(http.StatusNotAcceptable), http.StatusNotAcceptable)
 	}
 }
 

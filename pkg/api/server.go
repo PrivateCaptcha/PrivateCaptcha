@@ -78,33 +78,34 @@ func init() {
 }
 
 type Server struct {
-	APIHeaders          map[string][]string
-	Stage               string
-	Prefix              string
-	BusinessDB          db.Implementor
-	TimeSeries          common.TimeSeriesStore
-	Levels              *difficulty.Levels
-	Auth                *AuthMiddleware
-	VerifyLogChan       chan *common.VerifyRecord
-	VerifyLogCancel     context.CancelFunc
-	FormSubmitLogChan   chan *common.FormSubmitRecord
-	FormSubmitLogCancel context.CancelFunc
-	FormSubmissionChan  chan *FormSubmission
-	FormSubmitCancel    context.CancelFunc
-	FailingForms        *common.ExpiringCounterMap[int32]
-	APICors             *cors.Cors
-	FormsCors           *cors.Cors
-	FormsClient         *http.Client
-	Metrics             common.APIMetrics
-	Mailer              common.Mailer
-	RateLimiter         ratelimit.HTTPRateLimiter
-	Verifier            *Verifier
-	FormURLVerifier     common.FormURLVerifier
-	SubscriptionLimits  db.SubscriptionLimits
-	IDHasher            common.IdentifierHasher
-	AsyncTasks          db.AsyncTasks
-	CountryCodeHeader   common.ConfigItem
-	NoticeProvider      db.PropertyNoticeProvider
+	APIHeaders           map[string][]string
+	Stage                string
+	Prefix               string
+	BusinessDB           db.Implementor
+	TimeSeries           common.TimeSeriesStore
+	Levels               *difficulty.Levels
+	Auth                 *AuthMiddleware
+	VerifyLogChan        chan *common.VerifyRecord
+	VerifyLogCancel      context.CancelFunc
+	FormSubmitLogChan    chan *common.FormSubmitRecord
+	FormSubmitLogCancel  context.CancelFunc
+	FormSubmissionChan   chan *FormSubmission
+	FormSubmitCancel     context.CancelFunc
+	formInlineBypassSlot chan struct{}
+	FailingForms         *common.ExpiringCounterMap[int32]
+	APICors              *cors.Cors
+	FormsCors            *cors.Cors
+	FormsClient          *http.Client
+	Metrics              common.APIMetrics
+	Mailer               common.Mailer
+	RateLimiter          ratelimit.HTTPRateLimiter
+	Verifier             *Verifier
+	FormURLVerifier      common.FormURLVerifier
+	SubscriptionLimits   db.SubscriptionLimits
+	IDHasher             common.IdentifierHasher
+	AsyncTasks           db.AsyncTasks
+	CountryCodeHeader    common.ConfigItem
+	NoticeProvider       db.PropertyNoticeProvider
 }
 
 type apiKeyOwnerSource struct {
@@ -211,6 +212,7 @@ func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 	if s.FailingForms == nil {
 		s.FailingForms = common.NewExpiringCounterMap[int32]()
 	}
+	s.formInlineBypassSlot = make(chan struct{}, 1)
 
 	if (s.FormsClient == nil) && (s.FormURLVerifier != nil) {
 		s.FormsClient = common.NewFormHTTPClient(s.FormURLVerifier, 0 /*redirect count*/)

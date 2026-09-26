@@ -967,6 +967,119 @@ func TestQueuedArgonFormSubmissionBypassesBusyCapacity(t *testing.T) {
 	held = false
 }
 
+func busyInlineFormProxyForTest(t *testing.T, domain string, transport submitFormRoundTripFunc) (*Server, *dbgen.Form, url.Values, string) {
+	t.Helper()
+	ctx := t.Context()
+	form, property := createFormProxyForTest(ctx, t, t.Name(), domain)
+	setArgonAPIPropertyChallenge(t, property, dbgen.ChallengeTypeArgon2ID)
+	puzzleText, solutionsText, err := solutionsSuite(ctx, db.UUIDToSiteKey(property.ExternalID), property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := *server
+	s.FormSubmissionChan = make(chan *FormSubmission, 1)
+	s.FormSubmissionChan <- &FormSubmission{}
+	s.FormSubmitLogChan = make(chan *common.FormSubmitRecord, 1)
+	s.FailingForms = common.NewExpiringCounterMap[int32]()
+	s.FormURLVerifier = &stubSubmitFormURLVerifier{}
+	s.FormsClient = &http.Client{Transport: transport}
+	s.RateLimiter = &ratelimit.StubRateLimiter{}
+	capacity := s.Verifier.verificationCapacityKiB
+	if err := s.Verifier.verificationSemaphore.Acquire(ctx, capacity); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Verifier.verificationSemaphore.Release(capacity) })
+
+	values := url.Values{
+		"email":                            {"user@example.com"},
+		common.ParamPrivateCaptchaSolution: {solutionsText + "." + puzzleText},
+	}
+	return &s, form, values, db.UUIDToSiteKey(property.ExternalID)
+}
+
+func submitBusyInlineFormProxy(s *Server, form *dbgen.Form, values url.Values) int {
+	req := httptest.NewRequest(http.MethodPost, "/form/"+db.UUIDToString(form.ExternalID), strings.NewReader(values.Encode()))
+	req.SetPathValue(common.ParamForm, db.UUIDToString(form.ExternalID))
+	req = req.WithContext(context.WithValue(req.Context(), common.FormContextKey, form))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	s.formProxyHandler(w, req)
+	return w.Code
+}
+
+func TestFullFormQueueDeliversBusyArgonSubmissionInline(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	var delivered atomic.Int32
+	s, form, values, _ := busyInlineFormProxyForTest(t, "inline-argon.example.com", func(req *http.Request) (*http.Response, error) {
+		delivered.Add(1)
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header)}, nil
+	})
+
+	if status := submitBusyInlineFormProxy(s, form, values); status != http.StatusAccepted {
+		t.Fatalf("full queue response = %d, want 202", status)
+	}
+	if got := delivered.Load(); got != 1 {
+		t.Fatalf("form deliveries = %d, want 1", got)
+	}
+}
+
+func TestFullFormQueueLimitsConcurrentInlineBypasses(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	var delivered atomic.Int32
+	s, form, values, sitekey := busyInlineFormProxyForTest(t, "inline-bypass.example.com", func(req *http.Request) (*http.Response, error) {
+		if delivered.Add(1) == 1 {
+			started <- struct{}{}
+			select {
+			case <-release:
+			case <-req.Context().Done():
+				return nil, req.Context().Err()
+			}
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header)}, nil
+	})
+	puzzleText, solutionsText, err := solutionsSuite(t.Context(), sitekey, "inline-bypass.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondValues := url.Values{
+		"email":                            {"another@example.com"},
+		common.ParamPrivateCaptchaSolution: {solutionsText + "." + puzzleText},
+	}
+
+	first := make(chan int, 1)
+	go func() { first <- submitBusyInlineFormProxy(s, form, values) }()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first inline submission did not reach downstream")
+	}
+	otherServer := *s
+	if status := submitBusyInlineFormProxy(&otherServer, form, secondValues); status != http.StatusServiceUnavailable {
+		t.Fatalf("concurrent inline response = %d, want 503", status)
+	}
+	if got := delivered.Load(); got != 1 {
+		t.Fatalf("form deliveries = %d, want 1", got)
+	}
+	close(release)
+	if status := <-first; status != http.StatusAccepted {
+		t.Fatalf("first inline response = %d, want 202", status)
+	}
+}
+
 func TestFormProxyRejectsWrongPropertyCaptcha(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
