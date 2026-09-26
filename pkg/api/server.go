@@ -478,10 +478,6 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 	if result.Valid() {
 		s.addVerifyRecord(ctx, result, r.UserAgent())
 	}
-	if result.Success() {
-		s.Verifier.CacheVerification(ctx, result)
-	}
-
 	if apiKey := ownerSource.cachedKey; apiKey != nil {
 		// if we are not cached, then we will recheck via "delayed" mechanism of OwnerIDSource
 		// when rate limiting is cleaned up (due to inactivity) we should still be able to access on defaults
@@ -558,10 +554,6 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	if result.Valid() {
 		s.addVerifyRecord(ctx, result, r.UserAgent())
 	}
-	if result.Success() {
-		s.Verifier.CacheVerification(ctx, result)
-	}
-
 	if apiKey := ownerSource.cachedKey; apiKey != nil {
 		// if we are not cached, then we will recheck via "delayed" mechanism of OwnerIDSource
 		// when rate limiting is cleaned up (due to inactivity) we should still be able to access on defaults
@@ -648,9 +640,6 @@ func (rv *reportingVerifier) Write(ctx context.Context, p puzzle.Puzzle, extraSa
 func (rv *reportingVerifier) ParseSolutionPayload(ctx context.Context, payload []byte) (puzzle.SolutionPayload, error) {
 	return rv.verifier.ParseSolutionPayload(ctx, payload)
 }
-func (rv *reportingVerifier) CacheVerification(ctx context.Context, vr *puzzle.VerifyResult) {
-	rv.verifier.CacheVerification(ctx, vr)
-}
 func (rv *reportingVerifier) Verify(ctx context.Context, payload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, error) {
 	result, err := rv.verifier.Verify(ctx, payload, expectedOwner, tnow)
 	if err == nil {
@@ -659,9 +648,6 @@ func (rv *reportingVerifier) Verify(ctx context.Context, payload puzzle.Solution
 		}
 		if result.Valid() {
 			rv.reportFunc(ctx, result, rv.userAgent)
-		}
-		if result.Success() {
-			rv.verifier.CacheVerification(ctx, result)
 		}
 	}
 	return result, err

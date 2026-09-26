@@ -187,10 +187,6 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err == nil {
-			if result.Success() && result.Error == puzzle.MaintenanceModeError {
-				// maintenance-mode returns Success() with PropertyID==0
-				s.Verifier.CacheVerification(ctx, result)
-			}
 			if result.PropertyID == ownerSource.Form.PropertyID {
 				s.Verifier.recordVerificationStats(result, tnow)
 			}
@@ -199,7 +195,6 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
-			s.Verifier.CacheVerification(ctx, result)
 			payload = nil
 		}
 		if form.RequestsPerMinute > 0 {
@@ -364,9 +359,6 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 			return err
 		}
 
-		if result.Success() && result.Error == puzzle.MaintenanceModeError {
-			s.Verifier.CacheVerification(ctx, result) // record single-use in maintenance mode (property is nil)
-		}
 		if result.PropertyID == ownerSource.Form.PropertyID {
 			s.Verifier.recordVerificationStats(result, sub.Time)
 		}
@@ -376,7 +368,6 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 		}
 
 		s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
-		s.Verifier.CacheVerification(ctx, result)
 	}
 
 	if err := s.FormURLVerifier.VerifyURL(ctx, f.URL); err != nil {

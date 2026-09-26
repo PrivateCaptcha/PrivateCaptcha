@@ -62,8 +62,7 @@ type Implementor interface {
 	Impl() *BusinessStoreImpl
 	WithTx(ctx context.Context, fn func(*BusinessStoreImpl) ([]*common.AuditLogEvent, error)) ([]*common.AuditLogEvent, error)
 	Ping(ctx context.Context) error
-	CheckVerifiedPuzzle(ctx context.Context, p puzzle.Puzzle, maxCount uint32) bool
-	CacheVerifiedPuzzle(ctx context.Context, p puzzle.Puzzle, tnow time.Time)
+	ReserveVerifiedPuzzle(ctx context.Context, p puzzle.Puzzle, maxCount uint32, tnow time.Time) (*PuzzleReservation, bool)
 	CheckUserPropertyAccess(ctx context.Context, property *dbgen.Property, userID int32) bool
 	CacheHitRatio() float64
 	AuditLog() common.AuditLog
@@ -183,32 +182,12 @@ func (s *BusinessStore) CacheHitRatio() float64 {
 	return s.Cache.HitRatio()
 }
 
-func (s *BusinessStore) CheckVerifiedPuzzle(ctx context.Context, p puzzle.Puzzle, maxCount uint32) bool {
-	if p == nil || p.IsZero() {
-		return false
+func (s *BusinessStore) ReserveVerifiedPuzzle(ctx context.Context, p puzzle.Puzzle, maxCount uint32, tnow time.Time) (*PuzzleReservation, bool) {
+	if p == nil || p.IsZero() || !tnow.Before(p.Expiration()) {
+		return nil, false
 	}
-
-	// purely theoretically there's still a chance of cache collision, but it's so negligible that it's allowed
-	// (HashKey() has to match during puzzle.DefaultValidityPeriod on the same server)
-	return !s.puzzleCache.CheckCount(ctx, p.HashKey(), maxCount)
-}
-
-func (s *BusinessStore) CacheVerifiedPuzzle(ctx context.Context, p puzzle.Puzzle, tnow time.Time) {
-	if p == nil || p.IsZero() {
-		slog.Log(ctx, common.LevelTrace, "Skipping caching zero puzzle")
-		return
-	}
-
-	expiration := p.Expiration()
-	// this check should have been done before in the pipeline. Here the check only to safeguard storing in cache
-	if !tnow.Before(expiration) {
-		slog.WarnContext(ctx, "Skipping caching expired puzzle", "now", tnow, "expiration", p.Expiration())
-		return
-	}
-
-	key := p.HashKey()
-	value := s.puzzleCache.Inc(ctx, key, expiration.Sub(tnow))
-	slog.Log(ctx, common.LevelTrace, "Cached verified puzzle", "times", value, "key", key)
+	// Hash collisions during the puzzle's lifetime on the same server are sufficiently unlikely.
+	return s.puzzleCache.Reserve(ctx, p.HashKey(), maxCount, p.Expiration().Sub(tnow))
 }
 
 func (s *BusinessStore) CheckUserPropertyAccess(ctx context.Context, property *dbgen.Property, userID int32) bool {

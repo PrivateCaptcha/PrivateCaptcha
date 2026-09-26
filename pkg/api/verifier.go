@@ -192,10 +192,6 @@ func (v *Verifier) verifyPuzzleValid(ctx context.Context, payload puzzle.Solutio
 				// Cannot verify signature without property salt - reject to prevent forgery attacks
 				return p, nil, puzzle.IntegrityError
 			}
-			if v.Store.CheckVerifiedPuzzle(ctx, p, 1 /*maxCount*/) {
-				slog.WarnContext(ctx, "Puzzle is already cached", "count", 1, common.PuzzleIDAttr(p.PuzzleID()))
-				return p, nil, puzzle.VerifiedBeforeError
-			}
 			return p, nil, puzzle.MaintenanceModeError
 		default:
 			slog.ErrorContext(ctx, "Failed to find property by sitekey", "sitekey", sitekey, common.PuzzleIDAttr(p.PuzzleID()), common.ErrAttr(err))
@@ -203,15 +199,6 @@ func (v *Verifier) verifyPuzzleValid(ctx context.Context, payload puzzle.Solutio
 		}
 	}
 
-	var maxCount uint32 = 1
-	if (property != nil) && (property.MaxReplayCount > 0) {
-		maxCount = uint32(property.MaxReplayCount)
-	}
-
-	if v.Store.CheckVerifiedPuzzle(ctx, p, maxCount) {
-		slog.WarnContext(ctx, "Puzzle is already cached", "count", maxCount, common.PuzzleIDAttr(p.PuzzleID()))
-		return p, nil, puzzle.VerifiedBeforeError
-	}
 	if payload.NeedsExtraSalt() {
 		if serr := payload.VerifySignature(ctx, v.Salt.Value(), property.Salt); serr != nil {
 			return p, nil, puzzle.IntegrityError
@@ -256,7 +243,7 @@ func (v *Verifier) VerifyUnsafe(ctx context.Context, verifyPayload puzzle.Soluti
 
 func (v *Verifier) verify(ctx context.Context, verifyPayload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time, skipMemorySemaphore bool) (*puzzle.VerifyResult, error) {
 	puzzleObject, property, perr := v.verifyPuzzleValid(ctx, verifyPayload, tnow)
-	result := puzzle.NewVerifyResult(perr, puzzleObject, tnow)
+	result := puzzle.NewVerifyResult(perr)
 	if puzzleObject != nil && !puzzleObject.IsZero() {
 		result.PuzzleID = puzzleObject.PuzzleID()
 		// The puzzle bytes are untrusted until their signature is verified (and we parse expiration/creation time from bytes)
@@ -305,7 +292,21 @@ func (v *Verifier) verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 		}
 	}
 
+	var maxCount uint32 = 1
+	if property != nil && property.MaxReplayCount > 0 {
+		maxCount = uint32(property.MaxReplayCount)
+	}
+	reservation, reserved := v.Store.ReserveVerifiedPuzzle(ctx, puzzleObject, maxCount, tnow)
+	if !reserved {
+		slog.WarnContext(ctx, "Puzzle is already cached", "count", maxCount, common.PuzzleIDAttr(puzzleObject.PuzzleID()))
+		result.SetError(puzzle.VerifiedBeforeError)
+		return result, nil
+	}
+
 	metadata, verr, err := v.verifyPayload(ctx, verifyPayload, skipMemorySemaphore)
+	if err != nil || verr != puzzle.VerifyNoError {
+		reservation.Release()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -355,19 +356,6 @@ func (v *Verifier) verifyPayload(ctx context.Context, payload puzzle.SolutionPay
 	}
 	metadata, result := payload.VerifySolutions(ctx)
 	return metadata, result, nil
-}
-
-func (v *Verifier) CacheVerification(ctx context.Context, vr *puzzle.VerifyResult) {
-	if vr == nil {
-		return
-	}
-
-	puzzle := vr.Puzzle()
-	if puzzle == nil {
-		return
-	}
-
-	v.Store.CacheVerifiedPuzzle(ctx, puzzle, vr.VerificationTime())
 }
 
 func (v *Verifier) recordPuzzleStats(property *dbgen.Property, tnow time.Time) {

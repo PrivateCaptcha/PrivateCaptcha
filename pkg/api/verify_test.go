@@ -223,7 +223,8 @@ func TestArgonPuzzleVerifiesThroughAPI(t *testing.T) {
 	parts[1] = base64.StdEncoding.EncodeToString(tampered)
 	checkArgonAPIVerification(t, strings.Join(parts, "."), secret, sitekey, puzzle.IntegrityError)
 	checkArgonAPIVerification(t, solutionsText+"."+puzzleText, secret, sitekey, puzzle.VerifyNoError)
-	checkArgonAPIVerification(t, strings.Join(parts, "."), secret, sitekey, puzzle.VerifiedBeforeError)
+	checkArgonAPIVerification(t, strings.Join(parts, "."), secret, sitekey, puzzle.IntegrityError)
+	checkArgonAPIVerification(t, solutionsText+"."+puzzleText, secret, sitekey, puzzle.VerifiedBeforeError)
 
 	decodedSolutions, err := base64.StdEncoding.DecodeString(parts[0])
 	if err != nil {
@@ -368,7 +369,7 @@ func TestVerifyRejectsUnsignedExpiration(t *testing.T) {
 	}
 }
 
-func TestVerifyReplayCheckedBeforeTamperedChallenge(t *testing.T) {
+func TestVerifyRejectsTamperedChallengeAfterReplay(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -405,7 +406,14 @@ func TestVerifyReplayCheckedBeforeTamperedChallenge(t *testing.T) {
 		t.Fatal(err)
 	}
 	tnow := time.Now().UTC()
-	server.Verifier.CacheVerification(ctx, puzzle.NewVerifyResult(puzzle.VerifyNoError, p, tnow))
+	valid, err := server.Verifier.ParseSolutionPayload(ctx, payload.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := server.Verifier.Verify(ctx, valid, argonOwner{user.ID}, tnow)
+	if err != nil || result.Error != puzzle.VerifyNoError {
+		t.Fatalf("initial verification: result = %+v, err = %v", result, err)
+	}
 
 	parts := strings.Split(payload.String(), ".")
 	puzzleBytes, err := base64.StdEncoding.DecodeString(parts[1])
@@ -418,12 +426,12 @@ func TestVerifyReplayCheckedBeforeTamperedChallenge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := server.Verifier.Verify(ctx, tampered, nil, tnow)
+	result, err = server.Verifier.Verify(ctx, tampered, nil, tnow)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Error != puzzle.VerifiedBeforeError {
-		t.Fatalf("verification error = %v, want %v", result.Error, puzzle.VerifiedBeforeError)
+	if result.Error != puzzle.IntegrityError {
+		t.Fatalf("verification error = %v, want %v", result.Error, puzzle.IntegrityError)
 	}
 }
 
