@@ -18,7 +18,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
-	puzzlepkg "github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/justinas/alice"
@@ -376,7 +375,7 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	puzzle, property, err := s.Verifier.PuzzleForRequest(r, s.Levels, rulesPair, ri)
+	reqPuzzle, property, err := s.Verifier.PuzzleForRequest(r, s.Levels, rulesPair, ri)
 	if err != nil {
 		switch err {
 		case db.ErrTestProperty:
@@ -415,12 +414,12 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 			if notice := s.NoticeProvider.Notice(ctx, property); len(notice) > 0 {
 				w.Header().Set(common.HeaderWidgetNotice, notice)
 			}
-		} else if (property.Challenge == dbgen.ChallengeTypeArgon2ID) && (puzzle.Challenge() != puzzlepkg.ChallengeArgon2ID) {
+		} else if (property.Challenge == dbgen.ChallengeTypeArgon2ID) && (reqPuzzle.Challenge() != puzzle.ChallengeArgon2ID) {
 			w.Header().Set(common.HeaderWidgetNotice, "Your widget isn't compatible with a security setting your site needs.")
 		}
 	}
 
-	if err := s.Verifier.Write(ctx, puzzle, extraSalt, w); err != nil {
+	if err := s.Verifier.Write(ctx, reqPuzzle, extraSalt, w); err != nil {
 		slog.ErrorContext(ctx, "Failed to write puzzle", common.ErrAttr(err))
 	}
 
