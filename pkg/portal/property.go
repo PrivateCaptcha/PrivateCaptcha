@@ -834,7 +834,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 		return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, IsNew: false}, nil
 	}
 
-	name := r.FormValue(common.ParamName)
+	name := strings.TrimSpace(r.FormValue(common.ParamName))
 	if name != property.Name {
 		if nameStatus := s.Store.Impl().ValidatePropertyName(ctx, name, org); !nameStatus.Success() {
 			renderCtx.NameError = nameStatus.String()
