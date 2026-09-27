@@ -379,6 +379,12 @@ func TestPortalServerStoreErrors(t *testing.T) {
 			mux.ServeHTTP(w, req)
 		}(method, path)
 
+		if strings.HasPrefix(path, "/portal/orginvite/") && strings.HasSuffix(path, "/signup") {
+			if w.Code != http.StatusOK {
+				t.Errorf("Route %s %s expected login page, got %d", method, path, w.Code)
+			}
+			continue
+		}
 		if w.Code < 300 && w.Code != http.StatusNotFound && method != "OPTIONS" && !strings.HasSuffix(path, "/login") && !strings.HasSuffix(path, "/expired") {
 			t.Errorf("Route %s %s expected error status, got %d", method, path, w.Code)
 		}

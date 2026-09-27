@@ -36,15 +36,22 @@ func TestAddVerifyRecord(t *testing.T) {
 	}
 	expiresAt := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
 	ua := "private-captcha-go/1.2.3"
-	srv.addVerifyRecord(t.Context(), &puzzle.VerifyResult{
+	result := &puzzle.VerifyResult{
 		UserID:     1,
 		OrgID:      2,
 		PropertyID: 3,
 		PuzzleID:   4,
+		CreatedAt:  expiresAt.Add(-time.Minute),
 		ExpiresAt:  expiresAt,
-	}, ua)
+	}
+	srv.addVerifyRecord(t.Context(), result, ua)
 
-	actual := <-srv.VerifyLogChan
+	var actual *common.VerifyRecord
+	select {
+	case actual = <-srv.VerifyLogChan:
+	default:
+		t.Fatal("valid verification did not produce a record")
+	}
 	if !actual.ExpiresAt.Equal(expiresAt) {
 		t.Errorf("ExpiresAt = %v, want %v", actual.ExpiresAt, expiresAt)
 	}
@@ -52,9 +59,22 @@ func TestAddVerifyRecord(t *testing.T) {
 		t.Errorf("UserAgent = %q, want go", actual.UserAgent)
 	}
 
-	srv.addVerifyRecord(t.Context(), &puzzle.VerifyResult{}, string(common.VerifyClientForm))
-	if actual := <-srv.VerifyLogChan; actual.UserAgent != string(common.VerifyClientForm) {
+	srv.addVerifyRecord(t.Context(), result, string(common.VerifyClientForm))
+	select {
+	case actual = <-srv.VerifyLogChan:
+	default:
+		t.Fatal("valid form verification did not produce a record")
+	}
+	if actual.UserAgent != string(common.VerifyClientForm) {
 		t.Errorf("UserAgent = %q, want form", actual.UserAgent)
+	}
+
+	srv.addVerifyRecord(t.Context(), nil, ua)
+	srv.addVerifyRecord(t.Context(), &puzzle.VerifyResult{}, ua)
+	select {
+	case <-srv.VerifyLogChan:
+		t.Fatal("invalid verification produced a record")
+	default:
 	}
 }
 
