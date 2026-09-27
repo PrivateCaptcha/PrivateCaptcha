@@ -136,6 +136,61 @@ func TestVerificationAdmission(t *testing.T) {
 	}
 }
 
+func TestVerificationAdmissionWaitsForCapacity(t *testing.T) {
+	p, err := puzzle.NewComputePuzzleForChallenge(1, [puzzle.PropertyIDSize]byte{}, 0, puzzle.ChallengeArgon2ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	weight := int64(puzzle.Argon2IDMemoryKiB)
+	verifier := &Verifier{verificationSemaphore: semaphore.NewWeighted(weight)}
+	if err := verifier.verificationSemaphore.Acquire(t.Context(), weight); err != nil {
+		t.Fatal(err)
+	}
+	held := true
+	defer func() {
+		if held {
+			verifier.verificationSemaphore.Release(weight)
+		}
+	}()
+
+	waiting := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p)}
+	done := make(chan error, 1)
+	go func() {
+		_, _, err := verifier.verifyPayload(t.Context(), waiting, false)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("verification returned before capacity was released: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+	verifier.verificationSemaphore.Release(weight)
+	held = false
+	if err := <-done; err != nil || waiting.calls != 1 {
+		t.Fatalf("verification after release: err = %v, calls = %d", err, waiting.calls)
+	}
+}
+
+func TestVerificationAdmissionHonorsCallerDeadline(t *testing.T) {
+	p, err := puzzle.NewComputePuzzleForChallenge(1, [puzzle.PropertyIDSize]byte{}, 0, puzzle.ChallengeArgon2ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	weight := int64(puzzle.Argon2IDMemoryKiB)
+	verifier := &Verifier{verificationSemaphore: semaphore.NewWeighted(weight)}
+	if err := verifier.verificationSemaphore.Acquire(t.Context(), weight); err != nil {
+		t.Fatal(err)
+	}
+	defer verifier.verificationSemaphore.Release(weight)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	waiting := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p)}
+	if _, _, err := verifier.verifyPayload(ctx, waiting, false); err != context.DeadlineExceeded || waiting.calls != 0 {
+		t.Fatalf("caller deadline: err = %v, calls = %d", err, waiting.calls)
+	}
+}
+
 func TestMemoryBudgetUpdateWaitsForActiveVerification(t *testing.T) {
 	cfg := config.NewBaseConfig(testsConfigStore())
 	item := &budgetConfigItem{value: "16"}
@@ -320,7 +375,7 @@ func TestArgon2IDAdmissionAfterValidation(t *testing.T) {
 	t.Cleanup(func() { verifier.verificationSemaphore.Release(int64(puzzle.Argon2IDMemoryKiB)) })
 	shortCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
-	if result, err := verifier.Verify(shortCtx, payload, argonOwner{user.ID}, time.Now().UTC()); err != errVerificationBusy || result != nil {
+	if result, err := verifier.Verify(shortCtx, payload, argonOwner{user.ID}, time.Now().UTC()); err != context.DeadlineExceeded || result != nil {
 		t.Fatalf("contended verification: result = %+v, err = %v", result, err)
 	}
 	if result, err := verifier.Verify(ctx, payload, argonOwner{-1}, time.Now().UTC()); err != nil || result.Error != puzzle.WrongOwnerError {

@@ -346,9 +346,18 @@ func (v *Verifier) verifyPayload(ctx context.Context, payload puzzle.SolutionPay
 	if ctx.Err() != nil {
 		return nil, puzzle.VerifyNoError, ctx.Err()
 	}
-	if !v.verificationSemaphore.TryAcquire(weight) {
-		slog.WarnContext(ctx, "Verification capacity exhausted", "weightKiB", weight, "capacityKiB", v.verificationCapacityKiB)
-		return nil, puzzle.VerifyNoError, errVerificationBusy
+	acquireCtx, cancel := context.WithTimeout(ctx, 400*time.Millisecond)
+	err := v.verificationSemaphore.Acquire(acquireCtx, weight)
+	cancel()
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, puzzle.VerifyNoError, ctx.Err()
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			slog.WarnContext(ctx, "Verification capacity exhausted", "weightKiB", weight, "capacityKiB", v.verificationCapacityKiB)
+			return nil, puzzle.VerifyNoError, errVerificationBusy
+		}
+		return nil, puzzle.VerifyNoError, err
 	}
 	defer v.verificationSemaphore.Release(weight)
 	if ctx.Err() != nil {
