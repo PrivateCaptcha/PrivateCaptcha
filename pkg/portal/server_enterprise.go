@@ -46,6 +46,7 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRea
 		return fmt.Sprintf("{%s}", s)
 	}
 	privateReadWithTip := privateRead.Append(TipMiddleware)
+	longPrivateRead := alice.New(common.WriteDeadlineExtender(30 * time.Second)).Extend(privateRead)
 
 	rg.Handle(rg.Post(common.OrgEndpoint, common.NewEndpoint), privateWrite, http.HandlerFunc(s.postNewOrg))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite, s.Handler(s.postOrgMembers))
@@ -63,7 +64,7 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRea
 	)
 
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getAuditLogEvents))
-	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.ExportEndpoint), privateRead, http.HandlerFunc(s.exportAuditLogsCSV))
+	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.ExportEndpoint), longPrivateRead, http.HandlerFunc(s.exportAuditLogsCSV))
 
 	// Rules routes
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, common.NewEndpoint), privateReadWithTip, s.Handler(s.getOrgNewRule))

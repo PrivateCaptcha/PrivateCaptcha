@@ -375,3 +375,20 @@ func APIKeyMiddleware(apiKey string) alice.Constructor {
 		})
 	}
 }
+
+// writeDeadlineExtender pushes the underlying connection's write deadline out
+// to the supplied budget for the duration of the handler. It must be the
+// outermost middleware in the chain so that http.ResponseController receives
+// the server's native ResponseWriter: downstream wrappers (e.g. statusRecorder
+// from Recovered/SoftTimeoutHandler) do not implement Unwrap, so
+// SetWriteDeadline would be a no-op if this were placed later in the chain.
+// SoftTimeoutHandler only sets the request context deadline; it cannot extend
+// the connection-level write deadline imposed by http.Server.WriteTimeout.
+func WriteDeadlineExtender(budget time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(budget))
+			next.ServeHTTP(w, r)
+		})
+	}
+}
