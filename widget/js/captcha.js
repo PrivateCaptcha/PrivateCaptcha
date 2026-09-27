@@ -70,7 +70,7 @@ function setupPrivateCaptcha() {
             const widget = renderCaptchaWidget(htmlElement, options);
             if (widget) {
                 newWidgets.push(widget);
-                autoWidget = widget;
+                if (!autoWidget) { autoWidget = widget; }
             }
         }
 
