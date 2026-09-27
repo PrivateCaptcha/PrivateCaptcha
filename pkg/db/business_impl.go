@@ -1004,6 +1004,11 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 		slog.InfoContext(ctx, "Soft-deleted user", "userID", user.ID)
 	}
 
+	// Fetch the user's orgs from the DB (not cache) BEFORE soft-deleting them, since
+	// GetUserOrganizations filters deleted_at IS NULL and we need the pre-deletion set
+	// to invalidate other members' caches regardless of cache warmth.
+	userOrgs, orgsErr := impl.querier.GetUserOrganizations(ctx, Int(user.ID))
+
 	if affected, err := impl.querier.SoftDeleteUserOrganizations(ctx, Int(user.ID)); err != nil {
 		slog.ErrorContext(ctx, "Failed to soft-delete user organizations", "userID", user.ID, common.ErrAttr(err))
 		return nil, err
@@ -1027,15 +1032,28 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 
 	// invalidate user caches
 	userOrgsCacheKey := UserOrgsCacheKey(user.ID)
-	if orgs, err := FetchCachedArray[dbgen.GetUserOrganizationsRow](ctx, impl.cache, userOrgsCacheKey); err == nil {
-		for _, org := range orgs {
-			_ = impl.cache.Delete(ctx, orgCacheKey(org.Organization.ID))
+	if orgsErr == nil {
+		for _, org := range userOrgs {
+			// negative-cache (not Delete), mirroring SoftDeleteOrganization. Makes retrieveOrganizationWithAccess
+			// short-circuit on ErrNegativeCacheHit in BOTH variants.
+			_ = impl.cache.SetMissing(ctx, orgCacheKey(org.Organization.ID))
 			impl.invalidateOrgPropertiesCache(ctx, org.Organization.ID, nil /*all properties*/)
 			impl.invalidateOrgFormsCache(ctx, org.Organization.ID, nil /*all forms*/)
-		}
-		_ = impl.cache.Delete(ctx, userOrgsCacheKey)
-	}
 
+			// Invalidate every other member's UserOrgsCacheKey so the deleted org disappears from
+			// their org list immediately. Query the DB (not cache) for members so the invalidation
+			// runs even when orgUsersCacheKey is cold (e.g. no Members-tab view prior to deletion).
+			if members, mErr := impl.querier.GetOrganizationUsers(ctx, org.Organization.ID); mErr == nil {
+				for _, m := range members {
+					if m.User.ID != user.ID {
+						_ = impl.cache.Delete(ctx, UserOrgsCacheKey(m.User.ID))
+					}
+				}
+			}
+			_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.Organization.ID))
+		}
+	}
+	_ = impl.cache.Delete(ctx, userOrgsCacheKey)
 	_ = impl.cache.Delete(ctx, UserCacheKey(user.ID))
 
 	auditEvent := newUserAuditLogEvent(user, nil, common.AuditLogActionSoftDelete)
