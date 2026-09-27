@@ -86,6 +86,7 @@ func (s *Server) exportAuditLogsCSV(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// audit logs for UI are sorted from the newest, but in CSV we want to see from the oldest
+	logs = slices.Clone(logs)
 	slices.Reverse(logs)
 
 	// Set headers for CSV download
