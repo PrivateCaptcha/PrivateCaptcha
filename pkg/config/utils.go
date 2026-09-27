@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -16,6 +17,10 @@ import (
 const (
 	defaultArgon2IDMemoryBudgetMiB = int64(256)
 	kiBPerMiB                      = int64(1024)
+)
+
+var (
+	errBareIPURLLiteral = errors.New("bare IPv6 literal must be bracketed in a URL")
 )
 
 // Argon2IDMemoryBudgetKiB validates the process-wide capacity from a config item.
@@ -79,6 +84,22 @@ func splitHostPort(s string) (domain string, port string, err error) {
 
 	domain, port, err = net.SplitHostPort(s)
 	if err != nil {
+		// bracketed IPv6 without a port, e.g. "[::1]" — valid per RFC 3986 §3.2.2.
+		// Strip the brackets so the resulting ServeMux pattern ("GET ::1/portal/") matches
+		// the form Go's stripHostPort produces from "Host: [::1]:8080" (which strips both
+		// port and brackets via net.SplitHostPort). The bracket-preserving form "[::1]"
+		// would only match "Host: [::1]:8080" if stripHostPort left brackets intact — it
+		// does not — so the unbracketed form is the one consistent with the existing
+		// success branch "[::1]:8080" -> "::1".
+		if len(s) >= 2 && s[0] == '[' && s[len(s)-1] == ']' {
+			return s[1 : len(s)-1], "", nil
+		}
+		// bare IPv6 without a port, e.g. "::1" — invalid URL host; flag it explicitly
+		// so AsURL's existing slog.ErrorContext reports the misconfiguration.
+		if strings.Count(s, ":") >= 2 && net.ParseIP(s) != nil {
+			return "", "", errBareIPURLLiteral
+		}
+
 		lastColonIndex := strings.LastIndex(s, ":")
 		// no port, "s" is the full domain
 		if lastColonIndex == -1 {

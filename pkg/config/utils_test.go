@@ -91,6 +91,7 @@ func TestSplitHostPort(t *testing.T) {
 		{"domain_colon_number", "example.com:443", "example.com", "443", false},
 		{"localhost_with_port", "localhost:3000", "localhost", "3000", false},
 		{"subdomain_with_port", "api.example.com:9000", "api.example.com", "9000", false},
+		{"IPv6_URL", "[::1]", "::1", "", false},
 	}
 
 	for _, tc := range testCases {
