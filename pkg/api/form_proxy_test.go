@@ -902,15 +902,29 @@ func TestQueuedArgonFormSubmissionBypassesBusyCapacity(t *testing.T) {
 		t.Skip("requires PostgreSQL")
 	}
 
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-	form, property := createFormProxyForTest(ctx, t, t.Name(), "queued-argon.example.com")
-	setArgonAPIPropertyChallenge(t, property, dbgen.ChallengeTypeArgon2ID)
-	sitekey := db.UUIDToSiteKey(property.ExternalID)
-	puzzleText, solutionsText, err := solutionsSuite(ctx, sitekey, property.Domain)
+	form, property := createFormProxyForTest(t.Context(), t, t.Name(), "queued-argon.example.com")
+	property = setArgonAPIPropertyChallenge(t, property, dbgen.ChallengeTypeArgon2ID)
+	p, err := puzzle.NewComputePuzzleForChallenge(puzzle.NextPuzzleID(), property.ExternalID.Bytes, 0, puzzle.ChallengeArgon2ID)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := p.Init(property.ValidityInterval); err != nil {
+		t.Fatal(err)
+	}
+	solutions, err := (&puzzle.ComputeSolver{}).Solve(t.Context(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signed, err := p.Serialize(t.Context(), server.Verifier.Salt.Value(), property.Salt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var puzzleText strings.Builder
+	if err := signed.Write(&puzzleText); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
 
 	var delivered atomic.Int32
 	s := *server
@@ -925,7 +939,7 @@ func TestQueuedArgonFormSubmissionBypassesBusyCapacity(t *testing.T) {
 
 	values := url.Values{
 		"email":                            {"user@example.com"},
-		common.ParamPrivateCaptchaSolution: {solutionsText + "." + puzzleText},
+		common.ParamPrivateCaptchaSolution: {solutions.String() + "." + puzzleText.String()},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/form/"+db.UUIDToString(form.ExternalID), strings.NewReader(values.Encode()))
 	req.SetPathValue(common.ParamForm, db.UUIDToString(form.ExternalID))
