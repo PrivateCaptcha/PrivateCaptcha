@@ -258,6 +258,7 @@ func (pm *PortalMailer) SendOrgInvite(ctx context.Context, email, name string, o
 		Subject:  fmt.Sprintf("[%s] You have been invited to the %s organization", common.PrivateCaptcha, data.OrgName),
 		EmailTo:  email,
 		NameFrom: common.PrivateCaptchaTeam,
+		ReplyTo:  pm.ReplyToEmail.Value(),
 	}
 
 	olog := slog.With("email", email, "org", orgName)
@@ -309,6 +310,7 @@ func (pm *PortalMailer) SendOrgMemberJoined(ctx context.Context, ownerEmail, own
 		Subject:  fmt.Sprintf("[%s] A member joined the %s organization", common.PrivateCaptcha, orgName),
 		EmailTo:  ownerEmail,
 		NameFrom: common.PrivateCaptchaTeam,
+		ReplyTo:  pm.ReplyToEmail.Value(),
 	}
 
 	if err := pm.Mailer.SendEmail(ctx, msg); err != nil {
