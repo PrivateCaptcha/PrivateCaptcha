@@ -31,10 +31,10 @@ Private Captcha is an independent, privacy-first, self-hostable Proof-of-Work CA
 - [adaptive challenge difficulty](https://privatecaptcha.com/features/#difficulty) (including various configuration options, compute- and memory-hard proof-of-work)
 - [custom difficulty rules](https://privatecaptcha.com/features/#rules) (based on traffic source, country, user-agent, IP address etc.)
 - [form proxy](https://privatecaptcha.com/features/#form-proxy) (hide your webhook behind rate-limit and CAPTCHA check)
-- optimized backend (low resource requirements)
+- optimized and rock-solid backend (low resource requirements, implemented in Go, backed by ClickHouse and Postgres)
 - lightweight, [customizable](https://privatecaptcha.com/features/#widget) widget (including "invisible" version)
-- [usage statistics](https://privatecaptcha.com/features/#stats) (backend)
-- [Platform API](https://privatecaptcha.com/features/#platform-api) (import/export or manage organizations, domains, and forms)
+- [usage statistics](https://privatecaptcha.com/features/#stats) (weekly and monthly reports, dashboard domain- and organization-level usage statistics)
+- [platform API](https://privatecaptcha.com/features/#platform-api) (import/export or manage organizations, domains, and forms via API)
 - rich [integration ecosystem](https://docs.privatecaptcha.com/docs/integrations/) (most popular backend and client technologies, separate stacks like WordPress, Magento 2, TYPO3 and others)
 - privacy-focused, no behavior tracking or PII processing
 
