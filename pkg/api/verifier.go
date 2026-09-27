@@ -116,6 +116,12 @@ func (v *Verifier) UpdateMemoryBudget(ctx context.Context) {
 	}
 }
 
+func (v *Verifier) argon2IDEnabled() bool {
+	v.verificationMu.RLock()
+	defer v.verificationMu.RUnlock()
+	return v.verificationCapacityKiB > 0
+}
+
 func (v *Verifier) WriteTestPuzzle(w io.Writer) error {
 	if v.TestPuzzleData == nil {
 		return errUninitialized
@@ -384,11 +390,14 @@ func (v *Verifier) recordVerificationStats(result *puzzle.VerifyResult, tnow tim
 	v.PropertyStats.RecordVerifications(result.PropertyID, 1, tnow)
 }
 
-func selectPropertyChallenge(selected dbgen.ChallengeType, logical uint8, captchaVersion string) (challenge puzzle.Challenge, wireDifficulty uint8, fallback bool, err error) {
+func selectPropertyChallenge(selected dbgen.ChallengeType, logical uint8, captchaVersion string, argonEnabled bool) (challenge puzzle.Challenge, wireDifficulty uint8, fallback bool, err error) {
 	switch selected {
 	case "", dbgen.ChallengeTypeBlake2b:
 		return puzzle.ChallengeBlake2b, logical, false, nil
 	case dbgen.ChallengeTypeArgon2ID:
+		if !argonEnabled {
+			return puzzle.ChallengeBlake2b, logical, false, nil
+		}
 		if captchaVersion == "1" {
 			return puzzle.ChallengeBlake2b, logical, true, nil
 		}
@@ -470,7 +479,7 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 
 	verificationRate := v.PropertyStats.VerificationRate(property.ID, tnow)
 	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, difficultyProperty, tnow, verificationRate)
-	challenge, wireDifficulty, fallback, challengeErr := selectPropertyChallenge(property.Challenge, puzzleDifficulty, r.Header.Get(common.HeaderCaptchaVersion))
+	challenge, wireDifficulty, fallback, challengeErr := selectPropertyChallenge(property.Challenge, puzzleDifficulty, r.Header.Get(common.HeaderCaptchaVersion), v.argon2IDEnabled())
 	if challengeErr != nil {
 		slog.ErrorContext(ctx, "Invalid property challenge", "propID", property.ID, "challenge", property.Challenge, common.ErrAttr(challengeErr))
 		return nil, property, challengeErr

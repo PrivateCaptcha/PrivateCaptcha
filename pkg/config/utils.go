@@ -20,16 +20,23 @@ const (
 
 // Argon2IDMemoryBudgetKiB validates the process-wide capacity from a config item.
 func Argon2IDMemoryBudgetKiB(ctx context.Context, item common.ConfigItem, minimumKiB int64) int64 {
+	if item == nil {
+		return 0
+	}
 	value := item.Value()
+	if value == "" {
+		return 0
+	}
 	budgetMiB, err := strconv.ParseInt(value, 10, 64)
+	if err == nil && budgetMiB == 0 {
+		return 0
+	}
 	reason := ""
 
 	switch {
-	case value == "":
-		reason = "value is missing"
 	case err != nil:
 		reason = "value is not a valid integer"
-	case budgetMiB <= 0:
+	case budgetMiB < 0:
 		reason = "value must be positive"
 	case budgetMiB > math.MaxInt64/kiBPerMiB:
 		reason = "value overflows the semaphore capacity"

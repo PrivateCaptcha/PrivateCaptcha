@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
@@ -131,6 +132,8 @@ func ruleNames(rules []*DifficultyRuleModel) []string {
 }
 
 func TestRenderHTML(t *testing.T) {
+	zeroBudget := "0"
+	missingBudget := ""
 	enterpriseOnly := new(bool)
 	*enterpriseOnly = true
 	hostileOrg := stubOrg("123")
@@ -186,6 +189,7 @@ func TestRenderHTML(t *testing.T) {
 		model      interface{}
 		selector   string
 		enterprise *bool
+		budget     *string
 		matches    []string
 	}{
 		{
@@ -646,6 +650,28 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{"Memory-hard (experimental)"},
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: argonProperty, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			budget:   &zeroBudget,
+			selector: `select[name="challenge"], label[for="challenge"]`,
+			matches:  []string{},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: blakeProperty, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			budget:   &missingBudget,
+			selector: `select[name="challenge"], label[for="challenge"]`,
+			matches:  []string{},
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
 			template: propertyDashboardSettingsTemplate,
 			model: &propertySettingsRenderContext{
@@ -983,10 +1009,15 @@ func TestRenderHTML(t *testing.T) {
 			}
 
 			t.Run(fmt.Sprintf("render-%s-%s", version, strings.Join(tc.path, "-")), func(t *testing.T) {
+				budget := "256"
+				if tc.budget != nil {
+					budget = *tc.budget
+				}
 				platformCtx := &PlatformRenderContext{
-					GitCommit:      "qwerty123",
-					Enterprise:     enterprise,
-					licenseService: server.LicenseService,
+					GitCommit:            "qwerty123",
+					Enterprise:           enterprise,
+					Argon2IDMemoryBudget: config.NewStaticValue(common.Argon2IDMemoryBudgetKey, budget),
+					licenseService:       server.LicenseService,
 				}
 
 				path := server.RelURL(strings.Join(tc.path, "/"))

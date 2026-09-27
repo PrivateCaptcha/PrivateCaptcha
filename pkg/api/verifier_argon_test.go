@@ -55,8 +55,8 @@ func TestArgon2IDMemoryBudgetUpdate(t *testing.T) {
 	if err := verifier.Update(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if verifier.verificationCapacityKiB != 256*1024 {
-		t.Fatalf("fallback capacity = %d KiB, want 262144", verifier.verificationCapacityKiB)
+	if verifier.verificationCapacityKiB != 0 {
+		t.Fatalf("disabled capacity = %d KiB, want 0", verifier.verificationCapacityKiB)
 	}
 }
 

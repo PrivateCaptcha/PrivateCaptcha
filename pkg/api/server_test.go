@@ -51,6 +51,7 @@ func testsConfigStore() common.ConfigStore {
 	baseCfg.Add(config.NewStaticValue(common.RateLimitRateKey, "10"))
 	baseCfg.Add(config.NewStaticValue(common.ClickHouseOptionalKey, "true"))
 	baseCfg.Add(config.NewStaticValue(common.CountryCodeHeaderKey, "CF-IPCountry"))
+	baseCfg.Add(config.NewStaticValue(common.Argon2IDMemoryBudgetKey, "256"))
 	return baseCfg
 }
 

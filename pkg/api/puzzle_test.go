@@ -15,6 +15,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	common_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
@@ -86,6 +87,9 @@ func TestArgonPropertyIssuesVersionTwoPuzzle(t *testing.T) {
 	if err != nil || legacy.Challenge() != puzzle.ChallengeBlake2b || legacy.PuzzleID() == 0 {
 		t.Fatalf("legacy widget puzzle = %v, error = %v", legacy, err)
 	}
+	if notice := response.Header.Get(common.HeaderWidgetNotice); notice == "" {
+		t.Fatal("legacy widget is missing compatibility notice")
+	}
 	response, err = puzzleSuiteEx(t.Context(), http.MethodGet, sitekey, property.Domain, "2")
 	if err != nil {
 		t.Fatal(err)
@@ -129,6 +133,40 @@ func TestArgonPropertyIssuesVersionTwoPuzzle(t *testing.T) {
 	low, _, err := server.Verifier.PuzzleForRequest(httptest.NewRequest(http.MethodGet, "/puzzle", nil).WithContext(ctx), levels, nil, nil)
 	if err != nil || low.Challenge() != puzzle.ChallengeBlake2b || low.Difficulty() != 151 {
 		t.Fatalf("low-end fallback = %v, error = %v", low, err)
+	}
+}
+
+func TestArgonPropertyWithDisabledBudgetIssuesBlakePuzzle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	_, _, property, sitekey := createArgonAPIProperty(t)
+	setArgonAPIPropertyChallenge(t, property, dbgen.ChallengeTypeArgon2ID)
+
+	previousBudget := server.Verifier.Argon2IDMemoryBudgetKey
+	server.Verifier.Argon2IDMemoryBudgetKey = config.NewStaticValue(common.Argon2IDMemoryBudgetKey, "0")
+	server.Verifier.UpdateMemoryBudget(t.Context())
+	t.Cleanup(func() {
+		server.Verifier.Argon2IDMemoryBudgetKey = previousBudget
+		server.Verifier.UpdateMemoryBudget(t.Context())
+	})
+
+	response, err := puzzleSuiteEx(t.Context(), http.MethodGet, sitekey, property.Domain, "2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("puzzle status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	issued, _, err := parsePuzzle(response)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issued.Challenge() != puzzle.ChallengeBlake2b || issued.PuzzleID() == 0 {
+		t.Fatalf("disabled Argon2id puzzle = %v, want non-stub Blake2b", issued)
+	}
+	if notice := response.Header.Get(common.HeaderWidgetNotice); notice != "" {
+		t.Fatalf("disabled Argon2id notice = %q, want empty", notice)
 	}
 }
 

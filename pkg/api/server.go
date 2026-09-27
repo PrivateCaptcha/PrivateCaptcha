@@ -414,7 +414,7 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 			if notice := s.NoticeProvider.Notice(ctx, property); len(notice) > 0 {
 				w.Header().Set(common.HeaderWidgetNotice, notice)
 			}
-		} else if (property.Challenge == dbgen.ChallengeTypeArgon2ID) && (reqPuzzle.Challenge() != puzzle.ChallengeArgon2ID) {
+		} else if s.Verifier.argon2IDEnabled() && (property.Challenge == dbgen.ChallengeTypeArgon2ID) && (reqPuzzle.Challenge() != puzzle.ChallengeArgon2ID) {
 			w.Header().Set(common.HeaderWidgetNotice, "Your widget isn't compatible with a security setting your site needs.")
 		}
 	}

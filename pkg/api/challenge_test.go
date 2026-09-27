@@ -23,6 +23,7 @@ func TestChallengeMapping(t *testing.T) {
 		selected       dbgen.ChallengeType
 		logical        uint8
 		captchaVersion string
+		argonEnabled   bool
 		challenge      puzzle.Challenge
 		wire           uint8
 		fallback       bool
@@ -30,16 +31,17 @@ func TestChallengeMapping(t *testing.T) {
 	}{
 		{name: "Blake", selected: dbgen.ChallengeTypeBlake2b, logical: 136, challenge: puzzle.ChallengeBlake2b, wire: 136},
 		{name: "LegacyCache", selected: "", logical: 152, challenge: puzzle.ChallengeBlake2b, wire: 152},
-		{name: "LegacyArgon", selected: dbgen.ChallengeTypeArgon2ID, logical: 152, captchaVersion: "1", challenge: puzzle.ChallengeBlake2b, wire: 152, fallback: true},
-		{name: "LowArgon", selected: dbgen.ChallengeTypeArgon2ID, logical: 151, challenge: puzzle.ChallengeBlake2b, wire: 151, fallback: true},
-		{name: "ArgonZero", selected: dbgen.ChallengeTypeArgon2ID, logical: 128, challenge: puzzle.ChallengeBlake2b, wire: 128, fallback: true},
-		{name: "ArgonMinimum", selected: dbgen.ChallengeTypeArgon2ID, logical: 152, challenge: puzzle.ChallengeArgon2ID, wire: 24},
-		{name: "ArgonMedium", selected: dbgen.ChallengeTypeArgon2ID, logical: 160, challenge: puzzle.ChallengeArgon2ID, wire: 32},
-		{name: "ArgonHigh", selected: dbgen.ChallengeTypeArgon2ID, logical: 168, challenge: puzzle.ChallengeArgon2ID, wire: 40},
+		{name: "LegacyArgon", selected: dbgen.ChallengeTypeArgon2ID, logical: 152, captchaVersion: "1", argonEnabled: true, challenge: puzzle.ChallengeBlake2b, wire: 152, fallback: true},
+		{name: "LowArgon", selected: dbgen.ChallengeTypeArgon2ID, logical: 151, argonEnabled: true, challenge: puzzle.ChallengeBlake2b, wire: 151, fallback: true},
+		{name: "ArgonZero", selected: dbgen.ChallengeTypeArgon2ID, logical: 128, argonEnabled: true, challenge: puzzle.ChallengeBlake2b, wire: 128, fallback: true},
+		{name: "ArgonMinimum", selected: dbgen.ChallengeTypeArgon2ID, logical: 152, argonEnabled: true, challenge: puzzle.ChallengeArgon2ID, wire: 24},
+		{name: "ArgonMedium", selected: dbgen.ChallengeTypeArgon2ID, logical: 160, argonEnabled: true, challenge: puzzle.ChallengeArgon2ID, wire: 32},
+		{name: "ArgonHigh", selected: dbgen.ChallengeTypeArgon2ID, logical: 168, argonEnabled: true, challenge: puzzle.ChallengeArgon2ID, wire: 40},
+		{name: "DisabledArgon", selected: dbgen.ChallengeTypeArgon2ID, logical: 152, challenge: puzzle.ChallengeBlake2b, wire: 152},
 		{name: "Unknown", selected: "unknown", logical: 152, invalid: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			challenge, wire, fallback, err := selectPropertyChallenge(tc.selected, tc.logical, tc.captchaVersion)
+			challenge, wire, fallback, err := selectPropertyChallenge(tc.selected, tc.logical, tc.captchaVersion, tc.argonEnabled)
 			if (err != nil) != tc.invalid {
 				t.Fatalf("error = %v, want invalid = %t", err, tc.invalid)
 			}
@@ -67,7 +69,10 @@ func TestPuzzleForRequestChallenge(t *testing.T) {
 		ValidityInterval: time.Hour,
 		Challenge:        dbgen.ChallengeTypeArgon2ID,
 	}
-	verifier := NewVerifier(testsConfigStore(), nil, config.NewStaticValue(common.FingerprintHeaderKey, ""), nil)
+	cfg := config.NewBaseConfig(testsConfigStore())
+	budget := &budgetConfigItem{value: "256"}
+	cfg.Add(budget)
+	verifier := NewVerifier(cfg, nil, config.NewStaticValue(common.FingerprintHeaderKey, ""), nil)
 	if err := verifier.Update(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -75,15 +80,20 @@ func TestPuzzleForRequestChallenge(t *testing.T) {
 		name      string
 		logical   uint8
 		version   string
+		budget    string
 		challenge puzzle.Challenge
 		wire      uint8
 	}{
-		{name: "Legacy", logical: 152, version: "1", challenge: puzzle.ChallengeBlake2b, wire: 152},
-		{name: "Unspecified", logical: 152, challenge: puzzle.ChallengeArgon2ID, wire: 24},
-		{name: "Extended", logical: 152, version: "2", challenge: puzzle.ChallengeArgon2ID, wire: 24},
-		{name: "Cutover", logical: 151, version: "2", challenge: puzzle.ChallengeBlake2b, wire: 151},
+		{name: "Legacy", logical: 152, version: "1", budget: "256", challenge: puzzle.ChallengeBlake2b, wire: 152},
+		{name: "Unspecified", logical: 152, budget: "256", challenge: puzzle.ChallengeArgon2ID, wire: 24},
+		{name: "Extended", logical: 152, version: "2", budget: "256", challenge: puzzle.ChallengeArgon2ID, wire: 24},
+		{name: "Cutover", logical: 151, version: "2", budget: "256", challenge: puzzle.ChallengeBlake2b, wire: 151},
+		{name: "Disabled", logical: 152, budget: "0", challenge: puzzle.ChallengeBlake2b, wire: 152},
+		{name: "Missing", logical: 152, budget: "", challenge: puzzle.ChallengeBlake2b, wire: 152},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			budget.value = tc.budget
+			verifier.UpdateMemoryBudget(t.Context())
 			levels := difficulty.NewLevelsEx(db.NewMemoryTimeSeries(), fixedPuzzleDifficulty(tc.logical), 1, time.Minute)
 			ctx := context.WithValue(t.Context(), common.PropertyContextKey, property)
 			ctx = context.WithValue(ctx, common.RateLimitKeyContextKey, netip.MustParseAddr("192.0.2.1"))

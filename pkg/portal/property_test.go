@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
@@ -2068,6 +2069,18 @@ func TestPortalPropertyUpdatesChallenge(t *testing.T) {
 
 	orgID := server.IDHasher.Encrypt(int(org.ID))
 	propertyID := server.IDHasher.Encrypt(int(property.ID))
+	platformCtx := server.PlatformCtx.(*PlatformRenderContext)
+	previousBudget := server.Argon2IDMemoryBudget
+	setBudget := func(value string) {
+		budget := config.NewStaticValue(common.Argon2IDMemoryBudgetKey, value)
+		server.Argon2IDMemoryBudget = budget
+		platformCtx.Argon2IDMemoryBudget = budget
+	}
+	setBudget("0")
+	t.Cleanup(func() {
+		server.Argon2IDMemoryBudget = previousBudget
+		platformCtx.Argon2IDMemoryBudget = previousBudget
+	})
 
 	form := url.Values{}
 	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
@@ -2077,16 +2090,34 @@ func TestPortalPropertyUpdatesChallenge(t *testing.T) {
 	form.Set(common.ParamValidityInterval, "4")
 	form.Set(common.ParamChallenge, string(dbgen.ChallengeTypeArgon2ID))
 
-	updateReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/property/%s/edit", orgID, propertyID), strings.NewReader(form.Encode()))
-	updateReq.AddCookie(cookie)
-	updateReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-	updateResponse := httptest.NewRecorder()
-	srv.ServeHTTP(updateResponse, updateReq)
+	sendUpdate := func() *httptest.ResponseRecorder {
+		updateReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/property/%s/edit", orgID, propertyID), strings.NewReader(form.Encode()))
+		updateReq.AddCookie(cookie)
+		updateReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+		updateResponse := httptest.NewRecorder()
+		srv.ServeHTTP(updateResponse, updateReq)
+		return updateResponse
+	}
+	updateResponse := sendUpdate()
 	if updateResponse.Code != http.StatusOK {
 		t.Fatalf("update status = %d, want %d", updateResponse.Code, http.StatusOK)
 	}
 
 	updatedProperty, err := server.Store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedProperty.Challenge != dbgen.ChallengeTypeBlake2b {
+		t.Fatalf("challenge while disabled = %q, want %q", updatedProperty.Challenge, dbgen.ChallengeTypeBlake2b)
+	}
+
+	setBudget("256")
+	updateResponse = sendUpdate()
+	if updateResponse.Code != http.StatusOK {
+		t.Fatalf("enabled update status = %d, want %d", updateResponse.Code, http.StatusOK)
+	}
+
+	updatedProperty, err = server.Store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2100,6 +2131,21 @@ func TestPortalPropertyUpdatesChallenge(t *testing.T) {
 	}
 	if dbgen.ChallengeType(persistedChallenge) != dbgen.ChallengeTypeArgon2ID {
 		t.Fatalf("persisted challenge = %q, want %q", persistedChallenge, dbgen.ChallengeTypeArgon2ID)
+	}
+
+	setBudget("0")
+	form.Del(common.ParamChallenge)
+	form.Set(common.ParamGrowth, "3")
+	updateResponse = sendUpdate()
+	if updateResponse.Code != http.StatusOK {
+		t.Fatalf("update without challenge status = %d, want %d", updateResponse.Code, http.StatusOK)
+	}
+	updatedProperty, err = server.Store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedProperty.Challenge != dbgen.ChallengeTypeArgon2ID || updatedProperty.Growth != dbgen.DifficultyGrowthFast {
+		t.Fatalf("updated property = challenge %q, growth %q; want preserved Argon2id and fast growth", updatedProperty.Challenge, updatedProperty.Growth)
 	}
 }
 

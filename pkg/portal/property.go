@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
@@ -847,6 +848,10 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 	validityInterval := puzzle.ValidityIntervalFromIndex(ctx, r.FormValue(common.ParamValidityInterval))
 	challenge := dbgen.ChallengeType(r.FormValue(common.ParamChallenge))
 	if challenge != dbgen.ChallengeTypeBlake2b && challenge != dbgen.ChallengeTypeArgon2ID {
+		challenge = property.Challenge
+	}
+	if challenge == dbgen.ChallengeTypeArgon2ID && property.Challenge != dbgen.ChallengeTypeArgon2ID &&
+		config.Argon2IDMemoryBudgetKiB(ctx, s.Argon2IDMemoryBudget, int64(puzzle.Argon2IDMemoryKiB)) == 0 {
 		challenge = property.Challenge
 	}
 	_, allowSubdomains := r.Form[common.ParamAllowSubdomains]

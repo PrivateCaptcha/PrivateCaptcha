@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -91,8 +92,9 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 		}
 
 		platformCtx := &portal.PlatformRenderContext{
-			GitCommit:  assetVersion,
-			Enterprise: enterpriseFromQuery(r),
+			GitCommit:            assetVersion,
+			Enterprise:           enterpriseFromQuery(r),
+			Argon2IDMemoryBudget: config.NewStaticValue(common.Argon2IDMemoryBudgetKey, "256"),
 		}
 
 		out, err := srv.RenderResponse(ctx, p.Template, model, reqCtx, platformCtx)

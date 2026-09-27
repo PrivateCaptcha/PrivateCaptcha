@@ -26,9 +26,11 @@ func TestArgon2IDMemoryBudget(t *testing.T) {
 		expected int64
 		warn     bool
 	}{
-		{name: "missing", value: "", expected: defaultKiB, warn: true},
+		{name: "missing", value: "", expected: 0},
 		{name: "malformed", value: "invalid", expected: defaultKiB, warn: true},
-		{name: "zero", value: "0", expected: defaultKiB, warn: true},
+		{name: "zero", value: "0", expected: 0},
+		{name: "padded zero", value: "00", expected: 0},
+		{name: "signed zero", value: "+0", expected: 0},
 		{name: "negative", value: "-1", expected: defaultKiB, warn: true},
 		{name: "parse overflow", value: strconv.FormatUint(math.MaxUint64, 10), expected: defaultKiB, warn: true},
 		{name: "conversion overflow", value: strconv.FormatInt(maxBudgetMiB+1, 10), expected: defaultKiB, warn: true},
@@ -40,6 +42,9 @@ func TestArgon2IDMemoryBudget(t *testing.T) {
 
 	previousLogger := slog.Default()
 	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+	if got := Argon2IDMemoryBudgetKiB(context.Background(), nil, profileMinimum); got != 0 {
+		t.Fatalf("nil memory budget = %d KiB, want 0", got)
+	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

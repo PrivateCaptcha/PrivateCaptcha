@@ -118,9 +118,14 @@ type CaptchaRenderContext struct {
 }
 
 type PlatformRenderContext struct {
-	GitCommit      string
-	Enterprise     bool
-	licenseService common.LicenseService
+	GitCommit            string
+	Enterprise           bool
+	Argon2IDMemoryBudget common.ConfigItem
+	licenseService       common.LicenseService
+}
+
+func (p PlatformRenderContext) Argon2IDEnabled() bool {
+	return config.Argon2IDMemoryBudgetKiB(context.Background(), p.Argon2IDMemoryBudget, int64(puzzle.Argon2IDMemoryKiB)) > 0
 }
 
 func (p PlatformRenderContext) Registered() bool {
@@ -150,42 +155,43 @@ func singleAuditEvents(event *common.AuditLogEvent) []*common.AuditLogEvent {
 }
 
 type Server struct {
-	Store              db.Implementor
-	TimeSeries         common.TimeSeriesStore
-	APIURL             string
-	CDNURL             string
-	Prefix             string
-	IDHasher           common.IdentifierHasher
-	template           *Templates
-	XSRF               *common.XSRFMiddleware
-	Sessions           *session.Manager
-	Mailer             common.Mailer
-	Stage              string
-	PlanService        billing.PlanService
-	PuzzleEngine       puzzle.Engine
-	Metrics            common.PortalMetrics
-	maintenanceMode    atomic.Bool
-	canRegister        atomic.Bool
-	SettingsTabs       []*SettingsTab
-	RateLimiter        ratelimit.HTTPRateLimiter
-	RenderConstants    interface{}
-	Jobs               db.UserJobs
-	PlatformCtx        interface{}
-	DataCtx            interface{}
-	Tips               []*web.Tip
-	AdminEmail         common.ConfigItem
-	CountryCodeHeader  common.ConfigItem
-	UserLimiter        api.UserLimiter
-	AuditLogsFunc      AuditLogsConstructor
-	AuditLogParser     AuditLogParser
-	PropertyRulesFunc  PropertyRulesConstructor
-	OrgRulesFunc       OrgRulesConstructor
-	SubscriptionLimits db.SubscriptionLimits
-	EmailVerifier      common.EmailVerifier
-	FormURLVerifier    common.FormURLVerifier
-	TwoFactorDuration  time.Duration
-	LicenseService     common.LicenseService
-	Rules              *RuleRegistry
+	Store                db.Implementor
+	TimeSeries           common.TimeSeriesStore
+	APIURL               string
+	CDNURL               string
+	Prefix               string
+	IDHasher             common.IdentifierHasher
+	template             *Templates
+	XSRF                 *common.XSRFMiddleware
+	Sessions             *session.Manager
+	Mailer               common.Mailer
+	Stage                string
+	PlanService          billing.PlanService
+	PuzzleEngine         puzzle.Engine
+	Metrics              common.PortalMetrics
+	maintenanceMode      atomic.Bool
+	canRegister          atomic.Bool
+	SettingsTabs         []*SettingsTab
+	RateLimiter          ratelimit.HTTPRateLimiter
+	RenderConstants      interface{}
+	Jobs                 db.UserJobs
+	PlatformCtx          interface{}
+	DataCtx              interface{}
+	Tips                 []*web.Tip
+	AdminEmail           common.ConfigItem
+	CountryCodeHeader    common.ConfigItem
+	Argon2IDMemoryBudget common.ConfigItem
+	UserLimiter          api.UserLimiter
+	AuditLogsFunc        AuditLogsConstructor
+	AuditLogParser       AuditLogParser
+	PropertyRulesFunc    PropertyRulesConstructor
+	OrgRulesFunc         OrgRulesConstructor
+	SubscriptionLimits   db.SubscriptionLimits
+	EmailVerifier        common.EmailVerifier
+	FormURLVerifier      common.FormURLVerifier
+	TwoFactorDuration    time.Duration
+	LicenseService       common.LicenseService
+	Rules                *RuleRegistry
 }
 
 func (s *Server) createSettingsTabs() []*SettingsTab {
@@ -243,9 +249,10 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 	s.Rules = NewRuleRegistry()
 
 	platformCtx := &PlatformRenderContext{
-		GitCommit:      gitCommit,
-		Enterprise:     s.isEnterprise(),
-		licenseService: s.LicenseService,
+		GitCommit:            gitCommit,
+		Enterprise:           s.isEnterprise(),
+		Argon2IDMemoryBudget: s.Argon2IDMemoryBudget,
+		licenseService:       s.LicenseService,
 	}
 	if len(gitCommit) == 0 {
 		platformCtx.GitCommit = xid.New().String()
