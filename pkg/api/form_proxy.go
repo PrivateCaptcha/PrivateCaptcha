@@ -188,13 +188,13 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 
 		if err == nil {
 			if result.PropertyID == ownerSource.Form.PropertyID {
+				s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
 				s.Verifier.recordVerificationStats(result, tnow)
 			}
 			if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
 				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 				return
 			}
-			s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
 			payload = nil
 		}
 		if form.RequestsPerMinute > 0 {
@@ -377,14 +377,13 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 		}
 
 		if result.PropertyID == ownerSource.Form.PropertyID {
+			s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
 			s.Verifier.recordVerificationStats(result, sub.Time)
 		}
 		if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
 			slog.WarnContext(ctx, "Skipping form submission due to captcha verification error", "result", result.Error.String())
 			return errCaptchaVerificationFailed
 		}
-
-		s.addVerifyRecord(ctx, result, string(common.VerifyClientForm))
 	}
 
 	if err := s.FormURLVerifier.VerifyURL(ctx, f.URL); err != nil {

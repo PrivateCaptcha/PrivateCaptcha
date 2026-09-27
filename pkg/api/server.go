@@ -479,9 +479,7 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	s.Verifier.recordVerificationStats(result, tnow)
-	if result.Valid() {
-		s.addVerifyRecord(ctx, result, r.UserAgent())
-	}
+	s.addVerifyRecord(ctx, result, r.UserAgent())
 	if apiKey := ownerSource.cachedKey; apiKey != nil {
 		// if we are not cached, then we will recheck via "delayed" mechanism of OwnerIDSource
 		// when rate limiting is cleaned up (due to inactivity) we should still be able to access on defaults
@@ -555,9 +553,7 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.Verifier.recordVerificationStats(result, tnow)
-	if result.Valid() {
-		s.addVerifyRecord(ctx, result, r.UserAgent())
-	}
+	s.addVerifyRecord(ctx, result, r.UserAgent())
 	if apiKey := ownerSource.cachedKey; apiKey != nil {
 		// if we are not cached, then we will recheck via "delayed" mechanism of OwnerIDSource
 		// when rate limiting is cleaned up (due to inactivity) we should still be able to access on defaults
@@ -585,6 +581,10 @@ func newVerificationResponse(result *puzzle.VerifyResult, isExplicitTestSitekey 
 }
 
 func (s *Server) addVerifyRecord(ctx context.Context, result *puzzle.VerifyResult, userAgent string) {
+	if (result == nil) || !result.Valid() {
+		return
+	}
+
 	vr := &common.VerifyRecord{
 		UserID:     result.UserID,
 		OrgID:      result.OrgID,
