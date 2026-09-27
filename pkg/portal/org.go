@@ -325,11 +325,22 @@ func (s *Server) createPortalBaseContext(ctx context.Context, orgID int32, sess 
 	} else if len(renderCtx.Orgs) > 0 {
 		earliestIdx := 0
 		earliestDate := time.Now()
+		found := false
 
 		for i, o := range orgs {
 			if (o.Level == dbgen.AccessLevelOwner) && o.Organization.CreatedAt.Time.Before(earliestDate) {
 				earliestIdx = i
 				earliestDate = o.Organization.CreatedAt.Time
+				found = true
+			}
+		}
+
+		if !found {
+			for i, o := range orgs {
+				if o.Level != dbgen.AccessLevelInvited {
+					earliestIdx = i
+					break
+				}
 			}
 		}
 
