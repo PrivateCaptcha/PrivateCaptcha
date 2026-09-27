@@ -396,7 +396,11 @@ export class CaptchaWidget {
         this._apiTriggered = true;
 
         // show spinner when in auto mode
-        let progressState = ('auto' === this._options.startMode) ? STATE_IN_PROGRESS : this._state;
+        // For the non-auto retry-from-STATE_ERROR case, init() will synchronously set
+        // STATE_LOADING; capture the post-init value rather than the stale pre-init STATE_ERROR.
+        let progressState = ('auto' === this._options.startMode)
+            ? STATE_IN_PROGRESS
+            : (STATE_ERROR === this._state ? STATE_LOADING : this._state);
         this._triggerSolving(progressState);
 
         return new Promise(() => { });
