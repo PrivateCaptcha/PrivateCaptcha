@@ -8,7 +8,9 @@ import (
 )
 
 type idHasher struct {
-	hashIDData *hashids.HashIDData
+	// HashID copies its mutable alphabet for each call, so it can be shared by goroutines.
+	hashID    *hashids.HashID
+	hashIDErr error
 }
 
 var errUnexpectedIdentifierLen = errors.New("unexpected identifier length")
@@ -24,18 +26,18 @@ func NewIDHasher(salt ConfigItem) IdentifierHasher {
 	data := hashids.NewData()
 	data.Salt = saltValue
 	data.MinLength = 10
+	h, err := hashids.NewWithData(data)
 
 	return &idHasher{
-		hashIDData: data,
+		hashID:    h,
+		hashIDErr: err,
 	}
 }
 
 func (ih *idHasher) Encrypt(id int) string {
-	if ih.hashIDData != nil {
-		if h, err := hashids.NewWithData(ih.hashIDData); err == nil {
-			if e, err := h.Encode([]int{id}); err == nil {
-				return e
-			}
+	if ih.hashID != nil {
+		if e, err := ih.hashID.Encode([]int{id}); err == nil {
+			return e
 		}
 	}
 
@@ -43,11 +45,9 @@ func (ih *idHasher) Encrypt(id int) string {
 }
 
 func (ih *idHasher) Encrypt64(id int64) string {
-	if ih.hashIDData != nil {
-		if h, err := hashids.NewWithData(ih.hashIDData); err == nil {
-			if e, err := h.EncodeInt64([]int64{id}); err == nil {
-				return e
-			}
+	if ih.hashID != nil {
+		if e, err := ih.hashID.EncodeInt64([]int64{id}); err == nil {
+			return e
 		}
 	}
 
@@ -55,16 +55,14 @@ func (ih *idHasher) Encrypt64(id int64) string {
 }
 
 func (ih *idHasher) Decrypt(hash string) (int, error) {
-	if ih.hashIDData == nil {
+	if ih.hashIDErr != nil {
+		return -1, ih.hashIDErr
+	}
+	if ih.hashID == nil {
 		return strconv.Atoi(hash)
 	}
 
-	h, err := hashids.NewWithData(ih.hashIDData)
-	if err != nil {
-		return -1, err
-	}
-
-	d, err := h.DecodeWithError(hash)
+	d, err := ih.hashID.DecodeWithError(hash)
 	if err != nil {
 		return -1, err
 	}
@@ -77,16 +75,14 @@ func (ih *idHasher) Decrypt(hash string) (int, error) {
 }
 
 func (ih *idHasher) Decrypt64(hash string) (int64, error) {
-	if ih.hashIDData == nil {
+	if ih.hashIDErr != nil {
+		return -1, ih.hashIDErr
+	}
+	if ih.hashID == nil {
 		return strconv.ParseInt(hash, 10, 64)
 	}
 
-	h, err := hashids.NewWithData(ih.hashIDData)
-	if err != nil {
-		return -1, err
-	}
-
-	d, err := h.DecodeInt64WithError(hash)
+	d, err := ih.hashID.DecodeInt64WithError(hash)
 	if err != nil {
 		return -1, err
 	}

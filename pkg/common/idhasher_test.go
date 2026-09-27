@@ -1,6 +1,7 @@
 package common
 
 import (
+	"sync"
 	"testing"
 )
 
@@ -58,6 +59,39 @@ func TestIDHasherEncrypt64Decrypt64(t *testing.T) {
 			t.Errorf("Decrypted value %d does not match original %d", decrypted, id)
 		}
 	}
+}
+
+func TestIDHasherConcurrentReuse(t *testing.T) {
+	hasher := NewIDHasher(&stubConfigItemHash{value: "testsalt"}).(*idHasher)
+	if hasher.hashID == nil {
+		t.Fatal("expected a cached HashID for a nonempty salt")
+	}
+
+	const workers = 32
+	const iterations = 100
+	var wg sync.WaitGroup
+	for worker := 0; worker < workers; worker++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				id := worker*iterations + i
+				encoded := hasher.Encrypt(id)
+				decoded, err := hasher.Decrypt(encoded)
+				if err != nil || decoded != id {
+					t.Errorf("int round trip for %d: got %d, %v", id, decoded, err)
+				}
+
+				id64 := int64(id) + 1<<40
+				encoded64 := hasher.Encrypt64(id64)
+				decoded64, err := hasher.Decrypt64(encoded64)
+				if err != nil || decoded64 != id64 {
+					t.Errorf("int64 round trip for %d: got %d, %v", id64, decoded64, err)
+				}
+			}
+		}(worker)
+	}
+	wg.Wait()
 }
 
 func TestIDHasherWithoutSalt(t *testing.T) {
