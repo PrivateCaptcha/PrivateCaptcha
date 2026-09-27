@@ -3938,3 +3938,53 @@ func TestSoftDeletedRedirectUsesHashedOrgID(t *testing.T) {
 		t.Errorf("buggy raw-integer Location unexpectedly decoded; salt should make it undecodable")
 	}
 }
+
+func TestOrgInviteRegisterAlreadyLinkedDisabledRegistration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user1, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org1, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-actual-org", user1.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	user3, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_3", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create user3 account: %v", err)
+	}
+
+	testEmail := user3.Email
+	inviteRecord, _, err := store.Impl().InviteEmailToOrg(ctx, user1, org1, testEmail)
+	if err != nil {
+		t.Fatalf("Failed to create email invite: %v", err)
+	}
+
+	_, err = store.Impl().LinkOrgInviteToUser(ctx, inviteRecord.ID, user3)
+	if err != nil {
+		t.Fatalf("Failed to link invite to user: %v", err)
+	}
+
+	// Flip registration off — the configuration where the linked-invite (login) branch should still render.
+	server.canRegister.Store(false)
+	defer server.canRegister.Store(true)
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	req := httptest.NewRequest(http.MethodGet, "/orginvite/"+server.IDHasher.Encrypt(int(inviteRecord.ID))+"/"+common.RegisterEndpoint, nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected 200 OK (login page) for already-linked invite, got status code %v; location=%q",
+			resp.StatusCode, resp.Header.Get("Location"))
+	}
+}

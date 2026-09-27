@@ -751,7 +751,22 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 	ctx := r.Context()
 
 	if !s.canRegister.Load() {
-		return nil, errRegistrationDisabled
+		// When public registration is disabled, render a plain login page WITHOUT
+		// consulting the invite cache. This (a) avoids leaking invite state (linked
+		// vs unlinked vs unknown) from an anonymous endpoint
+		// Unlinked invites cannot be
+		// accepted while registration is disabled regardless, so the login page is
+		// no worse than 404 for them, and strictly better for already-linked users
+		// re-clicking a stale invite email
+		return &ViewModel{
+			Model: &loginRenderContext{
+				CsrfRenderContext:    CsrfRenderContext{Token: s.XSRF.Token("")},
+				CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalLoginSitekey),
+				CanRegister:          false,
+			},
+			View:  loginTemplate,
+			IsNew: true,
+		}, nil
 	}
 
 	// Validate invite ID from URL
