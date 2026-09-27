@@ -147,6 +147,7 @@ func (v *Verifier) Write(ctx context.Context, p puzzle.Puzzle, extraSalt []byte,
 }
 
 func (v *Verifier) ParseSolutionPayload(ctx context.Context, data []byte) (puzzle.SolutionPayload, error) {
+	data = bytes.TrimRight(data, " \t\r\n")
 	// this is faster than doing base64 decoding and parsing of zero puzzle
 	if v.TestPuzzleData.IsSuffixFor(data) {
 		// lazy roughly check solutions (without "dot" and puzzle)

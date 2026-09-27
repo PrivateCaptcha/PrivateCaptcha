@@ -1129,6 +1129,12 @@ func TestParseVerifyPayloadTestPuzzleFastPath(t *testing.T) {
 	if _, err := verifier.ParseSolutionPayload(t.Context(), makePayload(solutionsData)); err != nil {
 		t.Fatalf("valid test payload failed: %v", err)
 	}
+	for _, suffix := range []string{"\n", "\r\n"} {
+		payload := append(makePayload(solutionsData), suffix...)
+		if parsed, err := verifier.ParseSolutionPayload(t.Context(), payload); err != nil || parsed != verifier.TestSolutions {
+			t.Fatalf("test payload with trailing %q: parsed = %v, error = %v", suffix, parsed, err)
+		}
+	}
 	invalidVersion := bytes.Clone(solutionsData)
 	invalidVersion[0]++
 	invalidFlag := bytes.Clone(solutionsData)
@@ -1145,6 +1151,42 @@ func TestParseVerifyPayloadTestPuzzleFastPath(t *testing.T) {
 	}
 	if _, err := verifier.ParseSolutionPayload(t.Context(), makePayload(solutionsData[:len(solutionsData)-2*puzzle.SolutionLength])); err != errTestSolutions {
 		t.Fatalf("short test solutions error = %v, want %v", err, errTestSolutions)
+	}
+}
+
+func TestParseSolutionPayloadWithTrailingNewline(t *testing.T) {
+	t.Parallel()
+
+	realPuzzle := puzzle.NewComputePuzzle(1, db.TestPropertyUUID.Bytes, 0)
+	serialized, err := realPuzzle.Serialize(t.Context(), puzzle.NewSalt([]byte("test-salt")), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	solutions, err := (&puzzle.ComputeSolver{}).Solve(t.Context(), realPuzzle)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var body bytes.Buffer
+	body.WriteString(solutions.String())
+	body.WriteByte('.')
+	if err := serialized.Write(&body); err != nil {
+		t.Fatal(err)
+	}
+	body.WriteByte('\n')
+
+	testPuzzle := puzzle.NewComputePuzzle(0, db.TestPropertyUUID.Bytes, 0)
+	testSerialized, err := testPuzzle.Serialize(t.Context(), puzzle.NewSalt([]byte("test-salt")), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier := &Verifier{TestPuzzleData: testSerialized}
+	parsed, err := verifier.ParseSolutionPayload(t.Context(), body.Bytes())
+	if err != nil {
+		t.Fatalf("valid payload with trailing newline failed: %v", err)
+	}
+	if got := parsed.Puzzle().PuzzleID(); got != realPuzzle.PuzzleID() {
+		t.Fatalf("puzzle ID = %d, want %d", got, realPuzzle.PuzzleID())
 	}
 }
 
