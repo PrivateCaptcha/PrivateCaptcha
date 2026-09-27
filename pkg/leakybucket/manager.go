@@ -230,14 +230,6 @@ func (m *Manager[TKey, T, TBucket]) SaveCache(ctx context.Context, dir, filename
 }
 
 func (m *Manager[TKey, T, TBucket]) LoadCache(ctx context.Context, dir, filename string) error {
-	m.mu.RLock()
-	cap64 := int64(m.capacity)
-	interval := int64(m.leakInterval)
-	ttl := time.Duration(math.MaxInt64)
-	if cap64 != 0 && interval != 0 && cap64 <= math.MaxInt64/interval {
-		ttl = time.Duration(cap64 * interval)
-	}
-	m.mu.RUnlock()
-
-	return common.LoadCacheFromFile(ctx, dir, filename, ttl, m.buckets)
+	const persistedCacheMaxAge = 1 * time.Hour
+	return common.LoadCacheFromFile(ctx, dir, filename, persistedCacheMaxAge, m.buckets)
 }
