@@ -112,10 +112,6 @@ func connectEx(ctx context.Context, cfg common.ConfigStore, timeout time.Duratio
 		if perr != nil {
 			return perr
 		}
-		if perr := pool.Ping(ctx); perr != nil {
-			pool.Close()
-			return perr
-		}
 
 		return nil
 	})

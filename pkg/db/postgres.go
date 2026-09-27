@@ -139,8 +139,12 @@ func connectPostgres(ctx context.Context, config *pgxpool.Config, timeout time.D
 			if err == nil {
 				return pool, nil
 			}
-
-			slog.ErrorContext(ctx, "Failed to create pgxpool", common.ErrAttr(err))
+			if perr := pool.Ping(ctx); perr != nil {
+				slog.WarnContext(ctx, "Postgres not yet ready", common.ErrAttr(perr))
+				pool.Close()
+				continue
+			}
+			return pool, nil
 		}
 	}
 }
