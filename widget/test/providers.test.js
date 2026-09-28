@@ -64,6 +64,17 @@ test('Argon providers match shared Go vectors', async (t) => {
     }
 });
 
+test('Argon providers hash extended puzzle bodies consistently', async () => {
+    const body = Uint8Array.from([...bytesFromHex(argon2Fixtures.project.puzzleBody), ...new Uint8Array(72).fill(0xab)]);
+    const nonce = bytesFromHex(argon2Fixtures.project.nonce);
+    const scalar = await loadArgon2IDProvider();
+    const noble = await loadArgon2IDProvider({ instantiateWasm: async () => { throw new Error('no wasm'); } });
+    const scalarOutput = scalar.hash(nonce, body, new Uint8Array(4));
+    const nobleOutput = noble.hash(nonce, body, new Uint8Array(4));
+    assert.deepStrictEqual(scalarOutput, nobleOutput);
+    assert.notDeepStrictEqual(scalarOutput, scalar.hash(nonce, body.subarray(0, 48), new Uint8Array(4)));
+});
+
 test('Argon provider validates inputs before hashing', async () => {
     const provider = await loadArgon2IDProvider();
     const nonce = new Uint8Array(8);
@@ -71,8 +82,6 @@ test('Argon provider validates inputs before hashing', async () => {
     const output = new Uint8Array(4);
     assert.throws(() => provider.hash(new Uint8Array(7), body, output), /8 bytes/);
     assert.throws(() => provider.hash(new Uint8Array(9), body, output), /8 bytes/);
-    assert.throws(() => provider.hash(nonce, new Uint8Array(47), output), /48 bytes/);
-    assert.throws(() => provider.hash(nonce, new Uint8Array(49), output), /48 bytes/);
     assert.throws(() => provider.hash(nonce, body, new Uint8Array(3)), /4 bytes/);
     assert.throws(() => provider.hash(nonce, body, new Uint8Array(5)), /4 bytes/);
 });
@@ -111,7 +120,6 @@ test('Argon provider returns big-endian WASM solution bytes across counter carri
     const body = new Uint8Array(48);
     assert.deepStrictEqual(await provider.solve(body, 12, 7), Uint8Array.of(7, 0, 0, 0, 1, 2, 3, 4));
     assert.deepStrictEqual(observed, [[7, 12, 0, 65536]]);
-    await assert.rejects(provider.solve(new Uint8Array(47), 12, 7), /48 bytes/);
     await assert.rejects(provider.solve(body, -1, 7), /threshold/);
     await assert.rejects(provider.solve(body, 12, 256), /solution index/);
 });

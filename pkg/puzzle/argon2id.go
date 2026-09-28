@@ -32,7 +32,7 @@ func Argon2IDWireDifficulty(logical uint8) (uint8, bool) {
 }
 
 func validateArgon2IDParameters(canonicalBody []byte, memoryKiB uint32) error {
-	if len(canonicalBody) != puzzleV2Size {
+	if len(canonicalBody) < puzzleV2MinSize {
 		return ErrInvalidArgon2IDInput
 	}
 	if memoryKiB != argon2IDMemoryKiB {

@@ -26,8 +26,9 @@ const (
 	MaxValidityPeriod     = 24 * time.Hour
 	puzzleVersion1        = 1
 	puzzleVersion2        = 2
-	puzzleV1Size          = 47
-	puzzleV2Size          = 48
+	puzzleFieldsSize      = PropertyIDSize + 8 + 1 + 1 + 4
+	puzzleV2MinSize       = 1 + 1 + puzzleFieldsSize + UserDataSize
+	maxPuzzleBodySize     = 2 * PuzzleBytesLength
 )
 
 var (
@@ -220,33 +221,30 @@ func (p *ComputePuzzle) UnmarshalBinary(data []byte) error {
 	if len(data) < 1 {
 		return io.ErrShortBuffer
 	}
+	if len(data) > maxPuzzleBodySize {
+		return errInvalidPuzzleLength
+	}
 
 	version := data[0]
-	expectedSize := 0
-	switch version {
-	case puzzleVersion1:
-		expectedSize = puzzleV1Size
-	case puzzleVersion2:
-		expectedSize = puzzleV2Size
-	default:
+	if version != puzzleVersion1 && version != puzzleVersion2 {
 		return errInvalidPuzzleVersion
-	}
-	if len(data) < expectedSize {
-		return io.ErrShortBuffer
-	}
-	if len(data) > expectedSize {
-		return errInvalidPuzzleLength
 	}
 
 	p.version = version
 	p.challenge = ChallengeBlake2b
 	offset := 1
 	if version == puzzleVersion2 {
+		if len(data) < offset+1 {
+			return io.ErrShortBuffer
+		}
 		p.challenge = Challenge(data[offset])
 		if !p.challenge.valid() {
 			return errInvalidPuzzleChallenge
 		}
 		offset++
+	}
+	if len(data) < offset+puzzleFieldsSize+UserDataSize {
+		return io.ErrShortBuffer
 	}
 
 	copy(p.propertyID[:], data[offset:offset+PropertyIDSize])
@@ -268,8 +266,7 @@ func (p *ComputePuzzle) UnmarshalBinary(data []byte) error {
 	}
 	offset += 4
 
-	p.userData = data[offset : offset+UserDataSize]
-	//offset += UserDataSize
+	p.userData = data[offset:]
 
 	return nil
 }

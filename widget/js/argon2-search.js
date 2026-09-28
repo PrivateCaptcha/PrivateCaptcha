@@ -14,9 +14,6 @@ function incrementCounter(nonce) {
 }
 
 export async function findArgon2IDSolution(canonicalBody, threshold, solutionIndex, provider) {
-    if (!(canonicalBody instanceof Uint8Array) || canonicalBody.length !== 48) {
-        throw new Error('Argon2id puzzle body must be exactly 48 bytes');
-    }
     if (!Number.isSafeInteger(threshold) || threshold < 0 || threshold > MAX_UINT32) {
         throw new Error('Argon2id threshold must be a uint32');
     }

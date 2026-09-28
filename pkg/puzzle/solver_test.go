@@ -45,7 +45,7 @@ func TestSolverArgon2ID(t *testing.T) {
 }
 
 func TestSolverArgon2IDExhaustion(t *testing.T) {
-	body := make([]byte, puzzleV2Size)
+	body := make([]byte, puzzleV2MinSize)
 	const threshold = uint32(0)
 	hash := func([]byte, []byte, uint32) (uint32, error) { return 1, nil }
 	if _, err := solveArgon2IDOne(t.Context(), body, 0, threshold, 1, hash); !errors.Is(err, ErrArgon2IDExhausted) {

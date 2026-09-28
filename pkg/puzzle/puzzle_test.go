@@ -161,9 +161,7 @@ func TestComputePuzzleRejectsInvalidWireValues(t *testing.T) {
 		{"UnknownVersion", unknownVersion},
 		{"UnknownChallenge", unknownChallenge},
 		{"ShortV1", v1[:len(v1)-1]},
-		{"TrailingV1", append(bytes.Clone(v1), 0)},
 		{"ShortV2", v2[:len(v2)-1]},
-		{"TrailingV2", append(bytes.Clone(v2), 0)},
 	}
 
 	for _, tt := range tests {
@@ -173,6 +171,65 @@ func TestComputePuzzleRejectsInvalidWireValues(t *testing.T) {
 				t.Fatal("expected invalid puzzle body to fail")
 			}
 		})
+	}
+}
+
+func TestComputePuzzleVariableUserData(t *testing.T) {
+	t.Parallel()
+
+	fixtures := loadProtocolFixtures(t)
+	for _, tc := range []struct {
+		name    string
+		fixture protocolFixture
+	}{
+		{"V1", fixtures.V1},
+		{"V2", fixtures.V2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := puzzleFromFixture(t, tc.fixture)
+			p.userData = append(p.userData, 0xaa, 0xbb, 0xcc)
+			body, err := p.MarshalBinary()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var parsed ComputePuzzle
+			if err := parsed.UnmarshalBinary(body); err != nil {
+				t.Fatal(err)
+			}
+			checkPuzzles(p, &parsed, t)
+		})
+	}
+}
+
+func TestComputePuzzleBodyLimit(t *testing.T) {
+	t.Parallel()
+
+	for _, fixture := range []protocolFixture{loadProtocolFixtures(t).V1, loadProtocolFixtures(t).V2} {
+		body := fixtureBody(t, fixture)
+		body = append(body, bytes.Repeat([]byte{0xab}, 256-len(body))...)
+		var p ComputePuzzle
+		if err := p.UnmarshalBinary(body); err != nil {
+			t.Fatalf("v%d 256-byte body: %v", fixture.Version, err)
+		}
+		if err := p.UnmarshalBinary(append(body, 0)); err == nil {
+			t.Fatalf("v%d 257-byte body was accepted", fixture.Version)
+		}
+	}
+}
+
+func TestComputePuzzleRejectsTruncatedFields(t *testing.T) {
+	t.Parallel()
+
+	fixtures := loadProtocolFixtures(t)
+	for _, fixture := range []protocolFixture{fixtures.V1, fixtures.V2} {
+		body := fixtureBody(t, fixture)
+		for size := 0; size < len(body); size++ {
+			var parsed ComputePuzzle
+			if err := parsed.UnmarshalBinary(body[:size]); err != io.ErrShortBuffer {
+				t.Fatalf("v%d body of %d bytes: error = %v, want %v", fixture.Version, size, err, io.ErrShortBuffer)
+			}
+		}
 	}
 }
 

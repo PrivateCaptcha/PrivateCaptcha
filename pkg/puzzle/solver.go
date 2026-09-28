@@ -37,7 +37,10 @@ func solveArgon2IDOne(ctx context.Context, body []byte, lane byte, threshold uin
 }
 
 func (s *ComputeSolver) solveArgon2ID(ctx context.Context, p Puzzle, body []byte) (*Solutions, error) {
-	if len(body) != puzzleV2Size || p.SolutionsCount() != Argon2IDSolutionsCount {
+	if err := validateArgon2IDParameters(body, Argon2IDMemoryKiB); err != nil {
+		return nil, err
+	}
+	if p.SolutionsCount() != Argon2IDSolutionsCount {
 		return nil, ErrInvalidArgon2IDInput
 	}
 	started := time.Now()

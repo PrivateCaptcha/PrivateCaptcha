@@ -71,6 +71,108 @@ func TestSolutionsArgon2IDSignedRoundTrip(t *testing.T) {
 	}
 }
 
+func TestParseVerifyPayloadVariableUserData(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		challenge Challenge
+		extra     int
+	}{
+		{"Blake2b", ChallengeBlake2b, 32},
+		{"Blake2bAtNonceBoundary", ChallengeBlake2b, PuzzleBytesLength - SolutionLength - 47},
+		{"Argon2ID", ChallengeArgon2ID, argon2IDPasswordSize - SolutionLength - puzzleV2MinSize},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			difficulty := uint8(0)
+			if tc.challenge == ChallengeBlake2b {
+				difficulty = 1
+			}
+			p, err := NewComputePuzzleForChallenge(123, [PropertyIDSize]byte{1}, difficulty, tc.challenge)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.userData = append(p.userData, bytes.Repeat([]byte{0xab}, tc.extra)...)
+			solutions, err := (&ComputeSolver{}).Solve(t.Context(), p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			salt := NewSalt([]byte("test-salt"))
+			signed, err := p.Serialize(t.Context(), salt, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var encoded bytes.Buffer
+			encoded.WriteString(solutions.String())
+			encoded.WriteByte('.')
+			if err := signed.Write(&encoded); err != nil {
+				t.Fatal(err)
+			}
+
+			parsed, err := ParseVerifyPayload[ComputePuzzle](t.Context(), encoded.Bytes())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := parsed.VerifySignature(t.Context(), salt, nil); err != nil {
+				t.Fatal(err)
+			}
+			if _, result := parsed.VerifySolutions(t.Context()); result != VerifyNoError {
+				t.Fatalf("verification = %v, want %v", result, VerifyNoError)
+			}
+
+			tampered := mutateEncodedPayloadPart(t, encoded.Bytes(), 1, func(data []byte) []byte {
+				data[len(data)-1] ^= 1
+				return data
+			})
+			modified, err := ParseVerifyPayload[ComputePuzzle](t.Context(), tampered)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := modified.VerifySignature(t.Context(), salt, nil); err != errSignatureMismatch {
+				t.Fatalf("modified user data signature error = %v, want %v", err, errSignatureMismatch)
+			}
+		})
+	}
+}
+
+func TestParseVerifyPayloadBodyLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		challenge Challenge
+	}{
+		{"Blake2b", ChallengeBlake2b},
+		{"Argon2ID", ChallengeArgon2ID},
+	} {
+		payload, _, _ := newVerifyPayloadBytes(t, tc.challenge)
+		parts := bytes.Split(payload, dotBytes)
+		body, err := base64.StdEncoding.DecodeString(string(parts[1]))
+		if err != nil {
+			t.Fatal(err)
+		}
+		body = append(body, bytes.Repeat([]byte{0xab}, 256-len(body))...)
+		for _, sizeCase := range []struct {
+			name string
+			body []byte
+			ok   bool
+		}{
+			{"AtLimit", body, true},
+			{"OverLimit", append(bytes.Clone(body), 0), false},
+		} {
+			t.Run(tc.name+sizeCase.name, func(t *testing.T) {
+				parts[1] = []byte(base64.StdEncoding.EncodeToString(sizeCase.body))
+				_, err := ParseVerifyPayload[ComputePuzzle](t.Context(), bytes.Join(parts, dotBytes))
+				if (err == nil) != sizeCase.ok {
+					t.Fatalf("%d-byte puzzle: error = %v, want success = %t", len(sizeCase.body), err, sizeCase.ok)
+				}
+			})
+		}
+	}
+	payload, _, _ := newVerifyPayloadBytes(t, ChallengeBlake2b)
+	parts := bytes.Split(payload, dotBytes)
+	parts[1] = bytes.Repeat([]byte{'A'}, 256*1024)
+	if _, err := ParseVerifyPayload[ComputePuzzle](t.Context(), bytes.Join(parts, dotBytes)); err != errInvalidEncoding {
+		t.Fatalf("large encoded puzzle error = %v, want %v", err, errInvalidEncoding)
+	}
+}
+
 func mutateEncodedPayloadPart(t *testing.T, payload []byte, part int, mutate func([]byte) []byte) []byte {
 	t.Helper()
 
@@ -271,7 +373,6 @@ func TestParseVerifyPayloadRejectsNonCanonicalComponents(t *testing.T) {
 		part int
 		edit func([]byte) []byte
 	}{
-		{"PuzzleTrailingData", 1, func(data []byte) []byte { return append(data, 0) }},
 		{"SignatureVersion", 2, func(data []byte) []byte { data[0]++; return data }},
 		{"SignatureFlags", 2, func(data []byte) []byte { data[1] = 1; return data }},
 		{"SignatureTrailingData", 2, func(data []byte) []byte { return append(data, 0) }},

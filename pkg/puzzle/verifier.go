@@ -122,8 +122,7 @@ func ParseVerifyPayload[T any, TPuzzle PuzzleConstraint[T]](ctx context.Context,
 		)
 		return nil, errEmptyPayloadPart
 	}
-	if (len(puzzleBytesB64) != base64.StdEncoding.EncodedLen(puzzleV1Size) &&
-		len(puzzleBytesB64) != base64.StdEncoding.EncodedLen(puzzleV2Size)) ||
+	if len(puzzleBytesB64) > base64.StdEncoding.EncodedLen(maxPuzzleBodySize) ||
 		len(signatureBytesB64) != base64.StdEncoding.EncodedLen(signatureSize) {
 		return nil, errInvalidEncoding
 	}
@@ -137,6 +136,9 @@ func ParseVerifyPayload[T any, TPuzzle PuzzleConstraint[T]](ctx context.Context,
 	}
 
 	puzzleBytes = puzzleBytes[:n]
+	if len(puzzleBytes) > maxPuzzleBodySize {
+		return nil, errInvalidEncoding
+	}
 	if len(puzzleBytes) == 0 {
 		return nil, errEmptyPuzzle
 	}

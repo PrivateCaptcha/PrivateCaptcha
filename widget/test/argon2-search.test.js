@@ -73,8 +73,6 @@ test('Argon search validates inputs before hashing', async () => {
     const provider = { hash() { throw new Error('must not hash'); } };
     const body = new Uint8Array(48);
 
-    await assert.rejects(findArgon2IDSolution(new Uint8Array(47), 0, 0, provider), /48 bytes/);
-    await assert.rejects(findArgon2IDSolution(new Uint8Array(49), 0, 0, provider), /48 bytes/);
     await assert.rejects(findArgon2IDSolution(body, -1, 0, provider), /threshold/);
     await assert.rejects(findArgon2IDSolution(body, 0x100000000, 0, provider), /threshold/);
     await assert.rejects(findArgon2IDSolution(body, 0, -1, provider), /solution index/);
@@ -83,7 +81,7 @@ test('Argon search validates inputs before hashing', async () => {
 });
 
 test('Argon search delegates batches to a WASM solver', async () => {
-    const body = new Uint8Array(48);
+    const body = new Uint8Array(120);
     const expected = Uint8Array.of(3, 0, 0, 0, 0, 0, 0, 4);
     const solution = await findArgon2IDSolution(body, 7, 3, {
         solve(input, threshold, index) {

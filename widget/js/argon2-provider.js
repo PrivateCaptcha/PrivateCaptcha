@@ -5,7 +5,6 @@ import { argon2id as nobleArgon2ID } from '@noble/hashes/argon2.js';
 const MEMORY_KIB = 16 * 1024;
 const TAG_LENGTH = 32;
 const PASSWORD_LENGTH = 128;
-const BODY_LENGTH = 48;
 const NONCE_LENGTH = 8;
 const BATCH_SIZE = 65536;
 const NONCE_SPACE = 0x100000000;
@@ -44,7 +43,6 @@ function createWasmProvider(wasm) {
         wasm: true,
         hash(nonce, canonicalBody, output) {
             validateBytes(nonce, NONCE_LENGTH, 'password');
-            validateBytes(canonicalBody, BODY_LENGTH, 'salt');
             validateBytes(output, 4, 'output');
             puzzle.fill(0);
             puzzle.set(canonicalBody);
@@ -55,7 +53,6 @@ function createWasmProvider(wasm) {
             return copyPrefix(digest, output);
         },
         async solve(canonicalBody, threshold, index) {
-            validateBytes(canonicalBody, BODY_LENGTH, 'salt');
             if (!Number.isSafeInteger(threshold) || threshold < 0 || threshold > 0xffffffff) {
                 throw new Error('Argon2id threshold must be a uint32');
             }
@@ -85,7 +82,6 @@ function createNobleProvider(dependencies) {
         wasm: false,
         hash(nonce, canonicalBody, output) {
             validateBytes(nonce, NONCE_LENGTH, 'password');
-            validateBytes(canonicalBody, BODY_LENGTH, 'salt');
             validateBytes(output, 4, 'output');
             const password = normalizedPassword(nonce, canonicalBody);
             const tag = dependencies.nobleHash(password, password.subarray(0, 16), {

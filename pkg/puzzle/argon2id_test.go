@@ -23,7 +23,7 @@ type argon2IDCompatibilityVector struct {
 }
 
 func BenchmarkArgon2IDVerification(b *testing.B) {
-	body := make([]byte, puzzleV2Size)
+	body := make([]byte, puzzleV2MinSize)
 	body[0] = puzzleVersion2
 	body[1] = byte(ChallengeArgon2ID)
 	memoryKiB := argon2IDMemoryKiB

@@ -815,6 +815,29 @@ test('Puzzle parses canonical v1 and v2 fixtures', async () => {
     }
 });
 
+test('Puzzle preserves variable-length user data in v1 and v2', async () => {
+    const { Puzzle } = await import('../js/puzzle.js');
+    for (const fixture of [protocolFixtures.v1, protocolFixtures.v2]) {
+        const original = bytesFromHex(fixture.body);
+        const extra = Uint8Array.of(0xaa, 0xbb, 0xcc);
+        const body = Uint8Array.from([...original, ...extra]);
+        const puzzle = new Puzzle(puzzlePayload(body));
+        assert.deepStrictEqual(puzzle.puzzleBytes, body);
+        assert.deepStrictEqual(puzzle.userData, body.subarray(original.length - 16));
+        assert.deepStrictEqual(puzzle.puzzleBuffer.subarray(0, body.length), body);
+    }
+});
+
+test('Puzzle bounds variable-length bodies to 256 bytes', async () => {
+    const { Puzzle } = await import('../js/puzzle.js');
+    for (const fixture of [protocolFixtures.v1, protocolFixtures.v2]) {
+        const original = bytesFromHex(fixture.body);
+        const body = Uint8Array.from([...original, ...new Uint8Array(256 - original.length)]);
+        assert.strictEqual(new Puzzle(puzzlePayload(body)).userData.length, 256 - (original.length - 16));
+        assert.throws(() => new Puzzle(puzzlePayload(Uint8Array.from([...body, 0]))), /puzzle body length/i);
+    }
+});
+
 test('Puzzle rejects unknown and non-canonical records', async () => {
     const { Puzzle } = await import('../js/puzzle.js');
     const v1 = bytesFromHex(protocolFixtures.v1.body);
@@ -828,9 +851,7 @@ test('Puzzle rejects unknown and non-canonical records', async () => {
         unknownVersion,
         unknownChallenge,
         v1.slice(0, -1),
-        Uint8Array.from([...v1, 0]),
         v2.slice(0, -1),
-        Uint8Array.from([...v2, 0]),
     ];
 
     for (const body of invalidBodies) {

@@ -4,8 +4,9 @@ import { decode } from 'base64-arraybuffer';
 import { readUInt32LE } from './puzzle.utils.js';
 
 const PUZZLE_BUFFER_LENGTH = 128;
-const PUZZLE_V1_LENGTH = 47;
-const PUZZLE_V2_LENGTH = 48;
+const MAX_PUZZLE_BODY_LENGTH = PUZZLE_BUFFER_LENGTH * 2;
+const PUZZLE_V1_MIN_LENGTH = 47;
+const PUZZLE_V2_MIN_LENGTH = 48;
 const PUZZLE_VERSION_1 = 1;
 const PUZZLE_VERSION_2 = 2;
 export const CHALLENGE_BLAKE2B = 0;
@@ -179,6 +180,9 @@ export class Puzzle {
 
         const buffer = parts[0];
         this.signature = parts[1];
+        if (buffer.length > Math.ceil(MAX_PUZZLE_BODY_LENGTH / 3) * 4) {
+            throw new Error(`Invalid puzzle body length: ${buffer.length}`);
+        }
 
         const data = new Uint8Array(decode(buffer));
         if (data.length < 1) {
@@ -186,15 +190,18 @@ export class Puzzle {
         }
 
         this.version = data[0];
-        let expectedLength;
+        let minimumLength;
         let offset = 1;
         switch (this.version) {
             case PUZZLE_VERSION_1:
-                expectedLength = PUZZLE_V1_LENGTH;
+                minimumLength = PUZZLE_V1_MIN_LENGTH;
                 this.challenge = CHALLENGE_BLAKE2B;
                 break;
             case PUZZLE_VERSION_2:
-                expectedLength = PUZZLE_V2_LENGTH;
+                minimumLength = PUZZLE_V2_MIN_LENGTH;
+                if (data.length < offset + 1) {
+                    throw new Error(`Invalid puzzle body length: ${data.length}`);
+                }
                 this.challenge = data[offset++];
                 if (this.challenge !== CHALLENGE_BLAKE2B && this.challenge !== CHALLENGE_ARGON2ID) {
                     throw new Error(`Unknown puzzle challenge: ${this.challenge}`);
@@ -203,7 +210,7 @@ export class Puzzle {
             default:
                 throw new Error(`Unknown puzzle version: ${this.version}`);
         }
-        if (data.length !== expectedLength) {
+        if (data.length < minimumLength || data.length > MAX_PUZZLE_BODY_LENGTH) {
             throw new Error(`Invalid puzzle body length: ${data.length}`);
         }
 
@@ -222,10 +229,10 @@ export class Puzzle {
         this.expirationTimestamp = readUInt32LE(data, offset);
         offset += 4;
 
-        const userDataSize = 16;
+        const userDataSize = data.length - offset;
         const userDataStart = offset;
         offset += 4; // AccountID is the first four bytes of userData
-        this.userData = data.slice(userDataStart, userDataStart + userDataSize);
+        this.userData = data.slice(userDataStart);
         offset += userDataSize - 4;
 
         let sourceBuffer = this.puzzleBytes;
