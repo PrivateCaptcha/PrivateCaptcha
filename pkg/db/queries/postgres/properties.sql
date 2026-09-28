@@ -8,8 +8,8 @@ SELECT * from backend.properties WHERE id = ANY($1::INT[]);
 SELECT * from backend.properties WHERE external_id = $1;
 
 -- name: CreateProperty :one
-INSERT INTO backend.properties (name, org_id, creator_id, org_owner_id, domain, level, growth, validity_interval, allow_subdomains, allow_localhost, max_replay_count, challenge)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE(sqlc.narg(challenge)::backend.challenge_type, 'blake2b'::backend.challenge_type))
+INSERT INTO backend.properties (name, org_id, creator_id, org_owner_id, domain, level, growth, validity_interval, allow_subdomains, allow_localhost, max_replay_count, challenge, edge_token_validity_interval, edge_widget_start_mode)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, COALESCE(sqlc.narg(challenge)::backend.challenge_type, 'blake2b'::backend.challenge_type), sqlc.arg(edge_token_validity_interval)::interval, COALESCE(sqlc.narg(edge_widget_start_mode)::backend.edge_widget_start_mode, 'click'::backend.edge_widget_start_mode))
 RETURNING *;
 
 -- name: UpdateProperty :one
@@ -28,8 +28,12 @@ upd AS (
         allow_localhost = $7,
         max_replay_count = $8,
         challenge = COALESCE(sqlc.narg(challenge)::backend.challenge_type, p.challenge),
+        edge_token_validity_interval = sqlc.arg(edge_token_validity_interval)::interval,
+        edge_widget_start_mode = COALESCE(sqlc.narg(edge_widget_start_mode)::backend.edge_widget_start_mode, p.edge_widget_start_mode),
         updated_at = NOW()
     WHERE p.id = (SELECT id FROM old)
+      AND sqlc.arg(edge_token_validity_interval)::interval BETWEEN INTERVAL '0 seconds' AND INTERVAL '24 hours'
+      AND (p.domain <> '' OR sqlc.arg(edge_token_validity_interval)::interval = INTERVAL '0 seconds')
     RETURNING * -- This ensures the final SELECT only returns data if the update actually happened
 )
 SELECT
@@ -41,7 +45,9 @@ SELECT
     old.allow_subdomains AS old_allow_subdomains,
     old.allow_localhost AS old_allow_localhost,
     old.max_replay_count AS old_max_replay_count,
-    old.challenge AS old_challenge
+    old.challenge AS old_challenge,
+    old.edge_token_validity_interval AS old_edge_token_validity_interval,
+    old.edge_widget_start_mode AS old_edge_widget_start_mode
 FROM upd
 CROSS JOIN old;
 

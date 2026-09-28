@@ -146,6 +146,24 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(in *jlex
 			} else {
 				out.ValiditySeconds = int(in.Int())
 			}
+		case "edge_token_validity_seconds":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.EdgeTokenValiditySeconds = int(in.Int())
+			}
+		case "edge_widget_start_mode":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.EdgeWidgetStartMode = string(in.String())
+			}
+		case "max_replay_count":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.MaxReplayCount = int(in.Int())
+			}
 		case "allow_subdomains":
 			if in.IsNull() {
 				in.Skip()
@@ -157,12 +175,6 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(in *jlex
 				in.Skip()
 			} else {
 				out.AllowLocalhost = bool(in.Bool())
-			}
-		case "max_replay_count":
-			if in.IsNull() {
-				in.Skip()
-			} else {
-				out.MaxReplayCount = int(in.Int())
 			}
 		default:
 			in.SkipRecursive()
@@ -218,6 +230,21 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(out *jwr
 		out.RawString(prefix)
 		out.Int(int(in.ValiditySeconds))
 	}
+	{
+		const prefix string = ",\"edge_token_validity_seconds\":"
+		out.RawString(prefix)
+		out.Int(int(in.EdgeTokenValiditySeconds))
+	}
+	{
+		const prefix string = ",\"edge_widget_start_mode\":"
+		out.RawString(prefix)
+		out.String(string(in.EdgeWidgetStartMode))
+	}
+	if in.MaxReplayCount != 0 {
+		const prefix string = ",\"max_replay_count\":"
+		out.RawString(prefix)
+		out.Int(int(in.MaxReplayCount))
+	}
 	if in.AllowSubdomains {
 		const prefix string = ",\"allow_subdomains\":"
 		out.RawString(prefix)
@@ -227,11 +254,6 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(out *jwr
 		const prefix string = ",\"allow_localhost\":"
 		out.RawString(prefix)
 		out.Bool(bool(in.AllowLocalhost))
-	}
-	if in.MaxReplayCount != 0 {
-		const prefix string = ",\"max_replay_count\":"
-		out.RawString(prefix)
-		out.Int(int(in.MaxReplayCount))
 	}
 	out.RawByte('}')
 }
@@ -912,6 +934,12 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi8(in *jlex
 					}
 				}
 			}
+		case "edge_token":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.EdgeToken = string(in.String())
+			}
 		default:
 			in.SkipRecursive()
 		}
@@ -945,6 +973,11 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi8(out *jwr
 		const prefix string = ",\"timestamp\":"
 		out.RawString(prefix)
 		out.Raw((*in.Timestamp).MarshalJSON())
+	}
+	if in.EdgeToken != "" {
+		const prefix string = ",\"edge_token\":"
+		out.RawString(prefix)
+		out.String(string(in.EdgeToken))
 	}
 	out.RawByte('}')
 }

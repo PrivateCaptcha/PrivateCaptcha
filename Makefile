@@ -270,7 +270,7 @@ view-portal: build-js build-widget-script copy-static-js build-view-portal
 	bin/viewportal
 
 run-view-portal:
-	reflex -r '^(pkg\/portal|web|cmd\/viewportal)/' \
+	reflex -r '^(pkg\/portal|web|cmd\/viewportal|pkg\/api)/' \
 		-R '^(web/static/js|web/node_modules)' \
 		-s -- sh -c 'make view-portal'
 

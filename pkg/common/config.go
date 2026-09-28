@@ -53,6 +53,8 @@ const (
 	ClickHousePortKey
 	GradualDataCleanupKey
 	Argon2IDMemoryBudgetKey
+	EdgeTokenPrivateKeyKey
+	EdgeTokenPublicKeyKey
 	// Add new fields _above_
 	COMMON_CONFIG_KEYS_COUNT
 )
