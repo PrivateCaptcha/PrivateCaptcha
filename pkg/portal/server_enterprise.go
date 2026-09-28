@@ -41,12 +41,11 @@ func MaxAuditLogsRetention(cfg common.ConfigStore) time.Duration {
 	return time.Duration(days) * 24 * time.Hour
 }
 
-func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRead, privateWrite alice.Chain) {
+func (s *Server) setupEnterprise(rg *common.RouteGenerator, public, openRead, privateRead, privateWrite alice.Chain) {
 	arg := func(s string) string {
 		return fmt.Sprintf("{%s}", s)
 	}
 	privateReadWithTip := privateRead.Append(TipMiddleware)
-	longPrivateRead := alice.New(common.WriteDeadlineExtender(30 * time.Second)).Extend(privateRead)
 
 	rg.Handle(rg.Post(common.OrgEndpoint, common.NewEndpoint), privateWrite, http.HandlerFunc(s.postNewOrg))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite, s.Handler(s.postOrgMembers))
@@ -64,6 +63,8 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRea
 	)
 
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getAuditLogEvents))
+	longPublic := alice.New(common.WriteDeadlineExtender(30 * time.Second)).Extend(public)
+	longPrivateRead := longPublic.Append(s.Maintenance, common.SoftTimeoutHandler(28*time.Second), s.private)
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.ExportEndpoint), longPrivateRead, http.HandlerFunc(s.exportAuditLogsCSV))
 
 	// Rules routes
