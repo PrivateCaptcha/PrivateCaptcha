@@ -83,12 +83,12 @@
             x-transition:leave-start="grid-rows-[1fr] opacity-100"
             x-transition:leave-end="grid-rows-[0fr] opacity-0">
             <div class="min-h-0 px-4 pb-6 pt-1">
-                {{- if $.Platform.Argon2IDEnabled }}
+                {{- if or $.Platform.Argon2IDEnabled $.Platform.ShowDisabledArgon2id }}
                 <label for="{{ .Const.Challenge }}" class="pc-internal-form-label">Challenge type</label>
                 <div class="mt-2 mb-4">
                     <select id="{{ .Const.Challenge }}" name="{{ .Const.Challenge }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
                         <option value="{{ .Const.ChallengeTypeBlake2b }}" {{ if eq $.Params.Property.Challenge .Const.ChallengeTypeBlake2b }}selected="selected"{{ end }}>Compute-hard (default)</option>
-                        <option value="{{ .Const.ChallengeTypeArgon2ID }}" {{ if eq $.Params.Property.Challenge .Const.ChallengeTypeArgon2ID }}selected="selected"{{ end }}>Memory-hard (experimental)</option>
+                        <option value="{{ .Const.ChallengeTypeArgon2ID }}" {{ if eq $.Params.Property.Challenge .Const.ChallengeTypeArgon2ID }}selected="selected"{{ end }} {{ if not $.Platform.Argon2IDEnabled }}disabled{{end}}>Memory-hard {{ if $.Platform.Argon2IDEnabled }}(experimental){{else}}(disabled){{end}}</option>
                     </select>
                 </div>
                 {{- end }}

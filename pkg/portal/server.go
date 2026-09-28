@@ -119,9 +119,10 @@ type CaptchaRenderContext struct {
 
 type PlatformRenderContext struct {
 	GitCommit            string
-	Enterprise           bool
 	Argon2IDMemoryBudget common.ConfigItem
 	licenseService       common.LicenseService
+	ShowDisabledArgon2id bool
+	Enterprise           bool
 }
 
 func (p PlatformRenderContext) Argon2IDEnabled() bool {
@@ -252,6 +253,7 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 		GitCommit:            gitCommit,
 		Enterprise:           s.isEnterprise(),
 		Argon2IDMemoryBudget: s.Argon2IDMemoryBudget,
+		ShowDisabledArgon2id: true,
 		licenseService:       s.LicenseService,
 	}
 	if len(gitCommit) == 0 {
