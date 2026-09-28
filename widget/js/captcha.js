@@ -63,8 +63,8 @@ function setupPrivateCaptcha() {
     const newWidgets = [];
 
     if (options.render !== RENDER_EXPLICIT) {
-        let autoWidget = window.privateCaptcha.autoWidget;
-
+        let autoWidget = null;
+        const existing = window.privateCaptcha.autoWidget;
         const elements = findCaptchaElements(options.compat);
         for (let htmlElement of elements) {
             const widget = renderCaptchaWidget(htmlElement, options);
@@ -73,7 +73,10 @@ function setupPrivateCaptcha() {
                 if (!autoWidget) { autoWidget = widget; }
             }
         }
-
+        // keep the previous autoWidget only if its element is still in the document
+        if (!autoWidget && existing && document.body.contains(existing.element())) {
+            autoWidget = existing;
+        }
         window.privateCaptcha.autoWidget = autoWidget;
     }
 
