@@ -1034,15 +1034,24 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 	userOrgsCacheKey := UserOrgsCacheKey(user.ID)
 	if orgsErr == nil {
 		for _, org := range userOrgs {
-			// negative-cache (not Delete), mirroring SoftDeleteOrganization. Makes retrieveOrganizationWithAccess
-			// short-circuit on ErrNegativeCacheHit in BOTH variants.
+			if org.Level != dbgen.AccessLevelOwner {
+				// member-only org: the org itself is NOT being deleted. Only invalidate
+				// membership-related caches so the departed user vanishes from members lists;
+				// the org key stays positively cached (or cold) so others can still load it.
+				if members, mErr := impl.querier.GetOrganizationUsers(ctx, org.Organization.ID); mErr == nil {
+					for _, m := range members {
+						if m.User.ID != user.ID {
+							_ = impl.cache.Delete(ctx, UserOrgsCacheKey(m.User.ID))
+						}
+					}
+				}
+				_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.Organization.ID))
+				continue
+			}
+			// owned org: actually deleted at the DB level, so negative-cache the org key.
 			_ = impl.cache.SetMissing(ctx, orgCacheKey(org.Organization.ID))
-			impl.invalidateOrgPropertiesCache(ctx, org.Organization.ID, nil /*all properties*/)
-			impl.invalidateOrgFormsCache(ctx, org.Organization.ID, nil /*all forms*/)
-
-			// Invalidate every other member's UserOrgsCacheKey so the deleted org disappears from
-			// their org list immediately. Query the DB (not cache) for members so the invalidation
-			// runs even when orgUsersCacheKey is cold (e.g. no Members-tab view prior to deletion).
+			impl.invalidateOrgPropertiesCache(ctx, org.Organization.ID, nil)
+			impl.invalidateOrgFormsCache(ctx, org.Organization.ID, nil)
 			if members, mErr := impl.querier.GetOrganizationUsers(ctx, org.Organization.ID); mErr == nil {
 				for _, m := range members {
 					if m.User.ID != user.ID {
