@@ -2,7 +2,12 @@ package portal
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/api"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -2042,6 +2048,95 @@ func TestPutPropertyChangeDifficulty(t *testing.T) {
 
 	if renderCtx.SuccessMessage == "" {
 		t.Error("Expected SuccessMessage to be set after updating property")
+	}
+}
+
+func TestPutPropertyEdgeTokenLifetime(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "edge-settings.example.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if property.EdgeTokenValidityInterval != 0 {
+		t.Fatalf("default TTL = %v", property.EdgeTokenValidityInterval)
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicDER, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := server.EdgeTokens
+	server.EdgeTokens, err = api.NewEdgeTokenSigner(
+		config.NewStaticValue(common.EdgeTokenPrivateKeyKey, string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER}))),
+		config.NewStaticValue(common.EdgeTokenPublicKeyKey, string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: publicDER}))),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { server.EdgeTokens = previous }()
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, property.Name)
+	form.Set(common.ParamDifficulty, strconv.Itoa(int(property.Level.Int16)))
+	form.Set(common.ParamGrowth, strconv.Itoa(growthLevelToIndex(property.Growth)))
+	form.Set(common.ParamValidityInterval, strconv.Itoa(puzzle.ValidityIntervalToIndex(property.ValidityInterval)))
+	form.Set(common.ParamEdgeTokenValidityInterval, "4")
+	form.Set(common.ParamEdgeWidgetStartMode, "load")
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+	w := httptest.NewRecorder()
+	view, err := server.putProperty(w, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := view.Model.(*propertySettingsRenderContext)
+	if model.SuccessMessage == "" || model.Property.EdgeTokenValidityInterval != 4 || model.Property.EdgeWidgetStartMode != "load" {
+		t.Fatalf("portal update: %+v", model)
+	}
+	updated, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil || updated.EdgeTokenValidityInterval != time.Hour || updated.EdgeWidgetStartMode != "load" {
+		t.Fatalf("stored TTL = %v, err = %v", updated, err)
+	}
+
+	form.Set(common.ParamEdgeWidgetStartMode, "auto")
+	invalidReq := httptest.NewRequest(http.MethodPut, req.URL.Path, strings.NewReader(form.Encode()))
+	invalidReq.AddCookie(cookie)
+	invalidReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	invalidReq.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	invalidReq.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+	view, err = server.putProperty(httptest.NewRecorder(), invalidReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Model.(*propertySettingsRenderContext).ErrorMessage == "" {
+		t.Fatal("unsupported start mode was accepted")
+	}
+	stored, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil || stored.EdgeWidgetStartMode != "load" {
+		t.Fatalf("unsupported mode changed property: %+v, err=%v", stored, err)
 	}
 }
 

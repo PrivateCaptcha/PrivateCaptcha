@@ -112,6 +112,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 	orgs := []*UserOrg{org, {Name: "Other Org", ID: "org2", Level: string(dbgen.AccessLevelOwner)}}
 	prop := viewStubProperty("Main Site", "org1")
 	prop.Challenge = string(dbgen.ChallengeTypeArgon2ID)
+	prop.EdgeEnabled = true
 	form := viewStubForm("Contact us", "org1")
 	token := CsrfRenderContext{Token: "stub-csrf-token"}
 	rules := viewStubRules()

@@ -342,19 +342,21 @@ func newOrgAuditLogEvent(userID int32, org *dbgen.Organization, action common.Au
 }
 
 type AuditLogProperty struct {
-	Name                string `json:"name,omitempty"`
-	Challenge           string `json:"challenge,omitempty"`
-	OrgID               int32  `json:"org_id,omitempty"`
-	OrgName             string `json:"org_name,omitempty"`
-	OrgOwnerID          int32  `json:"org_owner_id,omitempty"`
-	CreatorID           int32  `json:"creator_id,omitempty"`
-	Domain              string `json:"domain,omitempty"`
-	Level               int16  `json:"level,omitempty"`
-	Growth              string `json:"growth,omitempty"`
-	ValidityIntervalSec int    `json:"validity_interval_s,omitempty"`
-	MaxReplayCount      int32  `json:"max_replay_count,omitempty"`
-	AllowSubdomains     bool   `json:"allow_subdomains,omitempty"`
-	AllowLocalhost      bool   `json:"allow_localhost,omitempty"`
+	Name                 string `json:"name,omitempty"`
+	Challenge            string `json:"challenge,omitempty"`
+	OrgID                int32  `json:"org_id,omitempty"`
+	OrgName              string `json:"org_name,omitempty"`
+	OrgOwnerID           int32  `json:"org_owner_id,omitempty"`
+	CreatorID            int32  `json:"creator_id,omitempty"`
+	Domain               string `json:"domain,omitempty"`
+	Level                int16  `json:"level,omitempty"`
+	Growth               string `json:"growth,omitempty"`
+	ValidityIntervalSec  int    `json:"validity_interval_s,omitempty"`
+	EdgeTokenValiditySec int    `json:"edge_token_validity_s,omitempty"`
+	EdgeWidgetStartMode  string `json:"edge_widget_start_mode,omitempty"`
+	MaxReplayCount       int32  `json:"max_replay_count,omitempty"`
+	AllowSubdomains      bool   `json:"allow_subdomains,omitempty"`
+	AllowLocalhost       bool   `json:"allow_localhost,omitempty"`
 }
 
 type AuditLogForm struct {
@@ -430,18 +432,20 @@ func newAuditLogProperty(property *dbgen.Property, org *dbgen.Organization) *Aud
 	}
 
 	event := &AuditLogProperty{
-		Name:                property.Name,
-		Challenge:           string(property.Challenge),
-		OrgID:               property.OrgID.Int32,
-		OrgOwnerID:          property.OrgOwnerID.Int32,
-		CreatorID:           property.CreatorID.Int32,
-		Domain:              property.Domain,
-		Level:               property.Level.Int16,
-		Growth:              string(property.Growth),
-		ValidityIntervalSec: int(property.ValidityInterval.Seconds()),
-		MaxReplayCount:      property.MaxReplayCount,
-		AllowSubdomains:     property.AllowSubdomains,
-		AllowLocalhost:      property.AllowLocalhost,
+		Name:                 property.Name,
+		Challenge:            string(property.Challenge),
+		OrgID:                property.OrgID.Int32,
+		OrgOwnerID:           property.OrgOwnerID.Int32,
+		CreatorID:            property.CreatorID.Int32,
+		Domain:               property.Domain,
+		Level:                property.Level.Int16,
+		Growth:               string(property.Growth),
+		ValidityIntervalSec:  int(property.ValidityInterval.Seconds()),
+		EdgeTokenValiditySec: int(property.EdgeTokenValidityInterval.Seconds()),
+		EdgeWidgetStartMode:  string(property.EdgeWidgetStartMode),
+		MaxReplayCount:       property.MaxReplayCount,
+		AllowSubdomains:      property.AllowSubdomains,
+		AllowLocalhost:       property.AllowLocalhost,
 	}
 
 	if org != nil {
@@ -457,18 +461,20 @@ func newAuditLogOldProperty(property *dbgen.Property, updateRow *dbgen.UpdatePro
 	}
 
 	event := &AuditLogProperty{
-		Name:                updateRow.OldName,
-		Challenge:           string(updateRow.OldChallenge),
-		OrgID:               property.OrgID.Int32,
-		OrgOwnerID:          property.OrgOwnerID.Int32,
-		CreatorID:           property.CreatorID.Int32,
-		Domain:              property.Domain,
-		Level:               updateRow.OldLevel.Int16,
-		Growth:              string(updateRow.OldGrowth),
-		ValidityIntervalSec: int(updateRow.OldValidityInterval.Seconds()),
-		MaxReplayCount:      updateRow.OldMaxReplayCount,
-		AllowSubdomains:     updateRow.OldAllowSubdomains,
-		AllowLocalhost:      updateRow.OldAllowLocalhost,
+		Name:                 updateRow.OldName,
+		Challenge:            string(updateRow.OldChallenge),
+		OrgID:                property.OrgID.Int32,
+		OrgOwnerID:           property.OrgOwnerID.Int32,
+		CreatorID:            property.CreatorID.Int32,
+		Domain:               property.Domain,
+		Level:                updateRow.OldLevel.Int16,
+		Growth:               string(updateRow.OldGrowth),
+		ValidityIntervalSec:  int(updateRow.OldValidityInterval.Seconds()),
+		EdgeTokenValiditySec: int(updateRow.OldEdgeTokenValidityInterval.Seconds()),
+		EdgeWidgetStartMode:  string(updateRow.OldEdgeWidgetStartMode),
+		MaxReplayCount:       updateRow.OldMaxReplayCount,
+		AllowSubdomains:      updateRow.OldAllowSubdomains,
+		AllowLocalhost:       updateRow.OldAllowLocalhost,
 	}
 
 	if org != nil {

@@ -822,6 +822,18 @@ func TestInitFromPropertyValidityChange(t *testing.T) {
 	}
 }
 
+func TestInitFromPropertyEdgeWidgetStartModeChange(t *testing.T) {
+	log := &UserAuditLog{}
+	oldValue := &db.AuditLogProperty{Name: "Test Property", EdgeWidgetStartMode: "click"}
+	newValue := &db.AuditLogProperty{Name: "Test Property", EdgeWidgetStartMode: "load"}
+	if err := log.initFromProperty(oldValue, newValue); err != nil {
+		t.Fatal(err)
+	}
+	if log.Property != "Edge widget start mode" || log.Value != "load" {
+		t.Fatalf("audit log = (%q, %q), want start mode load", log.Property, log.Value)
+	}
+}
+
 func TestInitFromPropertyAllowSubdomainsChange(t *testing.T) {
 	ul := &UserAuditLog{}
 

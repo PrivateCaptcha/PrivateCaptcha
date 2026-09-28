@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -13,7 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/api"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -30,6 +33,7 @@ const (
 	listTemplateEnd = `</ul>
 </body>
 </html>`
+	gatePagePath = "/" + common.GateEndpoint + "/" + common.PageEndpoint
 )
 
 var (
@@ -64,7 +68,30 @@ func listPages(w http.ResponseWriter, _ *http.Request) {
 		}
 		_, _ = fmt.Fprintf(w, "<li><a href=\"%s\">%s</a></li>\n", strings.TrimSuffix(p.Path, "{$}"), p.Path)
 	}
+	_, _ = fmt.Fprintf(w, "<li><a href=\"%s\">API Gate Page</a></li>\n", gatePagePath)
 	_, _ = w.Write([]byte(listTemplateEnd))
+}
+
+func serveGatePage(w http.ResponseWriter, r *http.Request) {
+	out := &bytes.Buffer{}
+	if err := api.GatePageTemplate.Execute(out, struct{ Sitekey, ScriptURL, PuzzleURL, StartMode, Domain, CompletePath string }{
+		db.TestPropertySitekey, "/widget/js/privatecaptcha.js", "/" + common.PuzzleEndpoint, "click", "example.com", api.GateCompletePath,
+	}); err != nil {
+		slog.ErrorContext(r.Context(), "Failed to render gate page", common.ErrAttr(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
+	_, _ = out.WriteTo(w)
+}
+
+func stubGateCompleteHandler(w http.ResponseWriter, r *http.Request) {
+	if r.PostFormValue(common.ParamPrivateCaptchaSolution) == "" {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
+	_, _ = w.Write([]byte(`<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="icon" href="data:,"><title>Challenge submitted</title></head><body style="margin: 0; min-height: 100vh; background-color: green"></body></html>`))
 }
 
 func servePage(p portal.ViewPortalPage) http.HandlerFunc {
@@ -312,6 +339,8 @@ func main() {
 	router.HandleFunc("/"+common.PuzzleEndpoint, puzzleHandler)
 	router.HandleFunc("/"+common.PuzzleEndpoint+"/{level}", puzzleHandler)
 	router.HandleFunc("/portal/"+common.EchoPuzzleEndpoint+"/{level}", puzzleHandler)
+	router.HandleFunc("GET "+gatePagePath, serveGatePage)
+	router.HandleFunc("POST "+api.GateCompletePath, stubGateCompleteHandler)
 
 	for _, p := range pages {
 		router.HandleFunc(p.Path, servePage(p))
