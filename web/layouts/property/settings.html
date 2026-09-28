@@ -1,6 +1,6 @@
 {{template "property-tabs.html" (dict "Root" . "ActiveTab" "settings")}}
 
-<div class="pc-section-divide" x-data="{deleteOpen: false, moveOpen: false}">
+<div x-data="{deleteOpen: false, moveOpen: false}">
     <div class="pc-modal-root" aria-labelledby="delete-property-modal-title" role="dialog" aria-modal="true"
         @keydown.escape.window="deleteOpen && (deleteOpen = false)"
         x-cloak x-show="deleteOpen"
@@ -101,6 +101,7 @@
         </div>
     </div>
     {{ end }}
+    <div class="pc-section-divide">
     <div class="grid max-w-4xl grid-cols-1 gap-x-10 gap-y-10 px-4 py-12 sm:px-6 md:grid-cols-3 lg:px-8 lg:py-10">
         <div>
             <h2 class="pc-section-heading">Basic settings</h2>
@@ -143,5 +144,6 @@
         <div class="flex items-start md:col-span-2">
             <button type="submit" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanEdit }}pc-internal-form-button-danger{{ else }}pc-internal-form-button-disabled{{ end }}" @click="deleteOpen = true; pcTrackEvent('Delete');">Delete</button>
         </div>
+    </div>
     </div>
 </div>
