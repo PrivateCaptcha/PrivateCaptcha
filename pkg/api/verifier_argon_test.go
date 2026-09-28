@@ -86,7 +86,10 @@ func TestVerificationAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	verifier := &Verifier{verificationSemaphore: semaphore.NewWeighted(int64(puzzle.Argon2IDMemoryKiB))}
+	verifier := &Verifier{
+		verificationSemaphore:   semaphore.NewWeighted(int64(puzzle.Argon2IDMemoryKiB)),
+		verificationCapacityKiB: int64(puzzle.Argon2IDMemoryKiB),
+	}
 	first := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p), started: make(chan struct{}), release: make(chan struct{})}
 	defer func() {
 		select {
@@ -142,7 +145,7 @@ func TestVerificationAdmissionWaitsForCapacity(t *testing.T) {
 		t.Fatal(err)
 	}
 	weight := int64(puzzle.Argon2IDMemoryKiB)
-	verifier := &Verifier{verificationSemaphore: semaphore.NewWeighted(weight)}
+	verifier := &Verifier{verificationSemaphore: semaphore.NewWeighted(weight), verificationCapacityKiB: weight}
 	if err := verifier.verificationSemaphore.Acquire(t.Context(), weight); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +180,7 @@ func TestVerificationAdmissionHonorsCallerDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 	weight := int64(puzzle.Argon2IDMemoryKiB)
-	verifier := &Verifier{verificationSemaphore: semaphore.NewWeighted(weight)}
+	verifier := &Verifier{verificationSemaphore: semaphore.NewWeighted(weight), verificationCapacityKiB: weight}
 	if err := verifier.verificationSemaphore.Acquire(t.Context(), weight); err != nil {
 		t.Fatal(err)
 	}
