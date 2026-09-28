@@ -74,6 +74,101 @@ const protocolFixtures = {
     },
 };
 
+test('load mode fetches and finishes on its own, including after reset', { timeout: 4000 }, async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { WorkersPool } = await import('../js/workerspool.js');
+    const { STATE_LOADING, STATE_VERIFIED } = await import('../js/html.js');
+    class SolvingWorker {
+        postMessage({ command, argument }) {
+            if (command === 'init') {
+                this.id = argument.id;
+                setTimeout(() => this.onmessage?.({ data: { command: 'init' } }), 0);
+            } else if (command === 'solve') {
+                const solution = new Uint8Array(8);
+                solution[0] = argument.puzzleIndex;
+                setTimeout(() => this.onmessage?.({ data: { command: 'solve', argument: {
+                    id: this.id, solution, wasm: false,
+                } } }), 0);
+            }
+        }
+        terminate() { this.onmessage = null; }
+    }
+    const body = bytesFromHex(protocolFixtures.v1.body);
+    body[26] = 1;
+    body.fill(0, 27, 31);
+    const previousFetch = globalThis.fetch;
+    let releasePuzzle;
+    let fetches = 0;
+    globalThis.fetch = () => {
+        fetches++;
+        return new Promise((resolve) => {
+            releasePuzzle = () => resolve({
+                ok: true, text: async () => puzzlePayload(body), headers: { get: () => null },
+            });
+        });
+    };
+    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}" data-start-mode="load"></div></form>`;
+    const element = document.querySelector('.private-captcha');
+    let widget;
+    try {
+        widget = new CaptchaWidget(element);
+        widget._workersPool = new WorkersPool({
+            workersReady: widget.onWorkersReady.bind(widget),
+            workerError: widget.onWorkerError.bind(widget),
+            workStarted: widget.onWorkStarted.bind(widget),
+            workCompleted: widget.onWorkCompleted.bind(widget),
+            progress: widget.onWorkProgress.bind(widget),
+        }, false, SolvingWorker);
+        assert.strictEqual(fetches, 1, 'load mode fetches before focus or click');
+        assert.strictEqual(widget._state, STATE_LOADING);
+        assert.strictEqual(widget.solution(), null, 'nothing solved before puzzle arrives');
+        let starts = 0;
+        element.addEventListener('privatecaptcha:start', () => { starts++; });
+        const waitForFinish = () => new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('load mode did not finish')), 1500);
+            element.addEventListener('privatecaptcha:finish', () => { clearTimeout(timeout); resolve(); }, { once: true });
+        });
+        const finished = waitForFinish();
+        releasePuzzle();
+        await finished;
+        assert.strictEqual(starts, 1);
+        assert.strictEqual(widget._state, STATE_VERIFIED);
+        assert.strictEqual(widget._userStarted, false);
+        assert.strictEqual(widget._apiTriggered, false);
+        assert.ok(widget.solution(), 'load mode exposes the solution without user action');
+        assert.ok(element.querySelector('input[name="private-captcha-solution"]'));
+
+        const finishedAgain = waitForFinish();
+        widget.reset();
+        assert.strictEqual(fetches, 2, 'reset starts a new load');
+        releasePuzzle();
+        await finishedAgain;
+        assert.strictEqual(starts, 2);
+        assert.strictEqual(widget._state, STATE_VERIFIED);
+        assert.ok(widget.solution());
+    } finally {
+        globalThis.fetch = previousFetch;
+        if (widget?._expiryTimeout) { clearTimeout(widget._expiryTimeout); }
+        widget?._workersPool?.stop();
+    }
+});
+
+test('auto and click modes do not fetch on construction', async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const previousFetch = globalThis.fetch;
+    let fetches = 0;
+    globalThis.fetch = () => { fetches++; throw new Error('unexpected fetch'); };
+    try {
+        for (const mode of ['auto', 'click']) {
+            document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}" data-start-mode="${mode}"></div></form>`;
+            new CaptchaWidget(document.querySelector('.private-captcha'));
+        }
+        assert.strictEqual(fetches, 0);
+    } finally {
+        globalThis.fetch = previousFetch;
+    }
+});
+
 function bytesFromHex(value) {
     return Uint8Array.from(value.match(/.{2}/g), (byte) => Number.parseInt(byte, 16));
 }

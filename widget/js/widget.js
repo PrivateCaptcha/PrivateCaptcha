@@ -74,7 +74,10 @@ export class CaptchaWidget {
                 }
             }
 
-            this.checkConfigured();
+            const sitekey = this.checkConfigured();
+            if (sitekey && this._options.startMode === 'load') {
+                this.init(false);
+            }
         } else {
             console.warn('[privatecaptcha] cannot find form element');
         }
@@ -169,7 +172,7 @@ export class CaptchaWidget {
             this._workersPool.reset();
         }
 
-        const startWorkers = ('auto' === this._options.startMode) || autoStart;
+        const startWorkers = ('auto' === this._options.startMode) || ('load' === this._options.startMode) || autoStart;
 
         try {
             this.setState(STATE_LOADING);
@@ -322,6 +325,9 @@ export class CaptchaWidget {
         this._apiTriggered = false;
 
         this.signalReset();
+        if (this._options.startMode === 'load') {
+            this.init(false);
+        }
     }
 
     updateStyles() {
@@ -461,7 +467,7 @@ export class CaptchaWidget {
     }
 
     shouldFinalizeWork() {
-        return this._userStarted || (this._apiTriggered && (
+        return ('load' === this._options.startMode) || this._userStarted || (this._apiTriggered && (
             ('auto' === this._options.startMode) || ('hidden' === this._options.displayMode)
         ));
     }
@@ -474,7 +480,9 @@ export class CaptchaWidget {
 
         this.setState(STATE_READY);
         // if user started we always show "in progress"
-        if (!this._userStarted && !(this._apiTriggered && autoStart)) {
+        if ('load' === this._options.startMode) {
+            this.setProgressState(STATE_IN_PROGRESS);
+        } else if (!this._userStarted && !(this._apiTriggered && autoStart)) {
             this.setProgressState(STATE_READY);
         }
 
