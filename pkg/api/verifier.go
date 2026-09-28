@@ -337,7 +337,8 @@ func (v *Verifier) verifyPayload(ctx context.Context, payload puzzle.SolutionPay
 		metadata, result := payload.VerifySolutions(ctx)
 		return metadata, result, nil
 	}
-	if skipMemorySemaphore {
+	// when Argon2ID is disabled, skip the semaphore for in-flight Argon2ID puzzles
+	if skipMemorySemaphore || !v.argon2IDEnabled() {
 		if err := ctx.Err(); err != nil {
 			return nil, puzzle.VerifyNoError, err
 		}
