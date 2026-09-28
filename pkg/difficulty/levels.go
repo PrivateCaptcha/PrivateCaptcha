@@ -261,5 +261,5 @@ func (l *Levels) SaveCache(ctx context.Context, dir string) error {
 }
 
 func (l *Levels) LoadCache(ctx context.Context, dir string) error {
-	return l.userBuckets.LoadCache(ctx, dir, userBucketsCacheFilename)
+	return l.userBuckets.LoadCache(ctx, dir, userBucketsCacheFilename, l.propertyBuckets.LeakInterval()*propertyBackfillIntervalCount)
 }

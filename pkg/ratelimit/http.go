@@ -166,5 +166,5 @@ func (l *httpRateLimiter[TKey]) SaveCache(ctx context.Context, dir string) error
 }
 
 func (l *httpRateLimiter[TKey]) LoadCache(ctx context.Context, dir string) error {
-	return l.buckets.LoadCache(ctx, dir, ipRateLimiterCacheFilename)
+	return l.buckets.LoadCache(ctx, dir, ipRateLimiterCacheFilename, 1*time.Hour)
 }

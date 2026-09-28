@@ -229,7 +229,6 @@ func (m *Manager[TKey, T, TBucket]) SaveCache(ctx context.Context, dir, filename
 	return common.SaveCacheToFile(ctx, dir, filename, maxItems, m.buckets, filter)
 }
 
-func (m *Manager[TKey, T, TBucket]) LoadCache(ctx context.Context, dir, filename string) error {
-	const persistedCacheMaxAge = 1 * time.Hour
-	return common.LoadCacheFromFile(ctx, dir, filename, persistedCacheMaxAge, m.buckets)
+func (m *Manager[TKey, T, TBucket]) LoadCache(ctx context.Context, dir, filename string, maxAge time.Duration) error {
+	return common.LoadCacheFromFile(ctx, dir, filename, maxAge, m.buckets)
 }
