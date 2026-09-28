@@ -136,8 +136,9 @@ func connectPostgres(ctx context.Context, config *pgxpool.Config, timeout time.D
 		case <-ticker.C:
 			slog.DebugContext(ctx, "Connecting to Postgres...")
 			pool, err := pgxpool.NewWithConfig(ctx, config)
-			if err == nil {
-				return pool, nil
+			if err != nil {
+				slog.WarnContext(ctx, "Failed to create pgxpool", common.ErrAttr(err))
+				continue
 			}
 			if perr := pool.Ping(ctx); perr != nil {
 				slog.WarnContext(ctx, "Postgres not yet ready", common.ErrAttr(perr))
