@@ -94,7 +94,7 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 			GitCommit:  assetVersion,
 			Enterprise: enterpriseFromQuery(r),
 			//Argon2IDMemoryBudget: config.NewStaticValue(common.Argon2IDMemoryBudgetKey, "256"),
-			ShowDisabledArgon2id: true,
+			ShowChallengeType: true,
 		}
 
 		out, err := srv.RenderResponse(ctx, p.Template, model, reqCtx, platformCtx)

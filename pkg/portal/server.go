@@ -121,7 +121,7 @@ type PlatformRenderContext struct {
 	GitCommit            string
 	Argon2IDMemoryBudget common.ConfigItem
 	licenseService       common.LicenseService
-	ShowDisabledArgon2id bool
+	ShowChallengeType    bool
 	Enterprise           bool
 }
 
@@ -253,7 +253,7 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 		GitCommit:            gitCommit,
 		Enterprise:           s.isEnterprise(),
 		Argon2IDMemoryBudget: s.Argon2IDMemoryBudget,
-		ShowDisabledArgon2id: true,
+		ShowChallengeType:    true,
 		licenseService:       s.LicenseService,
 	}
 	if len(gitCommit) == 0 {

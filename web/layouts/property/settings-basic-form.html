@@ -83,7 +83,7 @@
             x-transition:leave-start="grid-rows-[1fr] opacity-100"
             x-transition:leave-end="grid-rows-[0fr] opacity-0">
             <div class="min-h-0 px-4 pb-6 pt-1">
-                {{- if or $.Platform.Argon2IDEnabled $.Platform.ShowDisabledArgon2id }}
+                {{- if or $.Platform.ShowChallengeType (not (eq $.Params.Property.Challenge .Const.ChallengeTypeBlake2b)) }}
                 <label for="{{ .Const.Challenge }}" class="pc-internal-form-label">Challenge type</label>
                 <div class="mt-2 mb-4">
                     <select id="{{ .Const.Challenge }}" name="{{ .Const.Challenge }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
