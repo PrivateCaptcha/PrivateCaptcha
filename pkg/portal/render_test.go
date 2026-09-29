@@ -145,6 +145,10 @@ func TestRenderHTML(t *testing.T) {
 	blakeProperty.Challenge = string(dbgen.ChallengeTypeBlake2b)
 	argonProperty := stubProperty("Foo", "123")
 	argonProperty.Challenge = string(dbgen.ChallengeTypeArgon2ID)
+	edgeProperty := stubProperty("Foo", "123")
+	edgeProperty.HasDomain = true
+	edgeProperty.EdgeTokenValidityInterval = 4
+	edgeProperty.EdgeWidgetStartMode = "load"
 	integrationForm := stubForm("Contact", "123")
 	integrationForm.ExternalID = "form-uuid"
 	hostileOrgModel := &orgDashboardRenderContext{
@@ -629,6 +633,46 @@ func TestRenderHTML(t *testing.T) {
 			},
 		},
 		// same as above, but property settings _template_
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: edgeProperty, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			selector: `select[name="edge_widget_start_mode"] option[selected]`,
+			matches:  []string{"On page load"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: edgeProperty, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			selector: `div.pc-advanced-settings > h4 > button > span:first-child`,
+			matches:  []string{"Edge verification", "Advanced"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: &userProperty{Domain: "any domain (*)", HasDomain: false}, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			selector: `div.pc-advanced-settings > h4 > button > span:first-child`,
+			matches:  []string{"Advanced"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: edgeProperty, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			selector: `select[name="edge_token_validity_interval"] option[selected]`,
+			matches:  []string{"1 hour"},
+		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
 			template: propertyDashboardSettingsTemplate,

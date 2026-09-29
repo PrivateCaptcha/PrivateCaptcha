@@ -63,21 +63,24 @@ type propertyWizardRenderContext struct {
 }
 
 type userProperty struct {
-	ID               string
-	OrgID            string
-	Name             string
-	Domain           string
-	Sitekey          string
-	Level            int
-	Growth           int
-	Challenge        string
-	ValidityInterval int
-	MaxReplayCount   int
-	HasDomain        bool
-	AllowSubdomains  bool
-	AllowLocalhost   bool
-	AllowReplay      bool
-	Enabled          bool
+	ID                        string
+	OrgID                     string
+	Name                      string
+	Domain                    string
+	Sitekey                   string
+	Level                     int
+	Growth                    int
+	Challenge                 string
+	ValidityInterval          int
+	EdgeTokenValidityInterval int
+	EdgeWidgetStartMode       string
+	MaxReplayCount            int
+	HasDomain                 bool
+	AllowSubdomains           bool
+	AllowLocalhost            bool
+	AllowReplay               bool
+	Enabled                   bool
+	EdgeEnabled               bool
 }
 
 type orgPropertiesRenderContext struct {
@@ -152,24 +155,53 @@ func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 
 func propertyToUserProperty(p *dbgen.Property, hasher common.IdentifierHasher) *userProperty {
 	up := &userProperty{
-		ID:               hasher.Encrypt(int(p.ID)),
-		OrgID:            hasher.Encrypt(int(p.OrgID.Int32)),
-		Name:             p.Name,
-		Domain:           common.DisplayPropertyDomain(p.Domain, p.AllowSubdomains),
-		HasDomain:        len(p.Domain) > 0,
-		Level:            int(p.Level.Int16),
-		Growth:           growthLevelToIndex(p.Growth),
-		Challenge:        string(p.Challenge),
-		Sitekey:          db.UUIDToSiteKey(p.ExternalID),
-		ValidityInterval: puzzle.ValidityIntervalToIndex(p.ValidityInterval),
-		AllowReplay:      (p.MaxReplayCount > 1),
-		MaxReplayCount:   max(1, int(p.MaxReplayCount)),
-		AllowSubdomains:  p.AllowSubdomains,
-		AllowLocalhost:   p.AllowLocalhost,
-		Enabled:          p.Enabled,
+		ID:                        hasher.Encrypt(int(p.ID)),
+		OrgID:                     hasher.Encrypt(int(p.OrgID.Int32)),
+		Name:                      p.Name,
+		Domain:                    common.DisplayPropertyDomain(p.Domain, p.AllowSubdomains),
+		HasDomain:                 len(p.Domain) > 0,
+		Level:                     int(p.Level.Int16),
+		Growth:                    growthLevelToIndex(p.Growth),
+		Challenge:                 string(p.Challenge),
+		Sitekey:                   db.UUIDToSiteKey(p.ExternalID),
+		ValidityInterval:          puzzle.ValidityIntervalToIndex(p.ValidityInterval),
+		EdgeTokenValidityInterval: edgeTokenValidityToIndex(p.EdgeTokenValidityInterval),
+		EdgeWidgetStartMode:       string(p.EdgeWidgetStartMode),
+		AllowReplay:               (p.MaxReplayCount > 1),
+		MaxReplayCount:            max(1, int(p.MaxReplayCount)),
+		AllowSubdomains:           p.AllowSubdomains,
+		AllowLocalhost:            p.AllowLocalhost,
+		Enabled:                   p.Enabled,
+		EdgeEnabled:               p.EdgeTokenValidityInterval > 0,
 	}
 
 	return up
+}
+
+func edgeTokenValidityToIndex(period time.Duration) int {
+	if period <= 0 {
+		return 0
+	}
+	for i, duration := range puzzle.ValidityDurations {
+		if duration == period {
+			return i + 1
+		}
+		if period < duration {
+			if i == 0 || period-puzzle.ValidityDurations[i-1] > duration-period {
+				return i + 1
+			}
+			return i
+		}
+	}
+	return len(puzzle.ValidityDurations)
+}
+
+func edgeTokenValidityFromIndex(value string) time.Duration {
+	index, err := strconv.Atoi(value)
+	if err != nil || index < 1 || index > len(puzzle.ValidityDurations) {
+		return 0
+	}
+	return puzzle.ValidityDurations[index-1]
 }
 
 func propertiesToUserProperties(ctx context.Context, properties []*dbgen.Property, hasher common.IdentifierHasher) []*userProperty {
@@ -846,6 +878,19 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty), renderCtx.MinLevel, renderCtx.MaxLevel)
 	growth := growthLevelFromValue(ctx, r.FormValue(common.ParamGrowth))
 	validityInterval := puzzle.ValidityIntervalFromIndex(ctx, r.FormValue(common.ParamValidityInterval))
+	edgeTokenValidity := edgeTokenValidityFromIndex(r.FormValue(common.ParamEdgeTokenValidityInterval))
+	edgeWidgetStartMode := dbgen.EdgeWidgetStartMode(r.FormValue(common.ParamEdgeWidgetStartMode))
+	if edgeWidgetStartMode == "" {
+		edgeWidgetStartMode = property.EdgeWidgetStartMode
+	}
+	if edgeWidgetStartMode != dbgen.EdgeWidgetStartModeClick && edgeWidgetStartMode != dbgen.EdgeWidgetStartModeLoad {
+		renderCtx.ErrorMessage = "Invalid edge widget start mode."
+		return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, IsNew: false}, nil
+	}
+	if err := s.EdgeTokens.ValidateProperty(property.Domain, edgeTokenValidity); err != nil {
+		renderCtx.ErrorMessage = "Edge token signing requires configured keys and a property domain."
+		return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, IsNew: false}, nil
+	}
 	challenge := dbgen.ChallengeType(r.FormValue(common.ParamChallenge))
 	if challenge != dbgen.ChallengeTypeBlake2b && challenge != dbgen.ChallengeTypeArgon2ID {
 		challenge = property.Challenge
@@ -869,19 +914,23 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 		(growth != property.Growth) ||
 		(challenge != property.Challenge) ||
 		(validityInterval != property.ValidityInterval) ||
+		(edgeTokenValidity != property.EdgeTokenValidityInterval) ||
+		(edgeWidgetStartMode != property.EdgeWidgetStartMode) ||
 		(maxReplayCount != property.MaxReplayCount) ||
 		(allowSubdomains != property.AllowSubdomains) ||
 		(allowLocalhost != property.AllowLocalhost) {
 		params := &dbgen.UpdatePropertyParams{
-			ID:               property.ID,
-			Name:             name,
-			Level:            db.Int2(int16(difficulty)),
-			Growth:           growth,
-			Challenge:        dbgen.NullChallengeType{ChallengeType: challenge, Valid: true},
-			ValidityInterval: validityInterval,
-			AllowSubdomains:  allowSubdomains,
-			AllowLocalhost:   allowLocalhost,
-			MaxReplayCount:   maxReplayCount,
+			ID:                        property.ID,
+			Name:                      name,
+			Level:                     db.Int2(int16(difficulty)),
+			Growth:                    growth,
+			Challenge:                 dbgen.NullChallengeType{ChallengeType: challenge, Valid: true},
+			ValidityInterval:          validityInterval,
+			EdgeTokenValidityInterval: edgeTokenValidity,
+			EdgeWidgetStartMode:       dbgen.NullEdgeWidgetStartMode{EdgeWidgetStartMode: edgeWidgetStartMode, Valid: true},
+			AllowSubdomains:           allowSubdomains,
+			AllowLocalhost:            allowLocalhost,
+			MaxReplayCount:            maxReplayCount,
 		}
 
 		var updatedProperty *dbgen.Property

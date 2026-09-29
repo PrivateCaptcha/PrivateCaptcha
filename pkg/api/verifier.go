@@ -273,6 +273,8 @@ func (v *Verifier) verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 		result.OrgID = property.OrgID.Int32
 		result.PropertyID = property.ID
 		result.Domain = property.Domain
+		result.Sitekey = db.UUIDToSiteKey(property.ExternalID)
+		result.EdgeTokenValidityInterval = property.EdgeTokenValidityInterval
 	}
 	if perr != puzzle.VerifyNoError && perr != puzzle.MaintenanceModeError {
 		return result, nil

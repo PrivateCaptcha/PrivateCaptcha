@@ -146,6 +146,24 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(in *jlex
 			} else {
 				out.ValiditySeconds = int(in.Int())
 			}
+		case "edge_token_validity_seconds":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.EdgeTokenValiditySeconds = int(in.Int())
+			}
+		case "edge_widget_start_mode":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.EdgeWidgetStartMode = string(in.String())
+			}
+		case "max_replay_count":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.MaxReplayCount = int(in.Int())
+			}
 		case "allow_subdomains":
 			if in.IsNull() {
 				in.Skip()
@@ -157,12 +175,6 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(in *jlex
 				in.Skip()
 			} else {
 				out.AllowLocalhost = bool(in.Bool())
-			}
-		case "max_replay_count":
-			if in.IsNull() {
-				in.Skip()
-			} else {
-				out.MaxReplayCount = int(in.Int())
 			}
 		default:
 			in.SkipRecursive()
@@ -218,6 +230,21 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(out *jwr
 		out.RawString(prefix)
 		out.Int(int(in.ValiditySeconds))
 	}
+	{
+		const prefix string = ",\"edge_token_validity_seconds\":"
+		out.RawString(prefix)
+		out.Int(int(in.EdgeTokenValiditySeconds))
+	}
+	{
+		const prefix string = ",\"edge_widget_start_mode\":"
+		out.RawString(prefix)
+		out.String(string(in.EdgeWidgetStartMode))
+	}
+	if in.MaxReplayCount != 0 {
+		const prefix string = ",\"max_replay_count\":"
+		out.RawString(prefix)
+		out.Int(int(in.MaxReplayCount))
+	}
 	if in.AllowSubdomains {
 		const prefix string = ",\"allow_subdomains\":"
 		out.RawString(prefix)
@@ -227,11 +254,6 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(out *jwr
 		const prefix string = ",\"allow_localhost\":"
 		out.RawString(prefix)
 		out.Bool(bool(in.AllowLocalhost))
-	}
-	if in.MaxReplayCount != 0 {
-		const prefix string = ",\"max_replay_count\":"
-		out.RawString(prefix)
-		out.Int(int(in.MaxReplayCount))
 	}
 	out.RawByte('}')
 }
@@ -912,6 +934,12 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi8(in *jlex
 					}
 				}
 			}
+		case "edge_token":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.EdgeToken = string(in.String())
+			}
 		default:
 			in.SkipRecursive()
 		}
@@ -945,6 +973,11 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi8(out *jwr
 		const prefix string = ",\"timestamp\":"
 		out.RawString(prefix)
 		out.Raw((*in.Timestamp).MarshalJSON())
+	}
+	if in.EdgeToken != "" {
+		const prefix string = ",\"edge_token\":"
+		out.RawString(prefix)
+		out.String(string(in.EdgeToken))
 	}
 	out.RawByte('}')
 }
@@ -1146,7 +1179,207 @@ func (v *Pagination) UnmarshalJSON(data []byte) error {
 func (v *Pagination) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi10(l, v)
 }
-func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(in *jlexer.Lexer, out *APIResponse) {
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(in *jlexer.Lexer, out *EdgeJWKS) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		case "keys":
+			if in.IsNull() {
+				in.Skip()
+				out.Keys = nil
+			} else {
+				in.Delim('[')
+				if out.Keys == nil {
+					if !in.IsDelim(']') {
+						out.Keys = make([]edgeJWK, 0, 0)
+					} else {
+						out.Keys = []edgeJWK{}
+					}
+				} else {
+					out.Keys = (out.Keys)[:0]
+				}
+				for !in.IsDelim(']') {
+					var v7 edgeJWK
+					easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi12(in, &v7)
+					out.Keys = append(out.Keys, v7)
+					in.WantComma()
+				}
+				in.Delim(']')
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(out *jwriter.Writer, in EdgeJWKS) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"keys\":"
+		out.RawString(prefix[1:])
+		if in.Keys == nil && (out.Flags&jwriter.NilSliceAsEmpty) == 0 {
+			out.RawString("null")
+		} else {
+			out.RawByte('[')
+			for v8, v9 := range in.Keys {
+				if v8 > 0 {
+					out.RawByte(',')
+				}
+				easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi12(out, v9)
+			}
+			out.RawByte(']')
+		}
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v EdgeJWKS) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v EdgeJWKS) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *EdgeJWKS) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *EdgeJWKS) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(l, v)
+}
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi12(in *jlexer.Lexer, out *edgeJWK) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		case "kty":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Kty = string(in.String())
+			}
+		case "crv":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Crv = string(in.String())
+			}
+		case "alg":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Alg = string(in.String())
+			}
+		case "use":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Use = string(in.String())
+			}
+		case "kid":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Kid = string(in.String())
+			}
+		case "x":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.X = string(in.String())
+			}
+		case "y":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Y = string(in.String())
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi12(out *jwriter.Writer, in edgeJWK) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"kty\":"
+		out.RawString(prefix[1:])
+		out.String(string(in.Kty))
+	}
+	{
+		const prefix string = ",\"crv\":"
+		out.RawString(prefix)
+		out.String(string(in.Crv))
+	}
+	{
+		const prefix string = ",\"alg\":"
+		out.RawString(prefix)
+		out.String(string(in.Alg))
+	}
+	{
+		const prefix string = ",\"use\":"
+		out.RawString(prefix)
+		out.String(string(in.Use))
+	}
+	{
+		const prefix string = ",\"kid\":"
+		out.RawString(prefix)
+		out.String(string(in.Kid))
+	}
+	{
+		const prefix string = ",\"x\":"
+		out.RawString(prefix)
+		out.String(string(in.X))
+	}
+	{
+		const prefix string = ",\"y\":"
+		out.RawString(prefix)
+		out.String(string(in.Y))
+	}
+	out.RawByte('}')
+}
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi13(in *jlexer.Lexer, out *APIResponse) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -1198,7 +1431,7 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(in *jle
 		in.Consumed()
 	}
 }
-func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(out *jwriter.Writer, in APIResponse) {
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi13(out *jwriter.Writer, in APIResponse) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -1229,23 +1462,23 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(out *jw
 // MarshalJSON supports json.Marshaler interface
 func (v APIResponse) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(&w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi13(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v APIResponse) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi13(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *APIResponse) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(&r, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi13(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *APIResponse) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(l, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi13(l, v)
 }

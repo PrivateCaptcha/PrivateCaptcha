@@ -490,6 +490,7 @@ body.pc-vertical-stretch {
     @apply font-medium;
     @apply ring-1;
     @apply ring-inset;
+    font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
 }
 
 .pc-badge-blue {

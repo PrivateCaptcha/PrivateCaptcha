@@ -66,6 +66,49 @@
         </div>
     </div>
 
+    {{ if .Params.Property.HasDomain }}
+    <div class="pc-advanced-settings bg-pc-blue-10 col-span-full" x-data="{edgeOpen: false, edgeTransitioning: true, toggleEdge() { this.edgeTransitioning = true; this.edgeOpen = !this.edgeOpen }}">
+        <h4>
+            <button type="button" class="pc-advanced-settings-trigger pc-subsubsection-title" @click="toggleEdge()" :aria-expanded="edgeOpen" aria-controls="edge-property-settings">
+                <span class="inline-flex items-center">Edge verification{{ if $.Params.Property.EdgeEnabled }} <span class="pc-badge pc-badge-green ml-3" x-show="!edgeOpen" aria-hidden="true">Enabled</span>{{end}}</span>
+                <span class="pc-advanced-settings-icon" aria-hidden="true"></span>
+            </button>
+        </h4>
+
+        <div id="edge-property-settings" class="grid" :class="edgeTransitioning ? 'overflow-hidden' : 'overflow-visible'" x-cloak x-show="edgeOpen"
+            x-on:transitionend="if (edgeOpen && $event.target === $el && $event.propertyName === 'grid-template-rows') edgeTransitioning = false"
+            x-transition:enter="transition-[grid-template-rows,opacity] duration-300 ease-out"
+            x-transition:enter-start="grid-rows-[0fr] opacity-0"
+            x-transition:enter-end="grid-rows-[1fr] opacity-100"
+            x-transition:leave="transition-[grid-template-rows,opacity] duration-200 ease-in"
+            x-transition:leave-start="grid-rows-[1fr] opacity-100"
+            x-transition:leave-end="grid-rows-[0fr] opacity-0">
+            <div class="min-h-0 px-4 pb-6 pt-1">
+                <label for="{{ .Const.EdgeTokenValidityInterval }}" class="pc-internal-form-label tooltip" data-tooltip="Verified users can access protected resource for this duration.">Verified access duration</label>
+                <div class="mt-2">
+                    <select id="{{ .Const.EdgeTokenValidityInterval }}" name="{{ .Const.EdgeTokenValidityInterval }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
+                        <option value="0" {{ if eq $.Params.Property.EdgeTokenValidityInterval 0 }}selected="selected"{{ end }}>Disabled (default)</option>
+                        <option value="1" {{ if eq $.Params.Property.EdgeTokenValidityInterval 1 }}selected="selected"{{ end }}>5 minutes</option>
+                        <option value="2" {{ if eq $.Params.Property.EdgeTokenValidityInterval 2 }}selected="selected"{{ end }}>10 minutes</option>
+                        <option value="3" {{ if eq $.Params.Property.EdgeTokenValidityInterval 3 }}selected="selected"{{ end }}>30 minutes</option>
+                        <option value="4" {{ if eq $.Params.Property.EdgeTokenValidityInterval 4 }}selected="selected"{{ end }}>1 hour</option>
+                        <option value="5" {{ if eq $.Params.Property.EdgeTokenValidityInterval 5 }}selected="selected"{{ end }}>6 hours</option>
+                        <option value="6" {{ if eq $.Params.Property.EdgeTokenValidityInterval 6 }}selected="selected"{{ end }}>12 hours</option>
+                        <option value="7" {{ if eq $.Params.Property.EdgeTokenValidityInterval 7 }}selected="selected"{{ end }}>1 day</option>
+                    </select>
+                </div>
+                <label for="{{ .Const.EdgeWidgetStartMode }}" class="pc-internal-form-label mt-4 inline-block tooltip" data-tooltip="Choose when the edge challenge starts solving.">Widget start mode</label>
+                <div class="mt-2">
+                    <select id="{{ .Const.EdgeWidgetStartMode }}" name="{{ .Const.EdgeWidgetStartMode }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
+                        <option value="{{ .Const.EdgeWidgetStartModeClick }}" {{ if eq $.Params.Property.EdgeWidgetStartMode .Const.EdgeWidgetStartModeClick }}selected="selected"{{ end }}>On click</option>
+                        <option value="{{ .Const.EdgeWidgetStartModeLoad }}" {{ if eq $.Params.Property.EdgeWidgetStartMode .Const.EdgeWidgetStartModeLoad }}selected="selected"{{ end }}>On page load</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{ end }}
+
     <div class="pc-advanced-settings bg-pc-blue-10 col-span-full" x-data="{advancedOpen: false, advancedTransitioning: true, replayEnabled: {{ $.Params.Property.AllowReplay }}, toggleAdvanced() { if (this.advancedOpen && !this.$refs.maxReplayCount.checkValidity()) { this.$refs.maxReplayCount.reportValidity(); return; } this.advancedTransitioning = true; this.advancedOpen = !this.advancedOpen }}">
         <h4>
             <button type="button" class="pc-advanced-settings-trigger pc-subsubsection-title" @click="toggleAdvanced()" :aria-expanded="advancedOpen" aria-controls="advanced-property-settings">

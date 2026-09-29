@@ -191,6 +191,12 @@ func (ul *UserAuditLog) initFromProperty(oldValue, newValue *db.AuditLogProperty
 			ul.Property = "Validity"
 			interval := time.Duration(newValue.ValidityIntervalSec) * time.Second
 			ul.Value = fmt.Sprintf("%.2f hour(s)", interval.Hours())
+		} else if oldValue.EdgeTokenValiditySec != newValue.EdgeTokenValiditySec {
+			ul.Property = "Edge token lifetime"
+			ul.Value = (time.Duration(newValue.EdgeTokenValiditySec) * time.Second).String()
+		} else if oldValue.EdgeWidgetStartMode != newValue.EdgeWidgetStartMode {
+			ul.Property = "Edge widget start mode"
+			ul.Value = newValue.EdgeWidgetStartMode
 		} else if oldValue.AllowSubdomains != newValue.AllowSubdomains {
 			ul.Property = "Subdomains"
 			ul.Value = strconv.FormatBool(newValue.AllowSubdomains)

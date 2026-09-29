@@ -184,6 +184,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	noticeProvider := db.NewNoticeProvider(cfg.Get(common.WidgetNoticeKey))
 
 	apiURLConfig := config.AsURL(ctx, cfg.Get(common.APIBaseURLKey))
+	edgeTokens := api.NewEdgeTokenSigner("https:"+apiURLConfig.URL(), cfg.Get(common.EdgeTokenPrivateKeyKey), cfg.Get(common.EdgeTokenPublicKeyKey))
 	apiServer := &api.Server{
 		Stage:               stage,
 		Prefix:              apiURLConfig.Path(),
@@ -206,6 +207,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		AsyncTasks:          asyncTasksJob,
 		CountryCodeHeader:   cfg.Get(common.CountryCodeHeaderKey),
 		NoticeProvider:      noticeProvider,
+		EdgeTokens:          edgeTokens,
+		GatePage:            api.NewGatePage(cdnURLConfig.URL(), apiURLConfig.URL(), cdnURLConfig.HostPort(), apiURLConfig.HostPort(), stage == common.StageDev),
 	}
 	apiServerCfg := api.ServerConfig{
 		VerifyFlushInterval: 10 * time.Second,
@@ -294,6 +297,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		PlanService:          planService,
 		APIURL:               apiURLConfig.URL(),
 		CDNURL:               cdnURLConfig.URL(),
+		EdgeTokens:           edgeTokens,
 		PuzzleEngine:         apiServer.ReportingVerifier(string(common.VerifyClientPortal)),
 		Metrics:              metrics,
 		Mailer:               mailer,

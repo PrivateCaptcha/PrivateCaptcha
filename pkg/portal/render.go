@@ -61,6 +61,10 @@ type RenderConstants struct {
 	NotificationEndpoint            string
 	ErrorEndpoint                   string
 	ValidityInterval                string
+	EdgeTokenValidityInterval       string
+	EdgeWidgetStartMode             string
+	EdgeWidgetStartModeClick        string
+	EdgeWidgetStartModeLoad         string
 	AllowSubdomains                 string
 	AllowLocalhost                  string
 	AllowReplay                     string
@@ -181,6 +185,10 @@ func NewRenderConstants() *RenderConstants {
 		NotificationEndpoint:            common.NotificationEndpoint,
 		ErrorEndpoint:                   common.ErrorEndpoint,
 		ValidityInterval:                common.ParamValidityInterval,
+		EdgeTokenValidityInterval:       common.ParamEdgeTokenValidityInterval,
+		EdgeWidgetStartMode:             common.ParamEdgeWidgetStartMode,
+		EdgeWidgetStartModeClick:        string(dbgen.EdgeWidgetStartModeClick),
+		EdgeWidgetStartModeLoad:         string(dbgen.EdgeWidgetStartModeLoad),
 		AllowSubdomains:                 common.ParamAllowSubdomains,
 		AllowLocalhost:                  common.ParamAllowLocalhost,
 		AllowReplay:                     common.ParamAllowReplay,
