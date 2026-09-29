@@ -139,6 +139,53 @@ func TestVerificationAdmission(t *testing.T) {
 	}
 }
 
+func TestArgon2IDDisabledVerification(t *testing.T) {
+	cfg := config.NewBaseConfig(testsConfigStore())
+	item := &budgetConfigItem{value: "16"}
+	cfg.Add(item)
+	verifier := NewVerifier(cfg, nil, config.NewStaticValue(common.FingerprintHeaderKey, ""), nil)
+	p, err := puzzle.NewComputePuzzleForChallenge(1, [puzzle.PropertyIDSize]byte{}, 0, puzzle.ChallengeArgon2ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	argon := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p)}
+
+	item.value = "0"
+	verifier.UpdateMemoryBudget(t.Context())
+	if verifier.argon2IDEnabled() {
+		t.Fatal("Argon2ID is still enabled")
+	}
+	for _, skip := range []bool{false, true} {
+		if _, result, err := verifier.verifyPayload(t.Context(), argon, skip); err != nil || result != puzzle.VerifyErrorOther || argon.calls != 0 {
+			t.Fatalf("disabled Argon2ID (skip = %t): result = %v, err = %v, calls = %d", skip, result, err, argon.calls)
+		}
+	}
+	blake := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(puzzle.NewComputePuzzle(2, [puzzle.PropertyIDSize]byte{}, 0))}
+	if _, result, err := verifier.verifyPayload(t.Context(), blake, false); err != nil || result != puzzle.VerifyNoError || blake.calls != 1 {
+		t.Fatalf("Blake2b while Argon2ID disabled: result = %v, err = %v, calls = %d", result, err, blake.calls)
+	}
+
+	item.value = "16"
+	verifier.UpdateMemoryBudget(t.Context())
+	if _, result, err := verifier.verifyPayload(t.Context(), argon, false); err != nil || result != puzzle.VerifyNoError || argon.calls != 1 {
+		t.Fatalf("re-enabled Argon2ID: result = %v, err = %v, calls = %d", result, err, argon.calls)
+	}
+}
+
+func TestArgon2IDInitiallyDisabledVerification(t *testing.T) {
+	cfg := config.NewBaseConfig(testsConfigStore())
+	cfg.Add(config.NewStaticValue(common.Argon2IDMemoryBudgetKey, "0"))
+	verifier := NewVerifier(cfg, nil, config.NewStaticValue(common.FingerprintHeaderKey, ""), nil)
+	p, err := puzzle.NewComputePuzzleForChallenge(1, [puzzle.PropertyIDSize]byte{}, 0, puzzle.ChallengeArgon2ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	argon := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p)}
+	if _, result, err := verifier.verifyPayload(t.Context(), argon, false); err != nil || result != puzzle.VerifyErrorOther || argon.calls != 0 {
+		t.Fatalf("initially disabled Argon2ID: result = %v, err = %v, calls = %d", result, err, argon.calls)
+	}
+}
+
 func TestVerificationAdmissionWaitsForCapacity(t *testing.T) {
 	p, err := puzzle.NewComputePuzzleForChallenge(1, [puzzle.PropertyIDSize]byte{}, 0, puzzle.ChallengeArgon2ID)
 	if err != nil {

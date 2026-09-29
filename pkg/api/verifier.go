@@ -337,16 +337,18 @@ func (v *Verifier) verifyPayload(ctx context.Context, payload puzzle.SolutionPay
 		metadata, result := payload.VerifySolutions(ctx)
 		return metadata, result, nil
 	}
-	// when Argon2ID is disabled, skip the semaphore for in-flight Argon2ID puzzles
-	if skipMemorySemaphore || !v.argon2IDEnabled() {
+	v.verificationMu.RLock()
+	defer v.verificationMu.RUnlock()
+	if v.verificationCapacityKiB == 0 {
+		return nil, puzzle.VerifyErrorOther, nil
+	}
+	if skipMemorySemaphore {
 		if err := ctx.Err(); err != nil {
 			return nil, puzzle.VerifyNoError, err
 		}
 		metadata, result := payload.VerifySolutions(ctx)
 		return metadata, result, nil
 	}
-	v.verificationMu.RLock()
-	defer v.verificationMu.RUnlock()
 	if v.verificationSemaphore == nil {
 		return nil, puzzle.VerifyNoError, errUninitialized
 	}

@@ -19,6 +19,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	common_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
@@ -237,6 +238,43 @@ func TestArgonPuzzleVerifiesThroughAPI(t *testing.T) {
 			t.Fatal("incorrect Argon solution count passed API preflight")
 		}
 	}
+}
+
+func TestArgonPuzzleRejectedAfterBudgetDisabled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	user, _, property, sitekey := createArgonAPIProperty(t)
+	setArgonAPIPropertyChallenge(t, property, dbgen.ChallengeTypeArgon2ID)
+	secret := argonAPIKeyForTest(t, user)
+	puzzleText, solutionsText, err := solutionsSuite(t.Context(), sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof := solutionsText + "." + puzzleText
+
+	previousBudget := server.Verifier.Argon2IDMemoryBudgetKey
+	t.Cleanup(func() {
+		server.Verifier.Argon2IDMemoryBudgetKey = previousBudget
+		server.Verifier.UpdateMemoryBudget(t.Context())
+	})
+	server.Verifier.Argon2IDMemoryBudgetKey = config.NewStaticValue(common.Argon2IDMemoryBudgetKey, "0")
+	server.Verifier.UpdateMemoryBudget(t.Context())
+	checkArgonAPIVerification(t, proof, secret, sitekey, puzzle.VerifyErrorOther)
+	resp, err := siteVerifySuite(proof, secret, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("siteverify status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if err := checkSiteVerifyError(resp, puzzle.VerifyErrorOther); err != nil {
+		t.Fatal(err)
+	}
+
+	server.Verifier.Argon2IDMemoryBudgetKey = previousBudget
+	server.Verifier.UpdateMemoryBudget(t.Context())
+	checkArgonAPIVerification(t, proof, secret, sitekey, puzzle.VerifyNoError)
 }
 
 func TestArgonAdmissionReturnsTooManyRequests(t *testing.T) {
