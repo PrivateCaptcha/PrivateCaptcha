@@ -112,6 +112,11 @@ jobs:
         path: coverage_unit.cov
         key: unit-coverage-${{ github.run_id }}
 
+    - name: Puzzle compatibility tests
+      run: |
+        make test-puzzle-compat PUZZLE_COUNT=100 PUZZLE_CHALLENGE=blake2b
+        make test-puzzle-compat PUZZLE_COUNT=10 PUZZLE_CHALLENGE=argon2id
+
     - name: Build tests
       run: make build-tests-ee
 
