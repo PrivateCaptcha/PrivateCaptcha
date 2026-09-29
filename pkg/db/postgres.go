@@ -126,6 +126,9 @@ func connectPostgres(ctx context.Context, config *pgxpool.Config, timeout time.D
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	timeoutExceeded := time.After(timeout)
 	for {
 		select {
