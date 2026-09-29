@@ -14,10 +14,13 @@ import (
 
 var salt = puzzle.NewSalt([]byte("puzzle-compat-local-salt"))
 
-func generate(ctx context.Context, out io.Writer, count int, difficulty uint8) error {
+func generate(ctx context.Context, out io.Writer, count int, difficulty uint8, challenge puzzle.Challenge) error {
 	w := bufio.NewWriter(out)
 	for i := 0; i < count; i++ {
-		p := puzzle.NewComputePuzzle(uint64(i+1), [puzzle.PropertyIDSize]byte{1}, difficulty)
+		p, err := puzzle.NewComputePuzzleForChallenge(uint64(i+1), [puzzle.PropertyIDSize]byte{1}, difficulty, challenge)
+		if err != nil {
+			return err
+		}
 		if err := p.Init(puzzle.DefaultValidityPeriod); err != nil {
 			return err
 		}
@@ -71,6 +74,7 @@ func main() {
 	mode := flag.String("mode", "", "generate or verify")
 	count := flag.Int("count", 1000, "number of puzzles to generate or verify")
 	difficulty := flag.Int("difficulty", 48, "generated puzzle difficulty (1-255)")
+	challengeName := flag.String("challenge", "blake2b", "generated puzzle challenge (blake2b or argon2id)")
 	flag.Parse()
 
 	var err error
@@ -80,8 +84,14 @@ func main() {
 		err = fmt.Errorf("count must be positive")
 	case *mode == "generate" && (*difficulty < 1 || *difficulty > 255):
 		err = fmt.Errorf("difficulty must be between 1 and 255")
+	case *mode == "generate" && *challengeName != "blake2b" && *challengeName != "argon2id":
+		err = fmt.Errorf("challenge must be blake2b or argon2id")
 	case *mode == "generate":
-		err = generate(ctx, os.Stdout, *count, uint8(*difficulty))
+		challenge := puzzle.ChallengeBlake2b
+		if *challengeName == "argon2id" {
+			challenge = puzzle.ChallengeArgon2ID
+		}
+		err = generate(ctx, os.Stdout, *count, uint8(*difficulty), challenge)
 	case *mode == "verify":
 		err = verify(ctx, os.Stdin, *count)
 	default:

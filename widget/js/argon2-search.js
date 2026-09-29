@@ -1,6 +1,8 @@
 import { readUInt32LE } from './puzzle.utils.js';
 
 const MAX_UINT32 = 0xffffffff;
+const ARGON2_ID_BODY_MIN = 48;
+const ARGON2_ID_BODY_MAX = 120;
 
 function incrementCounter(nonce) {
     for (let index = nonce.length - 1; index >= 4; index--) {
@@ -14,6 +16,9 @@ function incrementCounter(nonce) {
 }
 
 export async function findArgon2IDSolution(canonicalBody, threshold, solutionIndex, provider) {
+    if (!(canonicalBody instanceof Uint8Array) || canonicalBody.length < ARGON2_ID_BODY_MIN || canonicalBody.length > ARGON2_ID_BODY_MAX) {
+        throw new Error('Argon2id puzzle body length is out of bounds');
+    }
     if (!Number.isSafeInteger(threshold) || threshold < 0 || threshold > MAX_UINT32) {
         throw new Error('Argon2id threshold must be a uint32');
     }

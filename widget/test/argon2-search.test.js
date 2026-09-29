@@ -80,6 +80,17 @@ test('Argon search validates inputs before hashing', async () => {
     await assert.rejects(findArgon2IDSolution(body, 0, 0, {}), /provider/);
 });
 
+test('Argon search rejects bodies outside the password prefix before invoking providers', async () => {
+    for (const provider of [
+        { hash() { throw new Error('must not hash'); } },
+        { solve() { throw new Error('must not solve'); } },
+    ]) {
+        for (const body of [null, new Uint8Array(47), ...[121, 128, 129, 256].map((length) => new Uint8Array(length))]) {
+            await assert.rejects(findArgon2IDSolution(body, 0, 0, provider), /Argon2id puzzle body length is out of bounds/);
+        }
+    }
+});
+
 test('Argon search delegates batches to a WASM solver', async () => {
     const body = new Uint8Array(120);
     const expected = Uint8Array.of(3, 0, 0, 0, 0, 0, 0, 4);

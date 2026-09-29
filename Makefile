@@ -145,10 +145,11 @@ build-puzzle-compat-go:
 build-puzzle-compat-js:
 	cd widget && npm run build:puzzle-compat
 
-test-puzzle-compat: PUZZLE_COUNT ?= 10000
-test-puzzle-compat: PUZZLE_DIFFICULTY ?= 84
+test-puzzle-compat: PUZZLE_CHALLENGE ?= blake2b
+test-puzzle-compat: PUZZLE_COUNT ?= $(if $(filter argon2id,$(PUZZLE_CHALLENGE)),20,10000)
+test-puzzle-compat: PUZZLE_DIFFICULTY ?= $(if $(filter argon2id,$(PUZZLE_CHALLENGE)),24,84)
 test-puzzle-compat: build-puzzle-compat-go build-puzzle-compat-js
-	@bash -o pipefail -c './bin/puzzlecompat -mode generate -count "$(PUZZLE_COUNT)" -difficulty "$(PUZZLE_DIFFICULTY)" | node ./bin/puzzle-compat-solver.mjs | ./bin/puzzlecompat -mode verify -count "$(PUZZLE_COUNT)"'
+	@bash -o pipefail -c './bin/puzzlecompat -mode generate -challenge "$(PUZZLE_CHALLENGE)" -count "$(PUZZLE_COUNT)" -difficulty "$(PUZZLE_DIFFICULTY)" | node ./bin/puzzle-compat-solver.mjs | ./bin/puzzlecompat -mode verify -count "$(PUZZLE_COUNT)"'
 
 deploy:
 	@echo "Deploy target is not implemented. Please use your CI/CD pipeline or add deployment steps here."

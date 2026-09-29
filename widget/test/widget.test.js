@@ -927,12 +927,12 @@ test('Puzzle preserves variable-length user data in v1 and v2', async () => {
     }
 });
 
-test('Puzzle bounds variable-length bodies to 256 bytes', async () => {
+test('Puzzle bounds Blake2b bodies to 256 bytes and Argon2id bodies to 120 bytes', async () => {
     const { Puzzle } = await import('../js/puzzle.js');
-    for (const fixture of [protocolFixtures.v1, protocolFixtures.v2]) {
+    for (const [fixture, maximum] of [[protocolFixtures.v1, 256], [protocolFixtures.v2, 120]]) {
         const original = bytesFromHex(fixture.body);
-        const body = Uint8Array.from([...original, ...new Uint8Array(256 - original.length)]);
-        assert.strictEqual(new Puzzle(puzzlePayload(body)).userData.length, 256 - (original.length - 16));
+        const body = Uint8Array.from([...original, ...new Uint8Array(maximum - original.length)]);
+        assert.strictEqual(new Puzzle(puzzlePayload(body)).userData.length, maximum - (original.length - 16));
         assert.throws(() => new Puzzle(puzzlePayload(Uint8Array.from([...body, 0]))), /puzzle body length/i);
     }
 });

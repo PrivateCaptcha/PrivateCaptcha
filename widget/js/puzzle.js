@@ -5,6 +5,7 @@ import { readUInt32LE } from './puzzle.utils.js';
 
 const PUZZLE_BUFFER_LENGTH = 128;
 const MAX_PUZZLE_BODY_LENGTH = PUZZLE_BUFFER_LENGTH * 2;
+const MAX_ARGON2_ID_BODY_LENGTH = 120;
 const PUZZLE_V1_MIN_LENGTH = 47;
 const PUZZLE_V2_MIN_LENGTH = 48;
 const PUZZLE_VERSION_1 = 1;
@@ -210,7 +211,7 @@ export class Puzzle {
             default:
                 throw new Error(`Unknown puzzle version: ${this.version}`);
         }
-        if (data.length < minimumLength || data.length > MAX_PUZZLE_BODY_LENGTH) {
+        if (data.length < minimumLength || data.length > (this.challenge === CHALLENGE_ARGON2ID ? MAX_ARGON2_ID_BODY_LENGTH : MAX_PUZZLE_BODY_LENGTH)) {
             throw new Error(`Invalid puzzle body length: ${data.length}`);
         }
 

@@ -1,7 +1,7 @@
 import { once } from 'node:events';
 import { createInterface } from 'node:readline';
-import { createSolver } from './js/blake2-solver.js';
-import { Puzzle } from './js/puzzle.js';
+import { createWorkerSolver } from './js/worker-solver.js';
+import { Puzzle, CHALLENGE_ARGON2ID } from './js/puzzle.js';
 import { thresholdFromDifficulty } from './js/puzzle.utils.js';
 
 async function main() {
@@ -10,7 +10,8 @@ async function main() {
         lineNumber++;
         try {
             const puzzle = new Puzzle(rawData);
-            const solver = await createSolver(puzzle.puzzleBuffer);
+            const body = puzzle.challenge === CHALLENGE_ARGON2ID ? puzzle.puzzleBytes : puzzle.puzzleBuffer;
+            const solver = await createWorkerSolver(puzzle.challenge, body);
             if (!solver.wasm) {
                 throw new Error('WASM solver unavailable');
             }
