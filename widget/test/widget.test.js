@@ -86,9 +86,13 @@ test('load mode fetches and finishes on its own, including after reset', { timeo
             } else if (command === 'solve') {
                 const solution = new Uint8Array(8);
                 solution[0] = argument.puzzleIndex;
-                setTimeout(() => this.onmessage?.({ data: { command: 'solve', argument: {
-                    id: this.id, solution, wasm: false,
-                } } }), 0);
+                setTimeout(() => this.onmessage?.({
+                    data: {
+                        command: 'solve', argument: {
+                            id: this.id, solution, wasm: false,
+                        }
+                    }
+                }), 0);
             }
         }
         terminate() { this.onmessage = null; }
@@ -1030,19 +1034,25 @@ for (const mode of ['wasm', 'noble', 'blake']) {
                         blake: async () => ({ wasm: true, solve: async (_threshold, index) => failSearch(index) }),
                         argon: async () => mode === 'wasm'
                             ? { wasm: true, solve: (_body, _threshold, index) => failSearch(index) }
-                            : { wasm: false, hash(nonce, _body, output) {
-                                if (fail && nonce[0] === 1) { throw new Error('noble search failed'); }
-                                output.fill(0);
-                            } },
+                            : {
+                                wasm: false, hash(nonce, _body, output) {
+                                    if (fail && nonce[0] === 1) { throw new Error('noble search failed'); }
+                                    output.fill(0);
+                                }
+                            },
                     });
                     void this.solver.then(() => this.onmessage?.({ data: { command: 'init' } }));
                 } else if (command === 'solve') {
                     void this.solver.then((solver) => solver.solve(0xffffffff, argument.puzzleIndex))
                         .then((solution) => {
                             if (!this.terminated) {
-                                this.onmessage?.({ data: { command: 'solve', argument: {
-                                    id: this.puzzleID, solution, wasm: mode !== 'noble',
-                                } } });
+                                this.onmessage?.({
+                                    data: {
+                                        command: 'solve', argument: {
+                                            id: this.puzzleID, solution, wasm: mode !== 'noble',
+                                        }
+                                    }
+                                });
                             }
                         }, (error) => {
                             if (!this.terminated) { this.onmessage?.({ data: { command: 'error', error: error.message } }); }
@@ -1121,8 +1131,10 @@ test('CaptchaWidget handles synchronous solve dispatch failures without leaving 
         terminate() { this.terminated = true; }
     }
     widget._workersPool = new WorkersPool({ workerError: widget.onWorkerError.bind(widget) }, false, ThrowingWorker);
-    const work = { ID: 42, challenge: 0, puzzleBuffer: new Uint8Array(128), solutionsCount: 8,
-        difficulty: 136, isZero: () => false };
+    const work = {
+        ID: 42, challenge: 0, puzzleBuffer: new Uint8Array(128), solutionsCount: 8,
+        difficulty: 136, isZero: () => false
+    };
     widget._puzzle = work;
     widget._workersPool.init(work, false);
     widget.setState(STATE_READY);
@@ -1469,4 +1481,176 @@ test('worker solver falls back to JS when scalar WASM fails while preserving sol
         assert.ok(prefix <= threshold);
     }
     assert.strictEqual(failedInstantiations, 1);
+});
+
+test('load mode reset during in-flight fetch only solves the replacement puzzle', { timeout: 4000 }, async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { WorkersPool } = await import('../js/workerspool.js');
+    let liveWorkers = 0;
+    class TrackingWorker {
+        constructor() { liveWorkers++; this.id = null; }
+        postMessage({ command, argument }) {
+            if (command === 'init') {
+                this.id = argument.id;
+                setTimeout(() => this.onmessage?.({ data: { command: 'init' } }), 0);
+            } else if (command === 'solve') {
+                const solution = new Uint8Array(8);
+                solution[0] = argument.puzzleIndex;
+                setTimeout(() => this.onmessage?.({
+                    data: {
+                        command: 'solve', argument: {
+                            id: this.id, solution, wasm: false,
+                        }
+                    }
+                }), 0);
+            }
+        }
+        terminate() { this.onmessage = null; liveWorkers--; }
+    }
+    const body = bytesFromHex(protocolFixtures.v1.body);
+    body[26] = 1;
+    body.fill(0, 27, 31);
+    const previousFetch = globalThis.fetch;
+    const releaseQueue = [];
+    let fetches = 0;
+    globalThis.fetch = () => {
+        fetches++;
+        return new Promise((resolve) => {
+            releaseQueue.push(() => resolve({
+                ok: true, text: async () => puzzlePayload(body), headers: { get: () => null },
+            }));
+        });
+    };
+    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}" data-start-mode="load"></div></form>`;
+    const element = document.querySelector('.private-captcha');
+    let widget;
+    let finishes = 0, inits = 0, starts = 0;
+    element.addEventListener('privatecaptcha:finish', () => { finishes++; });
+    element.addEventListener('privatecaptcha:init', () => { inits++; });
+    element.addEventListener('privatecaptcha:start', () => { starts++; });
+    try {
+        widget = new CaptchaWidget(element);
+        widget._workersPool = new WorkersPool({
+            workersReady: widget.onWorkersReady.bind(widget),
+            workerError: widget.onWorkerError.bind(widget),
+            workStarted: widget.onWorkStarted.bind(widget),
+            workCompleted: widget.onWorkCompleted.bind(widget),
+            progress: widget.onWorkProgress.bind(widget),
+        }, false, TrackingWorker);
+        assert.strictEqual(fetches, 1, 'construction fetched');
+        widget.reset();
+        assert.strictEqual(fetches, 2, 'reset started a second fetch');
+        releaseQueue.shift()();
+        await new Promise(r => setTimeout(r, 0));
+        assert.strictEqual(inits, 0, 'stale fetch must not initialize workers');
+        assert.strictEqual(starts, 0, 'stale fetch must not start solving');
+        assert.strictEqual(liveWorkers, 0, 'stale fetch must not create workers');
+
+        const finished = new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('replacement puzzle did not finish')), 1500);
+            element.addEventListener('privatecaptcha:finish', () => { clearTimeout(timeout); resolve(); }, { once: true });
+        });
+        releaseQueue.shift()();
+        await finished;
+        assert.strictEqual(finishes, 1);
+        assert.strictEqual(inits, 1);
+        assert.strictEqual(starts, 1);
+        assert.strictEqual(liveWorkers, 4);
+        assert.ok(widget.solution());
+    } finally {
+        globalThis.fetch = previousFetch;
+        if (widget?._expiryTimeout) { clearTimeout(widget._expiryTimeout); }
+        widget?._workersPool?.stop();
+    }
+    assert.strictEqual(liveWorkers, 0, 'stopping the pool releases all workers');
+});
+
+test('load mode ignores a failed puzzle response from before reset', { timeout: 4000 }, async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { STATE_LOADING } = await import('../js/html.js');
+    const body = bytesFromHex(protocolFixtures.v1.body);
+    body.fill(0, 17, 31);
+    const previousFetch = globalThis.fetch;
+    const releaseQueue = [];
+    globalThis.fetch = () => new Promise((resolve) => releaseQueue.push(resolve));
+    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}" data-start-mode="load"></div></form>`;
+    const element = document.querySelector('.private-captcha');
+    let widget;
+    let errors = 0, inits = 0;
+    element.addEventListener('privatecaptcha:error', () => { errors++; });
+    element.addEventListener('privatecaptcha:init', () => { inits++; });
+    try {
+        widget = new CaptchaWidget(element);
+        widget.reset();
+        releaseQueue.shift()({
+            ok: true, text: async () => { throw new Error('stale response failed'); }, headers: { get: () => null },
+        });
+        await new Promise(r => setTimeout(r, 0));
+        assert.strictEqual(widget._state, STATE_LOADING);
+        assert.strictEqual(errors, 0, 'stale failure must not report an error');
+
+        const finished = new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('replacement puzzle did not finish')), 1500);
+            element.addEventListener('privatecaptcha:finish', () => { clearTimeout(timeout); resolve(); }, { once: true });
+        });
+        releaseQueue.shift()({
+            ok: true, text: async () => puzzlePayload(body), headers: { get: () => null },
+        });
+        await finished;
+        assert.strictEqual(inits, 1);
+        assert.strictEqual(errors, 0);
+    } finally {
+        globalThis.fetch = previousFetch;
+        if (widget?._expiryTimeout) { clearTimeout(widget._expiryTimeout); }
+        widget?._workersPool?.stop();
+    }
+});
+
+test('reset without reinit ignores an in-flight puzzle response', async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { STATE_EMPTY, STATE_LOADING } = await import('../js/html.js');
+    const body = bytesFromHex(protocolFixtures.v1.body);
+    body.fill(0, 17, 31);
+    const previousFetch = globalThis.fetch;
+
+    for (const failed of [false, true]) {
+        let releasePuzzle;
+        let fetches = 0;
+        globalThis.fetch = () => {
+            fetches++;
+            return new Promise((resolve) => { releasePuzzle = resolve; });
+        };
+        document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}" data-start-mode="click"></div></form>`;
+        const element = document.querySelector('.private-captcha');
+        let inits = 0, errors = 0;
+        element.addEventListener('privatecaptcha:init', () => { inits++; });
+        element.addEventListener('privatecaptcha:error', () => { errors++; });
+        const widget = new CaptchaWidget(element);
+        try {
+            const pending = widget.init(false);
+            const generation = widget._initGeneration;
+            assert.strictEqual(widget._state, STATE_LOADING);
+            widget.reset();
+            const generationAfterReset = widget._initGeneration;
+            releasePuzzle({
+                ok: true,
+                text: async () => {
+                    if (failed) { throw new Error('stale response failed'); }
+                    return puzzlePayload(body);
+                },
+                headers: { get: () => null },
+            });
+            await pending;
+            assert.strictEqual(fetches, 1, 'click mode does not refetch on reset');
+            assert.strictEqual(generationAfterReset, generation, 'only init advances the generation');
+            assert.strictEqual(widget._state, STATE_EMPTY);
+            assert.strictEqual(inits, 0);
+            assert.strictEqual(errors, 0);
+            assert.strictEqual(widget.solution(), null);
+        } finally {
+            globalThis.fetch = previousFetch;
+            if (widget._expiryTimeout) { clearTimeout(widget._expiryTimeout); }
+            widget._workersPool.stop();
+        }
+    }
 });

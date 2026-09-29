@@ -64,6 +64,19 @@ test('WorkersPool keeps four Blake workers and the normalized working buffer', (
     }
 });
 
+test('WorkersPool terminates old workers before replacing them', () => {
+    const { TestWorker, workers } = workerHarness();
+    const pool = new WorkersPool({}, false, TestWorker);
+    const work = puzzle();
+    pool.init(work, false);
+    pool.init(work, false);
+    assert.strictEqual(workers.length, 8);
+    assert.ok(workers.slice(0, 4).every((worker) => worker.terminated));
+    assert.ok(workers.slice(4).every((worker) => !worker.terminated));
+    pool.stop();
+    assert.ok(workers.every((worker) => worker.terminated));
+});
+
 test('WorkersPool rejects unknown challenge before creating workers', () => {
     const { TestWorker, workers } = workerHarness();
     const work = puzzle();

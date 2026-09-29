@@ -32,6 +32,7 @@ export class WorkersPool {
         if (puzzle.challenge !== CHALLENGE_BLAKE2B && puzzle.challenge !== CHALLENGE_ARGON2ID) {
             throw new Error(`Unknown puzzle challenge: ${puzzle.challenge}`);
         }
+        this.stop();
         if (puzzle.isZero() && puzzle.challenge === CHALLENGE_BLAKE2B) {
             if (this._debug) { console.debug('[privatecaptcha][pool] skipping initializing workers'); }
             setTimeout(() => this._callbacks.workersReady(autoStart), 0);

@@ -34,6 +34,7 @@ export class CaptchaWidget {
         this._element = element;
         this._puzzle = null;
         this._expiryTimeout = null;
+        this._initGeneration = 0;
         this._state = STATE_EMPTY;
         this._lastProgress = null;
         this._solution = null;
@@ -153,12 +154,6 @@ export class CaptchaWidget {
     async init(autoStart) {
         this.trace(`init() was called. state=${this._state}`);
 
-        this._puzzle = null;
-        this._solution = null;
-        this._errorCode = errors.ERROR_NO_ERROR;
-        this._internalError = null;
-        this._notice = null;
-
         const sitekey = this.checkConfigured();
         if (!sitekey) { return; }
 
@@ -166,6 +161,13 @@ export class CaptchaWidget {
             console.warn(`[privatecaptcha] captcha has already been initialized. state=${this._state}`);
             return;
         }
+
+        const generation = ++this._initGeneration;
+        this._puzzle = null;
+        this._solution = null;
+        this._errorCode = errors.ERROR_NO_ERROR;
+        this._internalError = null;
+        this._notice = null;
 
         if (this._workersPool) {
             this._workersPool.stop();
@@ -179,6 +181,7 @@ export class CaptchaWidget {
             this.setProgressState(STATE_LOADING);
             this.trace(`fetching puzzle. sitekey=${sitekey}`);
             const puzzleResult = await getPuzzle(this._options.puzzleEndpoint, sitekey);
+            if (generation !== this._initGeneration || this._state !== STATE_LOADING) { return; }
             this._notice = puzzleResult.notice;
             this._puzzle = new Puzzle(puzzleResult.data);
             if (this._puzzle && this._puzzle.isZero()) { this._errorCode = errors.ERROR_ZERO_PUZZLE; }
@@ -194,6 +197,7 @@ export class CaptchaWidget {
             }
             this.signalInit();
         } catch (e) {
+            if (generation !== this._initGeneration || this._state !== STATE_LOADING) { return; }
             console.error('[privatecaptcha]', e);
             if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
             this._errorCode = errors.ERROR_FETCH_PUZZLE;
