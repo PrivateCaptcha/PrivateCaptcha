@@ -88,6 +88,11 @@ jobs:
         STAGE: prod
       run: make build-widget-script
 
+    - name: Run widget unit tests
+      env:
+        STAGE: prod
+      run: make test-widget-unit
+
     - name: Copy static js
       run: make copy-static-js
 
