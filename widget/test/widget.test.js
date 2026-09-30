@@ -1654,3 +1654,88 @@ test('reset without reinit ignores an in-flight puzzle response', async () => {
         }
     }
 });
+
+test('BRICKED: zero-puzzle init + synchronous reset from init-listener discards the held replacement fetch', { timeout: 4000 }, async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { WorkersPool } = await import('../js/workerspool.js');
+    const { Puzzle } = await import('../js/puzzle.js');
+    const { STATE_LOADING, STATE_VERIFIED } = await import('../js/html.js');
+
+    // Build a valid v1 BLAKE2B body that satisfies Puzzle.isZero()
+    // (ID === 0n, difficulty === 0, expirationTimestamp === 0) — the server's
+    // rate-limit / no-challenge response. Layout per widget/js/puzzle.js parse.
+    const V1_BODY_HEX = '01000102030405060708090a0b0c0d0e0f0807060504030201981880857467101112131415161718191a1b1c1d1e1f';
+    const body = Uint8Array.from(V1_BODY_HEX.match(/.{2}/g), (b) => Number.parseInt(b, 16));
+    body.fill(0, 17, 25); // ID = 0n
+    body[25] = 0;         // difficulty = 0
+    body[26] = 1;         // solutionsCount = 1
+    body.fill(0, 27, 31); // expirationTimestamp = 0
+    const { encode } = await import('base64-arraybuffer');
+    const payload = `${encode(body.buffer)}.signature`;
+    assert.strictEqual(new Puzzle(payload).isZero(), true);
+
+    const testSitekey = 'aaaaaaaabbbbccccddddeeeeeeeeeeee';
+    const previousFetch = globalThis.fetch;
+    const releaseQueue = [];
+    let fetches = 0;
+    globalThis.fetch = () => {
+        fetches++;
+        return new Promise((resolve) => {
+            releaseQueue.push(() => resolve({
+                ok: true, text: async () => payload, headers: { get: () => null },
+            }));
+        });
+    };
+
+    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}" data-start-mode="load"></div></form>`;
+    const element = document.querySelector('.private-captcha');
+    let inits = 0, starts = 0, finishes = 0, resets = 0;
+    let widget;
+    let resetOnNextInit = true;
+    element.addEventListener('privatecaptcha:init', () => {
+        inits++;
+        if (resetOnNextInit) { resetOnNextInit = false; widget.reset(); } // <-- synchronous reset from an init listener
+    });
+    element.addEventListener('privatecaptcha:start', () => { starts++; });
+    element.addEventListener('privatecaptcha:finish', () => { finishes++; });
+    element.addEventListener('privatecaptcha:reset', () => { resets++; });
+
+    try {
+        widget = new CaptchaWidget(element);
+        class TrackingWorker {
+            constructor() { this.id = null; }
+            postMessage({ command, argument }) {
+                if (command === 'init') { this.id = argument.id; setTimeout(() => this.onmessage?.({ data: { command: 'init' } }), 0); }
+                else if (command === 'solve') {
+                    const solution = new Uint8Array(8); solution[0] = argument.puzzleIndex;
+                    setTimeout(() => this.onmessage?.({ data: { command: 'solve', argument: { id: this.id, solution, wasm: false } } }), 0);
+                }
+            }
+            terminate() { this.onmessage = null; }
+        }
+        widget._workersPool = new WorkersPool({
+            workersReady: widget.onWorkersReady.bind(widget),
+            workerError: widget.onWorkerError.bind(widget),
+            workStarted: widget.onWorkStarted.bind(widget),
+            workCompleted: widget.onWorkCompleted.bind(widget),
+            progress: widget.onWorkProgress.bind(widget),
+        }, false, TrackingWorker);
+
+        releaseQueue.shift()(); // resolve fetch #1 (zero puzzle) -> signalInit -> listener resets -> fetch #2 (held)
+        await new Promise((r) => setTimeout(r, 50));  // let the stale setTimeout(workersReady) from init #1 fire
+
+        const stateWhileFetchPending = widget._state;
+        releaseQueue.shift()(); // resolve fetch #2 (replacement puzzle)
+        await new Promise((r) => setTimeout(r, 200));
+
+        console.log('counts:', { fetches, inits, starts, finishes, resets, state: widget._state, hasPuzzle: !!widget._puzzle, hasSolution: !!widget.solution() });
+
+        assert.strictEqual(stateWhileFetchPending, STATE_LOADING, `state should stay LOADING while fetch#2 is pending (got ${stateWhileFetchPending})`);
+        assert.ok(widget._puzzle, 'replacement puzzle must be assigned (it was discarded -> widget bricked)');
+        assert.strictEqual(widget._state, STATE_VERIFIED, 'widget must verify the replacement puzzle (permanently stuck -> bricked)');
+    } finally {
+        globalThis.fetch = previousFetch;
+        if (widget?._expiryTimeout) { clearTimeout(widget._expiryTimeout); }
+        widget?._workersPool?.stop();
+    }
+});

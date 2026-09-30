@@ -17,6 +17,7 @@ export class WorkersPool {
         this._workFailed = false;
         this._puzzle = null;
         this._WorkerClass = WorkerClass;
+        this._initGeneration = 0; // ownership token for deferred callbacks
 
         this._callbacks = Object.assign({
             workersReady: () => 0,
@@ -32,10 +33,15 @@ export class WorkersPool {
         if (puzzle.challenge !== CHALLENGE_BLAKE2B && puzzle.challenge !== CHALLENGE_ARGON2ID) {
             throw new Error(`Unknown puzzle challenge: ${puzzle.challenge}`);
         }
-        this.stop();
+        this.stop(); // also bumps generation
         if (puzzle.isZero() && puzzle.challenge === CHALLENGE_BLAKE2B) {
             if (this._debug) { console.debug('[privatecaptcha][pool] skipping initializing workers'); }
-            setTimeout(() => this._callbacks.workersReady(autoStart), 0);
+            const generation = this._initGeneration; // capture AFTER stop()
+            setTimeout(() => {
+                if (this._initGeneration === generation) {
+                    this._callbacks.workersReady(autoStart);
+                }
+            }, 0);
             return;
         }
 
@@ -138,6 +144,7 @@ export class WorkersPool {
             this._workers[i].terminate();
         }
         this._workers = [];
+        this._initGeneration = (this._initGeneration || 0) + 1;
         if (this._debug) { console.debug('[privatecaptcha][pool] terminated the workers. count=' + count); }
     }
 
