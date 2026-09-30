@@ -1,72 +1,62 @@
-## General
+## Tooling
 
-- This project is a Golang monolith with internal parts in `pkg/` directory, main executable in `cmd/server`, JS widget code in `widget/` and Portal frontend code in `web/`. All dependencies get embedded into the final Golang binary.
-- Instead of using `go`, `npm` or any other standard tooling, only use targets defined in the `Makefile` with appropriate names (e.g. `init-` for setup, `build-` for building and `test-` for testing)
-- Add only the most important comments, prefer adding logs where necessary instead of comments
-- If you're not sure how to run something, look for examples in `Makefile`, CI workflow `.github/workflows/ci.yaml` or dockerfiles in `docker/`
-- If you change any external Go packages, run `make vendors`
-- Fix errors before moving on. Never skip failures. Never declare done without a passing test. Go with simplest working solution first. No over-engineering.
+- Prefer Makefile targets instead of invoking `go`, `npm`, or other build/test tooling directly.
+- Use `make init` for initial development setup.
+- If external Go dependencies change, run `make vendors`.
+- If Postgres queries or migrations change, run `make sqlc` and verify with `make vet-sqlc-local`.
+- If unsure which command to use, check `Makefile`, `.github/workflows/ci.yaml`, and `docker/`.
 
-### Databases
+## Code
 
-- we use Postgres and ClickHouse as databases
-- we are using golang-migrate as a library for migrations and we run them ourselves via `pkg/db/init.go`
-- base DB initialization scripts are in `pkg/db/migrations/init/`
+- Prefer the simplest minimal working solution. Do not over-engineer.
+- Add comments only when necessary. Prefer useful logging over explanatory comments where appropriate.
+- Fix failures before continuing. Do not ignore or skip errors.
 
-#### Postgres
+### Database
 
-- Postgres migrations are in `pkg/db/migrations/postgres/` and queries are in `pkg/db/queries/postgres/`
-- We use sqlc (config in `pkg/db/sqlc.yaml`) to codegen plain SQL into golang source code. After changing queries or migrations, run `make sqlc` in the root to regenerate the Go source code.
-- you can verify the sqlc queries/migrations using `make vet-sqlc-local`
-- we use generated Go code for Postgres via `pkg/db/business_impl.go`
-- for `business_impl.go` methods naming convention for getters is to use `Retrieve` prefix instead of `Get` and to use `GetCached` prefix for cache-only data (sql queries in `pkg/db/queries/` can still use `Get`)
-
-#### ClickHouse
-
-- ClickHouse migrations are in `pkg/db/migrations/clickhouse/` and queries are written in Go code in `pkg/db/timeseries.go`
-- we verify ClickHouse queries by writing integration tests for functionality that requires them
-- we use ClickHouse database functionality through our own interface `TimeSeriesStore` (with in-memory stub implementation `MemoryTimeSeries`)
-
-### Server
-
-- Server (entrypoint in `cmd/server/main.go`) has logical parts of API, Portal and background worker (running maintenance jobs)
-- handlers and routes for API part of the server are setup in `pkg/api/server.go` and `pkg/api/server_enterprise.go`
-- handlers and routes for Portal part of the server are setup in `pkg/portal/server.go` and `pkg/portal/server_enterprise.go`
-- maintenance jobs are defined in `pkg/maintenance/` package and scheduled in `cmd/server/main.go`
+- Database migrations use `golang-migrate` library and are run by the application.
+- Postgres access uses generated `sqlc` code.
+- In `pkg/db/business_impl.go`, getter methods use:
+  - `Retrieve...` for normal getters.
+  - `GetCached...` for cache-only getters.
+- SQL query names may still use `Get...`.
+- ClickHouse access must go through `TimeSeriesStore`; use `MemoryTimeSeries` for in-memory implementations.
+- Verify ClickHouse behavior with integration tests.
 
 ### Frontend
 
-- All frontend code (HTML, CSS, JavaScript) for Portal is in `web/` directory
-- We use htmx and Alpine.js libraries for frontend. For styles we use Tailwind CSS v3.4 (config is in `web/tailwind.config.js`)
-- Frontend code is formatted using Golang templates (with our additional functions) with entrypoint in `pkg/portal/templates.go`. Our templates use a similar system to Hugo static site generator where custom pages always get used with "base" templates in `web/layouts/_default` for rendering, so we can reuse functionality.
+- Portal frontend uses htmx, Alpine.js, Tailwind CSS v3.4, and Go templates.
+- Portal pages render through the base templates in `web/layouts/_default`.
 
-## Environment setup
+## Build
 
-- Use `make init` to initialize everything for development
+- Widget: `make build-widget-script`
+- Portal JS: `make build-js` then `make copy-static-js`
+- Server: `make build-server`
+- Enterprise server: `make build-server-ee`
 
-## Building instructions
+## Tests
 
-- To build widget script for testing, run `make build-widget-script`
-- To build portal/web JS code, run `make build-js` followed by `make copy-static-js`
-- To build main server executable, run `make build-server` (or `make build-server-ee` if Enterprise Edition changes were made)
-
-## Testing instructions
-
-- Test after writing. Never leave code untested.
-- To run all Go unit tests, run `make test-unit`. Unit tests always run with "enterprise" tag. You can use `make test-unit` also as a "shortcut" to check if everything builds.
-- To run JS widget tests, run `make test-widget-unit`
-- You do NOT have access to docker so running local tests requires existing running containers of Postgres and ClickHouse
-- To run PostgreSQL-only integration tests, run `make test-local-light TEST_NAME=<your-test-name>` (omit `TEST_NAME` to run all tests)
-- To run integration tests with Postgres and ClickHouse, run `make test-local TEST_NAME=<your-test-name>` (omit `TEST_NAME` to run all tests)
-- Do not use underscores in Golang test names
-- Put any new integration test for maintenance jobs to either Portal tests or API tests
-- Prefer to not add any new DB methods for tests only, first try to reuse existing DB methods with some tests-only helpers (even if not optimal)
-- To get unit tests code coverage, run `make test-unit-cover`
-- To get integration tests code coverage, after running integration tests, open `coverage_integration/` directory in repository root
-- Integration tests for Portal and API have global variables `store` (Postgres `db.BusinessStore`), `timeSeries` (ClickHouse, `common.TimeSeriesStore`) and `server` (respective server resource) that can be used instead of creating new resources.
-- For exact HTTP routes to endpoints always check how they are setup in `server.go` and `server_enterprise.go`
-- Portal render tests should be inside `pkg/portal/render_test.go` and only added to test `TestRenderHTML` with our mini framework
-- Always make sure all unit **and** integration tests pass before declaring done
+- Before declaring work complete, all unit and integration tests relevant to the change must pass.
+- Run only tests relevant to the change. For example:
+  - Widget-only changes: widget unit tests.
+  - Portal business logic changes that do not require ClickHouse: Postgres-only integration tests.
+- Do not use underscores in Go test names.
+- Unit tests: `make test-unit`
+- Widget tests: `make test-widget-unit`
+- Postgres integration tests:
+  `make test-local-light TEST_NAME=<test-name>`
+- Postgres + ClickHouse integration tests:
+  `make test-local TEST_NAME=<test-name>`
+- Omit `TEST_NAME` to run the full corresponding integration suite.
+- Docker is unavailable. Local integration tests require existing Postgres and ClickHouse containers.
+- Maintenance-job integration tests belong in Portal or API integration tests.
+- Do not add DB methods only for tests unless existing DB methods plus test helpers cannot reasonably be used.
+- Portal and API integration tests already provide global `store`, `timeSeries`, and `server` resources. Reuse them.
+- Verify HTTP route paths against `server.go` and `server_enterprise.go`.
+- Portal render tests belong in `pkg/portal/render_test.go` under `TestRenderHTML`.
+- Unit coverage: `make test-unit-cover`
+- Integration coverage is written to `coverage_integration/`.
 
 ## Output
 
