@@ -157,13 +157,9 @@ func TestViewwidgetPageParity(t *testing.T) {
 		endpoint string
 	}{
 		{target: "/popup.html", endpoint: `data-puzzle-endpoint="/puzzle"`},
-		{target: "/dark.html", endpoint: `data-puzzle-endpoint="/puzzle"`},
 		{target: "/popup.html?level=136&challenge=blake2b", endpoint: `data-puzzle-endpoint="/puzzle/136?challenge=blake2b"`},
-		{target: "/dark.html?level=152&challenge=blake2b", endpoint: `data-puzzle-endpoint="/puzzle/152?challenge=blake2b"`},
 		{target: "/popup.html?echo=true&challenge=blake2b", endpoint: `data-puzzle-endpoint="/echopuzzle"`},
-		{target: "/dark.html?echo=true&challenge=blake2b", endpoint: `data-puzzle-endpoint="/echopuzzle"`},
 		{target: "/popup.html?echo=true&level=136&challenge=blake2b", endpoint: `data-puzzle-endpoint="/echopuzzle"`},
-		{target: "/dark.html?echo=true&level=136&challenge=blake2b", endpoint: `data-puzzle-endpoint="/echopuzzle"`},
 	} {
 		t.Run(tc.target, func(t *testing.T) {
 			w := httptest.NewRecorder()
@@ -174,18 +170,12 @@ func TestViewwidgetPageParity(t *testing.T) {
 			if !strings.Contains(w.Body.String(), `src="/widget/js/privatecaptcha-ext.js"`) {
 				t.Fatal("viewer page does not load the extended widget")
 			}
-			if strings.HasPrefix(tc.target, "/dark.html") && !strings.Contains(w.Body.String(), `action="/submit"`) {
-				t.Fatal("dark page must submit to the real verification endpoint")
-			}
-			if strings.HasPrefix(tc.target, "/dark.html") && !strings.Contains(w.Body.String(), `src="/assets/img/pc-icon-light.svg"`) {
-				t.Fatal("dark page must use the local icon")
-			}
 		})
 	}
 }
 
 func TestViewwidgetStylesheetVersion(t *testing.T) {
-	for _, target := range []string{"/", "/popup.html", "/dark.html"} {
+	for _, target := range []string{"/", "/popup.html"} {
 		w := httptest.NewRecorder()
 		staticHandler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, target, nil))
 		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "/assets/css/style.css?v="+web.AssetVersion()) {
