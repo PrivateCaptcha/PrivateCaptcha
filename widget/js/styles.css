@@ -194,6 +194,14 @@
     -webkit-animation-name: dots-3;
 }
 
+@media (prefers-reduced-motion: reduce) {
+    .pc-interactive-area input[type="checkbox"].loading,
+    .pc-interactive-area .dots span {
+        animation: none;
+        -webkit-animation: none;
+    }
+}
+
 #pc-progress {
     display: flex;
     justify-content: center;
