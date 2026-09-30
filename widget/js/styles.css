@@ -64,6 +64,16 @@
         --checkbox-hover-color: #1C3232;
     }
 
+    :host([theme="auto"]) {
+        color-scheme: inherit;
+        --dark-color: light-dark(#070113, #EBF4F4);
+        --gray-color: light-dark(#E0E0E0, #656C7B);
+        --pie-color: light-dark(#D8E9E9, #376262);
+        --background-color: light-dark(#fff, #041616);
+        --checkbox-background-color: light-dark(#FFF, #223C3C);
+        --checkbox-hover-color: light-dark(#EBF4F4, #1C3232);
+    }
+
     :host {
         --border: 1px solid var(--gray-color);
     }

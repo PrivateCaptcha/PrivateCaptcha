@@ -148,6 +148,7 @@ export class CaptchaElement extends SafeHTMLElement {
         this._notice = null;
         this._displayMode = DISPLAY_HIDDEN;
         this._lang = 'en';
+        this._themeObserver = null;
 
         // Add CSS
         const sheet = new CSSStyleSheet();
@@ -176,9 +177,21 @@ export class CaptchaElement extends SafeHTMLElement {
     connectedCallback() {
         this.update();
 
+        const host = this.parentElement;
+        if (host) {
+            this._themeObserver = new this.ownerDocument.defaultView.MutationObserver(() => {
+                this.setAttribute('theme', host.dataset.theme || 'light');
+            });
+            this._themeObserver.observe(host, { attributes: true, attributeFilter: ['data-theme'] });
+        }
+
         // init
         const canShow = (this._displayMode == DISPLAY_WIDGET);
         this.setState(STATE_EMPTY, canShow);
+    }
+
+    disconnectedCallback() {
+        this._themeObserver?.disconnect();
     }
 
     /**

@@ -6,6 +6,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Private Captcha</title>
     <link rel="stylesheet" href="/assets/css/style.css?v={{.CSSVersion}}">
+    <style>
+        :root { color-scheme: light dark; }
+        body, .bg-gray-50 {
+            background-color: light-dark(#f9fafb, #111827);
+            color: light-dark(#111827, #f3f4f6);
+        }
+        h1.pc-form-caption, .pc-form-label { color: inherit; }
+        .pc-form-input-base, .pc-internal-form-button-secondary {
+            background-color: light-dark(#fff, #1f2937);
+            color: inherit;
+            caret-color: currentColor;
+            border-color: light-dark(#d1d5db, #6b7280);
+        }
+        .pc-form-input-base::placeholder { color: light-dark(#6b7280, #9ca3af); }
+    </style>
     <link rel="shortcut icon" type="image/png" href="/assets/img/favicon.png">
     <script src="/widget/js/privatecaptcha-ext.js{{if .Compat }}?compat={{.Compat}}{{end}}"></script>
     <script type="text/javascript">
@@ -52,6 +67,7 @@
                                 </div>
                             </div>
                             <div class="private-captcha g-recaptcha mt-8"
+                                data-theme="auto"
                                 data-sitekey="your-sitekey"
                                 data-puzzle-endpoint="/{{if .Echo}}echo{{end}}puzzle{{if .Level}}/{{.Level}}{{end}}{{if .Challenge}}?challenge={{.Challenge}}{{end}}"
                                 data-started-callback="onCaptchaStarted" 

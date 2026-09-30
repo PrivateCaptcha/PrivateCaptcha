@@ -762,6 +762,60 @@ test('CaptchaWidget reset() recalculates data attributes and auto defaults witho
     assert.strictEqual(widget._options.sitekey, element.dataset.sitekey);
 });
 
+test('host data-theme changes update the theme without resetting verification', async (t) => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { STATE_VERIFIED } = await import('../js/html.js');
+    document.body.innerHTML = `<form><div class="private-captcha" data-theme="auto" data-sitekey="${testSitekey}"></div></form>`;
+    t.after(() => document.body.replaceChildren());
+    const host = document.querySelector('.private-captcha');
+    const widget = new CaptchaWidget(host);
+    const captcha = host.querySelector('private-captcha');
+    widget.setState(STATE_VERIFIED);
+    widget.setProgressState(STATE_VERIFIED);
+    widget._solution = 'verified-solution';
+    const ui = captcha.shadowRoot.firstChild;
+    assert.strictEqual(captcha.getAttribute('theme'), 'auto');
+
+    for (const theme of ['dark', 'light', 'auto', '']) {
+        if (theme) { host.dataset.theme = theme; }
+        else { delete host.dataset.theme; }
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.strictEqual(captcha.getAttribute('theme'), theme || 'light');
+        assert.strictEqual(captcha.shadowRoot.firstChild, ui);
+        assert.strictEqual(captcha._state, STATE_VERIFIED);
+        assert.strictEqual(widget._state, STATE_VERIFIED);
+        assert.strictEqual(widget.solution(), 'verified-solution');
+    }
+
+    widget.reset();
+    assert.strictEqual(captcha.getAttribute('theme'), 'light', 'reset still reads the current host theme');
+});
+
+test('theme observer ignores unrelated attributes and stops observing while disconnected', async (t) => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    document.body.innerHTML = `<form><div class="private-captcha" data-theme="auto" data-sitekey="${testSitekey}"></div></form>`;
+    t.after(() => document.body.replaceChildren());
+    const host = document.querySelector('.private-captcha');
+    new CaptchaWidget(host, { theme: 'dark' });
+    const captcha = host.querySelector('private-captcha');
+    assert.strictEqual(captcha.getAttribute('theme'), 'dark', 'initial caller options retain precedence');
+
+    host.dataset.lang = 'fr';
+    host.closest('form').dataset.theme = 'light';
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.strictEqual(captcha.getAttribute('theme'), 'dark');
+
+    captcha.remove();
+    host.dataset.theme = 'light';
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.strictEqual(captcha.getAttribute('theme'), 'dark');
+
+    host.appendChild(captcha);
+    host.dataset.theme = 'auto';
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.strictEqual(captcha.getAttribute('theme'), 'auto', 'reconnecting resumes host theme updates');
+});
+
 test('CaptchaWidget setOptions() configures fieldName for recaptcha compat mode', async (t) => {
     document.body.innerHTML = `
         <form>
