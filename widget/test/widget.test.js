@@ -780,7 +780,7 @@ test('host data-theme changes update the theme without resetting verification', 
         if (theme) { host.dataset.theme = theme; }
         else { delete host.dataset.theme; }
         await new Promise(resolve => setTimeout(resolve, 0));
-        assert.strictEqual(captcha.getAttribute('theme'), theme || 'auto');
+        assert.strictEqual(captcha.getAttribute('theme'), theme || 'light');
         assert.strictEqual(captcha.shadowRoot.firstChild, ui);
         assert.strictEqual(captcha._state, STATE_VERIFIED);
         assert.strictEqual(widget._state, STATE_VERIFIED);
@@ -788,7 +788,7 @@ test('host data-theme changes update the theme without resetting verification', 
     }
 
     widget.reset();
-    assert.strictEqual(captcha.getAttribute('theme'), 'auto', 'reset still reads the current host theme');
+    assert.strictEqual(captcha.getAttribute('theme'), 'light', 'reset still reads the current host theme');
 });
 
 test('theme observer ignores unrelated attributes and stops observing while disconnected', async (t) => {

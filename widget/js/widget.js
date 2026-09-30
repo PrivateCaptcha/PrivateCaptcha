@@ -128,7 +128,7 @@ export class CaptchaWidget {
             sitekey: sitekey || this._element.dataset["sitekey"] || "",
             displayMode: this._element.dataset["displayMode"] || "widget",
             lang: this._element.dataset["lang"] || "auto",
-            theme: this._element.dataset["theme"] || "auto",
+            theme: this._element.dataset["theme"] || "light",
             styles: this._element.dataset["styles"] || "",
             storeVariable: this._element.dataset["storeVariable"] || null,
         }, options);

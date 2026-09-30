@@ -180,7 +180,7 @@ export class CaptchaElement extends SafeHTMLElement {
         const host = this.parentElement;
         if (host) {
             this._themeObserver = new this.ownerDocument.defaultView.MutationObserver(() => {
-                this.setAttribute('theme', host.dataset.theme || 'auto');
+                this.setAttribute('theme', host.dataset.theme || 'light');
             });
             this._themeObserver.observe(host, { attributes: true, attributeFilter: ['data-theme'] });
         }
