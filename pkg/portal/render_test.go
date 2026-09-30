@@ -657,8 +657,8 @@ func TestRenderHTML(t *testing.T) {
 				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
 			},
 			budget:   &zeroBudget,
-			selector: `select[name="challenge"], label[for="challenge"]`,
-			matches:  []string{},
+			selector: `select[name="challenge"] option[value="argon2id"][disabled]`,
+			matches:  []string{"Memory-hard (disabled)"},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
@@ -668,8 +668,8 @@ func TestRenderHTML(t *testing.T) {
 				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
 			},
 			budget:   &missingBudget,
-			selector: `select[name="challenge"], label[for="challenge"]`,
-			matches:  []string{},
+			selector: `select[name="challenge"] option[selected]`,
+			matches:  []string{"Compute-hard (default)"},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
@@ -1018,6 +1018,7 @@ func TestRenderHTML(t *testing.T) {
 					Enterprise:           enterprise,
 					Argon2IDMemoryBudget: config.NewStaticValue(common.Argon2IDMemoryBudgetKey, budget),
 					licenseService:       server.LicenseService,
+					ShowChallengeType:    true,
 				}
 
 				path := server.RelURL(strings.Join(tc.path, "/"))
