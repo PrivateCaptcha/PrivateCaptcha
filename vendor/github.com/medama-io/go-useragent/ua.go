@@ -25,7 +25,7 @@ type Parser struct {
 }
 
 type UserAgent struct {
-	version      [32]rune
+	version      [32]byte
 	versionIndex int
 
 	browser internal.Match

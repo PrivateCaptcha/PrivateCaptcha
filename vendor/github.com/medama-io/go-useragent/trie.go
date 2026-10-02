@@ -21,6 +21,9 @@ const (
 	// stateSkipClosingParenthesis is the state when we are skipping until a closing parenthesis.
 	// This is used to skip over device IDs.
 	stateSkipClosingParenthesis
+	// stateSkipToken is the state when we are skipping the rest of an
+	// unknown token until the next separator.
+	stateSkipToken
 )
 
 type resultItem struct {
@@ -82,6 +85,14 @@ func (trie *RuneTrie) Get(key string) UserAgent {
 				}
 			}
 
+		case stateSkipToken:
+			// Skip until the next separator, then resume from the current node.
+			// Separators must match the set stateDefault skips.
+			switch r {
+			case ' ', ';', ')', '(', ',', '_', '-', '/':
+				state = stateDefault
+			}
+
 		case stateVersion:
 			// In the case of Edg and Edge, skipCount = 1 might just put us on the slash.
 			// Ideally, we need to improve the matcher to choose Edge over Edg, but this is
@@ -94,9 +105,9 @@ func (trie *RuneTrie) Get(key string) UserAgent {
 			if !internal.IsDigit(r) && r != '.' {
 				state = stateDefault
 			} else {
-				// Add to rune buffer.
+				// Add to version buffer. Versions are ASCII, so store as bytes.
 				if ua.versionIndex < cap(ua.version) {
-					ua.version[ua.versionIndex] = r
+					ua.version[ua.versionIndex] = byte(r)
 					ua.versionIndex++
 				}
 			}
@@ -139,7 +150,7 @@ func (trie *RuneTrie) Get(key string) UserAgent {
 						ua.versionIndex == 0) {
 					// Clear version buffer if it has old values.
 					if ua.versionIndex > 0 {
-						ua.version = [32]rune{}
+						ua.version = [32]byte{}
 						ua.versionIndex = 0
 					}
 
@@ -174,6 +185,12 @@ func (trie *RuneTrie) Get(key string) UserAgent {
 			}
 
 			if next == nil {
+				// An unmatched letter means we are inside an unknown token
+				// (e.g. "Ecosia"). Skip the rest of it so we don't match
+				// tokens buried inside it.
+				if internal.IsLetter(r) {
+					state = stateSkipToken
+				}
 				continue // No match found, but we can try to match the next rune.
 			}
 			node = next

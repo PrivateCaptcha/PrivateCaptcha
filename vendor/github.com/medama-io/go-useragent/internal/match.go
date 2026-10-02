@@ -24,6 +24,7 @@ var matchMap = map[Match][]string{
 	BrowserSafari:    {string(agents.BrowserSafari), "AppleWebKit"},
 	BrowserVivaldi:   {string(agents.BrowserVivaldi)},
 	BrowserSamsung:   {"SamsungBrowser"},
+	BrowserSilk:      {"Silk"},
 	BrowserFalkon:    {string(agents.BrowserFalkon)},
 	BrowserNintendo:  {"NintendoBrowser"},
 	BrowserYandex:    {"YaBrowser"},
