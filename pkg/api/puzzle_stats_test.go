@@ -810,6 +810,17 @@ expires_on = {expires_on:Date}
 	}
 
 	if !t.Run("daily source retention", func(t *testing.T) {
+		// Keep another sealed month pending even when the recent fingerprint cohort is in the current month.
+		nextMonth := expiresAt.AddDate(0, 1, 0)
+		insertPuzzleOutcome(t, ctx, ts, puzzleOutcomeRow{
+			expiresAt: nextMonth, userID: userID, orgID: orgID, propertyID: propertyID,
+			puzzleID: 11, ipFamily: 4, ipPrefix: 0xc00002,
+			browser: "Chrome", browserMajor: 120, statusCodes: []uint8{0}, statusCounts: []uint64{1},
+		})
+		if processed, err := ts.FinalizeNextPuzzleStats(ctx, now); err != nil || !processed {
+			t.Fatalf("other month's daily finalization = (%v, %v), want (true, nil)", processed, err)
+		}
+
 		if _, err := ts.Clickhouse.ExecContext(ctx, `
 ALTER TABLE privatecaptcha.puzzle_stats_ip_daily
 DROP PARTITION {expires_on:Date}`, clickhouse.Named("expires_on", otherExpiresAt.Format(time.DateOnly))); err != nil {
@@ -820,9 +831,15 @@ ALTER TABLE privatecaptcha.puzzle_stats_user_agent_daily
 DROP PARTITION {expires_on:Date}`, clickhouse.Named("expires_on", otherExpiresAt.Format(time.DateOnly))); err != nil {
 			t.Fatal(err)
 		}
-		processed, err := ts.FinalizeNextPuzzleStatsMonth(ctx, now)
+		// Limit the check to the retained month, since other sealed months may still need finalization.
+		processed, err := ts.FinalizeNextPuzzleStatsMonth(ctx, nextMonth)
 		if err != nil {
 			t.Fatal(err)
+		}
+		for _, table := range []string{"privatecaptcha.puzzle_stats_ip_monthly", "privatecaptcha.puzzle_stats_user_agent_monthly"} {
+			assertPuzzleStatsMonthly(t, ctx, ts, table, `expires_on = {expires_on:Date}`, []any{
+				clickhouse.Named("expires_on", expiresMonth),
+			}, 2, 3, 2)
 		}
 		if processed {
 			t.Fatal("monthly statistics were rebuilt after daily source retention")
