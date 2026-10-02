@@ -555,7 +555,12 @@ export class CaptchaWidget {
         const payload = `${solutions}.${this._puzzle ? this._puzzle.rawData : ''}`;
 
         this.ensureNoSolutionField();
-        this._element.insertAdjacentHTML('beforeend', `<input name="${this._options.fieldName}" type="hidden" value="${payload}">`);
+
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = this._options.fieldName;
+        input.value = payload;
+        this._element.appendChild(input);
 
         this._solution = payload;
 
