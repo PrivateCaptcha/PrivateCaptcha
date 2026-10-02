@@ -33,6 +33,7 @@ func TestStatusCodeString(t *testing.T) {
 		StatusPropertyIDInvalidError,
 		StatusPropertyIDDuplicateError,
 		StatusPropertyPermissionsError,
+		StatusPropertyChallengeUnsupportedError,
 		StatusSubscriptionPropertyLimitError,
 		StatusRuleNameEmptyError,
 		StatusRuleConditionPropertyRequired,
@@ -108,6 +109,19 @@ func TestStatusCodeSuccess(t *testing.T) {
 
 	if StatusOrgNameEmptyError.Success() {
 		t.Error("StatusOrgNameEmptyError.Success() should return false")
+	}
+}
+
+func TestPropertyUnsupportedChallengeStatusCode(t *testing.T) {
+	code := StatusPropertyChallengeUnsupportedError
+	if code != 1215 {
+		t.Errorf("unsupported challenge code = %d, want 1215", code)
+	}
+	if got, want := code.String(), "Property challenge is not supported."; got != want {
+		t.Errorf("String() = %q, want %q", got, want)
+	}
+	if code.Success() {
+		t.Error("unsupported challenge status must not be successful")
 	}
 }
 

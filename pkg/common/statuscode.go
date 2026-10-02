@@ -31,21 +31,22 @@ const (
 	StatusOrgIDEmptyError            StatusCode = 1108
 	StatusOrgIDInvalidError          StatusCode = 1109
 	// properties errors
-	StatusPropertiesTooManyError          StatusCode = 1200
-	StatusPropertyNameEmptyError          StatusCode = 1201
-	StatusPropertyNameTooLongError        StatusCode = 1202
-	StatusPropertyNameInvalidSymbolsError StatusCode = 1203
-	StatusPropertyNameDuplicateError      StatusCode = 1204
-	StatusPropertyDomainEmptyError        StatusCode = 1205
-	StatusPropertyDomainLocalhostError    StatusCode = 1206
-	StatusPropertyDomainIPAddrError       StatusCode = 1207
-	StatusPropertyDomainNameInvalidError  StatusCode = 1208
-	StatusPropertyDomainResolveError      StatusCode = 1209
-	StatusPropertyDomainFormatError       StatusCode = 1210
-	StatusPropertyIDEmptyError            StatusCode = 1211
-	StatusPropertyIDInvalidError          StatusCode = 1212
-	StatusPropertyIDDuplicateError        StatusCode = 1213
-	StatusPropertyPermissionsError        StatusCode = 1214
+	StatusPropertiesTooManyError            StatusCode = 1200
+	StatusPropertyNameEmptyError            StatusCode = 1201
+	StatusPropertyNameTooLongError          StatusCode = 1202
+	StatusPropertyNameInvalidSymbolsError   StatusCode = 1203
+	StatusPropertyNameDuplicateError        StatusCode = 1204
+	StatusPropertyDomainEmptyError          StatusCode = 1205
+	StatusPropertyDomainLocalhostError      StatusCode = 1206
+	StatusPropertyDomainIPAddrError         StatusCode = 1207
+	StatusPropertyDomainNameInvalidError    StatusCode = 1208
+	StatusPropertyDomainResolveError        StatusCode = 1209
+	StatusPropertyDomainFormatError         StatusCode = 1210
+	StatusPropertyIDEmptyError              StatusCode = 1211
+	StatusPropertyIDInvalidError            StatusCode = 1212
+	StatusPropertyIDDuplicateError          StatusCode = 1213
+	StatusPropertyPermissionsError          StatusCode = 1214
+	StatusPropertyChallengeUnsupportedError StatusCode = 1215
 	// subscription errors
 	StatusSubscriptionPropertyLimitError StatusCode = 1300
 	// rules errors
@@ -145,6 +146,8 @@ func (sc StatusCode) String() string {
 		return "Property limit reached for current subscription plan."
 	case StatusPropertyPermissionsError:
 		return "Insufficient permissions to update settings."
+	case StatusPropertyChallengeUnsupportedError:
+		return "Property challenge is not supported."
 	case StatusFormNameEmptyError:
 		return "Name cannot be empty."
 	case StatusFormNameTooLongError:

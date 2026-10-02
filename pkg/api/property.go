@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
@@ -138,6 +139,7 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 		return nil, 0, db.ErrInvalidInput
 	}
 
+	canUseArgon2ID := config.Argon2IDMemoryBudgetKiB(ctx, s.Verifier.Argon2IDMemoryBudgetKey, int64(puzzle.Argon2IDMemoryKiB)) > 0
 	for decoder.More() {
 		if len(inputs) >= maxPropertiesBatchSize {
 			slog.WarnContext(ctx, "Too many properties in a batch", "count", len(inputs), "max", maxPropertiesBatchSize)
@@ -153,6 +155,10 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 		}
 
 		ilog := slog.With("index", len(inputs), "domain", input.Domain, "name", input.Name)
+		if !canUseArgon2ID && input.Challenge == string(dbgen.ChallengeTypeArgon2ID) {
+			ilog.WarnContext(ctx, "Property challenge is not supported", "challenge", input.Challenge)
+			return nil, common.StatusPropertyChallengeUnsupportedError, nil
+		}
 
 		name := strings.TrimSpace(input.Name)
 		if _, ok := namesMap[name]; ok {
@@ -361,6 +367,7 @@ func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user
 
 	results := make([]*operationResult, 0, len(params.Properties))
 	limitCheckIndex := 1
+	canUseArgon2ID := config.Argon2IDMemoryBudgetKiB(ctx, s.Verifier.Argon2IDMemoryBudgetKey, int64(puzzle.Argon2IDMemoryKiB)) > 0
 
 	for i, property := range params.Properties {
 		if i > 0 {
@@ -374,7 +381,13 @@ func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user
 		// TODO: Create properties in batches instead of one by one
 		// the only reason why it's not done is that it's not clear if this is a bottleneck right now AND
 		// maybe it will not be the most popular API
-		status := s.doCreateProperty(ctx, tlog.With("index", i), property, user, org)
+		var status common.StatusCode
+		if !canUseArgon2ID && property.Challenge == string(dbgen.ChallengeTypeArgon2ID) {
+			tlog.WarnContext(ctx, "Property challenge is not supported", "index", i, "challenge", property.Challenge)
+			status = common.StatusPropertyChallengeUnsupportedError
+		} else {
+			status = s.doCreateProperty(ctx, tlog.With("index", i), property, user, org)
+		}
 		results = append(results, &operationResult{Code: status})
 
 		// check user limits with a logarithmic step to make less DB round trips
@@ -659,6 +672,7 @@ func (s *Server) readUpdatePropertiesRequest(ctx context.Context, r *http.Reques
 	var inputs []*apiUpdatePropertyInput
 	idsMap := make(map[string]struct{}, maxPropertiesBatchSize/2)
 	nameMap := make(map[string]struct{}, maxPropertiesBatchSize/2)
+	canUseArgon2ID := config.Argon2IDMemoryBudgetKiB(ctx, s.Verifier.Argon2IDMemoryBudgetKey, int64(puzzle.Argon2IDMemoryKiB)) > 0
 
 	for decoder.More() {
 		if len(inputs) >= maxPropertiesBatchSize {
@@ -675,6 +689,10 @@ func (s *Server) readUpdatePropertiesRequest(ctx context.Context, r *http.Reques
 		}
 
 		ilog := slog.With("index", len(inputs), "id", input.ID, "name", input.Name)
+		if !canUseArgon2ID && input.Challenge == string(dbgen.ChallengeTypeArgon2ID) {
+			ilog.WarnContext(ctx, "Property challenge is not supported", "challenge", input.Challenge)
+			return nil, common.StatusPropertyChallengeUnsupportedError, nil
+		}
 
 		if len(input.ID) == 0 {
 			ilog.WarnContext(ctx, "Property ID is empty")
@@ -852,6 +870,7 @@ func (s *Server) doUpdateProperties(ctx context.Context, tlog *slog.Logger, user
 		}
 	}
 
+	canUseArgon2ID := config.Argon2IDMemoryBudgetKiB(ctx, s.Verifier.Argon2IDMemoryBudgetKey, int64(puzzle.Argon2IDMemoryKiB)) > 0
 	for i, property := range params.Properties {
 		if i > 0 {
 			select {
@@ -869,6 +888,12 @@ func (s *Server) doUpdateProperties(ctx context.Context, tlog *slog.Logger, user
 					continue
 				}
 			}
+		}
+
+		if !canUseArgon2ID && property.Challenge == string(dbgen.ChallengeTypeArgon2ID) {
+			tlog.WarnContext(ctx, "Property challenge is not supported", "index", i, "challenge", property.Challenge)
+			results = append(results, &operationResult{Code: common.StatusPropertyChallengeUnsupportedError})
+			continue
 		}
 
 		status := s.doUpdateProperty(ctx, tlog.With("index", i), property, user, org)
