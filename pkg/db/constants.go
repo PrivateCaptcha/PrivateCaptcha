@@ -5,6 +5,7 @@ const (
 	TableNameOrgs            = "organizations"
 	TableNameOrgUsers        = "organization_users"
 	TableNameProperties      = "properties"
+	TableNameEdgeSettings    = "edge_property_settings"
 	TableNameForms           = "forms"
 	TableNameSubscriptions   = "subscriptions"
 	TableNameAPIKeys         = "apikeys"

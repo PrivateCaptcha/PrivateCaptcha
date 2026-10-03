@@ -3,6 +3,9 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -10,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -171,6 +175,20 @@ func TestVerifyPuzzle(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(data, []byte(`"edge_token"`)) {
+		t.Fatalf("disabled edge tokens changed /verify response: %s", data)
+	}
+	var result VerificationResponse
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatal(err)
+	}
+	if !result.Success || result.EdgeToken != "" {
+		t.Fatalf("default verification must not issue an edge token: %+v", result)
 	}
 }
 
@@ -805,6 +823,109 @@ func TestVerifyPuzzleAllowReplay(t *testing.T) {
 	}
 }
 
+func TestVerifyEdgeTokenLifecycle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	signer := newTestEdgeSigner(t)
+	previous := server.EdgeTokens
+	server.EdgeTokens = signer
+	defer func() { server.EdgeTokens = previous }()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), time.Hour, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret := db.UUIDToSecret(key.ExternalID)
+	for propertyIndex := 0; propertyIndex < 2; propertyIndex++ {
+		params := db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("edge-%d.example.com", propertyIndex))
+		params.EdgeTokenValidityInterval = time.Hour
+		params.MaxReplayCount = 2
+		property, _, err := store.Impl().CreateNewProperty(ctx, params, org)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sitekey := db.UUIDToSiteKey(property.ExternalID)
+		puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload := solutionsStr + "." + puzzleStr
+		for attempt := 0; attempt < 3; attempt++ {
+			resp, err := verifySuite(payload, secret, sitekey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("verify status = %d", resp.StatusCode)
+			}
+			var result VerificationResponse
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				t.Fatal(err)
+			}
+			if attempt == 2 {
+				if result.Success || result.EdgeToken != "" || result.Code != puzzle.VerifiedBeforeError {
+					t.Fatalf("replay limit: %+v", result)
+				}
+				continue
+			}
+			if !result.Success || result.EdgeToken == "" || result.Origin != property.Domain {
+				t.Fatalf("successful verify: %+v", result)
+			}
+			jwksRouter := http.NewServeMux()
+			server.Setup("", false, common.NoopMiddleware).Register(jwksRouter)
+			jwksResponse := httptest.NewRecorder()
+			jwksRouter.ServeHTTP(jwksResponse, httptest.NewRequest(http.MethodGet, "/.well-known/jwks.json", nil))
+			if jwksResponse.Code != http.StatusOK {
+				t.Fatalf("jwks status: %d", jwksResponse.Code)
+			}
+			var jwks EdgeJWKS
+			if err := json.Unmarshal(jwksResponse.Body.Bytes(), &jwks); err != nil {
+				t.Fatal(err)
+			}
+			if len(jwks.Keys) != 1 {
+				t.Fatalf("jwks: %s", jwksResponse.Body.String())
+			}
+			parts := strings.Split(result.EdgeToken, ".")
+			if len(parts) != 3 {
+				t.Fatalf("invalid JWS: %s", result.EdgeToken)
+			}
+			decode := func(s string) []byte {
+				data, err := base64.RawURLEncoding.DecodeString(s)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return data
+			}
+			x, y := decode(jwks.Keys[0].X), decode(jwks.Keys[0].Y)
+			public := &ecdsa.PublicKey{Curve: elliptic.P256(), X: new(big.Int).SetBytes(x), Y: new(big.Int).SetBytes(y)}
+			signature := decode(parts[2])
+			digest := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
+			if len(signature) != 64 || !ecdsa.Verify(public, digest[:], new(big.Int).SetBytes(signature[:32]), new(big.Int).SetBytes(signature[32:])) {
+				t.Fatal("token failed JWKS verification")
+			}
+			var header map[string]any
+			var claims map[string]any
+			if err := json.Unmarshal(decode(parts[0]), &header); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(decode(parts[1]), &claims); err != nil {
+				t.Fatal(err)
+			}
+			if header["alg"] != "ES256" || header["typ"] != "pc-edge+jwt" || header["kid"] != jwks.Keys[0].Kid || claims["aud"] != sitekey || claims["host"] != property.Domain ||
+				claims["iss"] != "https://api.privatecaptcha.com" ||
+				claims["v"] != float64(1) ||
+				claims["exp"].(float64)-claims["iat"].(float64) != 3600 {
+				t.Fatalf("header=%v claims=%v", header, claims)
+			}
+		}
+	}
+}
+
 // same as successful test (TestVerifyPuzzle), but invalidates api key in cache
 func TestVerifyCachePriority(t *testing.T) {
 	if testing.Short() {
@@ -1046,6 +1167,47 @@ func TestVerifyMaintenanceModeReplay(t *testing.T) {
 	}
 	if err := checkVerifyError(resp, puzzle.VerifiedBeforeError); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestVerifyEdgeMaintenanceWithoutMetadata(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	params := db_tests.CreateNewPropertyParams(user.ID, "edge-maintenance.example.com")
+	params.EdgeTokenValidityInterval = time.Hour
+	property, _, err := store.Impl().CreateNewProperty(ctx, params, org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), time.Hour, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey))
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey))
+	store.UpdateConfig(true /*maintenance mode*/)
+	defer store.UpdateConfig(false /*maintenance mode*/)
+	resp, err := verifySuite(solutionsStr+"."+puzzleStr, db.UUIDToSecret(key.ExternalID), sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result VerificationResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK || !result.Success || result.Code != puzzle.MaintenanceModeError || result.EdgeToken != "" || result.Timestamp == nil {
+		t.Fatalf("edge maintenance must preserve verification success without a credential: status=%d result=%+v", resp.StatusCode, result)
 	}
 }
 
@@ -1849,5 +2011,19 @@ func TestNewVerificationResponseIncludesSuccessMetadata(t *testing.T) {
 	response := newVerificationResponse(result, false)
 	if !response.Success || response.Origin != result.Domain || response.Timestamp == nil || time.Time(*response.Timestamp) != createdAt {
 		t.Fatalf("success response does not include verification metadata: %+v", response)
+	}
+}
+
+func TestMaintenanceWithoutEdgeTokenPreservesSuccess(t *testing.T) {
+	result := &puzzle.VerifyResult{Error: puzzle.MaintenanceModeError, Domain: "example.com", CreatedAt: time.Now()}
+	response := newVerificationResponse(result, false)
+	if !response.Success {
+		t.Fatal("maintenance must retain VerifyResult.Success semantics")
+	}
+	if err := (&Server{}).addEdgeToken(t.Context(), response, result, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if !response.Success || response.EdgeToken != "" || response.Origin != result.Domain || response.Timestamp == nil || response.Code != puzzle.MaintenanceModeError {
+		t.Fatalf("maintenance without an edge token lost verification metadata: %+v", response)
 	}
 }

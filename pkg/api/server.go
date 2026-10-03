@@ -60,7 +60,8 @@ var (
 
 func init() {
 	var err error
-	invalidPropertyResponse, err = json.Marshal(&VerificationResponse{
+	type plainVerificationResponse VerificationResponse
+	invalidPropertyResponse, err = json.Marshal(&plainVerificationResponse{
 		Success: false,
 		Code:    puzzle.InvalidPropertyError,
 	})
@@ -68,7 +69,8 @@ func init() {
 		panic(err)
 	}
 
-	invalidPropertyRecaptchaResponse, err = json.Marshal(&VerifyResponseRecaptchaV2{
+	type plainVerifyResponseRecaptchaV2 VerifyResponseRecaptchaV2
+	invalidPropertyRecaptchaResponse, err = json.Marshal(&plainVerifyResponseRecaptchaV2{
 		Success:    false,
 		ErrorCodes: []string{puzzle.InvalidPropertyError.String()},
 	})
@@ -106,6 +108,8 @@ type Server struct {
 	AsyncTasks           db.AsyncTasks
 	CountryCodeHeader    common.ConfigItem
 	NoticeProvider       db.PropertyNoticeProvider
+	EdgeTokens           *EdgeTokenSigner
+	GatePage             *GatePage
 }
 
 type apiKeyOwnerSource struct {
@@ -233,6 +237,9 @@ func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 
 func (s *Server) Update(ctx context.Context) {
 	s.Verifier.UpdateMemoryBudget(ctx)
+	if err := s.EdgeTokens.Update(ctx); err != nil {
+		slog.ErrorContext(ctx, "Failed to reload edge token keys", common.ErrAttr(err))
+	}
 }
 
 func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) *common.RouteGenerator {
@@ -308,6 +315,8 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, apiCorsHandler, form
 	svc := common.ServiceMiddleware(ApiService)
 	recovered := common.Recovered(s.Metrics)
 	publicChain := alice.New(svc, recovered, security)
+	rg.Handle(rg.Get(common.WellKnownEndpoint, common.JWKSFileEndpoint), publicChain.Append(s.Metrics.APIHandler, s.RateLimiter.RateLimit), http.HandlerFunc(s.edgeJWKSHandler))
+	rg.Handle(rg.Get(common.GateEndpoint, common.PageEndpoint), publicChain.Append(s.Metrics.APIHandler, s.RateLimiter.RateLimit, s.Auth.GateSitekey), http.HandlerFunc(s.gatePageHandler))
 	// NOTE: auth middleware provides rate limiting internally
 	const puzzlePreLevelsBudget = 200 * time.Millisecond
 	puzzleChain := publicChain.Append(s.Metrics.APIHandler, s.RateLimiter.RateLimit, monitoring.Traced,
@@ -562,6 +571,10 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := newVerificationResponse(result, isExplicitTestSitekey)
+	if err := s.addEdgeToken(ctx, response, result, time.Now().UTC()); err != nil {
+		slog.ErrorContext(ctx, "Failed to issue edge token", "propertyID", result.PropertyID, common.ErrAttr(err))
+		// do NOT return an error, primary function is verification for captcha
+	}
 
 	common.SendJSONResponse(r.Context(), w, response, common.NoCacheHeaders, s.APIHeaders)
 }
@@ -578,6 +591,19 @@ func newVerificationResponse(result *puzzle.VerifyResult, isExplicitTestSitekey 
 	}
 
 	return response
+}
+
+func (s *Server) addEdgeToken(ctx context.Context, response *VerificationResponse, result *puzzle.VerifyResult, now time.Time) error {
+	if (result.Error != puzzle.VerifyNoError && result.Error != puzzle.MaintenanceModeError) || result.EdgeTokenValidityInterval == 0 {
+		return nil
+	}
+	sitekey := hex.EncodeToString(result.ExternalID)
+	token, err := s.EdgeTokens.Sign(ctx, sitekey, result.Domain, now, result.EdgeTokenValidityInterval)
+	if err != nil {
+		return err
+	}
+	response.EdgeToken = token
+	return nil
 }
 
 func (s *Server) addVerifyRecord(ctx context.Context, result *puzzle.VerifyResult, userAgent string) {

@@ -106,7 +106,7 @@ LEFT JOIN backend.users u ON u.id = a.user_id
 WHERE (
     ((a.entity_table = 'organizations' OR a.entity_table = 'organization_users') AND a.entity_id = $1)
     OR (
-        a.entity_table = 'properties'
+        a.entity_table IN ('properties', 'edge_property_settings')
         AND ((a.old_value ->> 'org_id')::bigint = $1 OR (a.new_value ->> 'org_id')::bigint = $1)
     )
 )
@@ -172,7 +172,7 @@ const getPropertyAuditLogs = `-- name: GetPropertyAuditLogs :many
 SELECT a.id, a.user_id, a.action, a.entity_id, a.entity_table, a.session_id, a.old_value, a.new_value, a.created_at, a.source, a.ip_address, u.name, u.email
 FROM backend.audit_logs a
 LEFT JOIN backend.users u ON u.id = a.user_id
-WHERE a.entity_table = 'properties' AND a.entity_id = $1 AND a.created_at >= $2
+WHERE a.entity_table IN ('properties', 'edge_property_settings') AND a.entity_id = $1 AND a.created_at >= $2
 ORDER BY a.created_at DESC
 OFFSET $3
 LIMIT $4
@@ -243,7 +243,7 @@ WHERE (a.user_id = $1 OR
         AND ((a.old_value ->> 'user_id')::bigint = $1 OR (a.new_value ->> 'user_id')::bigint = $1)
     ) OR
     (
-        a.entity_table = 'properties'
+        a.entity_table IN ('properties', 'edge_property_settings')
         AND ((a.old_value ->> 'creator_id')::bigint = $1 OR (a.new_value ->> 'creator_id')::bigint = $1)
     )
 )

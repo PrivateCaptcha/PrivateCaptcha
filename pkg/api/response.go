@@ -6,11 +6,17 @@ import (
 )
 
 //easyjson:json
+type EdgeJWKS struct {
+	Keys []edgeJWK `json:"keys"`
+}
+
+//easyjson:json
 type VerificationResponse struct {
 	Success   bool               `json:"success"`
 	Code      puzzle.VerifyError `json:"code"`
 	Origin    string             `json:"origin,omitempty"`
 	Timestamp *common.JSONTime   `json:"timestamp,omitempty"`
+	EdgeToken string             `json:"edge_token,omitempty"`
 }
 
 //easyjson:json
@@ -68,14 +74,15 @@ type apiOrgPropertyOutput struct {
 }
 
 type apiPropertySettings struct {
-	Name            string `json:"name"`
-	Challenge       string `json:"challenge,omitempty"`
-	Level           int    `json:"level,omitempty"`
-	Growth          string `json:"growth,omitempty"`
-	ValiditySeconds int    `json:"validity_seconds,omitempty"`
-	AllowSubdomains bool   `json:"allow_subdomains,omitempty"`
-	AllowLocalhost  bool   `json:"allow_localhost,omitempty"`
-	MaxReplayCount  int    `json:"max_replay_count,omitempty"`
+	Name                     string `json:"name"`
+	Challenge                string `json:"challenge,omitempty"`
+	Level                    int    `json:"level,omitempty"`
+	Growth                   string `json:"growth,omitempty"`
+	ValiditySeconds          int    `json:"validity_seconds,omitempty"`
+	EdgeTokenValiditySeconds int    `json:"edge_token_validity_seconds"`
+	MaxReplayCount           int    `json:"max_replay_count,omitempty"`
+	AllowSubdomains          bool   `json:"allow_subdomains,omitempty"`
+	AllowLocalhost           bool   `json:"allow_localhost,omitempty"`
 }
 
 type apiCreatePropertyInput struct {
@@ -107,15 +114,16 @@ type apiAsyncTaskResultOutput struct {
 
 //easyjson:json
 type apiPropertyOutput struct {
-	ID              string `json:"id"`
-	Name            string `json:"name"`
-	Challenge       string `json:"challenge"`
-	Domain          string `json:"domain"`
-	Sitekey         string `json:"sitekey"`
-	Level           int    `json:"level,omitempty"`
-	Growth          string `json:"growth,omitempty"`
-	ValiditySeconds int    `json:"validity_seconds,omitempty"`
-	AllowSubdomains bool   `json:"allow_subdomains,omitempty"`
-	AllowLocalhost  bool   `json:"allow_localhost,omitempty"`
-	MaxReplayCount  int    `json:"max_replay_count,omitempty"`
+	ID                       string `json:"id"`
+	Name                     string `json:"name"`
+	Challenge                string `json:"challenge"`
+	Domain                   string `json:"domain"`
+	Sitekey                  string `json:"sitekey"`
+	Level                    int    `json:"level,omitempty"`
+	Growth                   string `json:"growth,omitempty"`
+	ValiditySeconds          int    `json:"validity_seconds,omitempty"`
+	EdgeTokenValiditySeconds int    `json:"edge_token_validity_seconds"`
+	MaxReplayCount           int    `json:"max_replay_count,omitempty"`
+	AllowSubdomains          bool   `json:"allow_subdomains,omitempty"`
+	AllowLocalhost           bool   `json:"allow_localhost,omitempty"`
 }

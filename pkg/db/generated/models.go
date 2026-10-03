@@ -276,6 +276,48 @@ func (ns NullDifficultyGrowth) Value() (driver.Value, error) {
 	return string(ns.DifficultyGrowth), nil
 }
 
+type EdgeWidgetStartMode string
+
+const (
+	EdgeWidgetStartModeClick EdgeWidgetStartMode = "click"
+	EdgeWidgetStartModeLoad  EdgeWidgetStartMode = "load"
+)
+
+func (e *EdgeWidgetStartMode) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = EdgeWidgetStartMode(s)
+	case string:
+		*e = EdgeWidgetStartMode(s)
+	default:
+		return fmt.Errorf("unsupported scan type for EdgeWidgetStartMode: %T", src)
+	}
+	return nil
+}
+
+type NullEdgeWidgetStartMode struct {
+	EdgeWidgetStartMode EdgeWidgetStartMode `json:"backend_edge_widget_start_mode"`
+	Valid               bool                `json:"valid"` // Valid is true if EdgeWidgetStartMode is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullEdgeWidgetStartMode) Scan(value interface{}) error {
+	if value == nil {
+		ns.EdgeWidgetStartMode, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.EdgeWidgetStartMode.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullEdgeWidgetStartMode) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.EdgeWidgetStartMode), nil
+}
+
 type FormMethod string
 
 const (
@@ -668,6 +710,13 @@ type DifficultyRule struct {
 	Terminal                 bool                  `db:"terminal" json:"terminal"`
 }
 
+type EdgePropertySettings struct {
+	PropertyID          int32               `db:"property_id" json:"property_id"`
+	ExternalID          pgtype.UUID         `db:"external_id" json:"external_id"`
+	EdgeWidgetStartMode EdgeWidgetStartMode `db:"edge_widget_start_mode" json:"edge_widget_start_mode"`
+	UpdatedAt           pgtype.Timestamptz  `db:"updated_at" json:"updated_at"`
+}
+
 type Form struct {
 	ID                int32              `db:"id" json:"id"`
 	Name              string             `db:"name" json:"name"`
@@ -725,26 +774,27 @@ type OrganizationUser struct {
 }
 
 type Property struct {
-	ID               int32              `db:"id" json:"id"`
-	Name             string             `db:"name" json:"name"`
-	ExternalID       pgtype.UUID        `db:"external_id" json:"external_id"`
-	OrgID            pgtype.Int4        `db:"org_id" json:"org_id"`
-	CreatorID        pgtype.Int4        `db:"creator_id" json:"creator_id"`
-	OrgOwnerID       pgtype.Int4        `db:"org_owner_id" json:"org_owner_id"`
-	Domain           string             `db:"domain" json:"domain"`
-	Level            pgtype.Int2        `db:"level" json:"level"`
-	Salt             []byte             `db:"salt" json:"salt"`
-	Growth           DifficultyGrowth   `db:"growth" json:"growth"`
-	CreatedAt        pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
-	DeletedAt        pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
-	ValidityInterval time.Duration      `db:"validity_interval" json:"validity_interval"`
-	MaxReplayCount   int32              `db:"max_replay_count" json:"max_replay_count"`
-	Challenge        ChallengeType      `db:"challenge" json:"challenge"`
-	AllowSubdomains  bool               `db:"allow_subdomains" json:"allow_subdomains"`
-	AllowLocalhost   bool               `db:"allow_localhost" json:"allow_localhost"`
-	Enabled          bool               `db:"enabled" json:"enabled"`
-	ShowNotice       bool               `db:"show_notice" json:"show_notice"`
+	ID                        int32              `db:"id" json:"id"`
+	Name                      string             `db:"name" json:"name"`
+	ExternalID                pgtype.UUID        `db:"external_id" json:"external_id"`
+	OrgID                     pgtype.Int4        `db:"org_id" json:"org_id"`
+	CreatorID                 pgtype.Int4        `db:"creator_id" json:"creator_id"`
+	OrgOwnerID                pgtype.Int4        `db:"org_owner_id" json:"org_owner_id"`
+	Domain                    string             `db:"domain" json:"domain"`
+	Level                     pgtype.Int2        `db:"level" json:"level"`
+	Salt                      []byte             `db:"salt" json:"salt"`
+	Growth                    DifficultyGrowth   `db:"growth" json:"growth"`
+	CreatedAt                 pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt                 pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	DeletedAt                 pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	ValidityInterval          time.Duration      `db:"validity_interval" json:"validity_interval"`
+	MaxReplayCount            int32              `db:"max_replay_count" json:"max_replay_count"`
+	Challenge                 ChallengeType      `db:"challenge" json:"challenge"`
+	EdgeTokenValidityInterval time.Duration      `db:"edge_token_validity_interval" json:"edge_token_validity_interval"`
+	AllowSubdomains           bool               `db:"allow_subdomains" json:"allow_subdomains"`
+	AllowLocalhost            bool               `db:"allow_localhost" json:"allow_localhost"`
+	Enabled                   bool               `db:"enabled" json:"enabled"`
+	ShowNotice                bool               `db:"show_notice" json:"show_notice"`
 }
 
 type Session struct {

@@ -191,6 +191,9 @@ func (ul *UserAuditLog) initFromProperty(oldValue, newValue *db.AuditLogProperty
 			ul.Property = "Validity"
 			interval := time.Duration(newValue.ValidityIntervalSec) * time.Second
 			ul.Value = fmt.Sprintf("%.2f hour(s)", interval.Hours())
+		} else if oldValue.EdgeTokenValiditySec != newValue.EdgeTokenValiditySec {
+			ul.Property = "Edge token lifetime"
+			ul.Value = (time.Duration(newValue.EdgeTokenValiditySec) * time.Second).String()
 		} else if oldValue.AllowSubdomains != newValue.AllowSubdomains {
 			ul.Property = "Subdomains"
 			ul.Value = strconv.FormatBool(newValue.AllowSubdomains)
@@ -245,6 +248,22 @@ func (ul *UserAuditLog) initFromForm(oldValue, newValue *db.AuditLogForm) error 
 		ul.Resource = fmt.Sprintf("Form '%s'", form.Name)
 	}
 
+	return nil
+}
+
+func (ul *UserAuditLog) initFromEdgeSettings(oldValue, newValue *db.AuditLogEdgeSettings) error {
+	ul.Resource = "Edge settings"
+	settings := newValue
+	if settings == nil {
+		settings = oldValue
+	}
+	if settings != nil {
+		ul.Resource = fmt.Sprintf("Edge settings for '%s'", settings.Name)
+	}
+	if oldValue != nil && newValue != nil && oldValue.EdgeWidgetStartMode != newValue.EdgeWidgetStartMode {
+		ul.Property = "Widget start mode"
+		ul.Value = newValue.EdgeWidgetStartMode
+	}
 	return nil
 }
 
@@ -395,6 +414,11 @@ func (s *Server) NewUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*Use
 			var oldProperty, newProperty *db.AuditLogProperty
 			if oldProperty, newProperty, err = db.ParseAuditLogPayloads[db.AuditLogProperty](ctx, log); err == nil {
 				err = ul.initFromProperty(oldProperty, newProperty)
+			}
+		case db.TableNameEdgeSettings:
+			var oldSettings, newSettings *db.AuditLogEdgeSettings
+			if oldSettings, newSettings, err = db.ParseAuditLogPayloads[db.AuditLogEdgeSettings](ctx, log); err == nil {
+				err = ul.initFromEdgeSettings(oldSettings, newSettings)
 			}
 		case db.TableNameForms:
 			var oldForm, newForm *db.AuditLogForm

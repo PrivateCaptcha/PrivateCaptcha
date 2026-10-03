@@ -160,6 +160,7 @@ type Server struct {
 	TimeSeries           common.TimeSeriesStore
 	APIURL               string
 	CDNURL               string
+	EdgeTokens           *api.EdgeTokenSigner
 	Prefix               string
 	IDHasher             common.IdentifierHasher
 	template             *Templates
@@ -406,6 +407,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postNewOrgProperty))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty)), privateReadWithTip, s.Handler(s.getPropertyDashboard))
 	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.EditEndpoint), privateWrite, s.Handler(s.putProperty))
+	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.EdgeEndpoint), privateWrite, s.Handler(s.putPropertyEdgeSettings))
 	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.DeleteEndpoint), privateWrite, http.HandlerFunc(s.deleteProperty))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.ClientSetupEndpoint), privateRead, s.Handler(s.getPropertyWizardClientStep))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.ServerSetupEndpoint), privateRead, s.Handler(s.getPropertyWizardServerStep))

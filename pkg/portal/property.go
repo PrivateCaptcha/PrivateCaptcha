@@ -24,6 +24,8 @@ const (
 	propertyDashboardTemplate             = "property/dashboard.html"
 	propertyDashboardReportsTemplate      = "property/reports.html"
 	propertyDashboardSettingsTemplate     = "property/settings.html"
+	propertySettingsBasicFormTemplate     = "property/settings-basic-form.html"
+	propertySettingsEdgeFormTemplate      = "property/settings-edge-form.html"
 	propertyDashboardIntegrationsTemplate = "property/integrations.html"
 	propertyDashboardAuditLogsTemplate    = "property/auditlogs.html"
 	propertyDashboardRulesTemplate        = "property/rules.html"
@@ -63,21 +65,23 @@ type propertyWizardRenderContext struct {
 }
 
 type userProperty struct {
-	ID               string
-	OrgID            string
-	Name             string
-	Domain           string
-	Sitekey          string
-	Level            int
-	Growth           int
-	Challenge        string
-	ValidityInterval int
-	MaxReplayCount   int
-	HasDomain        bool
-	AllowSubdomains  bool
-	AllowLocalhost   bool
-	AllowReplay      bool
-	Enabled          bool
+	ID                        string
+	OrgID                     string
+	Name                      string
+	Domain                    string
+	Sitekey                   string
+	Level                     int
+	Growth                    int
+	Challenge                 string
+	ValidityInterval          int
+	EdgeTokenValidityInterval int
+	MaxReplayCount            int
+	HasDomain                 bool
+	AllowSubdomains           bool
+	AllowLocalhost            bool
+	AllowReplay               bool
+	Enabled                   bool
+	EdgeEnabled               bool
 }
 
 type orgPropertiesRenderContext struct {
@@ -105,10 +109,23 @@ type propertyDashboardRenderContext struct {
 type propertySettingsRenderContext struct {
 	propertyDashboardRenderContext
 	difficultyLevelsRenderContext
-	Orgs     []*UserOrg
-	MinLevel int
-	MaxLevel int
-	CanMove  bool
+	EdgeWidgetStartMode string
+	Orgs                []*UserOrg
+	MinLevel            int
+	MaxLevel            int
+	CanMove             bool
+}
+
+func newPropertySettingsRenderContext(dashboardCtx *propertyDashboardRenderContext) *propertySettingsRenderContext {
+	renderCtx := &propertySettingsRenderContext{
+		propertyDashboardRenderContext: *dashboardCtx,
+		difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+		Orgs:                           []*UserOrg{},
+		EdgeWidgetStartMode:            string(dbgen.EdgeWidgetStartModeClick),
+	}
+	renderCtx.Tab = propertySettingsTabIndex
+	renderCtx.UpdateLevels()
+	return renderCtx
 }
 
 func (pc *propertySettingsRenderContext) UpdateLevels() {
@@ -152,24 +169,34 @@ func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 
 func propertyToUserProperty(p *dbgen.Property, hasher common.IdentifierHasher) *userProperty {
 	up := &userProperty{
-		ID:               hasher.Encrypt(int(p.ID)),
-		OrgID:            hasher.Encrypt(int(p.OrgID.Int32)),
-		Name:             p.Name,
-		Domain:           common.DisplayPropertyDomain(p.Domain, p.AllowSubdomains),
-		HasDomain:        len(p.Domain) > 0,
-		Level:            int(p.Level.Int16),
-		Growth:           growthLevelToIndex(p.Growth),
-		Challenge:        string(p.Challenge),
-		Sitekey:          db.UUIDToSiteKey(p.ExternalID),
-		ValidityInterval: puzzle.ValidityIntervalToIndex(p.ValidityInterval),
-		AllowReplay:      (p.MaxReplayCount > 1),
-		MaxReplayCount:   max(1, int(p.MaxReplayCount)),
-		AllowSubdomains:  p.AllowSubdomains,
-		AllowLocalhost:   p.AllowLocalhost,
-		Enabled:          p.Enabled,
+		ID:                        hasher.Encrypt(int(p.ID)),
+		OrgID:                     hasher.Encrypt(int(p.OrgID.Int32)),
+		Name:                      p.Name,
+		Domain:                    common.DisplayPropertyDomain(p.Domain, p.AllowSubdomains),
+		HasDomain:                 len(p.Domain) > 0,
+		Level:                     int(p.Level.Int16),
+		Growth:                    growthLevelToIndex(p.Growth),
+		Challenge:                 string(p.Challenge),
+		Sitekey:                   db.UUIDToSiteKey(p.ExternalID),
+		ValidityInterval:          puzzle.ValidityIntervalToIndex(p.ValidityInterval),
+		EdgeTokenValidityInterval: db.EdgeTokenValidityIndex(p.EdgeTokenValidityInterval),
+		AllowReplay:               (p.MaxReplayCount > 1),
+		MaxReplayCount:            max(1, int(p.MaxReplayCount)),
+		AllowSubdomains:           p.AllowSubdomains,
+		AllowLocalhost:            p.AllowLocalhost,
+		Enabled:                   p.Enabled,
+		EdgeEnabled:               p.EdgeTokenValidityInterval > 0,
 	}
 
 	return up
+}
+
+func edgeTokenValidityFromIndex(value string) time.Duration {
+	index, err := strconv.Atoi(value)
+	if err != nil || index < 1 || index > len(puzzle.ValidityDurations) {
+		return 0
+	}
+	return puzzle.ValidityDurations[index-1]
 }
 
 func propertiesToUserProperties(ctx context.Context, properties []*dbgen.Property, hasher common.IdentifierHasher) []*userProperty {
@@ -627,11 +654,9 @@ func (s *Server) getOrgPropertySettings(w http.ResponseWriter, r *http.Request) 
 		return nil, nil, err
 	}
 
-	renderCtx := &propertySettingsRenderContext{
-		propertyDashboardRenderContext: *propertyRenderCtx,
-		difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
-		Orgs:                           []*UserOrg{},
-		CanMove:                        false,
+	renderCtx := newPropertySettingsRenderContext(propertyRenderCtx)
+	if renderCtx.EdgeWidgetStartMode, err = s.retrieveEdgeWidgetStartMode(ctx, property); err != nil {
+		return nil, nil, err
 	}
 
 	user, err := s.SessionUser(ctx, s.Session(w, r))
@@ -653,10 +678,6 @@ func (s *Server) getOrgPropertySettings(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 	}
-
-	renderCtx.Tab = propertySettingsTabIndex
-
-	renderCtx.UpdateLevels()
 
 	auditEvent := newAccessAuditLogEvent(user, db.TableNameProperties, int64(property.ID), property.Name, common.SettingsEndpoint)
 
@@ -811,18 +832,14 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 		return nil, ErrInvalidRequestArg
 	}
 
-	renderCtx, _, err := s.getOrgPropertySettings(w, r)
+	dashboardCtx, property, err := s.getOrgProperty(w, r)
 	if err != nil {
 		return nil, err
 	}
+	renderCtx := newPropertySettingsRenderContext(dashboardCtx)
 
 	// should hit cache right away
 	org, _, err := s.Org(user, r)
-	if err != nil {
-		return nil, err
-	}
-
-	property, err := s.Property(org, r)
 	if err != nil {
 		return nil, err
 	}
@@ -831,7 +848,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 		slog.WarnContext(ctx, "Insufficient permissions to edit property", "userID", user.ID, "orgUserID", org.UserID.Int32,
 			"propUserID", property.CreatorID.Int32)
 		renderCtx.ErrorMessage = common.StatusPropertyPermissionsError.String()
-		return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, IsNew: false}, nil
+		return &ViewModel{Model: renderCtx, View: propertySettingsBasicFormTemplate, IsNew: false}, nil
 	}
 
 	name := strings.TrimSpace(r.FormValue(common.ParamName))
@@ -839,13 +856,21 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 		if nameStatus := s.Store.Impl().ValidatePropertyName(ctx, name, org); !nameStatus.Success() {
 			renderCtx.NameError = nameStatus.String()
 			renderCtx.Property.Name = name
-			return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, IsNew: false}, nil
+			return &ViewModel{Model: renderCtx, View: propertySettingsBasicFormTemplate, IsNew: false}, nil
 		}
 	}
 
 	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty), renderCtx.MinLevel, renderCtx.MaxLevel)
 	growth := growthLevelFromValue(ctx, r.FormValue(common.ParamGrowth))
 	validityInterval := puzzle.ValidityIntervalFromIndex(ctx, r.FormValue(common.ParamValidityInterval))
+	edgeTokenValidity := property.EdgeTokenValidityInterval
+	if _, supplied := r.Form[common.ParamEdgeTokenValidityInterval]; supplied {
+		edgeTokenValidity = edgeTokenValidityFromIndex(r.FormValue(common.ParamEdgeTokenValidityInterval))
+		if err := s.EdgeTokens.ValidateProperty(ctx, property.Domain, edgeTokenValidity); err != nil {
+			renderCtx.ErrorMessage = "Edge token signing requires configured keys and a property domain."
+			return &ViewModel{Model: renderCtx, View: propertySettingsBasicFormTemplate, IsNew: false}, nil
+		}
+	}
 	challenge := dbgen.ChallengeType(r.FormValue(common.ParamChallenge))
 	if challenge != dbgen.ChallengeTypeBlake2b && challenge != dbgen.ChallengeTypeArgon2ID {
 		challenge = property.Challenge
@@ -869,19 +894,21 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 		(growth != property.Growth) ||
 		(challenge != property.Challenge) ||
 		(validityInterval != property.ValidityInterval) ||
+		(edgeTokenValidity != property.EdgeTokenValidityInterval) ||
 		(maxReplayCount != property.MaxReplayCount) ||
 		(allowSubdomains != property.AllowSubdomains) ||
 		(allowLocalhost != property.AllowLocalhost) {
 		params := &dbgen.UpdatePropertyParams{
-			ID:               property.ID,
-			Name:             name,
-			Level:            db.Int2(int16(difficulty)),
-			Growth:           growth,
-			Challenge:        dbgen.NullChallengeType{ChallengeType: challenge, Valid: true},
-			ValidityInterval: validityInterval,
-			AllowSubdomains:  allowSubdomains,
-			AllowLocalhost:   allowLocalhost,
-			MaxReplayCount:   maxReplayCount,
+			ID:                        property.ID,
+			Name:                      name,
+			Level:                     db.Int2(int16(difficulty)),
+			Growth:                    growth,
+			Challenge:                 dbgen.NullChallengeType{ChallengeType: challenge, Valid: true},
+			ValidityInterval:          validityInterval,
+			EdgeTokenValidityInterval: edgeTokenValidity,
+			AllowSubdomains:           allowSubdomains,
+			AllowLocalhost:            allowLocalhost,
+			MaxReplayCount:            maxReplayCount,
 		}
 
 		var updatedProperty *dbgen.Property
@@ -894,7 +921,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 		}
 	}
 
-	return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: false}, nil
+	return &ViewModel{Model: renderCtx, View: propertySettingsBasicFormTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: false}, nil
 }
 
 func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {

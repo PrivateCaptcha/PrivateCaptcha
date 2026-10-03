@@ -5,6 +5,9 @@ package db
 import (
 	"context"
 	"testing"
+	"time"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
 type testCacheEntity struct {
@@ -103,6 +106,32 @@ func TestContainsInvalidNameChars(t *testing.T) {
 				t.Errorf("rune = %q, want %q", r, tt.expectedRune)
 			}
 		})
+	}
+}
+
+func TestEdgeTokenValidityIndex(t *testing.T) {
+	for i, duration := range puzzle.ValidityDurations {
+		if got := EdgeTokenValidityIndex(duration); got != i+1 {
+			t.Errorf("exact duration %v: got %d, want %d", duration, got, i+1)
+		}
+	}
+	for _, tt := range []struct {
+		period time.Duration
+		want   int
+	}{
+		{0, 0},
+		{-time.Minute, 0},
+		{time.Second, 1},
+		{8 * time.Minute, 2},
+		{20 * time.Minute, 2},
+		{25 * time.Minute, 3},
+		{45 * time.Minute, 3},
+		{46 * time.Minute, 4},
+		{48 * time.Hour, len(puzzle.ValidityDurations)},
+	} {
+		if got := EdgeTokenValidityIndex(tt.period); got != tt.want {
+			t.Errorf("duration %v: got %d, want %d", tt.period, got, tt.want)
+		}
 	}
 }
 

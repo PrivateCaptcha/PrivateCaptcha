@@ -376,6 +376,63 @@ func TestUserAuditLogInitFromAPIKey(t *testing.T) {
 	}
 }
 
+func TestNewUserAuditLogEdgeSettings(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		action             dbgen.AuditLogAction
+		oldValue, newValue string
+		resource, property string
+		value              string
+		wantErr            bool
+	}{
+		{
+			name: "start mode change", action: dbgen.AuditLogActionUpdate,
+			oldValue: `{"name":"Test Property","edge_widget_start_mode":"click"}`,
+			newValue: `{"name":"Test Property","edge_widget_start_mode":"load"}`,
+			resource: "Edge settings for 'Test Property'", property: "Widget start mode", value: "load",
+		},
+		{
+			name: "creation", action: dbgen.AuditLogActionCreate,
+			newValue: `{"name":"Test Property","edge_widget_start_mode":"load"}`,
+			resource: "Edge settings for 'Test Property'",
+		},
+		{
+			name: "deletion", action: dbgen.AuditLogActionDelete,
+			oldValue: `{"name":"Test Property","edge_widget_start_mode":"load"}`,
+			resource: "Edge settings for 'Test Property'",
+		},
+		{
+			name: "unchanged", action: dbgen.AuditLogActionUpdate,
+			oldValue: `{"name":"Test Property","edge_widget_start_mode":"click"}`,
+			newValue: `{"name":"Test Property","edge_widget_start_mode":"click"}`,
+			resource: "Edge settings for 'Test Property'",
+		},
+		{name: "empty payloads", action: dbgen.AuditLogActionUpdate, resource: "Edge settings"},
+		{name: "invalid old payload", action: dbgen.AuditLogActionUpdate, oldValue: `{`, wantErr: true},
+		{name: "invalid new payload", action: dbgen.AuditLogActionUpdate, newValue: `{"edge_widget_start_mode":42}`, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			log := &dbgen.AuditLog{
+				EntityTable: db.TableNameEdgeSettings, Action: tc.action,
+				OldValue: []byte(tc.oldValue), NewValue: []byte(tc.newValue),
+			}
+			ul, err := (&Server{}).NewUserAuditLog(t.Context(), log)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("NewUserAuditLog() error = %v, wantErr %v", err, tc.wantErr)
+			}
+			if tc.wantErr {
+				return
+			}
+			if ul.Resource != tc.resource || ul.Property != tc.property || ul.Value != tc.value {
+				t.Fatalf("audit log = (%q, %q, %q), want (%q, %q, %q)", ul.Resource, ul.Property, ul.Value, tc.resource, tc.property, tc.value)
+			}
+			if ul.TableName != log.EntityTable || ul.Action != string(tc.action) {
+				t.Fatalf("audit log metadata = %+v", ul)
+			}
+		})
+	}
+}
+
 func TestUserAuditLogInitFromAccess(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -819,6 +876,26 @@ func TestInitFromPropertyValidityChange(t *testing.T) {
 
 	if ul.Property != "Validity" {
 		t.Errorf("Expected Property to be 'Validity', got '%s'", ul.Property)
+	}
+}
+
+func TestInitFromEdgeSettingsWidgetStartModeChange(t *testing.T) {
+	for _, mode := range []string{"click", "load"} {
+		t.Run(mode, func(t *testing.T) {
+			oldMode := "click"
+			if mode == oldMode {
+				oldMode = "load"
+			}
+			log := &UserAuditLog{}
+			oldValue := &db.AuditLogEdgeSettings{Name: "Test Property", EdgeWidgetStartMode: oldMode}
+			newValue := &db.AuditLogEdgeSettings{Name: "Test Property", EdgeWidgetStartMode: mode}
+			if err := log.initFromEdgeSettings(oldValue, newValue); err != nil {
+				t.Fatal(err)
+			}
+			if log.Resource != "Edge settings for 'Test Property'" || log.Property != "Widget start mode" || log.Value != mode {
+				t.Fatalf("audit log = (%q, %q, %q), want start mode %s", log.Resource, log.Property, log.Value, mode)
+			}
+		})
 	}
 }
 

@@ -80,6 +80,7 @@ func stubAuditLogs() []*UserAuditLog {
 		db.TableNameOrgUsers,
 		db.TableNameAPIKeys,
 		db.TableNameProperties,
+		db.TableNameEdgeSettings,
 		db.TableNameOrgs,
 		db.TableNameUsers,
 		db.TableNameAuditLogs,
@@ -145,6 +146,9 @@ func TestRenderHTML(t *testing.T) {
 	blakeProperty.Challenge = string(dbgen.ChallengeTypeBlake2b)
 	argonProperty := stubProperty("Foo", "123")
 	argonProperty.Challenge = string(dbgen.ChallengeTypeArgon2ID)
+	edgeProperty := stubProperty("Foo", "123")
+	edgeProperty.HasDomain = true
+	edgeProperty.EdgeTokenValidityInterval = 4
 	integrationForm := stubForm("Contact", "123")
 	integrationForm.ExternalID = "form-uuid"
 	hostileOrgModel := &orgDashboardRenderContext{
@@ -628,7 +632,84 @@ func TestRenderHTML(t *testing.T) {
 				Sitekey: "qwerty",
 			},
 		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.EditEndpoint},
+			template: propertySettingsBasicFormTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{
+					Property: edgeProperty, Org: stubOrg("123"), CanEdit: true,
+					AlertRenderContext: AlertRenderContext{SuccessMessage: "Settings were updated"},
+				},
+				difficultyLevelsRenderContext: createDifficultyLevelsRenderContext(),
+			},
+			selector: `form[data-unsaved-changes-key="property-settings"][data-unsaved-changes-initial="clean"] div.col-span-full:first-child p`,
+			matches:  []string{"Settings were updated"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.EdgeEndpoint},
+			template: propertySettingsEdgeFormTemplate,
+			model: &edgePropertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{
+					Property: edgeProperty, Org: stubOrg("123"), CanEdit: true,
+					AlertRenderContext: AlertRenderContext{ErrorMessage: "Invalid edge widget start mode."},
+				},
+				EdgeWidgetStartMode: "load",
+			},
+			selector: `form[data-unsaved-changes-key="property-edge-settings"][data-unsaved-changes-initial="dirty"] div.col-span-full:first-child p`,
+			matches:  []string{"Invalid edge widget start mode."},
+		},
 		// same as above, but property settings _template_
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: edgeProperty, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			selector: `form[hx-put="/org/123/property/1/edge"] label`,
+			matches:  []string{"Verified access duration", "Widget start mode"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: edgeProperty, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+				EdgeWidgetStartMode:            "load",
+			},
+			selector: `form[data-unsaved-changes-key="property-edge-settings"] select[name="edge_widget_start_mode"] option[selected]`,
+			matches:  []string{"On page load"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: edgeProperty, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			selector: `div.pc-advanced-settings > h4 > button > span:first-child`,
+			matches:  []string{"Advanced"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: &userProperty{Domain: "any domain (*)", HasDomain: false}, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			selector: `div.pc-advanced-settings > h4 > button > span:first-child`,
+			matches:  []string{"Advanced"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: edgeProperty, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			selector: `select[name="edge_token_validity_interval"] option[selected]`,
+			matches:  []string{"1 hour"},
+		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
 			template: propertyDashboardSettingsTemplate,
@@ -1029,6 +1110,11 @@ func TestRenderHTML(t *testing.T) {
 
 				if len(tc.selector) > 0 {
 					document := portal_tests.ParseHTML(t, buf)
+					if tc.template == propertySettingsBasicFormTemplate || tc.template == propertySettingsEdgeFormTemplate {
+						if document.Find("form").Length() != 1 || document.Find("form[hx-select], .pc-section-heading").Length() != 0 {
+							t.Fatal("settings response must contain only the requested form")
+						}
+					}
 					selection := document.Find(tc.selector)
 					if len(tc.matches) != len(selection.Nodes) {
 						t.Fatalf("Expected %v matches, but got %v", len(tc.matches), len(selection.Nodes))
