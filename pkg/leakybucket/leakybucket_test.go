@@ -350,3 +350,74 @@ func TestOffGridUpdateSameIntervalAddLeaksPhantomInterval(t *testing.T) {
 		t.Fatalf("BUG: allowed (Added=%v) but should be rejected (only 0.9s since Update)", r3.Added)
 	}
 }
+
+func TestConstLeakyBucketUpdateClampsLevelOnCapacityDecrease(t *testing.T) {
+	tnow := time.Now().Truncate(1 * time.Second)
+	bucket := NewConstBucket[int32](0, 10, 1*time.Second, tnow)
+
+	for i := 0; i < 10; i++ {
+		bucket.Add(tnow, 1)
+	}
+	if bucket.level != 10 {
+		t.Fatalf("expected level 10 after fill, got %v", bucket.level)
+	}
+
+	bucket.Update(5, 1*time.Second, tnow)
+
+	if bucket.capacity != 5 {
+		t.Errorf("expected capacity 5, got %v", bucket.capacity)
+	}
+	if bucket.level > bucket.capacity {
+		t.Errorf("level %v exceeds capacity %v after Update", bucket.level, bucket.capacity)
+	}
+	if bucket.level != 5 {
+		t.Errorf("expected level clamped to 5, got %v", bucket.level)
+	}
+
+	_, added := bucket.Add(tnow, 1)
+	if added != 0 {
+		t.Errorf("expected Added=0 after capacity lowered below level, got %v (uint32 underflow)", added)
+	}
+}
+
+func TestConstLeakyBucketAddNoUnderflowWhenLevelExceedsCapacity(t *testing.T) {
+	tnow := time.Now().Truncate(1 * time.Second)
+	bucket := NewConstBucket[int32](0, 5, 1*time.Second, tnow)
+	bucket.level = 10
+	bucket.lastAccessTime = tnow
+
+	_, added := bucket.Add(tnow, 1)
+	if added != 0 {
+		t.Errorf("Expected Added=0 when level(10) > capacity(5), got %v (uint32 underflow)", added)
+	}
+	if bucket.level != 5 {
+		t.Errorf("Expected level clamped to capacity(5), got %v", bucket.level)
+	}
+}
+
+func TestVarLeakyBucketAddNoUnderflowWhenLevelExceedsCapacity(t *testing.T) {
+	tnow := time.Now().Truncate(1 * time.Second)
+	bucket := NewVarBucket[int32](0, 5, 1*time.Second, tnow)
+	bucket.level = 10
+	bucket.lastAccessTime = tnow
+
+	_, added := bucket.Add(tnow, 1)
+	if added != 0 {
+		t.Errorf("Expected Added=0 when level(10) > capacity(5), got %v (uint32 underflow)", added)
+	}
+	if bucket.level != 5 {
+		t.Errorf("Expected level clamped to capacity(5), got %v", bucket.level)
+	}
+}
+
+func TestVarLeakyBucketSeedNoUnderflowWhenLevelExceedsCapacity(t *testing.T) {
+	tnow := time.Now().Truncate(1 * time.Second)
+	bucket := NewVarBucket[int32](0, 5, 1*time.Second, tnow)
+	bucket.level = 10
+	bucket.lastAccessTime = tnow
+
+	_, added := bucket.seed(tnow, 1, 1.0, 1)
+	if added != 0 {
+		t.Errorf("Expected Added=0 when level(10) > capacity(5), got %v (uint32 underflow)", added)
+	}
+}
