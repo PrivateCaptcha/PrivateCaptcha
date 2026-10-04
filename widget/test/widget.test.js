@@ -843,12 +843,128 @@ test('extended widget script preserves recaptcha compat mode', async () => {
     await import('../js/captcha.js');
     document.body.innerHTML = '<script src="https://cdn.example.com/widget/js/privatecaptcha-ext.js?compat=recaptcha&render=explicit"></script>';
     const previous = window.grecaptcha;
+    const previousCompat = window.privateCaptcha.compat;
     window.grecaptcha = null;
     try {
         window.privateCaptcha.setup();
         assert.strictEqual(window.grecaptcha, window.privateCaptcha);
+        assert.strictEqual(window.privateCaptcha.compat, 'recaptcha',
+            'setup() should persist page-level compat on window.privateCaptcha');
     } finally {
         window.grecaptcha = previous;
+        window.privateCaptcha.compat = previousCompat;
+    }
+});
+
+test('compat=recaptcha explicit grecaptcha.render names the solution field g-recaptcha-response', async () => {
+    document.body.innerHTML = `
+        <script src="https://cdn.example.com/widget/js/privatecaptcha-ext.js?compat=recaptcha&render=explicit"></script>
+        <form><div id="wc-explicit" class="g-recaptcha" data-sitekey="${testSitekey}"></div></form>
+    `;
+    await import('../js/captcha.js');
+    const previousCompat = window.privateCaptcha.compat;
+    const previousGrecaptcha = window.grecaptcha;
+    try {
+        window.privateCaptcha.setup();
+        assert.strictEqual(window.privateCaptcha.compat, 'recaptcha');
+        const el = document.getElementById('wc-explicit');
+        const widget = window.grecaptcha.render(el, { sitekey: testSitekey, debug: true });
+        assert.ok(widget, 'manual grecaptcha.render() should return a widget');
+        assert.strictEqual(widget._options.compat, 'recaptcha',
+            'manual render should inherit page-level compat from window.privateCaptcha');
+        assert.strictEqual(widget._options.fieldName, 'g-recaptcha-response',
+            `manual render on a compat=recaptcha page should use g-recaptcha-response (got "${widget._options.fieldName}")`);
+        // Drive saveSolutions() to produce the hidden input that the form actually posts
+        widget._puzzle = { rawData: 'PUZZLE_RAW' };
+        widget._workersPool = { serializeSolutions: () => 'SOL_PREF' };
+        widget.saveSolutions();
+        const hidden = el.querySelector('input[type="hidden"]');
+        assert.ok(hidden, 'a hidden solution input should exist after saveSolutions');
+        assert.strictEqual(hidden.name, 'g-recaptcha-response',
+            `hidden solution input should be named g-recaptcha-response (got "${hidden.name}")`);
+        assert.strictEqual(hidden.value, 'SOL_PREF.PUZZLE_RAW',
+            'hidden solution input should carry the serialized solution payload');
+    } finally {
+        window.privateCaptcha.compat = previousCompat;
+        window.grecaptcha = previousGrecaptcha;
+    }
+});
+
+test('non-compat page manual render produces private-captcha-solution (no regression)', async () => {
+    document.body.innerHTML = `
+        <script src="https://cdn.example.com/widget/js/privatecaptcha-ext.js?render=explicit"></script>
+        <form><div id="wc-nocompat" class="private-captcha" data-sitekey="${testSitekey}"></div></form>
+    `;
+    await import('../js/captcha.js');
+    const previousCompat = window.privateCaptcha.compat;
+    try {
+        window.privateCaptcha.setup();
+        assert.strictEqual(window.privateCaptcha.compat, null,
+            'non-compat page should persist null compat on window.privateCaptcha');
+        const el = document.getElementById('wc-nocompat');
+        const widget = window.privateCaptcha.render(el, { sitekey: testSitekey, debug: true });
+        assert.ok(widget, 'manual render should return a widget');
+        assert.strictEqual(widget._options.compat, undefined,
+            'non-compat page should not inject compat into caller options');
+        assert.strictEqual(widget._options.fieldName, 'private-captcha-solution',
+            `non-compat page should use private-captcha-solution (got "${widget._options.fieldName}")`);
+    } finally {
+        window.privateCaptcha.compat = previousCompat;
+    }
+});
+
+test('explicit compat:null opt-out on compat page yields private-captcha-solution', async () => {
+    document.body.innerHTML = `
+        <script src="https://cdn.example.com/widget/js/privatecaptcha-ext.js?compat=recaptcha&render=explicit"></script>
+        <form><div id="wc-optout" class="g-recaptcha" data-sitekey="${testSitekey}"></div></form>
+    `;
+    await import('../js/captcha.js');
+    const previousCompat = window.privateCaptcha.compat;
+    const previousGrecaptcha = window.grecaptcha;
+    try {
+        window.privateCaptcha.setup();
+        assert.strictEqual(window.privateCaptcha.compat, 'recaptcha');
+        const el = document.getElementById('wc-optout');
+        const widget = window.grecaptcha.render(el, { sitekey: testSitekey, debug: true, compat: null });
+        assert.ok(widget, 'manual render with explicit compat:null should return a widget');
+        assert.strictEqual(widget._options.compat, null,
+            'explicit compat:null should be preserved, not overwritten by page-level compat');
+        assert.strictEqual(widget._options.fieldName, 'private-captcha-solution',
+            `explicit compat:null should opt out of g-recaptcha-response (got "${widget._options.fieldName}")`);
+    } finally {
+        window.privateCaptcha.compat = previousCompat;
+        window.grecaptcha = previousGrecaptcha;
+    }
+});
+
+test('reset() on a manually-rendered compat widget preserves the g-recaptcha-response field name', async () => {
+    document.body.innerHTML = `
+        <script src="https://cdn.example.com/widget/js/privatecaptcha-ext.js?compat=recaptcha&render=explicit"></script>
+        <form><div id="wc-reset" class="g-recaptcha" data-sitekey="${testSitekey}"></div></form>
+    `;
+    await import('../js/captcha.js');
+    const previousCompat = window.privateCaptcha.compat;
+    const previousGrecaptcha = window.grecaptcha;
+    try {
+        window.privateCaptcha.setup();
+        const el = document.getElementById('wc-reset');
+        const widget = window.grecaptcha.render(el, { sitekey: testSitekey, debug: true });
+        assert.strictEqual(widget._options.fieldName, 'g-recaptcha-response',
+            'manually-rendered compat widget should start with g-recaptcha-response');
+        // Simulate a solved-then-reset cycle (e.g. backend form-validation error)
+        widget._solution = 'prior-solution';
+        el.insertAdjacentHTML('beforeend', '<input type="hidden" name="g-recaptcha-response" value="prior-solution">');
+        widget.reset();
+        assert.strictEqual(widget._options.compat, 'recaptcha',
+            'reset() should preserve the inherited compat in caller options');
+        assert.strictEqual(widget._options.fieldName, 'g-recaptcha-response',
+            `reset() should keep g-recaptcha-response after re-render (got "${widget._options.fieldName}")`);
+        assert.strictEqual(widget.solution(), null, 'reset() should clear the solution');
+        assert.strictEqual(el.querySelector('input[name="g-recaptcha-response"]'), null,
+            'reset() should remove the prior hidden solution field');
+    } finally {
+        window.privateCaptcha.compat = previousCompat;
+        window.grecaptcha = previousGrecaptcha;
     }
 });
 

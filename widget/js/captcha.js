@@ -8,6 +8,7 @@ window.privateCaptcha = {
     getResponse: getCaptchaResponse,
     reset: resetCaptchaWidget,
     autoWidget: null,
+    compat: null,
 };
 
 const RENDER_EXPLICIT = "explicit";
@@ -60,6 +61,10 @@ function getBaseOptions() {
 
 function setupPrivateCaptcha() {
     let options = getBaseOptions();
+    // Persist the page-level compat mode so that later manual
+    // grecaptcha.render(element, options) calls can inherit it even
+    // when the caller passes only reCAPTCHA-style options.
+    window.privateCaptcha.compat = options.compat;
     const newWidgets = [];
 
     if (options.render !== RENDER_EXPLICIT) {
@@ -97,7 +102,15 @@ function renderCaptchaWidget(element, options) {
     let widget = null;
 
     if (element && !element.dataset['attached']) {
-        widget = new CaptchaWidget(element, options);
+        // Merge page-level compat mode when the caller omits it, so that
+        // manual grecaptcha.render(...) on a ?compat=recaptcha page behaves
+        // like the page-load auto-render path. An explicit caller-provided
+        // `compat` (including `null`) is always preserved.
+        const merged = { ...options };
+        if (window.privateCaptcha.compat && !merged.hasOwnProperty('compat')) {
+            merged.compat = window.privateCaptcha.compat;
+        }
+        widget = new CaptchaWidget(element, merged);
         // We set the "data-attached" attribute so we don't attach to the same element twice.
         element.dataset['attached'] = '1';
     }
