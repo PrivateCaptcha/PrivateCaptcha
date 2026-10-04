@@ -83,3 +83,25 @@ func TestVerifyEmailBracketedNonIP(t *testing.T) {
 		}
 	}
 }
+
+func TestTwoFactorAdminCaseMismatchReturnsError(t *testing.T) {
+	cfg := config.NewBaseConfig(mailConfig{})
+	cfg.Add(config.NewStaticValue(common.AdminEmailKey, "Admin@example.com"))
+
+	mailer := NewPortalMailer("https://cdn.example", "https://portal.example", &failingSender{}, cfg, nil)
+
+	if err := mailer.SendTwoFactor(t.Context(), "admin@example.com", 123456, "", "", false); err != nil {
+		t.Fatalf("SendTwoFactor returned %v; expected nil (admin email should match case-insensitively, swallowing the send failure)", err)
+	}
+}
+
+func TestTwoFactorSpammerCaseMismatchReturnsError(t *testing.T) {
+	cfg := config.NewBaseConfig(mailConfig{})
+	cfg.Add(config.NewStaticValue(common.AdminEmailKey, "admin@example.com"))
+
+	mailer := NewPortalMailer("https://cdn.example", "https://portal.example", &failingSender{}, cfg, nil)
+
+	if err := mailer.SendTwoFactor(t.Context(), "Spammer@privatecaptcha.local", 123456, "", "", false); err != nil {
+		t.Fatalf("SendTwoFactor returned %v; expected nil (spammer email should match case-insensitively, swallowing the send failure)", err)
+	}
+}

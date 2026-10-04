@@ -140,7 +140,7 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 	if err := pm.Mailer.SendEmail(ctx, msg); err != nil {
 		level := slog.LevelError
 
-		if (email == pm.AdminEmail.Value()) || (email == spammerEmail) {
+		if strings.EqualFold(email, pm.AdminEmail.Value()) || strings.EqualFold(email, spammerEmail) {
 			level = slog.LevelWarn
 			err = nil
 		}
