@@ -434,6 +434,8 @@ func testManagerSaveCacheConcurrentMutations[T any, TBucket BucketConstraint[int
 	t.Helper()
 	tnow := time.Now()
 	manager.Add(1, 1, tnow)
+	// Register the initial entry in Otter's eviction policy before the mutation loop replaces it.
+	manager.buckets.CleanUp()
 	mutations := []struct {
 		name string
 		run  func()
