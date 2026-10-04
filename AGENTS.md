@@ -11,6 +11,7 @@
 - Prefer the simplest minimal working solution. Do not over-engineer.
 - Add comments only when necessary. Prefer useful logging over explanatory comments where appropriate.
 - Fix failures before continuing. Do not ignore or skip errors.
+- In Go initialize structs one field per line
 
 ### Database
 
@@ -55,6 +56,7 @@
 - Portal and API integration tests already provide global `store`, `timeSeries`, and `server` resources. Reuse them.
 - Verify HTTP route paths against `server.go` and `server_enterprise.go`.
 - Portal render tests belong in `pkg/portal/render_test.go` under `TestRenderHTML`.
+- Never check substrings in handler's raw HTML output if this path is served by `ViewModelHandler` - check specific `ViewModel` fields directly
 - Unit coverage: `make test-unit-cover`
 - Integration coverage is written to `coverage_integration/`.
 
