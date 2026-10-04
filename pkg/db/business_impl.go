@@ -4386,6 +4386,39 @@ func (impl *BusinessStoreImpl) DeleteOldAsyncTasks(ctx context.Context, before t
 	return nil
 }
 
+// ClaimAsyncTask atomically claims a pending async task for execution by
+// incrementing processing_attempts, conditional on the task still being
+// unprocessed and below maxProcessingAttempts. It returns true when this
+// caller acquired the claim (rows affected > 0) and false when another
+// runner already completed the task or it has exhausted its attempts.
+func (impl *BusinessStoreImpl) ClaimAsyncTask(ctx context.Context, uuid pgtype.UUID, maxProcessingAttempts int) (bool, error) {
+	if !uuid.Valid {
+		return false, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return false, ErrMaintenance
+	}
+
+	affected, err := impl.querier.ClaimAsyncTask(ctx, &dbgen.ClaimAsyncTaskParams{
+		ID:                 uuid,
+		ProcessingAttempts: int32(maxProcessingAttempts),
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to claim async task", "id", UUIDToString(uuid), common.ErrAttr(err))
+		return false, err
+	}
+
+	claimed := affected > 0
+
+	// Invalidate the cache so subsequent RetrieveAsyncTask reads observe the
+	// incremented processing_attempts / processed_at written by this claim.
+	cacheKey := asyncTaskCacheKey(UUIDToString(uuid))
+	impl.cache.Delete(ctx, cacheKey)
+
+	return claimed, nil
+}
+
 func (impl *BusinessStoreImpl) UpdateAsyncTask(ctx context.Context, uuid pgtype.UUID, output []byte, processedAt time.Time) error {
 	if !uuid.Valid {
 		return ErrInvalidInput

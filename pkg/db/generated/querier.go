@@ -11,6 +11,12 @@ import (
 )
 
 type Querier interface {
+	// Atomically claim a pending task for execution. Increments processing_attempts
+	// as the claim token. Returns 0 rows if the task is already completed
+	// (processed_at IS NOT NULL) or has exhausted its attempts, so concurrent
+	// runners (immediate attempt vs. worker) cannot execute it more than
+	// MaxAttempts times.
+	ClaimAsyncTask(ctx context.Context, arg *ClaimAsyncTaskParams) (int64, error)
 	ConsumeEmailChangeChallenge(ctx context.Context, arg *ConsumeEmailChangeChallengeParams) (*ConsumeEmailChangeChallengeRow, error)
 	ConsumeRegistrationChallenge(ctx context.Context, arg *ConsumeRegistrationChallengeParams) (*ConsumeRegistrationChallengeRow, error)
 	ConsumeSignInChallenge(ctx context.Context, arg *ConsumeSignInChallengeParams) (*ConsumeSignInChallengeRow, error)
@@ -141,6 +147,10 @@ type Querier interface {
 	TransferOrganization(ctx context.Context, arg *TransferOrganizationParams) (int64, error)
 	UpdateAPIKey(ctx context.Context, arg *UpdateAPIKeyParams) (*APIKey, error)
 	UpdateAPIKeysLastUsedAt(ctx context.Context, dollar_1 []int32) (int64, error)
+	// Write the result of a claimed task. The processing_attempts increment is
+	// performed by ClaimAsyncTask. The processed_at IS NULL guard prevents a
+	// late/stale run from clobbering a task that another runner already
+	// completed.
 	UpdateAsyncTask(ctx context.Context, arg *UpdateAsyncTaskParams) (int64, error)
 	UpdateAttemptedUserNotifications(ctx context.Context, dollar_1 []int32) (int64, error)
 	UpdateDifficultyRule(ctx context.Context, arg *UpdateDifficultyRuleParams) (*UpdateDifficultyRuleRow, error)

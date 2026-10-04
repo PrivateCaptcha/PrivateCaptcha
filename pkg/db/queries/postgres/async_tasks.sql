@@ -20,12 +20,28 @@ ORDER BY
     random()
 LIMIT $3;
 
+-- name: ClaimAsyncTask :execrows
+-- Atomically claim a pending task for execution. Increments processing_attempts
+-- as the claim token. Returns 0 rows if the task is already completed
+-- (processed_at IS NOT NULL) or has exhausted its attempts, so concurrent
+-- runners (immediate attempt vs. worker) cannot execute it more than
+-- MaxAttempts times.
+UPDATE backend.async_tasks
+SET processing_attempts = processing_attempts + 1
+WHERE id = $1
+  AND processed_at IS NULL
+  AND processing_attempts < $2;
+
 -- name: UpdateAsyncTask :execrows
+-- Write the result of a claimed task. The processing_attempts increment is
+-- performed by ClaimAsyncTask. The processed_at IS NULL guard prevents a
+-- late/stale run from clobbering a task that another runner already
+-- completed.
 UPDATE backend.async_tasks SET
   processed_at = $2,
-  processing_attempts = processing_attempts + 1,
   output = $3
-WHERE id = $1;
+WHERE id = $1
+  AND processed_at IS NULL;
 
 -- name: DeleteOldAsyncTasks :execrows
 DELETE FROM backend.async_tasks WHERE created_at < $1;

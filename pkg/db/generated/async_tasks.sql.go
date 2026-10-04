@@ -11,6 +11,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const claimAsyncTask = `-- name: ClaimAsyncTask :execrows
+UPDATE backend.async_tasks
+SET processing_attempts = processing_attempts + 1
+WHERE id = $1
+  AND processed_at IS NULL
+  AND processing_attempts < $2
+`
+
+type ClaimAsyncTaskParams struct {
+	ID                 pgtype.UUID `db:"id" json:"id"`
+	ProcessingAttempts int32       `db:"processing_attempts" json:"processing_attempts"`
+}
+
+// Atomically claim a pending task for execution. Increments processing_attempts
+// as the claim token. Returns 0 rows if the task is already completed
+// (processed_at IS NOT NULL) or has exhausted its attempts, so concurrent
+// runners (immediate attempt vs. worker) cannot execute it more than
+// MaxAttempts times.
+func (q *Queries) ClaimAsyncTask(ctx context.Context, arg *ClaimAsyncTaskParams) (int64, error) {
+	result, err := q.db.Exec(ctx, claimAsyncTask, arg.ID, arg.ProcessingAttempts)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createAsyncTask = `-- name: CreateAsyncTask :one
 INSERT INTO backend.async_tasks (input, handler, user_id, reference_id, scheduled_at)
 VALUES ($1, $2, $3, $4, $5)
@@ -131,9 +157,9 @@ func (q *Queries) GetPendingAsyncTasks(ctx context.Context, arg *GetPendingAsync
 const updateAsyncTask = `-- name: UpdateAsyncTask :execrows
 UPDATE backend.async_tasks SET
   processed_at = $2,
-  processing_attempts = processing_attempts + 1,
   output = $3
 WHERE id = $1
+  AND processed_at IS NULL
 `
 
 type UpdateAsyncTaskParams struct {
@@ -142,6 +168,10 @@ type UpdateAsyncTaskParams struct {
 	Output      []byte             `db:"output" json:"output"`
 }
 
+// Write the result of a claimed task. The processing_attempts increment is
+// performed by ClaimAsyncTask. The processed_at IS NULL guard prevents a
+// late/stale run from clobbering a task that another runner already
+// completed.
 func (q *Queries) UpdateAsyncTask(ctx context.Context, arg *UpdateAsyncTaskParams) (int64, error) {
 	result, err := q.db.Exec(ctx, updateAsyncTask, arg.ID, arg.ProcessedAt, arg.Output)
 	if err != nil {
