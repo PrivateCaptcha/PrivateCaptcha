@@ -26,7 +26,7 @@ func TestCacheGobDecodesStructWithAddedField(t *testing.T) {
 	oldCache.Set("property", oldProperty{ID: 42, Name: "example"})
 
 	var data bytes.Buffer
-	if _, err := SaveCacheToWriter(t.Context(), &data, oldCache, 1, nil); err != nil {
+	if _, err := SaveCacheToWriter(t.Context(), &data, oldCache, 1, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 

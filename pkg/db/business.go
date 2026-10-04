@@ -217,7 +217,7 @@ func (s *BusinessStore) SaveCache(ctx context.Context, dir string) error {
 		return nil
 	}
 
-	return common.SaveCacheToFile(ctx, dir, cachePersistFile, cachePersistSize, mc.store, nil)
+	return common.SaveCacheToFile(ctx, dir, cachePersistFile, cachePersistSize, mc.store, nil, nil)
 }
 
 func (s *BusinessStore) LoadCache(ctx context.Context, dir string) error {

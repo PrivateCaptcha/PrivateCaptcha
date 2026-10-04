@@ -226,7 +226,30 @@ func (m *Manager[TKey, T, TBucket]) SaveCache(ctx context.Context, dir, filename
 		// NOTE: this is somewhat unfair for VarLeakyBucket beacause we discard learned leakRate/pendingSum/count combo
 		return b.Level(tnow) > 0
 	}
-	return common.SaveCacheToFile(ctx, dir, filename, maxItems, m.buckets, filter)
+	// Snapshot each bucket under otter's per-hash-bucket mutex — the same lock
+	// writers (Add/AddEx/Update/SeedVarBucket) hold via cache.Compute — so the
+	// filter above and gob encoding (GobEncode) read a detached copy instead of
+	// the live cached pointer. Without this, Hottest() yields the live pointer
+	// with no per-bucket lock, racing with concurrent writers and producing a
+	// Go data race (flagged by `go test -race`) on the bucket's mutable fields.
+	snapshot := func(key TKey, _ TBucket) (TBucket, bool) {
+		var cp T
+		_, ok := m.buckets.Compute(key, func(existing TBucket, exists bool) (TBucket, otter.ComputeOp) {
+			if !exists {
+				return existing, otter.CancelOp
+			}
+			// Struct copy performed while holding the per-bucket lock writers use.
+			cp = *existing
+			return existing, otter.CancelOp
+		})
+		if !ok {
+			// Entry was evicted between Hottest() and the snapshot; skip it.
+			var zero TBucket
+			return zero, false
+		}
+		return &cp, true
+	}
+	return common.SaveCacheToFile(ctx, dir, filename, maxItems, m.buckets, filter, snapshot)
 }
 
 func (m *Manager[TKey, T, TBucket]) LoadCache(ctx context.Context, dir, filename string, maxAge time.Duration) error {

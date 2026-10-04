@@ -16,12 +16,22 @@ import (
 
 var ErrCacheSaveTruncated = errors.New("cache was saved truncated")
 
+// SaveCacheToFile persists the given cache to a file. The optional filter drops
+// entries that should not be persisted. The optional snapshot callback lets the
+// caller return a detached copy of the value (and a flag indicating whether the
+// entry is still present) so that the filter and gob encoding never read mutable
+// fields off the live cached value while a concurrent writer mutates it in place
+// under the cache's per-bucket lock (see pkg/leakybucket). Both callbacks may be
+// nil: when snapshot is nil the live value is used directly (the historical
+// behaviour, which is safe for caches that publish new values via Set/Compute
+// rather than mutating in place).
 func SaveCacheToFile[TKey comparable, TValue any](
 	ctx context.Context,
 	dir, filename string,
 	maxItems int,
 	cache *otter.Cache[TKey, TValue],
 	filter func(TValue) bool,
+	snapshot func(TKey, TValue) (TValue, bool),
 ) error {
 	if len(dir) == 0 {
 		slog.DebugContext(ctx, "Skipping saving cache without cache dir")
@@ -54,7 +64,7 @@ func SaveCacheToFile[TKey comparable, TValue any](
 	// best-effort cleanup if we bail out before rename
 	defer os.Remove(tmpPath)
 
-	count, err := SaveCacheToWriter(ctx, tmp, cache, maxItems, filter)
+	count, err := SaveCacheToWriter(ctx, tmp, cache, maxItems, filter, snapshot)
 	if err != nil {
 		_ = tmp.Close()
 		if errors.Is(err, ErrCacheSaveTruncated) {
@@ -90,6 +100,7 @@ func SaveCacheToWriter[TKey comparable, TValue any](
 	cache *otter.Cache[TKey, TValue],
 	maxItems int,
 	filter func(TValue) bool,
+	snapshot func(TKey, TValue) (TValue, bool),
 ) (int, error) {
 	timeEnc := gob.NewEncoder(w)
 	if err := timeEnc.Encode(time.Now()); err != nil {
@@ -116,7 +127,22 @@ func SaveCacheToWriter[TKey comparable, TValue any](
 			return count, ErrCacheSaveTruncated
 		}
 
-		if filter != nil && !filter(entry.Value) {
+		// Snapshot the value before reading any of its fields so the filter and
+		// gob encoding operate on a detached copy rather than the live cached
+		// value (which a concurrent writer may mutate in place under the cache's
+		// per-bucket lock). When snapshot is nil the live value is used as-is.
+		v := entry.Value
+		if snapshot != nil {
+			var ok bool
+			v, ok = snapshot(entry.Key, entry.Value)
+			if !ok {
+				// The entry was evicted between Hottest() and the snapshot; skip it.
+				continue
+			}
+			entry.Value = v
+		}
+
+		if filter != nil && !filter(v) {
 			continue
 		}
 

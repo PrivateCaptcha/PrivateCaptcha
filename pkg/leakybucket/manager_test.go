@@ -342,7 +342,7 @@ func TestManagerCacheConstLeakyBucket(t *testing.T) {
 		return b.Level(tnow) > 0
 	}
 
-	_, err := common.SaveCacheToWriter(ctx, &buf, manager.buckets, 100, filter)
+	_, err := common.SaveCacheToWriter(ctx, &buf, manager.buckets, 100, filter, nil)
 	if err != nil {
 		t.Fatalf("SaveCacheToWriter failed: %v", err)
 	}
@@ -384,7 +384,7 @@ func TestManagerCacheVarLeakyBucket(t *testing.T) {
 		return b.Level(tnow) > 0
 	}
 
-	_, err := common.SaveCacheToWriter(ctx, &buf, manager.buckets, 100, filter)
+	_, err := common.SaveCacheToWriter(ctx, &buf, manager.buckets, 100, filter, nil)
 	if err != nil {
 		t.Fatalf("SaveCacheToWriter failed: %v", err)
 	}
@@ -410,6 +410,41 @@ func TestManagerCacheVarLeakyBucket(t *testing.T) {
 	lvl2b, _ := manager2.Level(2, tnow.Add(200*time.Millisecond))
 	if lvl2b != 0 {
 		t.Errorf("expected 2 level to leak to 0, got %v", lvl2b)
+	}
+}
+
+// TestManagerSaveCacheRoundTrip exercises the production Manager.SaveCache path
+// (which snapshots each bucket under cache.Compute) followed by Manager.LoadCache,
+// verifying that the snapshot produces a correct, loadable file with the live
+// bucket state captured at save time.
+func TestManagerSaveCacheRoundTrip(t *testing.T) {
+	ctx := context.TODO()
+	dir := t.TempDir()
+
+	manager := NewManager[int32, ConstLeakyBucket[int32]](100, 50, 1*time.Second)
+	tnow := time.Now().Truncate(1 * time.Second)
+
+	manager.Add(1, 5, tnow)
+	manager.Add(2, 10, tnow)
+	manager.Add(3, 25, tnow)
+
+	if err := manager.SaveCache(ctx, dir, "roundtrip.gob", 100, tnow); err != nil {
+		t.Fatalf("SaveCache failed: %v", err)
+	}
+
+	loaded := NewManager[int32, ConstLeakyBucket[int32]](100, 50, 1*time.Second)
+	if err := loaded.LoadCache(ctx, dir, "roundtrip.gob", 24*time.Hour); err != nil {
+		t.Fatalf("LoadCache failed: %v", err)
+	}
+
+	if lvl, ok := loaded.Level(1, tnow); !ok || lvl != 5 {
+		t.Errorf("key 1: expected level 5, got %v (ok=%v)", lvl, ok)
+	}
+	if lvl, ok := loaded.Level(2, tnow); !ok || lvl != 10 {
+		t.Errorf("key 2: expected level 10, got %v (ok=%v)", lvl, ok)
+	}
+	if lvl, ok := loaded.Level(3, tnow); !ok || lvl != 25 {
+		t.Errorf("key 3: expected level 25, got %v (ok=%v)", lvl, ok)
 	}
 }
 

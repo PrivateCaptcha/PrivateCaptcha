@@ -289,7 +289,7 @@ func (c *memcache[TKey, TValue]) Delete(ctx context.Context, key TKey) bool {
 }
 
 func (c *memcache[TKey, TValue]) SaveTo(ctx context.Context, w io.Writer, maxItems int) error {
-	_, err := common.SaveCacheToWriter(ctx, w, c.store, maxItems, nil)
+	_, err := common.SaveCacheToWriter(ctx, w, c.store, maxItems, nil, nil)
 	return err
 }
 
