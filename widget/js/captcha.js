@@ -8,6 +8,7 @@ window.privateCaptcha = {
     getResponse: getCaptchaResponse,
     reset: resetCaptchaWidget,
     autoWidget: null,
+    compat: null,
 };
 
 const RENDER_EXPLICIT = "explicit";
@@ -60,6 +61,7 @@ function getBaseOptions() {
 
 function setupPrivateCaptcha() {
     let options = getBaseOptions();
+    window.privateCaptcha.compat = options.compat;
     const newWidgets = [];
 
     if (options.render !== RENDER_EXPLICIT) {
@@ -97,7 +99,11 @@ function renderCaptchaWidget(element, options) {
     let widget = null;
 
     if (element && !element.dataset['attached']) {
-        widget = new CaptchaWidget(element, options);
+        const merged = { ...options };
+        if (window.privateCaptcha.compat && !merged.hasOwnProperty('compat')) {
+            merged.compat = window.privateCaptcha.compat;
+        }
+        widget = new CaptchaWidget(element, merged);
         // We set the "data-attached" attribute so we don't attach to the same element twice.
         element.dataset['attached'] = '1';
     }

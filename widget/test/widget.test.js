@@ -1793,3 +1793,38 @@ test('BRICKED: zero-puzzle init + synchronous reset from init-listener discards 
         widget?._workersPool?.stop();
     }
 });
+
+test('VERIFY_BUG_E2E: compat=recaptcha explicit render produces hidden input named private-captcha-solution (BUG)', async () => {
+    document.body.innerHTML = `
+        <script src="https://cdn.example.com/widget/js/privatecaptcha-ext.js?compat=recaptcha&render=explicit"></script>
+        <form><div id="wc-e2e" class="g-recaptcha" data-sitekey="${testSitekey}"></div></form>
+    `;
+    await import('../js/captcha.js');
+    window.privateCaptcha.setup();
+    const el = document.getElementById('wc-e2e');
+    const widget = window.grecaptcha.render(el, { sitekey: testSitekey, debug: true });
+    // Drive saveSolutions() to produce the hidden input that the form actually posts
+    widget._puzzle = { rawData: 'PUZZLE_RAW' };
+    widget._workersPool = { serializeSolutions: () => 'SOL_PREF' };
+    widget.saveSolutions();
+    const hidden = el.querySelector('input[type="hidden"]');
+    assert.ok(hidden, 'a hidden solution input should exist after saveSolutions');
+    assert.strictEqual(hidden.name, 'g-recaptcha-response',
+        `BUG: hidden solution input is named "${hidden.name}" (expected g-recaptcha-response); a reCAPTCHA-era backend reading g-recaptcha-response would not see the solution`);
+});
+
+test('VERIFY_BUG_DYNAMIC: compat=recaptcha dynamic grecaptcha.render loses field name', async () => {
+    document.body.innerHTML = `
+        <script src="https://cdn.example.com/widget/js/privatecaptcha-ext.js?compat=recaptcha"></script>
+        <form><div id="wc-dynamic1" class="g-recaptcha" data-sitekey="${testSitekey}"></div></form>
+    `;
+    await import('../js/captcha.js');
+    window.privateCaptcha.setup();                                  // auto-render correctly handles wc-dynamic1
+    document.body.insertAdjacentHTML('beforeend', `
+        <form><div id="wc-dynamic2" data-sitekey="${testSitekey}"></div></form>
+    `);
+    const newEl = document.getElementById('wc-dynamic2');
+    const widget = window.grecaptcha.render(newEl, { sitekey: testSitekey, debug: true }); // SPA-style manual render
+    assert.strictEqual(widget._options.fieldName, 'g-recaptcha-response',
+        `BUG: dynamically-rendered widget on a compat=recaptcha page loses compat; fieldName="${widget._options.fieldName}" expected "g-recaptcha-response"`);
+});
