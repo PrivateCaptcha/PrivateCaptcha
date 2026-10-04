@@ -114,10 +114,21 @@ func createPgxConfig(ctx context.Context, cfg common.ConfigStore, migrate bool, 
 	config.ConnConfig.RuntimeParams["application_name"] = "privatecaptcha"
 	config.ConnConfig.RuntimeParams["idle_in_transaction_session_timeout"] =
 		strconv.Itoa(int(pgIdleInTransactionSessionTimeout.Milliseconds()))
-	config.ConnConfig.RuntimeParams["statement_timeout"] =
-		strconv.Itoa(int(pgStatementTimeout.Milliseconds()))
-	config.ConnConfig.RuntimeParams["lock_timeout"] =
-		strconv.Itoa(int(pgLockTimeout.Milliseconds()))
+	if migrate {
+		// Migrations may run long statements (backfills, index builds, table
+		// rewrites) that exceed the application-pool timeout. Disable the
+		// server-side statement_timeout and lock_timeout on the migration
+		// pool so they are not aborted mid-flight. golang-migrate does not
+		// wrap migration bodies in a transaction, so SET LOCAL would be a
+		// no-op; the override must be applied at connection startup here.
+		config.ConnConfig.RuntimeParams["statement_timeout"] = "0"
+		config.ConnConfig.RuntimeParams["lock_timeout"] = "0"
+	} else {
+		config.ConnConfig.RuntimeParams["statement_timeout"] =
+			strconv.Itoa(int(pgStatementTimeout.Milliseconds()))
+		config.ConnConfig.RuntimeParams["lock_timeout"] =
+			strconv.Itoa(int(pgLockTimeout.Milliseconds()))
+	}
 
 	return
 }
