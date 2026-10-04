@@ -2061,6 +2061,125 @@ func TestPutPropertyChangeDifficulty(t *testing.T) {
 	}
 }
 
+func TestPutPropertyRenameOnlyPreservesOutOfDifficultyRange(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	cases := []struct {
+		name        string
+		storedLevel int16
+		submitDiff  string
+		newName     string
+		wantLevel   int16
+		wantUpdate  bool
+	}{
+		{name: "HighBandRenameOnly", storedLevel: 220, submitDiff: "200", newName: "renamed", wantLevel: 220, wantUpdate: true},
+		{name: "LowBandRenameOnly", storedLevel: 72, submitDiff: "136", newName: "renamed", wantLevel: 72, wantUpdate: true},
+		{name: "HighBandDifficultyChange", storedLevel: 220, submitDiff: "180", newName: "renamed", wantLevel: 180, wantUpdate: true},
+		{name: "InRangeRenameOnly", storedLevel: 168, submitDiff: "168", newName: "renamed", wantLevel: 168, wantUpdate: true},
+		{name: "HighBandNoChange", storedLevel: 220, submitDiff: "200", newName: "", wantLevel: 220, wantUpdate: false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			user, org, err := db_tests.CreateNewAccountForTest(ctx, store, "PutPropertyRange"+tc.name, testPlan)
+			if err != nil {
+				t.Fatalf("Failed to create account: %v", err)
+			}
+
+			params := db_tests.CreateNewPropertyParams(user.ID, "difficulty-clamp-"+tc.name+".com")
+			params.Level = db.Int2(tc.storedLevel)
+			property, _, err := server.Store.Impl().CreateNewProperty(ctx, params, org)
+			if err != nil {
+				t.Fatalf("Failed to create new property: %v", err)
+			}
+			if property.Level.Int16 != tc.storedLevel {
+				t.Fatalf("Setup failed: stored Level = %d, want %d", property.Level.Int16, tc.storedLevel)
+			}
+
+			srv := http.NewServeMux()
+			server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+			cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+			if err != nil {
+				t.Fatal(err)
+			}
+			csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+			submitName := property.Name
+			if tc.newName != "" {
+				submitName = property.Name + "-" + tc.newName
+			}
+
+			form := url.Values{}
+			form.Set(common.ParamCSRFToken, csrfToken)
+			form.Set(common.ParamName, submitName)
+			form.Set(common.ParamDifficulty, tc.submitDiff)
+			form.Set(common.ParamGrowth, "2")
+			form.Set(common.ParamValidityInterval, "4")
+
+			req := httptest.NewRequest("PUT", fmt.Sprintf("/org/%s/property/%s",
+				server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))),
+				strings.NewReader(form.Encode()))
+			req.AddCookie(cookie)
+			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+			req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+			req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+
+			w := httptest.NewRecorder()
+			viewModel, err := server.putProperty(w, req)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %v", err)
+			}
+			if viewModel == nil {
+				t.Fatal("Expected ViewModel, got nil")
+			}
+
+			renderCtx, ok := viewModel.Model.(*propertySettingsRenderContext)
+			if !ok {
+				t.Fatalf("Expected Model to be *propertySettingsRenderContext, got %T", viewModel.Model)
+			}
+
+			if tc.wantUpdate && renderCtx.SuccessMessage == "" {
+				t.Error("Expected SuccessMessage to be set after updating property")
+			}
+			if !tc.wantUpdate && renderCtx.SuccessMessage != "" {
+				t.Errorf("Expected no update, but SuccessMessage was set: %q", renderCtx.SuccessMessage)
+			}
+
+			props, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+			if err != nil {
+				t.Fatalf("Failed to retrieve properties: %v", err)
+			}
+
+			var fetched *dbgen.Property
+			for _, p := range props {
+				if p.ID == property.ID {
+					fetched = p
+					break
+				}
+			}
+			if fetched == nil {
+				t.Fatalf("Property %d not found after update", property.ID)
+			}
+
+			if fetched.Level.Int16 != tc.wantLevel {
+				t.Errorf("Stored Level corrupted: got %d, want %d", fetched.Level.Int16, tc.wantLevel)
+			}
+
+			if tc.newName != "" {
+				wantName := property.Name + "-" + tc.newName
+				if fetched.Name != wantName {
+					t.Errorf("Property name not renamed: got %q, want %q", fetched.Name, wantName)
+				}
+			} else if fetched.Name != property.Name {
+				t.Errorf("Property name changed unexpectedly: got %q, want %q", fetched.Name, property.Name)
+			}
+		})
+	}
+}
+
 func TestPortalPropertyUpdatesChallenge(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
