@@ -29,6 +29,16 @@ const (
 	createPropertiesHandlerID = "api-create-properties"
 	deletePropertiesHandlerID = "api-delete-properties"
 	updatePropertiesHandlerID = "api-update-properties"
+
+	// asyncTaskScheduleBuffer is how far in the future a bulk task is
+	// scheduled, leaving room for the immediate attempt to run first.
+	asyncTaskScheduleBuffer = 5 * time.Minute
+	// asyncTaskImmediateTimeout is the deadline for the immediate attempt
+	// goroutine. It is intentionally shorter than asyncTaskScheduleBuffer so
+	// the immediate attempt finishes (and writes its result) before the
+	// worker becomes eligible to select the same task, preventing the
+	// worker from racing on a task the immediate attempt is still running.
+	asyncTaskImmediateTimeout = asyncTaskScheduleBuffer - 1*time.Minute
 )
 
 type asyncTaskCreateProperties struct {
@@ -270,7 +280,7 @@ func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
 		asyncTaskRequesterIP: newAsyncTaskRequesterIP(ctx),
 	}
 
-	buffer := 5 * time.Minute
+	buffer := asyncTaskScheduleBuffer
 	// we schedule it for later, making "room" for immediate attempt first
 	scheduledAt := time.Now().UTC().Add(buffer)
 	task, err := s.BusinessDB.Impl().CreateNewAsyncTask(ctx, request, createPropertiesHandlerID, user, scheduledAt, referenceID)
@@ -286,7 +296,7 @@ func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
 	s.sendAPISuccessResponse(ctx, output, w)
 
 	go func(bctx context.Context) {
-		handlerCtx, cancel := context.WithTimeout(bctx, buffer)
+		handlerCtx, cancel := context.WithTimeout(bctx, asyncTaskImmediateTimeout)
 		defer cancel()
 		if err := s.AsyncTasks.Execute(handlerCtx, task); err != nil {
 			slog.ErrorContext(bctx, "Failed to execute async task", "taskID", output.ID, common.ErrAttr(err))
@@ -536,7 +546,7 @@ func (s *Server) deleteProperties(w http.ResponseWriter, r *http.Request) {
 		request.AllowedOrgID = apiKey.OrgID.Int32
 	}
 
-	buffer := 5 * time.Minute
+	buffer := asyncTaskScheduleBuffer
 	// we schedule it for later, making "room" for immediate attempt first
 	scheduledAt := time.Now().UTC().Add(buffer)
 	task, err := s.BusinessDB.Impl().CreateNewAsyncTask(ctx, request, deletePropertiesHandlerID, user, scheduledAt, referenceID)
@@ -552,7 +562,7 @@ func (s *Server) deleteProperties(w http.ResponseWriter, r *http.Request) {
 	s.sendAPISuccessResponse(ctx, output, w)
 
 	go func(bctx context.Context) {
-		handlerCtx, cancel := context.WithTimeout(bctx, buffer)
+		handlerCtx, cancel := context.WithTimeout(bctx, asyncTaskImmediateTimeout)
 		defer cancel()
 		if err := s.AsyncTasks.Execute(handlerCtx, task); err != nil {
 			slog.ErrorContext(bctx, "Failed to execute async task", "taskID", output.ID, common.ErrAttr(err))
@@ -770,7 +780,7 @@ func (s *Server) updateProperties(w http.ResponseWriter, r *http.Request) {
 		request.AllowedOrgID = apiKey.OrgID.Int32
 	}
 
-	buffer := 5 * time.Minute
+	buffer := asyncTaskScheduleBuffer
 	// we schedule it for later, making "room" for immediate attempt first
 	scheduledAt := time.Now().UTC().Add(buffer)
 	task, err := s.BusinessDB.Impl().CreateNewAsyncTask(ctx, request, updatePropertiesHandlerID, user, scheduledAt, referenceID)
@@ -786,7 +796,7 @@ func (s *Server) updateProperties(w http.ResponseWriter, r *http.Request) {
 	s.sendAPISuccessResponse(ctx, output, w)
 
 	go func(bctx context.Context) {
-		handlerCtx, cancel := context.WithTimeout(bctx, buffer)
+		handlerCtx, cancel := context.WithTimeout(bctx, asyncTaskImmediateTimeout)
 		defer cancel()
 		if err := s.AsyncTasks.Execute(handlerCtx, task); err != nil {
 			slog.ErrorContext(bctx, "Failed to execute async task", "taskID", output.ID, common.ErrAttr(err))

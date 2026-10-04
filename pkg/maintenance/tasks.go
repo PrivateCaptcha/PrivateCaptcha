@@ -145,11 +145,34 @@ func (j *AsyncTasksJob) Execute(ctx context.Context, task *dbgen.AsyncTask) erro
 
 func (j *AsyncTasksJob) doExecute(ctx context.Context, task *dbgen.AsyncTask) error {
 	if handler, ok := j.getHandlerSafe(task.Handler); ok {
+		// Atomically claim the task before invoking the handler. The claim
+		// increments processing_attempts and only succeeds while the task is
+		// still pending (processed_at IS NULL) and below MaxAttempts. This
+		// prevents concurrent runners (the immediate attempt goroutine and the
+		// UniquePeriodicJob worker, or duplicate worker ticks) from executing
+		// the same task more than MaxAttempts times.
+		claimed, err := j.BusinessDB.Impl().ClaimAsyncTask(ctx, task.ID, j.MaxAttempts)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to claim async task", "taskID", db.UUIDToString(task.ID), common.ErrAttr(err))
+			return err
+		}
+		if !claimed {
+			// Another runner already claimed or completed this task, or it has
+			// exhausted its attempts. Skip the handler to avoid duplicate
+			// execution and duplicate side effects.
+			slog.InfoContext(ctx, "Skipping async task: already claimed or completed", "taskID", db.UUIDToString(task.ID), "handler", task.Handler, "attempts", task.ProcessingAttempts)
+			return nil
+		}
+
 		output, err := executeHandlerSafe(ctx, handler, task)
 		var processedAt time.Time
 		if err == nil {
 			processedAt = time.Now().UTC()
 		}
+		// UpdateAsyncTask is guarded by processed_at IS NULL, so a late write
+		// from a stale run cannot clobber a task that another runner already
+		// completed. The processing_attempts increment was performed by the
+		// claim above; this update only records the result.
 		if updateErr := j.BusinessDB.Impl().UpdateAsyncTask(ctx, task.ID, output, processedAt); updateErr != nil {
 			slog.ErrorContext(ctx, "Failed to update async task", "taskID", db.UUIDToString(task.ID), common.ErrAttr(updateErr))
 		}

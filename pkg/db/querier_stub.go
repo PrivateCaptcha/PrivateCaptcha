@@ -22,6 +22,9 @@ func (s *QuerierStub) ConsumeRegistrationChallenge(ctx context.Context, arg *dbg
 func (s *QuerierStub) ConsumeSignInChallenge(ctx context.Context, arg *dbgen.ConsumeSignInChallengeParams) (*dbgen.ConsumeSignInChallengeRow, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) ClaimAsyncTask(ctx context.Context, arg *dbgen.ClaimAsyncTaskParams) (int64, error) {
+	return 0, s.Error
+}
 func (s *QuerierStub) CreateAPIKey(ctx context.Context, arg *dbgen.CreateAPIKeyParams) (*dbgen.APIKey, error) {
 	return nil, s.Error
 }

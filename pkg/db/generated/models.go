@@ -8,9 +8,9 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"net/netip"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"time"
 )
 
 type AccessLevel string
