@@ -99,6 +99,13 @@ func (lb *ConstLeakyBucket[TKey]) Update(capacity TLevel, leakInterval time.Dura
 	// computations measure elapsed time from tnow, not from the old-interval
 	// boundary that Add(tnow, 0) truncated to.
 	lb.lastAccessTime = tnow
+	// Restore the level <= capacity invariant. A capacity decrease (e.g. when
+	// UpdateRequestLimits downgrades an IP bucket to a free-tier API key burst)
+	// would otherwise leave level > capacity, so the next Add computes a
+	// negative (uint32-wrapped) Added value that the limiter treats as an admit.
+	if int64(lb.level) > int64(capacity) {
+		lb.level = capacity
+	}
 }
 
 func (lb *ConstLeakyBucket[TKey]) Level(tnow time.Time) TLevel {
@@ -126,7 +133,7 @@ func (lb *ConstLeakyBucket[TKey]) Add(tnow time.Time, n TLevel) (TLevel, TLevel)
 	lb.level = TLevel(nextLevel)
 
 	// {current level}, {how much added}
-	return TLevel(nextLevel), TLevel(nextLevel - currLevel)
+	return TLevel(nextLevel), TLevel(max(0, nextLevel-currLevel))
 }
 
 func NewConstBucket[TKey comparable](key TKey, capacity TLevel, leakInterval time.Duration, t time.Time) *ConstLeakyBucket[TKey] {
@@ -217,7 +224,7 @@ func (lb *VarLeakyBucket[TKey]) seed(tnow time.Time, historicalLevel TLevel, lea
 	lb.leakRate = leakRate
 	lb.count = max(sampleCount, 1)
 	// Historical traffic is represented by leakRate; pendingSum contains only live traffic.
-	return lb.level, lb.level - currLevel
+	return lb.level, TLevel(max(0, int64(lb.level)-int64(currLevel)))
 }
 
 func (lb *VarLeakyBucket[TKey]) Level(tnow time.Time) TLevel {
@@ -267,5 +274,5 @@ func (lb *VarLeakyBucket[TKey]) Add(tnow time.Time, n TLevel) (TLevel, TLevel) {
 	//    again, so this will make {pendingCount} incorrectly taken into account (like "twice")
 	lb.pendingSum += int64(n)
 
-	return TLevel(nextLevel), TLevel(nextLevel - currLevel)
+	return TLevel(nextLevel), TLevel(max(0, nextLevel-currLevel))
 }

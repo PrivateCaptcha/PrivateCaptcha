@@ -472,3 +472,95 @@ func TestManagerAddOverflowingExpiry(t *testing.T) {
 		t.Fatalf("Expiration = %v, want %v", entry.ExpiresAtNano, int64(math.MaxInt64))
 	}
 }
+
+func TestManagerUpdateLowerCapacityRejectsNextAdd(t *testing.T) {
+	const (
+		cap    = 10
+		newCap = 5
+		key    = int32(42)
+	)
+	manager := NewManager[int32, ConstLeakyBucket[int32]](8, cap, 1*time.Second)
+	tnow := time.Now().Truncate(1 * time.Second)
+
+	for i := 0; i < cap; i++ {
+		manager.Add(key, 1, tnow)
+	}
+
+	ok := manager.Update(key, newCap, 1*time.Second, tnow)
+	if !ok {
+		t.Fatal("Update reported key not found")
+	}
+
+	level, _ := manager.Level(key, tnow)
+	if level > newCap {
+		t.Fatalf("level %v exceeds new capacity %v after Update", level, newCap)
+	}
+
+	result := manager.Add(key, 1, tnow)
+	if result.Added != 0 {
+		t.Errorf("expected Added=0 after capacity lowered below level, got %v (uint32 underflow)", result.Added)
+	}
+	if result.CurrLevel != newCap {
+		t.Errorf("expected CurrLevel=%d, got %v", newCap, result.CurrLevel)
+	}
+}
+
+func TestManagerUpdateLowerCapacityAboveLevelDoesNotClamp(t *testing.T) {
+	const (
+		cap    = 10
+		newCap = 7
+		key    = int32(42)
+	)
+	manager := NewManager[int32, ConstLeakyBucket[int32]](8, cap, 1*time.Second)
+	tnow := time.Now().Truncate(1 * time.Second)
+
+	for i := 0; i < 5; i++ {
+		manager.Add(key, 1, tnow)
+	}
+
+	manager.Update(key, newCap, 1*time.Second, tnow)
+
+	level, _ := manager.Level(key, tnow)
+	if level != 5 {
+		t.Errorf("expected level unchanged at 5, got %v", level)
+	}
+
+	result := manager.Add(key, 1, tnow)
+	if result.Added != 1 {
+		t.Errorf("expected Added=1 (level below new capacity), got %v", result.Added)
+	}
+	if result.CurrLevel != 6 {
+		t.Errorf("expected CurrLevel=6, got %v", result.CurrLevel)
+	}
+}
+
+func TestManagerUpdateLowerCapacityAfterLeakClampsRemaining(t *testing.T) {
+	const (
+		cap    = 10
+		newCap = 5
+		key    = int32(42)
+	)
+	interval := 1 * time.Second
+	manager := NewManager[int32, ConstLeakyBucket[int32]](8, cap, interval)
+	t0 := time.Now().Truncate(interval)
+
+	for i := 0; i < cap; i++ {
+		manager.Add(key, 1, t0)
+	}
+
+	// Two leak intervals elapse: level settles 10 -> 8 before the downgrade.
+	tUpdate := t0.Add(2 * interval)
+	manager.Update(key, newCap, interval, tUpdate)
+
+	// newCap (5) < settled level (8), so level must be clamped to newCap.
+	level, _ := manager.Level(key, tUpdate)
+	if level != newCap {
+		t.Fatalf("expected settled+clamped level %d, got %v", newCap, level)
+	}
+
+	// Next Add must be rejected.
+	result := manager.Add(key, 1, tUpdate)
+	if result.Added != 0 {
+		t.Errorf("expected Added=0 after clamp, got %v", result.Added)
+	}
+}

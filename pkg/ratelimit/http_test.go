@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -279,5 +280,117 @@ func TestHTTPRateLimiterRetryAfterHeader(t *testing.T) {
 	retryAfter := w2.Header().Get("Retry-After")
 	if retryAfter == "" {
 		t.Error("Expected Retry-After header when rate limited")
+	}
+}
+
+func TestHTTPRateLimiterUpdateRequestLimitsUnderflow(t *testing.T) {
+	buckets := NewIPAddrBuckets(100, 10, 1*time.Second)
+	limiter := NewIPAddrRateLimiter("", buckets)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	wrapped := limiter.RateLimitExFunc(10, 1*time.Second)(handler) // new buckets get cap=10
+	addr := "198.51.100.7:31337"
+
+	// Step 1: prime the rate limit key in the context by sending one admitted
+	// request through the wrapper, mirroring how the verify chain seeds the
+	// per-IP key before the handler calls UpdateRequestLimits.
+	seedReq := httptest.NewRequest("GET", "/test", nil)
+	seedReq.RemoteAddr = addr
+	seedW := httptest.NewRecorder()
+	wrapped.ServeHTTP(seedW, seedReq)
+	if seedW.Code != http.StatusOK {
+		t.Fatalf("seed request should be admitted, got %d", seedW.Code)
+	}
+
+	// Step 2: fill the rest of the initial burst so level == capacity (10).
+	for i := 0; i < 9; i++ {
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.RemoteAddr = addr
+		w := httptest.NewRecorder()
+		wrapped.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("request %d should be admitted, got %d", i+1, w.Code)
+		}
+	}
+
+	// Step 3: lower the per-key capacity below the current level (10 -> 5),
+	// exactly as pkg/api/server.go does with apiKey.RequestsBurst for a
+	// free-tier key. Use the seeded context key path to avoid the fallback
+	// "key not found" warning and exercise the realistic code path.
+	upgradeReq := httptest.NewRequest("GET", "/test", nil)
+	upgradeReq.RemoteAddr = addr
+	// Replay the key into the request context exactly like the middleware does.
+	upgradeReq = upgradeReq.WithContext(context.WithValue(upgradeReq.Context(), common.RateLimitKeyContextKey,
+		clientIPAddr(limiter.strategy, upgradeReq)))
+	limiter.UpdateRequestLimits(upgradeReq, 5, 1*time.Second)
+
+	// Step 4: the bucket is now over capacity (level=10 > cap=5) prior to the
+	// clamp fix. The next request MUST be rejected (429), not admitted (200)
+	// due to a uint32-wrapped negative Added value.
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = addr
+	w := httptest.NewRecorder()
+	wrapped.ServeHTTP(w, req)
+	if w.Code == http.StatusOK {
+		t.Fatalf("BUG: request admitted (200) after capacity lowered below current level; expected 429")
+	}
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("expected 429 after capacity downgrade, got %d", w.Code)
+	}
+
+	// Step 5: the bucket must keep rejecting subsequent requests (level ==
+	// capacity == 5 after the clamp), i.e. the bypass must not persist.
+	for i := 0; i < 3; i++ {
+		r := httptest.NewRequest("GET", "/test", nil)
+		r.RemoteAddr = addr
+		ww := httptest.NewRecorder()
+		wrapped.ServeHTTP(ww, r)
+		if ww.Code != http.StatusTooManyRequests {
+			t.Errorf("follow-up request %d should be rate limited, got %d", i, ww.Code)
+		}
+	}
+}
+
+func TestHTTPRateLimiterUpdateRequestLimitsRaiseCapAdmitsBurst(t *testing.T) {
+	buckets := NewIPAddrBuckets(100, 10, 1*time.Second)
+	limiter := NewIPAddrRateLimiter("", buckets)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	wrapped := limiter.RateLimitExFunc(10, 1*time.Second)(handler) // new buckets get cap=10
+	addr := "198.51.100.7:31337"
+
+	// Prime + fill to the chain default cap of 10.
+	for i := 0; i < 10; i++ {
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.RemoteAddr = addr
+		w := httptest.NewRecorder()
+		wrapped.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("request %d should be admitted, got %d", i, w.Code)
+		}
+	}
+
+	// Raise the cap above the chain default, like pkg/api/form_proxy.go does
+	// (capacity = RequestsPerMinute + 10 >= 11).
+	raiseReq := httptest.NewRequest("GET", "/test", nil)
+	raiseReq.RemoteAddr = addr
+	raiseReq = raiseReq.WithContext(context.WithValue(raiseReq.Context(), common.RateLimitKeyContextKey,
+		clientIPAddr(limiter.strategy, raiseReq)))
+	limiter.UpdateRequestLimits(raiseReq, 20, 1*time.Second)
+
+	// With the cap raised to 20 while level is 10, the next request should be
+	// admitted (Added > 0): the raise path must not regress.
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = addr
+	w := httptest.NewRecorder()
+	wrapped.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("request after cap raise should be admitted, got %d", w.Code)
 	}
 }
