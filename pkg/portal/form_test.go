@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -220,6 +222,155 @@ func TestPostNewOrgForm(t *testing.T) {
 	formGUID := db.UUIDToString(createdForm.ExternalID)
 	if renderCtx.Form == nil || renderCtx.Form.ExternalID != formGUID {
 		t.Fatalf("Expected integration form with external ID %q, got %+v", formGUID, renderCtx.Form)
+	}
+}
+
+func TestPostNewOrgFormCreateFormFailureLeavesNoOrphan(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	const failFormName = "ForceFailForm"
+
+	var currentDB string
+	if err := store.Pool.QueryRow(ctx, "SELECT current_database()").Scan(&currentDB); err != nil {
+		t.Fatalf("Failed to determine current database: %v", err)
+	}
+
+	pgHost := getenvOrDefault("PG_HOST", "localhost")
+	pgPort := getenvOrDefault("PG_PORT", "5432")
+	pgAdmin := getenvOrDefault("PG_ADMIN_USER", "postgres")
+	pgAdminPass := getenvOrDefault("PGPASSWORD", "postgres")
+	adminConnStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", pgAdmin, pgAdminPass, pgHost, pgPort, currentDB)
+	adminConn, err := pgx.Connect(ctx, adminConnStr)
+	if err != nil {
+		t.Fatalf("Failed to open admin connection for trigger setup: %v", err)
+	}
+	defer func() { _ = adminConn.Close(context.Background()) }()
+
+	suffix := fmt.Sprintf("%d", org.ID)
+	createTrigger := fmt.Sprintf(`
+CREATE OR REPLACE FUNCTION pc_test_fail_form_%s() RETURNS trigger AS $$
+BEGIN
+	IF NEW.name = '%s' THEN
+		RAISE EXCEPTION 'forced form insert failure for test';
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER pc_test_fail_form_trigger_%s BEFORE INSERT ON backend.forms
+	FOR EACH ROW EXECUTE FUNCTION pc_test_fail_form_%s();`, suffix, failFormName, suffix, suffix)
+	if _, err := adminConn.Exec(ctx, createTrigger); err != nil {
+		t.Fatalf("Failed to create test trigger: %v", err)
+	}
+	dropTrigger := fmt.Sprintf(`DROP TRIGGER IF EXISTS pc_test_fail_form_trigger_%s ON backend.forms;
+DROP FUNCTION IF EXISTS pc_test_fail_form_%s();`, suffix, suffix)
+	t.Cleanup(func() {
+		_, _ = adminConn.Exec(context.Background(), dropTrigger)
+	})
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	formData := url.Values{}
+	formData.Set(common.ParamCSRFToken, server.XSRF.Token(fmt.Sprintf("%d", user.ID)))
+	formData.Set(common.ParamName, failFormName)
+	formData.Set(common.ParamDomain, "example.com")
+	formData.Set(common.ParamURL, "https://hooks.example.com/submit")
+	formData.Set(common.ParamIgnoreError, "true")
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/new", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(formData.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+
+	w := httptest.NewRecorder()
+	viewModel, err := server.postNewOrgForm(w, req)
+	if err != nil {
+		t.Fatalf("expected ViewModel, got transport error: %v", err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+	if viewModel.View != formWizardNewTemplate {
+		t.Fatalf("Expected view %q on partial failure, got %q", formWizardNewTemplate, viewModel.View)
+	}
+	renderCtx, ok := viewModel.Model.(*formWizardRenderContext)
+	if !ok {
+		t.Fatalf("Expected *formWizardRenderContext, got %T", viewModel.Model)
+	}
+	if renderCtx.ErrorMessage == "" {
+		t.Fatal("Expected non-empty error message on partial failure")
+	}
+
+	forms, _, err := store.Impl().RetrieveOrgForms(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(forms) != 0 {
+		t.Fatalf("expected 0 forms after partial failure, got %d", len(forms))
+	}
+
+	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org, db.OrgPropertiesSortDateAscending, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range properties {
+		if p.Name == failFormName+" (form)" {
+			t.Fatalf("expected no orphan property named %q, found one with id %d", p.Name, p.ID)
+		}
+	}
+
+	var orphanCount int
+	if err := store.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM backend.properties WHERE org_id = $1 AND name = $2", org.ID, failFormName+" (form)").Scan(&orphanCount); err != nil {
+		t.Fatal(err)
+	}
+	if orphanCount != 0 {
+		t.Fatalf("expected 0 orphan property rows in DB, got %d", orphanCount)
+	}
+
+	if _, err := adminConn.Exec(ctx, dropTrigger); err != nil {
+		t.Fatalf("Failed to drop test trigger before retry: %v", err)
+	}
+
+	retryData := url.Values{}
+	retryData.Set(common.ParamCSRFToken, server.XSRF.Token(fmt.Sprintf("%d", user.ID)))
+	retryData.Set(common.ParamName, failFormName)
+	retryData.Set(common.ParamDomain, "example.com")
+	retryData.Set(common.ParamURL, "https://hooks.example.com/submit")
+	retryData.Set(common.ParamIgnoreError, "true")
+
+	retryReq := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/new", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(retryData.Encode()))
+	retryReq.AddCookie(cookie)
+	retryReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	retryReq.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+
+	retryW := httptest.NewRecorder()
+	retryViewModel, err := server.postNewOrgForm(retryW, retryReq)
+	if err != nil {
+		t.Fatalf("expected retry to succeed, got transport error: %v", err)
+	}
+	if retryViewModel == nil || retryViewModel.View != formWizardSetupTemplate {
+		t.Fatalf("expected retry to reach %q, got view %v", formWizardSetupTemplate, retryViewModel)
+	}
+
+	forms, _, err = store.Impl().RetrieveOrgForms(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(forms) != 1 || forms[0].Name != failFormName {
+		t.Fatalf("expected 1 form named %q after retry, got %d forms", failFormName, len(forms))
 	}
 }
 
@@ -1184,6 +1335,13 @@ func TestGetFormDashboardAuditLogs(t *testing.T) {
 
 type rejectPortalFormURLVerifier struct {
 	err error
+}
+
+func getenvOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }
 
 type formsLimitSubscriptionStub struct {

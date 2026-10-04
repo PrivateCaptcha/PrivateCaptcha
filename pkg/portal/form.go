@@ -241,15 +241,22 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 	}
 
 	propertyParams := db.NewDefaultPropertyParams("" /*name*/, domain, user.ID)
-	form, property, auditEvents, err := s.Store.Impl().CreateNewForm(ctx, propertyParams, &dbgen.CreateFormParams{
-		Name:              renderCtx.Name,
-		URL:               renderCtx.URL,
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerMinute: 10,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	var form *dbgen.Form
+	var property *dbgen.Property
+	auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
+		var innerErr error
+		var createAuditEvents []*common.AuditLogEvent
+		form, property, createAuditEvents, innerErr = impl.CreateNewForm(ctx, propertyParams, &dbgen.CreateFormParams{
+			Name:              renderCtx.Name,
+			URL:               renderCtx.URL,
+			Fields:            []byte(`{}`),
+			Enabled:           true,
+			RequestsPerMinute: 10,
+			RetryRequestCount: 0,
+			Method:            dbgen.FormMethodPost,
+		}, org)
+		return createAuditEvents, innerErr
+	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create the form", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to create the form. Please try again later."
