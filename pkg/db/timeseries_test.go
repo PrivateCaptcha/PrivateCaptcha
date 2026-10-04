@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -12,6 +13,14 @@ func TestMemoryTimeSeriesPing(t *testing.T) {
 	ts := NewMemoryTimeSeries()
 	if err := ts.Ping(context.Background()); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestTimeSeriesDBPingNilClickhouse(t *testing.T) {
+	ts := NewTimeSeries(nil, nil)
+	err := ts.Ping(context.Background())
+	if !errors.Is(err, ErrClickHouseNotConfigured) {
+		t.Errorf("expected ErrClickHouseNotConfigured, got %v", err)
 	}
 }
 
