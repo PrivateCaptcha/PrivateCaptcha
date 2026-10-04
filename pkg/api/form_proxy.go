@@ -279,6 +279,7 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 
 	formIDs := make(map[string]uint, len(batch))
 	for _, submission := range batch {
+		submission.FormExternalID = strings.ToLower(submission.FormExternalID)
 		formIDs[submission.FormExternalID]++
 	}
 

@@ -1223,6 +1223,110 @@ func TestFormProxySubmitsForm(t *testing.T) {
 	}
 }
 
+func formProxySuiteWithExternalID(t *testing.T, form *dbgen.Form, body url.Values, externalID string) *http.Response {
+	t.Helper()
+
+	srv := http.NewServeMux()
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+
+	req := httptest.NewRequest(http.MethodPost, "/"+common.FormEndpoint+"/"+externalID, strings.NewReader(body.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	return w.Result()
+}
+
+func TestFormProxySubmitsFormWithUppercaseExternalID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	var mu sync.Mutex
+	received := url.Values{}
+	receivedHeaders := http.Header{}
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Errorf("downstream failed to parse form: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		received = r.PostForm
+		receivedHeaders = r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+	form, property, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "submit-form-upper.example.com"),
+		db_tests.CreateNewFormParams(user.ID, downstream.URL),
+		org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+	tnow := time.Now()
+	server.Verifier.PropertyStats.RecordPuzzles(property.ID, 10, tnow)
+	server.Verifier.PropertyStats.RecordVerifications(property.ID, 10, tnow)
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := url.Values{}
+	body.Set("email", "test@example.com")
+	body.Set("message", "hello")
+	body.Set(common.ParamPrivateCaptchaSolution, fmt.Sprintf("%s.%s", solutionsStr, puzzleStr))
+
+	upperExternalID := strings.ToUpper(db.UUIDToString(form.ExternalID))
+	if !db.CanBeValidSitekey(upperExternalID) {
+		t.Fatalf("uppercase external ID should pass CanBeValidSitekey")
+	}
+
+	resp := formProxySuiteWithExternalID(t, form, body, upperExternalID)
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("Unexpected submit status code %d for uppercase external ID", resp.StatusCode)
+	}
+
+	for i := 0; i < 5; i++ {
+		time.Sleep(formFlushInterval / 2)
+		mu.Lock()
+		called := received.Get("email") != ""
+		mu.Unlock()
+		if called {
+			break
+		}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if received.Get("email") == "" {
+		t.Fatal("expected downstream endpoint to be called for uppercase external ID; submission was silently dropped")
+	}
+	if received.Get("email") != "test@example.com" || received.Get("message") != "hello" {
+		t.Fatalf("unexpected downstream form data: %v", received)
+	}
+	if received.Get(common.ParamPrivateCaptchaSolution) != "" {
+		t.Fatalf("expected captcha solution field to be stripped")
+	}
+	if got := receivedHeaders.Get(common.HeaderContentType); got != common.ContentTypeURLEncoded {
+		t.Fatalf("expected downstream content type %q, got %q", common.ContentTypeURLEncoded, got)
+	}
+	if rate := server.Verifier.PropertyStats.VerificationRate(property.ID, time.Now()); rate != 1.0 {
+		t.Errorf("Verification rate after accepted uppercase form submission = %v, want 1", rate)
+	}
+}
+
 func TestFormProxyRecordsSamePropertyFailure(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -1264,5 +1368,64 @@ func TestFormProxyRecordsSamePropertyFailure(t *testing.T) {
 	rate := server.Verifier.PropertyStats.VerificationRate(property.ID, time.Now())
 	if rate >= rateBefore {
 		t.Errorf("same-property failure via form-proxy was not recorded: rate=%v, want < %v", rate, rateBefore)
+	}
+}
+
+func newUppercaseFormProxyServer(t *testing.T, downstream *httptest.Server, forms ...*dbgen.Form) *Server {
+	t.Helper()
+
+	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
+	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: forms}, cache)
+	return &Server{
+		BusinessDB:        store,
+		FormURLVerifier:   &stubSubmitFormURLVerifier{},
+		FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1),
+		FailingForms:      common.NewExpiringCounterMap[int32](),
+	}
+}
+
+func TestSubmitFormBatchForwardsUppercaseExternalID(t *testing.T) {
+	downstreamCalled := false
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		downstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	form := &dbgen.Form{
+		ID:         123,
+		PropertyID: 456,
+		OrgOwnerID: db.Int(7),
+		OrgID:      db.Int(8),
+		ExternalID: db.TestPropertyUUID,
+		URL:        downstream.URL,
+		Method:     dbgen.FormMethodPost,
+		Enabled:    true,
+		Active:     true,
+	}
+	srv := newUppercaseFormProxyServer(t, downstream, form)
+
+	upperExternalID := strings.ToUpper(db.UUIDToString(form.ExternalID))
+	if !db.CanBeValidSitekey(upperExternalID) {
+		t.Fatalf("uppercase external ID should pass CanBeValidSitekey")
+	}
+	if got := db.UUIDFromString(upperExternalID); got != form.ExternalID {
+		t.Fatalf("uppercase external ID should decode to the same UUID")
+	}
+
+	submission := &FormSubmission{FormExternalID: upperExternalID, Values: url.Values{"email": {"test@example.com"}}}
+	if err := srv.submitFormBatch(context.Background(), []*FormSubmission{submission}); err != nil {
+		t.Fatalf("expected batch submission to succeed, got %v", err)
+	}
+	if !downstreamCalled {
+		t.Fatal("expected downstream to be called for uppercase external ID; submission was silently dropped")
+	}
+	select {
+	case record := <-srv.FormSubmitLogChan:
+		if record.UserID != 7 || record.OrgID != 8 || record.FormID != 123 || record.Status != 0 {
+			t.Fatalf("unexpected success record: %+v", record)
+		}
+	default:
+		t.Fatal("expected success form metric record for uppercase external ID")
 	}
 }
