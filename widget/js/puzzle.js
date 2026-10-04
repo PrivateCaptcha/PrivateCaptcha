@@ -253,9 +253,7 @@ export class Puzzle {
     expirationMillis() {
         if (!this.expirationTimestamp) { return 0; }
 
-        const expiration = new Date(this.expirationTimestamp * 1000);
-        const currentDate = new Date();
-        const diff = expiration - currentDate;
-        return diff;
+        const diff = (this.expirationTimestamp * 1000) - Date.now();
+        return diff > 0 ? diff : 0;
     }
 };

@@ -188,7 +188,7 @@ export class CaptchaWidget {
             const expirationMillis = this._puzzle.expirationMillis();
             this.trace(`parsed puzzle buffer. isZero=${this._puzzle.isZero()} ttl=${expirationMillis / 1000}`);
             if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
-            if (expirationMillis) { this._expiryTimeout = setTimeout(() => this.expire(), expirationMillis); }
+            if (expirationMillis > 0) { this._expiryTimeout = setTimeout(() => this.expire(), expirationMillis); }
             try {
                 this._workersPool.init(this._puzzle, startWorkers);
             } catch (error) {
