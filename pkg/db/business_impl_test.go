@@ -91,6 +91,25 @@ func (s *createFormQuerierStub) CreateForm(ctx context.Context, arg *dbgen.Creat
 	return s.form, s.Error
 }
 
+type partialFailureFormStub struct {
+	*QuerierStub
+	property       *dbgen.Property
+	createdFormArg *dbgen.CreateFormParams
+	calls          []string
+	formErr        error
+}
+
+func (s *partialFailureFormStub) CreateProperty(ctx context.Context, arg *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
+	s.calls = append(s.calls, "CreateProperty")
+	return s.property, nil
+}
+
+func (s *partialFailureFormStub) CreateForm(ctx context.Context, arg *dbgen.CreateFormParams) (*dbgen.Form, error) {
+	s.calls = append(s.calls, "CreateForm")
+	s.createdFormArg = arg
+	return nil, s.formErr
+}
+
 func (s *retrieveUserFormsQuerierStub) GetOrgForms(ctx context.Context, arg *dbgen.GetOrgFormsParams) ([]*dbgen.Form, error) {
 	s.getOrgFormsArg = arg
 	s.formsCalls++
@@ -1006,6 +1025,108 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 		_, _, _, err := store.CreateNewForm(context.Background(), &dbgen.CreatePropertyParams{Name: "valid"}, &dbgen.CreateFormParams{}, &dbgen.Organization{})
 		if !errors.Is(err, ErrInvalidInput) {
 			t.Errorf("expected ErrInvalidInput, got %v", err)
+		}
+	})
+
+	t.Run("OrphanOnPartialFailureWithoutTxCache", func(t *testing.T) {
+		property := &dbgen.Property{
+			ID:         123,
+			Name:       "contact (form)",
+			ExternalID: TestPropertyUUID,
+			CreatorID:  Int(12),
+			OrgID:      Int(1),
+			OrgOwnerID: Int(99),
+		}
+		formErr := errors.New("simulated transient CreateForm failure")
+		querier := &partialFailureFormStub{
+			QuerierStub: &QuerierStub{},
+			property:    property,
+			formErr:     formErr,
+		}
+		store := &BusinessStoreImpl{
+			querier: querier,
+			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
+		}
+		propertyParams := &dbgen.CreatePropertyParams{CreatorID: Int(12), Domain: "example.com"}
+		formParams := &dbgen.CreateFormParams{
+			Name:              "contact",
+			URL:               "https://example.com/submit",
+			Fields:            []byte(`{}`),
+			RequestsPerMinute: 10,
+			Method:            dbgen.FormMethodPost,
+		}
+
+		form, returnedProperty, _, err := store.CreateNewForm(context.Background(), propertyParams, formParams,
+			&dbgen.Organization{ID: 1, UserID: Int(99)})
+		if !errors.Is(err, formErr) {
+			t.Fatalf("expected error %v, got %v", formErr, err)
+		}
+		if form != nil || returnedProperty != nil {
+			t.Fatalf("expected nil form and property on failure, got form=%v property=%v", form, returnedProperty)
+		}
+		if len(querier.calls) != 2 || querier.calls[0] != "CreateProperty" || querier.calls[1] != "CreateForm" {
+			t.Fatalf("expected CreateProperty then CreateForm, got %v", querier.calls)
+		}
+		cached, _ := store.GetCachedPropertyByID(context.Background(), property.ID)
+		if cached == nil || cached.ID != property.ID {
+			t.Fatalf("expected orphan property cached by ID %d, got %v", property.ID, cached)
+		}
+		sitekey := UUIDToSiteKey(property.ExternalID)
+		cachedBySitekey, _ := FetchCachedOne[dbgen.Property](context.Background(), store.cache,
+			PropertyBySitekeyCacheKey(sitekey))
+		if cachedBySitekey == nil || cachedBySitekey.ID != property.ID {
+			t.Fatalf("expected orphan property cached by sitekey, got %v", cachedBySitekey)
+		}
+		if _, derr := FetchCachedArray[dbgen.Property](context.Background(), store.cache,
+			orgPropertiesCacheKey(1, OrgPropertiesSortDateAscending)); derr == nil {
+			t.Fatalf("expected org properties cache to be invalidated after partial failure")
+		}
+	})
+
+	t.Run("PartialFailureTxCacheDoesNotCommitOrphan", func(t *testing.T) {
+		property := &dbgen.Property{
+			ID:         456,
+			Name:       "contact (form)",
+			ExternalID: TestPropertyUUID,
+			CreatorID:  Int(12),
+			OrgID:      Int(1),
+			OrgOwnerID: Int(99),
+		}
+		formErr := errors.New("simulated transient CreateForm failure")
+		querier := &partialFailureFormStub{
+			QuerierStub: &QuerierStub{},
+			property:    property,
+			formErr:     formErr,
+		}
+		shared := NewStaticCache[CacheKey, any](1000, &CacheMissingValue{})
+		tmpCache := NewTxCache(shared)
+		store := &BusinessStoreImpl{querier: querier, cache: tmpCache}
+		propertyParams := &dbgen.CreatePropertyParams{CreatorID: Int(12), Domain: "example.com"}
+		formParams := &dbgen.CreateFormParams{
+			Name:              "contact",
+			URL:               "https://example.com/submit",
+			Fields:            []byte(`{}`),
+			RequestsPerMinute: 10,
+			Method:            dbgen.FormMethodPost,
+		}
+
+		if _, _, _, err := store.CreateNewForm(context.Background(), propertyParams, formParams,
+			&dbgen.Organization{ID: 1, UserID: Int(99)}); !errors.Is(err, formErr) {
+			t.Fatalf("expected error %v, got %v", formErr, err)
+		}
+		if cached, _ := FetchCachedOne[dbgen.Property](context.Background(), shared,
+			PropertyByIDCacheKey(property.ID)); cached != nil {
+			t.Fatalf("expected shared cache untouched by ID before Commit, got %v", cached)
+		}
+		sitekey := UUIDToSiteKey(property.ExternalID)
+		if cached, _ := FetchCachedOne[dbgen.Property](context.Background(), shared,
+			PropertyBySitekeyCacheKey(sitekey)); cached != nil {
+			t.Fatalf("expected shared cache untouched by sitekey before Commit, got %v", cached)
+		}
+		tmpCache.Commit(context.Background())
+		if cached, _ := FetchCachedOne[dbgen.Property](context.Background(), shared,
+			PropertyByIDCacheKey(property.ID)); cached == nil || cached.ID != property.ID {
+			t.Fatalf("expected orphan to surface in shared cache after Commit, got %v", cached)
 		}
 	})
 }
