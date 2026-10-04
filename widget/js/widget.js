@@ -309,6 +309,7 @@ export class CaptchaWidget {
     reset(options = {}) {
         this.trace('reset captcha');
 
+        this.ensureNoSolutionField();
         if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
         if (this._workersPool) {
             this._workersPool.stop();
@@ -329,7 +330,6 @@ export class CaptchaWidget {
             pcElement.update();
         }
         this.setProgressState(STATE_EMPTY, true /*force refresh*/);
-        this.ensureNoSolutionField();
         this._userStarted = false;
         this._apiTriggered = false;
 
