@@ -1392,17 +1392,23 @@ func TestPropertyEndpointsMissingSubscription(t *testing.T) {
 		req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", orgID), strings.NewReader(form.Encode()))
 		req.AddCookie(cookie)
 		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+		req.SetPathValue(common.ParamOrg, orgID)
 
 		w := httptest.NewRecorder()
-		srv.ServeHTTP(w, req)
-
-		if w.Code != http.StatusOK {
-			t.Errorf("Expected status OK with re-rendered form, got %d", w.Code)
+		viewModel, err := server.postNewOrgProperty(w, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if viewModel == nil {
+			t.Fatal("Expected ViewModel, got nil")
 		}
 
-		body := w.Body.String()
-		if !strings.Contains(body, "You need an active subscription to create new properties") {
-			t.Error("Expected response to contain subscription requirement message")
+		renderCtx, ok := viewModel.Model.(*propertyWizardRenderContext)
+		if !ok {
+			t.Fatalf("Expected *propertyWizardRenderContext, got %T", viewModel.Model)
+		}
+		if renderCtx.ErrorMessage != activeSubscriptionForPropertyError {
+			t.Errorf("Expected subscription error %q, got %q", activeSubscriptionForPropertyError, renderCtx.ErrorMessage)
 		}
 	})
 }
@@ -1463,13 +1469,23 @@ func TestPropertyEndpointsInvalidFormArgs(t *testing.T) {
 		req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", orgID), strings.NewReader(form.Encode()))
 		req.AddCookie(cookie)
 		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+		req.SetPathValue(common.ParamOrg, orgID)
 
 		w := httptest.NewRecorder()
-		srv.ServeHTTP(w, req)
+		viewModel, err := server.postNewOrgProperty(w, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if viewModel == nil {
+			t.Fatal("Expected ViewModel, got nil")
+		}
 
-		body := w.Body.String()
-		if !strings.Contains(strings.ToLower(body), "localhost") {
-			t.Error("Expected response to mention localhost validation error")
+		renderCtx, ok := viewModel.Model.(*propertyWizardRenderContext)
+		if !ok {
+			t.Fatalf("Expected *propertyWizardRenderContext, got %T", viewModel.Model)
+		}
+		if want := common.StatusPropertyDomainLocalhostError.String(); renderCtx.DomainError != want {
+			t.Errorf("Expected domain error %q, got %q", want, renderCtx.DomainError)
 		}
 	})
 

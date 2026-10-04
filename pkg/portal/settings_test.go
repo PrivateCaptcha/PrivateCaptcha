@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -550,32 +549,6 @@ func TestGetUsageSettingsOrganizationStats(t *testing.T) {
 		t.Errorf("Pending member can see organization statistics for %q", org.Name)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/settings/tab/usage", nil)
-	req.AddCookie(cookie)
-	w = httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("Usage settings response status = %d, want %d", w.Code, http.StatusOK)
-	}
-
-	body := w.Body.String()
-	for _, heading := range []string{"Organization", "Members", "Properties", "Forms", "Rules"} {
-		if !strings.Contains(body, ">"+heading+"<") {
-			t.Errorf("Usage settings did not render %q column heading", heading)
-		}
-	}
-	for _, class := range []string{
-		"min-w-full border border-pc-grey-250",
-		"border-b border-dashed border-pc-grey-250 bg-pc-blue-50",
-		"pc-docs-link underline hover:text-pc-green-hover",
-	} {
-		if !strings.Contains(body, class) {
-			t.Errorf("Usage settings did not render %q", class)
-		}
-	}
-	if want := fmt.Sprintf("href=\"/org/%s\"", server.IDHasher.Encrypt(int(org.ID))); !strings.Contains(body, want) {
-		t.Errorf("Usage settings did not render organization link %q", want)
-	}
 }
 
 func TestGetNotificationsSettings(t *testing.T) {
@@ -733,20 +706,27 @@ func TestEmailChangeLifecycle(t *testing.T) {
 	issueReq.AddCookie(cookie)
 	issueReq.Header.Set(common.HeaderCSRFToken, csrfToken)
 	issueW := httptest.NewRecorder()
-	srv.ServeHTTP(issueW, issueReq)
-	if issueW.Code != http.StatusOK {
-		t.Fatalf("email-change issue status = %d, want 200", issueW.Code)
+	viewModel, err := server.editEmail(issueW, issueReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+	renderCtx, ok := viewModel.Model.(*settingsGeneralRenderContext)
+	if !ok {
+		t.Fatalf("Expected *settingsGeneralRenderContext, got %T", viewModel.Model)
 	}
 	maskedEmail := common.MaskEmail(user.Email, '*')
-	if !strings.Contains(issueW.Body.String(), maskedEmail) {
-		t.Fatalf("email-change issue did not render authoritative recipient %q", maskedEmail)
+	if renderCtx.TwoFactorEmail != maskedEmail {
+		t.Fatalf("email-change recipient = %q, want %q", renderCtx.TwoFactorEmail, maskedEmail)
 	}
 	code, err := portal_tests.TwoFactorCodeFromEmail(user.Email)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	update := func(email string, verificationCode int) *http.Response {
+	update := func(email string, verificationCode int) *settingsGeneralRenderContext {
 		form := url.Values{}
 		form.Set(common.ParamCSRFToken, csrfToken)
 		form.Set(common.ParamEmail, email)
@@ -755,22 +735,27 @@ func TestEmailChangeLifecycle(t *testing.T) {
 		req.AddCookie(cookie)
 		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 		w := httptest.NewRecorder()
-		srv.ServeHTTP(w, req)
-		return w.Result()
+		viewModel, err := server.putGeneralSettings(w, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if viewModel == nil {
+			t.Fatal("Expected ViewModel, got nil")
+		}
+		renderCtx, ok := viewModel.Model.(*settingsGeneralRenderContext)
+		if !ok {
+			t.Fatalf("Expected *settingsGeneralRenderContext, got %T", viewModel.Model)
+		}
+		return renderCtx
 	}
 
 	newEmail := strings.ToLower(t.Name()) + "_new@privatecaptcha.com"
-	resp := update(newEmail, code+1)
-	body, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		t.Fatal(err)
+	renderCtx = update(newEmail, code+1)
+	if renderCtx.TwoFactorError != "Code is not valid." {
+		t.Fatalf("Expected invalid-code error, got %q", renderCtx.TwoFactorError)
 	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("invalid email-change code status = %d, want 200", resp.StatusCode)
-	}
-	if !strings.Contains(string(body), maskedEmail) {
-		t.Fatalf("invalid email-change attempt did not render authoritative recipient %q", maskedEmail)
+	if renderCtx.TwoFactorEmail != maskedEmail {
+		t.Fatalf("invalid email-change recipient = %q, want %q", renderCtx.TwoFactorEmail, maskedEmail)
 	}
 	current, err := store.Impl().RetrieveUser(ctx, user.ID)
 	if err != nil {
@@ -780,10 +765,9 @@ func TestEmailChangeLifecycle(t *testing.T) {
 		t.Fatalf("invalid code changed email to %q", current.Email)
 	}
 
-	resp = update(newEmail, code)
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("email-change consume status = %d, want 200", resp.StatusCode)
+	renderCtx = update(newEmail, code)
+	if renderCtx.TwoFactorError != "" || renderCtx.ErrorMessage != "" {
+		t.Fatalf("Expected successful email change, got errors %q, %q", renderCtx.TwoFactorError, renderCtx.ErrorMessage)
 	}
 	current, err = store.Impl().RetrieveUser(ctx, user.ID)
 	if err != nil {
@@ -794,10 +778,9 @@ func TestEmailChangeLifecycle(t *testing.T) {
 	}
 
 	replayEmail := strings.ToLower(t.Name()) + "_replay@privatecaptcha.com"
-	resp = update(replayEmail, code)
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("email-change replay status = %d, want 200", resp.StatusCode)
+	renderCtx = update(replayEmail, code)
+	if renderCtx.TwoFactorError != "Code is not valid." {
+		t.Fatalf("Expected replay to fail verification, got %q", renderCtx.TwoFactorError)
 	}
 	current, err = store.Impl().RetrieveUser(ctx, user.ID)
 	if err != nil {
@@ -1292,11 +1275,14 @@ func TestSettingsEndpointsInvalidFormArgs(t *testing.T) {
 	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
 
 	tests := []struct {
-		name     string
-		method   string
-		path     string
-		formBody url.Values
-		checkErr string
+		name           string
+		method         string
+		path           string
+		formBody       url.Values
+		handler        ViewModelHandler
+		nameError      string
+		warningMessage string
+		emailError     string
 	}{
 		{
 			name:   "PostAPIKeyInvalidName",
@@ -1307,7 +1293,8 @@ func TestSettingsEndpointsInvalidFormArgs(t *testing.T) {
 				common.ParamDays:  {"90"},
 				common.ParamScope: {apiKeyScopePuzzle},
 			},
-			checkErr: "too short",
+			handler:   server.postAPIKeySettings,
+			nameError: "Name is too short.",
 		},
 		{
 			name:   "PostAPIKeyInvalidScope",
@@ -1318,7 +1305,8 @@ func TestSettingsEndpointsInvalidFormArgs(t *testing.T) {
 				common.ParamDays:  {"90"},
 				common.ParamScope: {"invalid-scope"},
 			},
-			checkErr: "scope",
+			handler:        server.postAPIKeySettings,
+			warningMessage: "Failed to create API key with invalid scope.",
 		},
 		{
 			name:   "PutNotificationsInvalidEmail",
@@ -1327,7 +1315,8 @@ func TestSettingsEndpointsInvalidFormArgs(t *testing.T) {
 			formBody: url.Values{
 				common.ParamEmail: {"not-a-valid-email"},
 			},
-			checkErr: "invalid email",
+			handler:    server.putNotificationsSettings,
+			emailError: "Invalid email address.",
 		},
 	}
 
@@ -1340,11 +1329,27 @@ func TestSettingsEndpointsInvalidFormArgs(t *testing.T) {
 			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 
 			w := httptest.NewRecorder()
-			srv.ServeHTTP(w, req)
-
-			body := w.Body.String()
-			if !strings.Contains(strings.ToLower(body), tc.checkErr) {
-				t.Errorf("%s: expected response to contain '%s'", tc.name, tc.checkErr)
+			viewModel, err := tc.handler(w, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if viewModel == nil {
+				t.Fatal("Expected ViewModel, got nil")
+			}
+			switch renderCtx := viewModel.Model.(type) {
+			case *settingsAPIKeysRenderContext:
+				if renderCtx.NameError != tc.nameError {
+					t.Errorf("Expected name error %q, got %q", tc.nameError, renderCtx.NameError)
+				}
+				if renderCtx.WarningMessage != tc.warningMessage {
+					t.Errorf("Expected warning %q, got %q", tc.warningMessage, renderCtx.WarningMessage)
+				}
+			case *settingsNotificationsRenderContext:
+				if renderCtx.EmailError != tc.emailError {
+					t.Errorf("Expected email error %q, got %q", tc.emailError, renderCtx.EmailError)
+				}
+			default:
+				t.Fatalf("Unexpected model type %T", viewModel.Model)
 			}
 		})
 	}

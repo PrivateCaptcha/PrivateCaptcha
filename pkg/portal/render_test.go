@@ -147,6 +147,52 @@ func TestRenderHTML(t *testing.T) {
 	argonProperty.Challenge = string(dbgen.ChallengeTypeArgon2ID)
 	integrationForm := stubForm("Contact", "123")
 	integrationForm.ExternalID = "form-uuid"
+	formWizardModel := &formWizardRenderContext{
+		CurrentOrg:        stubOrg("123"),
+		CsrfRenderContext: stubToken(),
+	}
+	formDashboardModel := &formDashboardRenderContext{
+		CsrfRenderContext: stubToken(),
+		Form:              integrationForm,
+		Org:               stubOrg("123"),
+		Tab:               formReportsTabIndex,
+	}
+	formIntegrationsModel := &formDashboardIntegrationsRenderContext{
+		formDashboardRenderContext: *formDashboardModel,
+		Sitekey:                    "qwerty",
+	}
+	formAuditLogsModel := &formAuditLogsRenderContext{
+		formDashboardRenderContext: *formDashboardModel,
+		AuditLogsRenderContext: AuditLogsRenderContext{
+			SeeMore: true,
+		},
+	}
+	formAuditLogsModel.Tab = formAuditLogsTabIndex
+	formsPaginationModel := &orgFormsRenderContext{
+		portalBaseRenderContext: portalBaseRenderContext{
+			CurrentOrg: stubOrg("123"),
+		},
+		PaginationRenderContext: PaginationRenderContext{
+			From:    1,
+			To:      30,
+			Count:   31,
+			Page:    0,
+			PerPage: 30,
+		},
+		Forms: []*userForm{stubForm("Newsletter Signup", "123")},
+	}
+	usageStatsModel := &settingsUsageRenderContext{
+		OrganizationStats: []*organizationUsageStats{
+			{
+				ID:         "123",
+				Name:       "My Org 123",
+				Members:    3,
+				Properties: 2,
+				Forms:      1,
+				Rules:      2,
+			},
+		},
+	}
 	hostileOrgModel := &orgDashboardRenderContext{
 		portalBaseRenderContext: portalBaseRenderContext{
 			Orgs:       []*UserOrg{hostileOrg},
@@ -257,6 +303,23 @@ func TestRenderHTML(t *testing.T) {
 			},
 			selector: "p.property-name",
 			matches:  []string{"1", "2"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", "property-order"},
+			template: portalTemplate,
+			model: &orgDashboardRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					CurrentOrg: stubOrg("123"),
+				},
+				Properties: []*userProperty{
+					stubProperty("Zulu", "123"),
+					stubProperty("Middle", "123"),
+					stubProperty("Alpha", "123"),
+				},
+				Sort: db.OrgPropertiesSortNameDescending,
+			},
+			selector: "p.property-name",
+			matches:  []string{"Zulu", "Middle", "Alpha"},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", "search-safe-data"},
@@ -439,6 +502,45 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{"Newsletter Signup", "Contact Us"},
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.FormsEndpoint, "pagination"},
+			template: orgFormsListTemplate,
+			model:    formsPaginationModel,
+			selector: `button[hx-target="#forms"]`,
+			matches:  []string{"Previous", "Next"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormsEndpoint, "pagination-targets"},
+			template: orgFormsListTemplate,
+			model:    formsPaginationModel,
+			selector: `button[hx-target="#forms"]:not([hx-get="/org/123/forms"])`,
+			matches:  []string{},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormsEndpoint, "partial"},
+			template: orgFormsListTemplate,
+			model:    formsPaginationModel,
+			selector: `label[for="org-tabs-select"], #org-tabs-select`,
+			matches:  []string{},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormsEndpoint, "empty"},
+			template: orgFormsTemplate,
+			model: &orgFormsRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					CurrentOrg: stubOrg("123"),
+				},
+			},
+			selector: `h1.pc-page-title, a[href="/org/123/form/new"]`,
+			matches:  []string{"No forms", "Add New Form"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormsEndpoint, "populated"},
+			template: orgFormsTemplate,
+			model:    formsPaginationModel,
+			selector: `span.form-name, .pc-property-card p.truncate, h1.pc-page-title`,
+			matches:  []string{"Newsletter Signup", "hooks.example.com/submit"},
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.SettingsEndpoint},
 			template: orgSettingsTemplate,
 			model: &orgSettingsRenderContext{
@@ -475,6 +577,73 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, common.NewEndpoint},
 			template: formWizardTemplate,
 			model:    &formWizardRenderContext{CurrentOrg: stubOrg("123"), CsrfRenderContext: stubToken(), NameError: "Name error"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, common.NewEndpoint, "steps"},
+			template: formWizardTemplate,
+			model:    formWizardModel,
+			selector: `.pc-wizard-step-label-current, .pc-wizard-step-label-upcoming`,
+			matches:  []string{"Create new form proxy", "Website integration"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, common.NewEndpoint, "url-and-cancel"},
+			template: formWizardTemplate,
+			model:    formWizardModel,
+			selector: `input[type="url"][name="url"], a.pc-internal-form-button[href="/org/123?tab=forms"]`,
+			matches:  []string{"", "Cancel"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, "1", "tabs"},
+			template: formDashboardTemplate,
+			model:    formDashboardModel,
+			selector: `#tabs option, #form-tabs a.pc-tab`,
+			matches:  []string{"Reports", "Integrations", "Settings", "Audit logs", "Reports", "Integrations", "Settings", "Audit logs"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, "1", "reports-heading"},
+			template: formDashboardTemplate,
+			model:    formDashboardModel,
+			selector: `#form-tabs p.text-base.font-bold`,
+			matches:  []string{"Form Requests"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, "1", "logout"},
+			template: formDashboardTemplate,
+			model:    formDashboardModel,
+			selector: `button[type="button"][hx-post="/logout"][hx-swap="none"], a[href="/logout"], form[action="/logout"]`,
+			matches:  []string{"Sign out", "Sign out"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, "1", "csrf-header"},
+			template: formDashboardTemplate,
+			model:    formDashboardModel,
+			selector: fmt.Sprintf(`body[hx-headers='{"%s": "token"}'] #chart`, common.HeaderCSRFToken),
+			matches:  []string{""},
+		},
+		{
+			path:     []string{common.ErrorEndpoint, "500", "logout"},
+			template: "errors/header-signed-in",
+			model:    &errorRenderContext{CsrfRenderContext: stubToken()},
+			selector: `button[type="button"][hx-post="/logout"][hx-swap="none"], a[href="/logout"], form[action="/logout"]`,
+			matches:  []string{"Sign out", "Sign out"},
+		},
+		{
+			path:     []string{common.ErrorEndpoint, "500", "csrf-header"},
+			template: errorTemplate,
+			model: &errorRenderContext{
+				CsrfRenderContext: stubToken(),
+				ErrorCode:         http.StatusInternalServerError,
+				ErrorMessage:      http.StatusText(http.StatusInternalServerError),
+			},
+			selector: fmt.Sprintf(`body[hx-headers='{"%s": "token"}'] h1`, common.HeaderCSRFToken),
+			matches:  []string{http.StatusText(http.StatusInternalServerError)},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, "1", common.EventsEndpoint},
+			template: formDashboardAuditLogsTemplate,
+			model:    formAuditLogsModel,
+			selector: `.pc-tab-active, a[href="/auditlogs"]`,
+			matches:  []string{"Audit logs", "See all Audit Logs"},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, "456", common.TestEndpoint},
@@ -580,6 +749,13 @@ func TestRenderHTML(t *testing.T) {
   <div class="private-captcha" data-sitekey="qwerty"></div>
   <!-- <input type="submit" disabled /> -->
 </form>`},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, "456", common.IntegrationsEndpoint, "sections"},
+			template: formDashboardIntegrationsTemplate,
+			model:    formIntegrationsModel,
+			selector: `h3.pc-subsection-title`,
+			matches:  []string{"Form proxy snippet", "HTML/JS Snippet"},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, "456", common.TabEndpoint, common.IntegrationsEndpoint},
@@ -773,6 +949,20 @@ func TestRenderHTML(t *testing.T) {
 			},
 			selector: `#usage-chart[data-stats-url="/user/stats"]`,
 			matches:  []string{""},
+		},
+		{
+			path:     []string{common.SettingsEndpoint, common.UsageEndpoint, "organization-headings"},
+			template: settingsUsageTemplatePrefix + "tab.html",
+			model:    usageStatsModel,
+			selector: `table.min-w-full.border.border-pc-grey-250 thead tr.border-b.border-dashed.border-pc-grey-250.bg-pc-blue-50 th`,
+			matches:  []string{"Organization", "Members", "Properties", "Forms", "Rules"},
+		},
+		{
+			path:     []string{common.SettingsEndpoint, common.UsageEndpoint, "organization-link"},
+			template: settingsUsageTemplatePrefix + "tab.html",
+			model:    usageStatsModel,
+			selector: `table a.pc-docs-link.underline.hover\:text-pc-green-hover[href="/org/123"]`,
+			matches:  []string{"My Org 123"},
 		},
 		{
 			path:     []string{common.SettingsEndpoint, common.TabEndpoint, common.NotificationsEndpoint},

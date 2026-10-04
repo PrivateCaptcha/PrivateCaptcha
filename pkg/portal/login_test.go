@@ -12,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/html"
-
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
@@ -21,49 +19,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
-
-func parseCsrfToken(body string) (string, error) {
-	doc, err := html.Parse(strings.NewReader(body))
-	if err != nil {
-		return "", err
-	}
-
-	var csrfToken string
-	var f func(*html.Node)
-	f = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "input" {
-			isCsrfElement := false
-			token := ""
-
-			for _, a := range n.Attr {
-				if a.Key == "name" && a.Val == common.ParamCSRFToken {
-					isCsrfElement = true
-				}
-
-				if a.Key == "type" && a.Val == "hidden" {
-					for _, a := range n.Attr {
-						if a.Key == "value" {
-							token = a.Val
-						}
-					}
-				}
-			}
-
-			if isCsrfElement && (len(token) > 0) && (len(csrfToken) == 0) {
-				csrfToken = token
-			}
-		}
-
-		if len(csrfToken) == 0 {
-			for c := n.FirstChild; c != nil; c = c.NextSibling {
-				f(c)
-			}
-		}
-	}
-	f(doc)
-
-	return csrfToken, nil
-}
 
 func TestGetLogin(t *testing.T) {
 	if testing.Short() {
@@ -74,19 +29,22 @@ func TestGetLogin(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 
-	server.Handler(server.getLogin).ServeHTTP(rr, req)
-
-	// check if the status code is 200
-	if rr.Code != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v", rr.Code, http.StatusOK)
+	viewModel, err := server.getLogin(rr, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+	if viewModel.View != loginTemplate {
+		t.Errorf("Expected view %q, got %q", loginTemplate, viewModel.View)
+	}
+	renderCtx, ok := viewModel.Model.(*loginRenderContext)
+	if !ok {
+		t.Fatalf("Expected *loginRenderContext, got %T", viewModel.Model)
 	}
 
-	token, err := parseCsrfToken(rr.Body.String())
-	if (err != nil) || (token == "") {
-		t.Errorf("failed to parse csrf token: %v", err)
-	}
-
-	if !server.XSRF.VerifyToken(token, "") {
+	if !server.XSRF.VerifyToken(renderCtx.Token, "") {
 		t.Error("Failed to verify token in Login form")
 	}
 }
@@ -124,14 +82,7 @@ func TestPostLogin(t *testing.T) {
 		t.Fatalf("failed to create new account: %v", err)
 	}
 
-	// Get the CSRF token
-	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
-	rr := httptest.NewRecorder()
-	server.Handler(server.getLogin).ServeHTTP(rr, req)
-	csrfToken, err := parseCsrfToken(rr.Body.String())
-	if err != nil {
-		t.Fatalf("failed to parse CSRF token: %v", err)
-	}
+	csrfToken := server.XSRF.Token("")
 
 	// Prepare the form data
 	form := url.Values{}
@@ -140,9 +91,9 @@ func TestPostLogin(t *testing.T) {
 	form.Add(common.ParamPortalSolution, "captcha solution")
 
 	// Send the POST request
-	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req := httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-	rr = httptest.NewRecorder()
+	rr := httptest.NewRecorder()
 	server.postLogin(rr, req)
 	resp := rr.Result()
 
@@ -160,14 +111,7 @@ func TestPostLoginEmptyEmail(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	// Get the CSRF token
-	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
-	rr := httptest.NewRecorder()
-	server.Handler(server.getLogin).ServeHTTP(rr, req)
-	csrfToken, err := parseCsrfToken(rr.Body.String())
-	if err != nil {
-		t.Fatalf("failed to parse CSRF token: %v", err)
-	}
+	csrfToken := server.XSRF.Token("")
 
 	// Prepare the form data with empty email
 	form := url.Values{}
@@ -176,9 +120,9 @@ func TestPostLoginEmptyEmail(t *testing.T) {
 	form.Add(common.ParamPortalSolution, "captcha solution")
 
 	// Send the POST request
-	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req := httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-	rr = httptest.NewRecorder()
+	rr := httptest.NewRecorder()
 	server.postLogin(rr, req)
 
 	// Empty email should fail validation
@@ -198,14 +142,7 @@ func TestPostLoginMalformedEmail(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	// Get the CSRF token
-	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
-	rr := httptest.NewRecorder()
-	server.Handler(server.getLogin).ServeHTTP(rr, req)
-	csrfToken, err := parseCsrfToken(rr.Body.String())
-	if err != nil {
-		t.Fatalf("failed to parse CSRF token: %v", err)
-	}
+	csrfToken := server.XSRF.Token("")
 
 	// Prepare the form data with malformed email
 	form := url.Values{}
@@ -214,9 +151,9 @@ func TestPostLoginMalformedEmail(t *testing.T) {
 	form.Add(common.ParamPortalSolution, "captcha solution")
 
 	// Send the POST request
-	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req := httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-	rr = httptest.NewRecorder()
+	rr := httptest.NewRecorder()
 	server.postLogin(rr, req)
 
 	// Malformed email should fail validation
@@ -235,14 +172,7 @@ func TestPostLoginNonexistentUser(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	// Get the CSRF token
-	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
-	rr := httptest.NewRecorder()
-	server.Handler(server.getLogin).ServeHTTP(rr, req)
-	csrfToken, err := parseCsrfToken(rr.Body.String())
-	if err != nil {
-		t.Fatalf("failed to parse CSRF token: %v", err)
-	}
+	csrfToken := server.XSRF.Token("")
 
 	// Prepare the form data with email that doesn't exist
 	form := url.Values{}
@@ -251,9 +181,9 @@ func TestPostLoginNonexistentUser(t *testing.T) {
 	form.Add(common.ParamPortalSolution, "captcha solution")
 
 	// Send the POST request
-	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req := httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-	rr = httptest.NewRecorder()
+	rr := httptest.NewRecorder()
 	server.postLogin(rr, req)
 
 	// Nonexistent user should fail
@@ -272,14 +202,7 @@ func TestPostLoginMissingCaptcha(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	// Get the CSRF token
-	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
-	rr := httptest.NewRecorder()
-	server.Handler(server.getLogin).ServeHTTP(rr, req)
-	csrfToken, err := parseCsrfToken(rr.Body.String())
-	if err != nil {
-		t.Fatalf("failed to parse CSRF token: %v", err)
-	}
+	csrfToken := server.XSRF.Token("")
 
 	// Prepare the form data WITHOUT captcha solution
 	form := url.Values{}
@@ -288,9 +211,9 @@ func TestPostLoginMissingCaptcha(t *testing.T) {
 	// No captcha solution
 
 	// Send the POST request
-	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req := httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-	rr = httptest.NewRecorder()
+	rr := httptest.NewRecorder()
 	server.postLogin(rr, req)
 
 	// Missing captcha should fail
@@ -338,7 +261,7 @@ func TestLogout(t *testing.T) {
 	if portalW.Code != http.StatusOK {
 		t.Fatalf("portal status = %v, want OK", portalW.Code)
 	}
-	assertLogoutButtons(t, portalW.Body, user.ID)
+	assertLogoutCSRF(t, portalW.Body, user.ID)
 
 	logoutGet := httptest.NewRequest(http.MethodGet, "/"+common.LogoutEndpoint, nil)
 	logoutGet.AddCookie(cookie)
@@ -397,16 +320,9 @@ func TestLogout(t *testing.T) {
 	}
 }
 
-func assertLogoutButtons(t *testing.T, body *bytes.Buffer, userID int32) {
+func assertLogoutCSRF(t *testing.T, body *bytes.Buffer, userID int32) {
 	t.Helper()
 	document := portal_tests.ParseHTML(t, body)
-	buttons := document.Find(`button[type="button"][hx-post="/logout"][hx-swap="none"]`)
-	if buttons.Length() != 2 {
-		t.Fatalf("logout button count = %d, want 2", buttons.Length())
-	}
-	if controls := document.Find(`a[href="/logout"], form[action="/logout"]`); controls.Length() != 0 {
-		t.Fatalf("non-HTMX logout control count = %d, want 0", controls.Length())
-	}
 	headersJSON, ok := document.Find("body").Attr("hx-headers")
 	if !ok {
 		t.Fatal("page does not provide inherited HTMX headers")
@@ -528,14 +444,7 @@ func TestPostLoginDisabledUser(t *testing.T) {
 	// Clear user cache to ensure disabled status is fetched from DB
 	cache.Delete(ctx, db.UserCacheKey(user.ID))
 
-	// Get the CSRF token
-	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
-	rr := httptest.NewRecorder()
-	server.Handler(server.getLogin).ServeHTTP(rr, req)
-	csrfToken, err := parseCsrfToken(rr.Body.String())
-	if err != nil {
-		t.Fatalf("failed to parse CSRF token: %v", err)
-	}
+	csrfToken := server.XSRF.Token("")
 
 	// Prepare the form data
 	form := url.Values{}
@@ -544,9 +453,9 @@ func TestPostLoginDisabledUser(t *testing.T) {
 	form.Add(common.ParamPortalSolution, "captcha solution")
 
 	// Send the POST request
-	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req := httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-	rr = httptest.NewRecorder()
+	rr := httptest.NewRecorder()
 	server.postLogin(rr, req)
 
 	// Disabled user should see error
@@ -572,14 +481,7 @@ func TestPostLoginInvalidCaptcha(t *testing.T) {
 		server.PuzzleEngine.(*portal_tests.StubPuzzleEngine).Result = originalResult
 	}()
 
-	// Get the CSRF token
-	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
-	rr := httptest.NewRecorder()
-	server.Handler(server.getLogin).ServeHTTP(rr, req)
-	csrfToken, err := parseCsrfToken(rr.Body.String())
-	if err != nil {
-		t.Fatalf("failed to parse CSRF token: %v", err)
-	}
+	csrfToken := server.XSRF.Token("")
 
 	// Prepare the form data with invalid captcha solution
 	form := url.Values{}
@@ -588,9 +490,9 @@ func TestPostLoginInvalidCaptcha(t *testing.T) {
 	form.Add(common.ParamPortalSolution, "invalid-captcha-solution")
 
 	// Send the POST request
-	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req := httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-	rr = httptest.NewRecorder()
+	rr := httptest.NewRecorder()
 	server.postLogin(rr, req)
 
 	if rr.Code != http.StatusOK {

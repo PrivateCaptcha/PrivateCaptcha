@@ -70,7 +70,7 @@ func TestSignedInErrorPageIncludesLogoutCSRF(t *testing.T) {
 	w := httptest.NewRecorder()
 	server.renderError(ctx, w, req, http.StatusInternalServerError)
 
-	assertLogoutButtons(t, w.Body, user.ID)
+	assertLogoutCSRF(t, w.Body, user.ID)
 }
 
 func TestNotFoundHandler(t *testing.T) {

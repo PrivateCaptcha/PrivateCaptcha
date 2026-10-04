@@ -580,6 +580,7 @@ func TestGetOrgPropertiesSorted(t *testing.T) {
 	tests := []struct {
 		name         string
 		path         string
+		handler      ViewModelHandler
 		want         []string
 		wantSortVal  bool
 		wantStatus   int
@@ -588,23 +589,32 @@ func TestGetOrgPropertiesSorted(t *testing.T) {
 		{
 			name: "DashboardPage",
 			path: fmt.Sprintf("/org/%s?%s=name_desc", orgID, common.ParamSort),
-			want: []string{"Zulu", "Middle", "Alpha"},
 		},
 		{
-			name: "DashboardTab",
-			path: fmt.Sprintf("/org/%s/tab/dashboard?%s=name_asc", orgID, common.ParamSort),
-			want: []string{"Alpha", "Middle", "Zulu"},
+			name:    "DashboardTab",
+			path:    fmt.Sprintf("/org/%s/tab/dashboard?%s=name_asc", orgID, common.ParamSort),
+			handler: server.getOrgDashboard,
+			want:    []string{"Alpha", "Middle", "Zulu"},
 		},
 		{
-			name:        "PropertiesPartial",
-			path:        fmt.Sprintf("/org/%s/properties?%s=name_desc", orgID, common.ParamSort),
+			name:        "DashboardTabDescending",
+			path:        fmt.Sprintf("/org/%s/tab/dashboard?%s=name_desc", orgID, common.ParamSort),
+			handler:     server.getOrgDashboard,
 			want:        []string{"Zulu", "Middle", "Alpha"},
 			wantSortVal: true,
 		},
 		{
-			name: "InvalidDefaultsToDateAscending",
-			path: fmt.Sprintf("/org/%s/properties?%s=unexpected", orgID, common.ParamSort),
-			want: []string{"Zulu", "Alpha", "Middle"},
+			name:        "PropertiesPartial",
+			path:        fmt.Sprintf("/org/%s/properties?%s=name_desc", orgID, common.ParamSort),
+			handler:     server.getOrgProperties,
+			want:        []string{"Zulu", "Middle", "Alpha"},
+			wantSortVal: true,
+		},
+		{
+			name:    "InvalidDefaultsToDateAscending",
+			path:    fmt.Sprintf("/org/%s/properties?%s=unexpected", orgID, common.ParamSort),
+			handler: server.getOrgProperties,
+			want:    []string{"Zulu", "Alpha", "Middle"},
 		},
 		{
 			name:         "PageMultiplicationOverflows",
@@ -618,8 +628,34 @@ func TestGetOrgPropertiesSorted(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", tt.path, nil)
 			req.AddCookie(cookie)
+			req.SetPathValue(common.ParamOrg, orgID)
 
 			w := httptest.NewRecorder()
+			if tt.handler != nil {
+				viewModel, err := tt.handler(w, req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if viewModel == nil {
+					t.Fatal("Expected ViewModel, got nil")
+				}
+				renderCtx, ok := viewModel.Model.(*orgPropertiesRenderContext)
+				if !ok {
+					t.Fatalf("Expected *orgPropertiesRenderContext, got %T", viewModel.Model)
+				}
+				if len(renderCtx.Properties) != len(tt.want) {
+					t.Fatalf("Expected %d properties, got %d", len(tt.want), len(renderCtx.Properties))
+				}
+				for i, name := range tt.want {
+					if renderCtx.Properties[i].Name != name {
+						t.Errorf("Expected property %d to be %q, got %q", i, name, renderCtx.Properties[i].Name)
+					}
+				}
+				if tt.wantSortVal && renderCtx.Sort != db.OrgPropertiesSortNameDescending {
+					t.Errorf("Expected descending name sort, got %q", renderCtx.Sort)
+				}
+				return
+			}
 			srv.ServeHTTP(w, req)
 
 			wantStatus := tt.wantStatus
@@ -629,27 +665,8 @@ func TestGetOrgPropertiesSorted(t *testing.T) {
 			if w.Code != wantStatus {
 				t.Fatalf("expected status %d, got %d", wantStatus, w.Code)
 			}
-			if wantStatus != http.StatusOK {
-				if tt.wantLocation != "" && w.Header().Get("Location") != tt.wantLocation {
-					t.Fatalf("expected redirect to %q, got %q", tt.wantLocation, w.Header().Get("Location"))
-				}
-				return
-			}
-
-			body := w.Body.String()
-			previousIndex := -1
-			for _, name := range tt.want {
-				index := strings.Index(body, name)
-				if index == -1 {
-					t.Fatalf("expected body to contain %q", name)
-				}
-				if index < previousIndex {
-					t.Fatalf("expected %q after the previous property", name)
-				}
-				previousIndex = index
-			}
-			if tt.wantSortVal && !strings.Contains(body, `"sort": "name_desc"`) {
-				t.Fatal("expected pagination to preserve the selected sort")
+			if tt.wantLocation != "" && w.Header().Get("Location") != tt.wantLocation {
+				t.Fatalf("expected redirect to %q, got %q", tt.wantLocation, w.Header().Get("Location"))
 			}
 		})
 	}
@@ -707,15 +724,24 @@ func TestGetOrgSearch(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/search?%s", server.IDHasher.Encrypt(int(org.ID)), query.Encode()), nil)
 			req.Header.Set(common.HeaderHtmxRequest, "true")
 			req.AddCookie(cookie)
+			req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
 
 			w := httptest.NewRecorder()
-			srv.ServeHTTP(w, req)
-
-			if w.Code != http.StatusOK {
-				t.Fatalf("expected status %d, got %d", http.StatusOK, w.Code)
+			viewModel, err := server.getOrgSearch(w, req)
+			if err != nil {
+				t.Fatal(err)
 			}
-			if !strings.Contains(w.Body.String(), tt.want) {
-				t.Fatalf("expected search response to contain %q, got %s", tt.want, w.Body.String())
+			if viewModel == nil {
+				t.Fatal("Expected ViewModel, got nil")
+			}
+			renderCtx, ok := viewModel.Model.(*OrgSearchRenderContext)
+			if !ok {
+				t.Fatalf("Expected *OrgSearchRenderContext, got %T", viewModel.Model)
+			}
+			if !slices.ContainsFunc(renderCtx.SearchResults, func(result *OrgSearchResult) bool {
+				return result.Name == tt.want
+			}) {
+				t.Fatalf("Expected search results to contain %q, got %+v", tt.want, renderCtx.SearchResults)
 			}
 		})
 	}
@@ -1883,14 +1909,14 @@ func TestOrgMemberEndpointsInvalidForm(t *testing.T) {
 			formBody: url.Values{
 				common.ParamEmail: {user.Email},
 			},
-			checkErr: "already a member",
+			checkErr: "You are already a member of this organization.",
 		},
 		{
 			name: "InviteInvalidEmail",
 			formBody: url.Values{
 				common.ParamEmail: {"invalid-email"},
 			},
-			checkErr: "not valid",
+			checkErr: "Email address is not valid.",
 		},
 	}
 
@@ -1901,13 +1927,22 @@ func TestOrgMemberEndpointsInvalidForm(t *testing.T) {
 			req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/members", orgID), strings.NewReader(tc.formBody.Encode()))
 			req.AddCookie(cookie)
 			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+			req.SetPathValue(common.ParamOrg, orgID)
 
 			w := httptest.NewRecorder()
-			srv.ServeHTTP(w, req)
-
-			body := w.Body.String()
-			if !strings.Contains(body, tc.checkErr) {
-				t.Errorf("%s: expected response to contain '%s'", tc.name, tc.checkErr)
+			viewModel, err := server.postOrgMembers(w, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if viewModel == nil {
+				t.Fatal("Expected ViewModel, got nil")
+			}
+			renderCtx, ok := viewModel.Model.(*orgMemberRenderContext)
+			if !ok {
+				t.Fatalf("Expected *orgMemberRenderContext, got %T", viewModel.Model)
+			}
+			if renderCtx.ErrorMessage != tc.checkErr {
+				t.Errorf("Expected error %q, got %q", tc.checkErr, renderCtx.ErrorMessage)
 			}
 		})
 	}
@@ -2037,7 +2072,7 @@ func TestInviteEmailToOrgIgnoresCase(t *testing.T) {
 	orgID := server.IDHasher.Encrypt(int(org.ID))
 	csrfToken := server.XSRF.Token(strconv.Itoa(int(owner.ID)))
 	inviteEmail := "mixed-case-" + t.Name() + "@example.com"
-	invite := func(email string) *httptest.ResponseRecorder {
+	invite := func(email string) *orgMemberRenderContext {
 		form := url.Values{
 			common.ParamCSRFToken: {csrfToken},
 			common.ParamEmail:     {email},
@@ -2045,20 +2080,31 @@ func TestInviteEmailToOrgIgnoresCase(t *testing.T) {
 		req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/members", orgID), strings.NewReader(form.Encode()))
 		req.AddCookie(cookie)
 		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+		req.SetPathValue(common.ParamOrg, orgID)
 
 		w := httptest.NewRecorder()
-		srv.ServeHTTP(w, req)
-		return w
+		viewModel, err := server.postOrgMembers(w, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if viewModel == nil {
+			t.Fatal("Expected ViewModel, got nil")
+		}
+		renderCtx, ok := viewModel.Model.(*orgMemberRenderContext)
+		if !ok {
+			t.Fatalf("Expected *orgMemberRenderContext, got %T", viewModel.Model)
+		}
+		return renderCtx
 	}
 
 	firstResponse := invite(inviteEmail)
-	if !strings.Contains(firstResponse.Body.String(), "Invite is sent.") {
-		t.Fatalf("Expected first invite to succeed, got: %s", firstResponse.Body.String())
+	if firstResponse.SuccessMessage != "Invite is sent." {
+		t.Fatalf("Expected first invite to succeed, got: %q", firstResponse.SuccessMessage)
 	}
 
 	duplicateResponse := invite(strings.ToUpper(inviteEmail))
-	if !strings.Contains(duplicateResponse.Body.String(), errorMessageUserAlreadyMember) {
-		t.Errorf("Expected differently-cased duplicate invite to be rejected, got: %s", duplicateResponse.Body.String())
+	if duplicateResponse.ErrorMessage != errorMessageUserAlreadyMember {
+		t.Errorf("Expected differently-cased duplicate invite to be rejected, got: %q", duplicateResponse.ErrorMessage)
 	}
 
 	_, err = store.Pool.Exec(ctx, `
@@ -3323,19 +3369,23 @@ func TestInviteDisabledUserToOrg(t *testing.T) {
 	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/members", server.IDHasher.Encrypt(int(org1.ID))), strings.NewReader(form.Encode()))
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org1.ID)))
 
 	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	viewModel, err := server.postOrgMembers(w, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+	renderCtx, ok := viewModel.Model.(*orgMemberRenderContext)
+	if !ok {
+		t.Fatalf("Expected *orgMemberRenderContext, got %T", viewModel.Model)
 	}
 
-	// Verify the body contains an error about not being able to invite the user
-	body := w.Body.String()
-	if !strings.Contains(body, "Cannot invite") {
-		t.Errorf("Expected error about not being able to invite disabled user, got: %s", body)
+	if renderCtx.ErrorMessage != "Cannot invite this user to the organization." {
+		t.Errorf("Expected error about not being able to invite disabled user, got: %q", renderCtx.ErrorMessage)
 	}
 
 	// Verify that the disabled user was not added to the org (only owner should be present)
@@ -3432,16 +3482,26 @@ func TestGetOrgFormsTabEndpoint(t *testing.T) {
 
 	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/%s/%s", server.IDHasher.Encrypt(int(org.ID)), common.TabEndpoint, common.FormsEndpoint), nil)
 	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
 
 	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("Expected status 200, got %d", w.Code)
+	viewModel, err := server.getOrgFormsTab(w, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+	if viewModel.View != orgFormsTemplate {
+		t.Fatalf("Expected view %q, got %q", orgFormsTemplate, viewModel.View)
 	}
 
-	if !strings.Contains(w.Body.String(), "No forms") {
-		t.Fatalf("Expected forms tab endpoint body to contain %q", "No forms")
+	renderCtx, ok := viewModel.Model.(*orgFormsRenderContext)
+	if !ok {
+		t.Fatalf("Expected *orgFormsRenderContext, got %T", viewModel.Model)
+	}
+	if len(renderCtx.Forms) != 0 {
+		t.Fatalf("Expected no forms, got %d", len(renderCtx.Forms))
 	}
 }
 
@@ -3598,23 +3658,33 @@ func TestGetOrgFormsPaginationEndpoint(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/%s?%s=%s", orgID, common.FormsEndpoint, common.ParamPage, tc.page), nil)
 			req.AddCookie(cookie)
+			req.SetPathValue(common.ParamOrg, orgID)
 
 			w := httptest.NewRecorder()
-			srv.ServeHTTP(w, req)
-
-			if w.Code != http.StatusOK {
-				t.Fatalf("Expected status 200, got %d", w.Code)
+			viewModel, err := server.getOrgForms(w, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if viewModel == nil {
+				t.Fatal("Expected ViewModel, got nil")
+			}
+			if viewModel.View != orgFormsListTemplate {
+				t.Fatalf("Expected partial view %q, got %q", orgFormsListTemplate, viewModel.View)
 			}
 
-			body := w.Body.String()
-			if !strings.Contains(body, tc.mustContain) {
-				t.Fatalf("Expected body to contain %q", tc.mustContain)
+			renderCtx, ok := viewModel.Model.(*orgFormsRenderContext)
+			if !ok {
+				t.Fatalf("Expected *orgFormsRenderContext, got %T", viewModel.Model)
 			}
-			if strings.Contains(body, tc.mustNotContain) {
-				t.Fatalf("Did not expect body to contain %q", tc.mustNotContain)
+			if !slices.ContainsFunc(renderCtx.Forms, func(form *userForm) bool {
+				return form.Name == tc.mustContain
+			}) {
+				t.Fatalf("Expected forms to contain %q", tc.mustContain)
 			}
-			if strings.Contains(body, "Select a tab") {
-				t.Fatalf("Expected forms endpoint to return partial without tab chrome")
+			if slices.ContainsFunc(renderCtx.Forms, func(form *userForm) bool {
+				return form.Name == tc.mustNotContain
+			}) {
+				t.Fatalf("Did not expect forms to contain %q", tc.mustNotContain)
 			}
 		})
 	}
@@ -3679,25 +3749,28 @@ func TestEmailMismatchDuringInviteRegistrationLeavesInviteUnlinked(t *testing.T)
 
 	invitePath := fmt.Sprintf("/%s/%s/%s", common.OrgInviteEndpoint, server.IDHasher.Encrypt(int(inviteRecord.ID)), common.RegisterEndpoint)
 	req := httptest.NewRequest(http.MethodGet, invitePath, nil)
+	req.SetPathValue(common.ParamID, server.IDHasher.Encrypt(int(inviteRecord.ID)))
 	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected invite registration page, got status %d", w.Code)
+	viewModel, err := server.getOrgInviteRegister(w, req)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	doc := portal_tests.ParseHTML(t, w.Body)
-	emailInput := doc.Find(fmt.Sprintf("input[name=%q]", common.ParamEmail))
-	if value, exists := emailInput.Attr("value"); !exists || value != invitedEmail {
-		t.Fatalf("expected invite email %q in registration form, got %q", invitedEmail, value)
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
 	}
-	if _, exists := emailInput.Attr("readonly"); !exists {
+	renderCtx, ok := viewModel.Model.(*loginRenderContext)
+	if !ok {
+		t.Fatalf("Expected *loginRenderContext, got %T", viewModel.Model)
+	}
+	if renderCtx.Email != invitedEmail {
+		t.Fatalf("expected invite email %q in registration form, got %q", invitedEmail, renderCtx.Email)
+	}
+	if !renderCtx.EmailReadonly {
 		t.Fatal("expected invite email field to be readonly")
 	}
 
-	inviteInput := doc.Find(fmt.Sprintf("input[name=%q]", common.ParamID))
-	inviteValue, exists := inviteInput.Attr("value")
-	if !exists || inviteValue != server.IDHasher.Encrypt(int(inviteRecord.ID)) {
+	inviteValue := renderCtx.InviteID
+	if inviteValue != server.IDHasher.Encrypt(int(inviteRecord.ID)) {
 		t.Fatalf("expected encrypted invite ID in registration form, got %q", inviteValue)
 	}
 
@@ -3792,19 +3865,26 @@ func TestInviteRegistrationPreservesContinuationAcrossSessionStores(t *testing.T
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 	invitePath := fmt.Sprintf("/%s/%s/%s", common.OrgInviteEndpoint, server.IDHasher.Encrypt(int(invite.ID)), common.RegisterEndpoint)
 	req := httptest.NewRequest(http.MethodGet, invitePath, nil)
+	req.SetPathValue(common.ParamID, server.IDHasher.Encrypt(int(invite.ID)))
 	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("invite registration page status = %d, want 200", w.Code)
+	viewModel, err := server.getOrgInviteRegister(w, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+	renderCtx, ok := viewModel.Model.(*loginRenderContext)
+	if !ok {
+		t.Fatalf("Expected *loginRenderContext, got %T", viewModel.Model)
 	}
 	if slices.ContainsFunc(w.Result().Cookies(), func(c *http.Cookie) bool {
 		return c.Name == server.Sessions.CookieName
 	}) {
 		t.Fatal("invite registration GET created a process-local session")
 	}
-	inviteInput := portal_tests.ParseHTML(t, w.Body).Find(fmt.Sprintf("input[name=%q]", common.ParamID))
-	inviteValue, exists := inviteInput.Attr("value")
-	if !exists || inviteValue != server.IDHasher.Encrypt(int(invite.ID)) {
+	inviteValue := renderCtx.InviteID
+	if inviteValue != server.IDHasher.Encrypt(int(invite.ID)) {
 		t.Fatalf("expected encrypted invite ID in registration form, got %q", inviteValue)
 	}
 

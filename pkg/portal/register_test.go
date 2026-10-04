@@ -232,22 +232,29 @@ func TestRegisterFromEmailInviteRedirectsToInvitedOrganization(t *testing.T) {
 	inviteURL.Path = inviteURL.Path[invitePathStart:]
 
 	req = httptest.NewRequest(http.MethodGet, inviteURL.RequestURI(), nil)
+	encodedInviteID := strings.TrimSuffix(strings.TrimPrefix(inviteURL.Path, "/"+common.OrgInviteEndpoint+"/"), "/"+common.RegisterEndpoint)
+	req.SetPathValue(common.ParamID, encodedInviteID)
 	w = httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("invite registration page status = %d, want 200", w.Code)
+	viewModel, err := server.getOrgInviteRegister(w, req)
+	if err != nil {
+		t.Fatal(err)
 	}
-	doc := portal_tests.ParseHTML(t, w.Body)
-	emailInput := doc.Find(fmt.Sprintf("input[name=%q]", common.ParamEmail))
-	if value, exists := emailInput.Attr("value"); !exists || value != invitedEmail {
-		t.Fatalf("registration email = %q, want %q", value, invitedEmail)
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
 	}
-	if _, exists := emailInput.Attr("readonly"); !exists {
+	renderCtx, ok := viewModel.Model.(*loginRenderContext)
+	if !ok {
+		t.Fatalf("Expected *loginRenderContext, got %T", viewModel.Model)
+	}
+	if renderCtx.Email != invitedEmail {
+		t.Fatalf("registration email = %q, want %q", renderCtx.Email, invitedEmail)
+	}
+	if !renderCtx.EmailReadonly {
 		t.Fatal("invite registration email is not readonly")
 	}
-	inviteID, exists := doc.Find(fmt.Sprintf("input[name=%q]", common.ParamID)).Attr("value")
-	if !exists || inviteID == "" {
-		t.Fatal("invite registration form does not contain invite ID")
+	inviteID := renderCtx.InviteID
+	if inviteID == "" || inviteID != encodedInviteID {
+		t.Fatalf("registration invite ID = %q, want %q", inviteID, encodedInviteID)
 	}
 
 	form = url.Values{

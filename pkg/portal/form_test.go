@@ -19,7 +19,6 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
-	"github.com/PuerkitoBio/goquery"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -88,34 +87,6 @@ func TestFormToUserForm(t *testing.T) {
 	}
 }
 
-func TestRenderFormsPaginationControls(t *testing.T) {
-	platformCtx := &PlatformRenderContext{
-		GitCommit:      "qwerty123",
-		Enterprise:     true,
-		licenseService: server.LicenseService,
-	}
-
-	buf, err := server.RenderResponse(t.Context(), "portal/forms.html", &orgFormsRenderContext{
-		portalBaseRenderContext: portalBaseRenderContext{CurrentOrg: stubOrg("123")},
-		PaginationRenderContext: PaginationRenderContext{From: 1, To: 30, Count: 31, Page: 0, PerPage: 30},
-		Forms:                   []*userForm{stubForm("Newsletter Signup", "123")},
-	}, &RequestContext{Path: server.RelURL("/org/123/forms")}, platformCtx)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	document := portal_tests.ParseHTML(t, buf)
-	buttons := document.Find("button[hx-target=\"#forms\"]")
-	if buttons.Length() != 2 {
-		t.Fatalf("expected 2 pagination buttons, got %d", buttons.Length())
-	}
-	buttons.Each(func(i int, s *goquery.Selection) {
-		if s.AttrOr("hx-get", "") != "/org/123/forms" {
-			t.Fatalf("expected pagination button to use forms endpoint, got %q", s.AttrOr("hx-get", ""))
-		}
-	})
-}
-
 func TestGetNewOrgForm(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -140,25 +111,22 @@ func TestGetNewOrgForm(t *testing.T) {
 	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
 
 	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Unexpected status code %v", resp.StatusCode)
+	viewModel, err := server.getNewOrgForm(w, req)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	body := w.Body.String()
-	if !strings.Contains(body, "Website integration") {
-		t.Fatal("expected website integration step")
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
 	}
-	if !strings.Contains(body, `name="url"`) {
-		t.Fatal("expected URL input field")
+	if viewModel.View != formWizardTemplate {
+		t.Fatalf("Expected view %q, got %q", formWizardTemplate, viewModel.View)
 	}
-	if !strings.Contains(body, fmt.Sprintf("/org/%s?tab=%s", server.IDHasher.Encrypt(int(org.ID)), common.FormsEndpoint)) {
-		t.Fatal("expected cancel link back to forms area")
+	renderCtx, ok := viewModel.Model.(*formWizardRenderContext)
+	if !ok {
+		t.Fatalf("Expected *formWizardRenderContext, got %T", viewModel.Model)
 	}
-	if strings.Contains(body, "Server integration") {
-		t.Fatal("did not expect server integration step")
+	if renderCtx.CurrentOrg.ID != server.IDHasher.Encrypt(int(org.ID)) {
+		t.Fatalf("Unexpected current organization %q", renderCtx.CurrentOrg.ID)
 	}
 }
 
@@ -192,12 +160,22 @@ func TestPostNewOrgForm(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/new", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(formData.Encode()))
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
 
 	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("Unexpected status code %d", w.Code)
+	viewModel, err := server.postNewOrgForm(w, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+	if viewModel.View != formWizardSetupTemplate {
+		t.Fatalf("Expected view %q, got %q", formWizardSetupTemplate, viewModel.View)
+	}
+	renderCtx, ok := viewModel.Model.(*formIntegrationRenderContext)
+	if !ok {
+		t.Fatalf("Expected *formIntegrationRenderContext, got %T", viewModel.Model)
 	}
 
 	forms, _, err := store.Impl().RetrieveOrgForms(ctx, org, 0, db.MaxOrgPropertiesPageSize)
@@ -240,9 +218,8 @@ func TestPostNewOrgForm(t *testing.T) {
 	}
 
 	formGUID := db.UUIDToString(createdForm.ExternalID)
-	expectedFormURL := server.APIURL + "/form/" + formGUID
-	if !strings.Contains(w.Body.String(), expectedFormURL) {
-		t.Fatal("expected integration step to include public form endpoint")
+	if renderCtx.Form == nil || renderCtx.Form.ExternalID != formGUID {
+		t.Fatalf("Expected integration form with external ID %q, got %+v", formGUID, renderCtx.Form)
 	}
 }
 
@@ -277,25 +254,26 @@ func TestGetFormDashboard(t *testing.T) {
 	formID := server.IDHasher.Encrypt(int(form.ID))
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/form/%s", orgID, formID), nil)
 	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, orgID)
+	req.SetPathValue(common.ParamForm, formID)
 
 	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("Unexpected status code %d", w.Code)
+	viewModel, err := server.getFormDashboard(w, req)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	body := w.Body.String()
-	for _, label := range []string{"Reports", "Integrations", "Settings", "Audit logs"} {
-		if !strings.Contains(body, label) {
-			t.Fatalf("expected %q tab in dashboard", label)
-		}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
 	}
-	if strings.Contains(body, "Rules") {
-		t.Fatal("did not expect rules tab in form dashboard")
+	renderCtx, ok := viewModel.Model.(*formDashboardRenderContext)
+	if !ok {
+		t.Fatalf("Expected *formDashboardRenderContext, got %T", viewModel.Model)
 	}
-	if !strings.Contains(body, "Form Requests") {
-		t.Fatal("expected reports content in form dashboard")
+	if renderCtx.Tab != formReportsTabIndex {
+		t.Fatalf("Expected reports tab, got %d", renderCtx.Tab)
+	}
+	if renderCtx.Form.ID != formID {
+		t.Fatalf("Expected form %q, got %q", formID, renderCtx.Form.ID)
 	}
 }
 
@@ -330,27 +308,29 @@ func TestGetFormDashboardIntegrationsTab(t *testing.T) {
 	formID := server.IDHasher.Encrypt(int(form.ID))
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/form/%s?tab=%s", orgID, formID, common.IntegrationsEndpoint), nil)
 	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, orgID)
+	req.SetPathValue(common.ParamForm, formID)
 
 	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("Unexpected status code %d", w.Code)
+	viewModel, err := server.getFormDashboard(w, req)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	body := w.Body.String()
-	expectedFormURL := server.APIURL + "/form/" + db.UUIDToString(form.ExternalID)
-	if !strings.Contains(body, expectedFormURL) {
-		t.Fatal("expected form action in integrations snippet")
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
 	}
-	if !strings.Contains(body, db.UUIDToSiteKey(property.ExternalID)) {
-		t.Fatal("expected property sitekey in integrations snippet")
+	renderCtx, ok := viewModel.Model.(*formDashboardIntegrationsRenderContext)
+	if !ok {
+		t.Fatalf("Expected *formDashboardIntegrationsRenderContext, got %T", viewModel.Model)
 	}
-	if strings.Contains(body, "On the server") {
-		t.Fatal("did not expect server integrations section")
+	if renderCtx.Tab != formIntegrationsTabIndex {
+		t.Fatalf("Expected integrations tab, got %d", renderCtx.Tab)
 	}
-	if strings.Contains(body, "Other") {
-		t.Fatal("did not expect other integrations section")
+	if renderCtx.Form.ExternalID != db.UUIDToString(form.ExternalID) {
+		t.Fatal("Expected form external ID in integrations model")
+	}
+	if renderCtx.Sitekey != db.UUIDToSiteKey(property.ExternalID) {
+		t.Fatal("Expected property sitekey in integrations model")
 	}
 }
 
@@ -1179,20 +1159,26 @@ func TestGetFormDashboardAuditLogs(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/form/%s?tab=%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.EventsEndpoint), nil)
 	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamForm, server.IDHasher.Encrypt(int(form.ID)))
 
 	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("Unexpected status code %d", w.Code)
+	viewModel, err := server.getFormDashboard(w, req)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	body := w.Body.String()
-	if !strings.Contains(body, "Audit logs") {
-		t.Fatal("expected audit logs view")
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
 	}
-	if !strings.Contains(body, "See all Audit Logs") {
-		t.Fatal("expected see all audit logs action")
+	renderCtx, ok := viewModel.Model.(*formAuditLogsRenderContext)
+	if !ok {
+		t.Fatalf("Expected *formAuditLogsRenderContext, got %T", viewModel.Model)
+	}
+	if renderCtx.Tab != formAuditLogsTabIndex {
+		t.Fatalf("Expected audit logs tab, got %d", renderCtx.Tab)
+	}
+	if !renderCtx.SeeMore {
+		t.Fatal("Expected see-all-audit-logs action to be enabled")
 	}
 }
 
@@ -1231,13 +1217,15 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 	}
 
 	type testCase struct {
-		name           string
-		setup          func(t *testing.T) (*dbgen.User, *dbgen.Organization, string, func())
-		mutate         func(values url.Values)
-		expectedStatus int
-		expectedBody   string
-		expectedCount  int
-		assertRedirect bool
+		name                string
+		setup               func(t *testing.T) (*dbgen.User, *dbgen.Organization, string, func())
+		mutate              func(values url.Values)
+		expectedNameError   string
+		expectedDomainError string
+		expectedURLError    string
+		expectedError       string
+		expectedCount       int
+		assertRedirect      bool
 	}
 
 	newValues := func(userID int32) url.Values {
@@ -1264,9 +1252,8 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 			mutate: func(values url.Values) {
 				values.Set(common.ParamName, "")
 			},
-			expectedStatus: http.StatusOK,
-			expectedBody:   common.StatusFormNameEmptyError.String(),
-			expectedCount:  0,
+			expectedNameError: common.StatusFormNameEmptyError.String(),
+			expectedCount:     0,
 		},
 		{
 			name: "InvalidDomain",
@@ -1282,9 +1269,8 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 				values.Del(common.ParamIgnoreError)
 				values.Set(common.ParamDomain, "localhost")
 			},
-			expectedStatus: http.StatusOK,
-			expectedBody:   common.StatusPropertyDomainLocalhostError.String(),
-			expectedCount:  0,
+			expectedDomainError: common.StatusPropertyDomainLocalhostError.String(),
+			expectedCount:       0,
 		},
 		{
 			name: "EmptyURL",
@@ -1299,9 +1285,8 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 			mutate: func(values url.Values) {
 				values.Set(common.ParamURL, "")
 			},
-			expectedStatus: http.StatusOK,
-			expectedBody:   "URL cannot be empty.",
-			expectedCount:  0,
+			expectedURLError: "URL cannot be empty.",
+			expectedCount:    0,
 		},
 		{
 			name: "UnsafeURL",
@@ -1319,9 +1304,8 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 					server.FormURLVerifier = originalVerifier
 				}
 			},
-			expectedStatus: http.StatusOK,
-			expectedBody:   "URL is not valid.",
-			expectedCount:  0,
+			expectedURLError: "URL is not valid.",
+			expectedCount:    0,
 		},
 		{
 			name: "MissingSubscription",
@@ -1333,9 +1317,8 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 				}
 				return user, org, user.Email, func() {}
 			},
-			expectedStatus: http.StatusOK,
-			expectedBody:   activeSubscriptionForPropertyError,
-			expectedCount:  0,
+			expectedError: activeSubscriptionForPropertyError,
+			expectedCount: 0,
 		},
 		{
 			name: "InvitedUser",
@@ -1354,7 +1337,6 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 				}
 				return member, org, member.Email, func() {}
 			},
-			expectedStatus: http.StatusSeeOther,
 			expectedCount:  0,
 			assertRedirect: true,
 		},
@@ -1374,9 +1356,8 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 					server.SubscriptionLimits = originalLimits
 				}
 			},
-			expectedStatus: http.StatusOK,
-			expectedBody:   "Forms limit reached for current subscription plan.",
-			expectedCount:  0,
+			expectedError: "Forms limit reached for current subscription plan.",
+			expectedCount: 0,
 		},
 		{
 			name: "DuplicateName",
@@ -1400,9 +1381,8 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 				}
 				return user, org, user.Email, func() {}
 			},
-			expectedStatus: http.StatusOK,
-			expectedBody:   common.StatusFormNameDuplicateError.String(),
-			expectedCount:  1,
+			expectedNameError: common.StatusFormNameDuplicateError.String(),
+			expectedCount:     1,
 		},
 	}
 
@@ -1427,15 +1407,14 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/new", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(values.Encode()))
 			req.AddCookie(cookie)
 			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+			req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
 
 			w := httptest.NewRecorder()
-			srv.ServeHTTP(w, req)
-
-			if w.Code != tc.expectedStatus {
-				t.Fatalf("expected status %d, got %d", tc.expectedStatus, w.Code)
-			}
-
 			if tc.assertRedirect {
+				srv.ServeHTTP(w, req)
+				if w.Code != http.StatusSeeOther {
+					t.Fatalf("expected status %d, got %d", http.StatusSeeOther, w.Code)
+				}
 				location, err := w.Result().Location()
 				if err != nil {
 					t.Fatalf("expected redirect location, got %v", err)
@@ -1443,8 +1422,33 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 				if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
 					t.Fatalf("expected error redirect, got %q", location.String())
 				}
-			} else if tc.expectedBody != "" && !strings.Contains(w.Body.String(), tc.expectedBody) {
-				t.Fatalf("expected body to contain %q", tc.expectedBody)
+			} else {
+				viewModel, err := server.postNewOrgForm(w, req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if viewModel == nil {
+					t.Fatal("Expected ViewModel, got nil")
+				}
+				if viewModel.View != formWizardNewTemplate {
+					t.Errorf("Expected view %q, got %q", formWizardNewTemplate, viewModel.View)
+				}
+				renderCtx, ok := viewModel.Model.(*formWizardRenderContext)
+				if !ok {
+					t.Fatalf("Expected *formWizardRenderContext, got %T", viewModel.Model)
+				}
+				if renderCtx.NameError != tc.expectedNameError {
+					t.Errorf("Expected name error %q, got %q", tc.expectedNameError, renderCtx.NameError)
+				}
+				if renderCtx.DomainError != tc.expectedDomainError {
+					t.Errorf("Expected domain error %q, got %q", tc.expectedDomainError, renderCtx.DomainError)
+				}
+				if renderCtx.URLError != tc.expectedURLError {
+					t.Errorf("Expected URL error %q, got %q", tc.expectedURLError, renderCtx.URLError)
+				}
+				if renderCtx.ErrorMessage != tc.expectedError {
+					t.Errorf("Expected error %q, got %q", tc.expectedError, renderCtx.ErrorMessage)
+				}
 			}
 
 			forms, _, err := store.Impl().RetrieveOrgForms(t.Context(), org, 0, db.MaxOrgPropertiesPageSize)
