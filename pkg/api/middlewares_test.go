@@ -2,10 +2,17 @@ package api
 
 import (
 	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -280,4 +287,127 @@ func TestIsOriginAllowed(t *testing.T) {
 			}
 		})
 	}
+}
+
+type errUserLimiter struct{}
+
+func (errUserLimiter) CheckUsers(context.Context, map[int32]uint) error {
+	return errors.New("no limits")
+}
+
+func (errUserLimiter) EvaluatePropertyAccess(context.Context, int32) (bool, error) {
+	return false, errors.New("no limits")
+}
+
+func (errUserLimiter) EvaluateFormAccess(context.Context, int32) (bool, error) {
+	return false, errors.New("no limits")
+}
+
+func (errUserLimiter) EvaluateAPIAccess(context.Context, int32) (bool, error) {
+	return false, errors.New("no limits")
+}
+
+func (errUserLimiter) DropUser(context.Context, int32) {}
+
+func TestAuthMiddlewareFormNormalizesExternalIDToLowerCase(t *testing.T) {
+	form := &dbgen.Form{
+		ID:         123,
+		PropertyID: 456,
+		OrgOwnerID: db.Int(7),
+		OrgID:      db.Int(8),
+		ExternalID: db.TestPropertyUUID,
+		Enabled:    true,
+		Active:     true,
+	}
+	lowerID := db.UUIDToString(form.ExternalID)
+	upperID := strings.ToUpper(lowerID)
+	if !db.CanBeValidSitekey(upperID) {
+		t.Fatalf("uppercase external ID should pass CanBeValidSitekey")
+	}
+	if got := db.UUIDFromString(upperID); got != form.ExternalID {
+		t.Fatalf("uppercase external ID should decode to the same UUID")
+	}
+
+	newMiddleware := func(cache common.Cache[db.CacheKey, any]) *AuthMiddleware {
+		store := db.NewBusinessWithQuerier(nil, &db.QuerierStub{}, cache)
+		return &AuthMiddleware{
+			Store:               store,
+			Limiter:             errUserLimiter{},
+			FormChan:            make(chan string, 1),
+			backpressureTimeout: time.Second,
+			Metrics:             monitoring.NewStub(),
+		}
+	}
+
+	t.Run("CacheHitCanonicalizesLookupAndContextValue", func(t *testing.T) {
+		cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
+		if err := cache.Set(context.Background(), db.FormByExternalIDCacheKey(lowerID), form); err != nil {
+			t.Fatalf("Failed to seed cache: %v", err)
+		}
+		am := newMiddleware(cache)
+
+		var capturedForm *dbgen.Form
+		var capturedFormID string
+		handler := am.Form(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedForm, _ = r.Context().Value(common.FormContextKey).(*dbgen.Form)
+			capturedFormID, _ = r.Context().Value(common.FormIDContextKey).(string)
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		req := httptest.NewRequest(http.MethodPost, "/"+common.FormEndpoint+"/"+upperID, nil)
+		req.SetPathValue(common.ParamForm, upperID)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d (uppercase path should be accepted and served)", w.Code, http.StatusOK)
+		}
+		if capturedForm == nil {
+			t.Fatal("FormContextKey not set; expected cache hit after normalizing uppercase path to the lowercase cache key")
+		}
+		if capturedFormID != lowerID {
+			t.Fatalf("FormIDContextKey = %q, want lowercase %q", capturedFormID, lowerID)
+		}
+		select {
+		case refreshed := <-am.FormChan:
+			t.Fatalf("did not expect refresh backfill on cache hit, got %q", refreshed)
+		default:
+		}
+	})
+
+	t.Run("CacheMissCanonicalizesContextValueAndBackfill", func(t *testing.T) {
+		cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
+		am := newMiddleware(cache)
+
+		var capturedForm *dbgen.Form
+		var capturedFormID string
+		handler := am.Form(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedForm, _ = r.Context().Value(common.FormContextKey).(*dbgen.Form)
+			capturedFormID, _ = r.Context().Value(common.FormIDContextKey).(string)
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		req := httptest.NewRequest(http.MethodPost, "/"+common.FormEndpoint+"/"+upperID, nil)
+		req.SetPathValue(common.ParamForm, upperID)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+		}
+		if capturedForm != nil {
+			t.Fatal("did not expect FormContextKey to be set on cache miss")
+		}
+		if capturedFormID != lowerID {
+			t.Fatalf("FormIDContextKey = %q, want lowercase %q (path should be canonicalized before being stored in context)", capturedFormID, lowerID)
+		}
+		select {
+		case refreshed := <-am.FormChan:
+			if refreshed != lowerID {
+				t.Fatalf("refreshForm backfill received %q, want lowercase %q", refreshed, lowerID)
+			}
+		default:
+			t.Fatal("expected refreshForm to be queued on cache miss")
+		}
+	})
 }

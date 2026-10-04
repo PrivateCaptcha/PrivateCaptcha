@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/maypok86/otter/v2"
@@ -643,6 +644,7 @@ func (am *AuthMiddleware) Form(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		guid := r.PathValue(common.ParamForm)
+		guid = strings.ToLower(guid)
 		if !db.CanBeValidSitekey(guid) {
 			slog.Log(ctx, common.LevelTrace, "Form GUID is not valid", "length", len(guid))
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
