@@ -185,6 +185,15 @@ function puzzlePayload(body) {
     return `${encode(body.buffer)}.signature`;
 }
 
+function mockZeroPuzzleFetch(t) {
+    const body = new Uint8Array(47);
+    body[0] = 1;
+    body[26] = 1;
+    t.mock.method(globalThis, 'fetch', async () => ({
+        ok: true, text: async () => puzzlePayload(body), headers: { get: () => null },
+    }));
+}
+
 // we have to mock worker too
 global.Worker = class Worker {
     constructor() {
@@ -256,6 +265,7 @@ test('default widget fails when an Argon2id property issues an Argon2id puzzle',
 
 
 test('CaptchaWidget execute() fires finished event and callback', async (t) => {
+    mockZeroPuzzleFetch(t);
     document.body.innerHTML = `
         <form>
             <div class="private-captcha"
@@ -310,6 +320,7 @@ test('CaptchaWidget execute() fires finished event and callback', async (t) => {
 });
 
 test('CaptchaWidget execute() in click popup mode keeps checkbox unchecked until user clicks', async (t) => {
+    mockZeroPuzzleFetch(t);
     document.body.innerHTML = `
         <form>
             <div class="private-captcha-anchor">
@@ -391,6 +402,7 @@ test('CaptchaWidget execute() in click popup mode keeps checkbox unchecked until
 });
 
 test('CaptchaWidget execute() during hidden click-mode loading starts and finishes solving', async (t) => {
+    mockZeroPuzzleFetch(t);
     document.body.innerHTML = `
         <form>
             <button type="button" id="submit-button">Submit</button>
@@ -442,6 +454,7 @@ test('CaptchaWidget execute() during hidden click-mode loading starts and finish
 });
 
 test('CaptchaWidget init() fires init event and callback', async (t) => {
+    mockZeroPuzzleFetch(t);
     document.body.innerHTML = `
         <form>
             <div class="private-captcha"
@@ -491,6 +504,7 @@ test('CaptchaWidget init() fires init event and callback', async (t) => {
 });
 
 test('CaptchaWidget execute() fires started event and callback', async (t) => {
+    mockZeroPuzzleFetch(t);
     document.body.innerHTML = `
         <form>
             <div class="private-captcha"
@@ -1108,70 +1122,97 @@ test('CaptchaWidget does not refetch when puzzle expiration is in the past (clie
     }
 });
 
-test('CaptchaWidget schedules expire timer for future-dated puzzle and still solves it', { timeout: 4000 }, async () => {
+test('CaptchaWidget expiration clears solutions, signals reset, and permits execute again', async (t) => {
     const { CaptchaWidget } = await import('../js/widget.js');
-    const { WorkersPool } = await import('../js/workerspool.js');
-    const { STATE_VERIFIED } = await import('../js/html.js');
-    class SolvingWorker {
-        postMessage({ command, argument }) {
-            if (command === 'init') {
-                this.id = argument.id;
-                setTimeout(() => this.onmessage?.({ data: { command: 'init' } }), 0);
-            } else if (command === 'solve') {
-                const solution = new Uint8Array(8);
-                solution[0] = argument.puzzleIndex;
-                setTimeout(() => this.onmessage?.({
-                    data: {
-                        command: 'solve', argument: {
-                            id: this.id, solution, wasm: false,
-                        }
-                    }
-                }), 0);
-            }
-        }
-        terminate() { this.onmessage = null; }
-    }
-    const body = bytesFromHex(protocolFixtures.v1.body);
-    body[26] = 1;
-    const futureTimestamp = Math.floor(Date.now() / 1000) + 3600;
-    body[27] = futureTimestamp & 0xFF;
-    body[28] = (futureTimestamp >>> 8) & 0xFF;
-    body[29] = (futureTimestamp >>> 16) & 0xFF;
-    body[30] = (futureTimestamp >>> 24) & 0xFF;
-    const previousFetch = globalThis.fetch;
-    let fetches = 0;
-    globalThis.fetch = async () => {
-        fetches++;
-        return { ok: true, text: async () => puzzlePayload(body), headers: { get: () => null } };
-    };
-    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}" data-start-mode="load"></div></form>`;
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    mockZeroPuzzleFetch(t);
+    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}"></div></form>`;
     const element = document.querySelector('.private-captcha');
-    let widget;
-    try {
-        widget = new CaptchaWidget(element);
-        widget._workersPool = new WorkersPool({
-            workersReady: widget.onWorkersReady.bind(widget),
-            workerError: widget.onWorkerError.bind(widget),
-            workStarted: widget.onWorkStarted.bind(widget),
-            workCompleted: widget.onWorkCompleted.bind(widget),
-            progress: widget.onWorkProgress.bind(widget),
-        }, false, SolvingWorker);
+    const widget = new CaptchaWidget(element);
+    t.after(() => widget._workersPool.stop());
+    const finished = t.mock.fn();
+    const reset = t.mock.fn();
+    element.addEventListener('privatecaptcha:finish', finished);
+    element.addEventListener('privatecaptcha:reset', reset);
+    const waitForInit = () => new Promise((resolve) => element.addEventListener('privatecaptcha:init', resolve, { once: true }));
 
-        const finished = new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('future-dated puzzle did not finish')), 2000);
-            element.addEventListener('privatecaptcha:finish', () => { clearTimeout(timeout); resolve(); }, { once: true });
-        });
-        await finished;
+    const initialized = waitForInit();
+    widget.execute();
+    await initialized;
+    t.mock.timers.tick(1);
+    assert.ok(widget.solution());
 
-        assert.strictEqual(widget._state, STATE_VERIFIED);
-        assert.strictEqual(fetches, 1, 'future-dated puzzle must not refetch during solving');
-        assert.ok(widget.solution(), 'must expose the solution');
-        assert.ok(widget._expiryTimeout, 'must schedule an expiry timer for a future-dated puzzle');
-    } finally {
-        globalThis.fetch = previousFetch;
-        if (widget?._expiryTimeout) { clearTimeout(widget._expiryTimeout); }
-        widget?._workersPool?.stop();
-    }
+    const refreshed = waitForInit();
+    widget.expire();
+    assert.strictEqual(reset.mock.calls.length, 1);
+    assert.strictEqual(widget.solution(), null);
+    assert.strictEqual(element.querySelector('input[name="private-captcha-solution"]'), null);
+    assert.strictEqual(widget._apiTriggered, false);
+    await refreshed;
+    t.mock.timers.tick(1);
+    t.mock.timers.tick(500);
+    assert.strictEqual(finished.mock.calls.length, 0, 'expired work must not signal finish');
+
+    widget.execute();
+    assert.strictEqual(finished.mock.calls.length, 1);
+    assert.ok(widget.solution());
+    assert.strictEqual(element.querySelector('input[name="private-captcha-solution"]').value, widget.solution());
+});
+
+async function initExpirationWidget(t, ttlSeconds) {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const body = bytesFromHex(protocolFixtures.v1.body);
+    new DataView(body.buffer).setUint32(27, ttlSeconds === 0 ? 0 : Date.now() / 1000 + ttlSeconds, true);
+    const fetch = t.mock.method(globalThis, 'fetch', async () => ({
+        ok: true, text: async () => puzzlePayload(body), headers: { get: () => null },
+    }));
+    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}" data-start-mode="click"></div></form>`;
+    const widget = new CaptchaWidget(document.querySelector('.private-captcha'));
+    t.mock.method(widget._workersPool, 'init', () => {});
+    widget._expiryTimeout = setTimeout(() => widget.expire(), 600000);
+    await widget.init(false);
+    fetch.mock.restore();
+    return widget;
+}
+
+test('CaptchaWidget expires five seconds before the server deadline', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1800000000000 });
+    const widget = await initExpirationWidget(t, 300);
+    const expire = t.mock.method(widget, 'expire', () => {});
+    t.mock.timers.tick(294999);
+    assert.strictEqual(expire.mock.calls.length, 0);
+    t.mock.timers.tick(1);
+    assert.strictEqual(expire.mock.calls.length, 1);
+});
+
+test('CaptchaWidget keeps short TTLs positive without extending their deadline', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1800000000000 });
+    const boundaryWidget = await initExpirationWidget(t, 5);
+    const boundaryExpire = t.mock.method(boundaryWidget, 'expire', () => {});
+    t.mock.timers.tick(4999);
+    assert.strictEqual(boundaryExpire.mock.calls.length, 0);
+    t.mock.timers.tick(1);
+    assert.strictEqual(boundaryExpire.mock.calls.length, 1);
+
+    const shortWidget = await initExpirationWidget(t, 1);
+    const shortExpire = t.mock.method(shortWidget, 'expire', () => {});
+    t.mock.timers.tick(999);
+    assert.strictEqual(shortExpire.mock.calls.length, 0);
+    t.mock.timers.tick(1);
+    assert.strictEqual(shortExpire.mock.calls.length, 1);
+});
+
+test('CaptchaWidget clears previous timers for zero and past-dated expirations', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1800000000000 });
+    const zeroWidget = await initExpirationWidget(t, 0);
+    const zeroExpire = t.mock.method(zeroWidget, 'expire', () => {});
+    assert.strictEqual(zeroWidget._expiryTimeout, null);
+    const pastWidget = await initExpirationWidget(t, -1);
+    const pastExpire = t.mock.method(pastWidget, 'expire', () => {});
+    assert.strictEqual(pastWidget._expiryTimeout, null);
+    t.mock.timers.tick(600000);
+    assert.strictEqual(zeroExpire.mock.calls.length, 0);
+    assert.strictEqual(pastExpire.mock.calls.length, 0);
 });
 
 test('CaptchaWidget reports Argon2id provider initialization errors', async () => {

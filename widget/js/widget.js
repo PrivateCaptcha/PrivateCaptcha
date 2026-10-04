@@ -11,6 +11,7 @@ if (typeof window !== "undefined" && window.customElements && !window.customElem
 
 const PUZZLE_ENDPOINT_URL = 'https://api.privatecaptcha.com/puzzle';
 const PUZZLE_EU_ENDPOINT_URL = 'https://api.eu.privatecaptcha.com/puzzle';
+const PUZZLE_EXPIRATION_GRACE_MILLIS = 5000;
 export const RECAPTCHA_COMPAT = 'recaptcha';
 
 
@@ -186,9 +187,13 @@ export class CaptchaWidget {
             this._puzzle = new Puzzle(puzzleResult.data);
             if (this._puzzle && this._puzzle.isZero()) { this._errorCode = errors.ERROR_ZERO_PUZZLE; }
             const expirationMillis = this._puzzle.expirationMillis();
+            // Keep short TTLs positive instead of immediately refreshing the puzzle.
+            const expiryDelayMillis = expirationMillis > PUZZLE_EXPIRATION_GRACE_MILLIS
+                ? expirationMillis - PUZZLE_EXPIRATION_GRACE_MILLIS
+                : expirationMillis;
             this.trace(`parsed puzzle buffer. isZero=${this._puzzle.isZero()} ttl=${expirationMillis / 1000}`);
-            if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
-            if (expirationMillis > 0) { this._expiryTimeout = setTimeout(() => this.expire(), expirationMillis); }
+            if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); this._expiryTimeout = null; }
+            if (expiryDelayMillis > 0) { this._expiryTimeout = setTimeout(() => this.expire(), expiryDelayMillis); }
             try {
                 this._workersPool.init(this._puzzle, startWorkers);
             } catch (error) {
@@ -348,14 +353,8 @@ export class CaptchaWidget {
     expire() {
         this.trace('expire captcha');
 
-        // we immediately call init so reset() will be called there for workers pool
-        if (this._workersPool) { this._workersPool.stop(); }
-
-        this.setState(STATE_EMPTY);
-        this.setProgressState(STATE_EMPTY);
-        this.ensureNoSolutionField();
-        this._apiTriggered = false;
-        this.init(this._userStarted);
+        this.reset();
+        if (STATE_EMPTY === this._state) { this.init(false); }
     }
 
     /**
@@ -533,7 +532,12 @@ export class CaptchaWidget {
             this.saveSolutions();
 
             // give time for checkbox animation to complete
-            setTimeout(() => this.signalFinished(), 500);
+            const puzzle = this._puzzle;
+            setTimeout(() => {
+                if ((STATE_VERIFIED === this._state) && (puzzle === this._puzzle)) {
+                    this.signalFinished();
+                }
+            }, 500);
         }
     }
 
