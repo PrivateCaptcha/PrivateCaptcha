@@ -1012,6 +1012,168 @@ test('Puzzle rejects unknown and non-canonical records', async () => {
     }
 });
 
+test('Puzzle.expirationMillis() returns 0 for zero expirationTimestamp', async () => {
+    const { Puzzle } = await import('../js/puzzle.js');
+    const body = bytesFromHex(protocolFixtures.v1.body);
+    body.fill(0, 27, 31);
+    const puzzle = new Puzzle(puzzlePayload(body));
+    assert.strictEqual(puzzle.expirationTimestamp, 0);
+    assert.strictEqual(puzzle.expirationMillis(), 0);
+});
+
+test('Puzzle.expirationMillis() clamps past-dated expiration to 0 instead of returning a negative value', async () => {
+    const { Puzzle } = await import('../js/puzzle.js');
+    const body = bytesFromHex(protocolFixtures.v1.body);
+    const puzzle = new Puzzle(puzzlePayload(body));
+    assert.ok(puzzle.expirationTimestamp > 0, 'fixture has a non-zero timestamp');
+    assert.ok(puzzle.expirationTimestamp * 1000 < Date.now(), 'fixture expiration is in the past');
+    assert.strictEqual(puzzle.expirationMillis(), 0, 'past-dated expiration must clamp to 0, not return negative');
+});
+
+test('Puzzle.expirationMillis() returns positive millis for future-dated expiration', async () => {
+    const { Puzzle } = await import('../js/puzzle.js');
+    const body = bytesFromHex(protocolFixtures.v1.body);
+    const futureTimestamp = Math.floor(Date.now() / 1000) + 3600;
+    body[27] = futureTimestamp & 0xFF;
+    body[28] = (futureTimestamp >>> 8) & 0xFF;
+    body[29] = (futureTimestamp >>> 16) & 0xFF;
+    body[30] = (futureTimestamp >>> 24) & 0xFF;
+    const puzzle = new Puzzle(puzzlePayload(body));
+    const expirationMillis = puzzle.expirationMillis();
+    assert.ok(expirationMillis > 0, 'future-dated expiration must return positive millis');
+    assert.ok(expirationMillis <= 3600 * 1000, 'should be at most 1 hour');
+});
+
+test('CaptchaWidget does not refetch when puzzle expiration is in the past (client clock ahead)', { timeout: 4000 }, async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { WorkersPool } = await import('../js/workerspool.js');
+    const { STATE_VERIFIED } = await import('../js/html.js');
+    class SolvingWorker {
+        postMessage({ command, argument }) {
+            if (command === 'init') {
+                this.id = argument.id;
+                setTimeout(() => this.onmessage?.({ data: { command: 'init' } }), 0);
+            } else if (command === 'solve') {
+                const solution = new Uint8Array(8);
+                solution[0] = argument.puzzleIndex;
+                setTimeout(() => this.onmessage?.({
+                    data: {
+                        command: 'solve', argument: {
+                            id: this.id, solution, wasm: false,
+                        }
+                    }
+                }), 0);
+            }
+        }
+        terminate() { this.onmessage = null; }
+    }
+    const body = bytesFromHex(protocolFixtures.v1.body);
+    body[26] = 1;
+    const previousFetch = globalThis.fetch;
+    let fetches = 0;
+    globalThis.fetch = async () => {
+        fetches++;
+        return { ok: true, text: async () => puzzlePayload(body), headers: { get: () => null } };
+    };
+    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}" data-start-mode="load"></div></form>`;
+    const element = document.querySelector('.private-captcha');
+    let widget;
+    try {
+        widget = new CaptchaWidget(element);
+        widget._workersPool = new WorkersPool({
+            workersReady: widget.onWorkersReady.bind(widget),
+            workerError: widget.onWorkerError.bind(widget),
+            workStarted: widget.onWorkStarted.bind(widget),
+            workCompleted: widget.onWorkCompleted.bind(widget),
+            progress: widget.onWorkProgress.bind(widget),
+        }, false, SolvingWorker);
+
+        const finished = new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('past-dated puzzle did not finish')), 2000);
+            element.addEventListener('privatecaptcha:finish', () => { clearTimeout(timeout); resolve(); }, { once: true });
+        });
+        await finished;
+
+        assert.strictEqual(widget._state, STATE_VERIFIED, 'past-dated puzzle must be solved, not looped');
+        assert.strictEqual(fetches, 1, 'must not refetch when expiration is in the past');
+        assert.ok(widget.solution(), 'must expose the solution');
+        assert.strictEqual(widget._expiryTimeout, null, 'must not schedule an expiry timer for a past-dated puzzle');
+
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        assert.strictEqual(fetches, 1, 'no delayed refetch should occur');
+    } finally {
+        globalThis.fetch = previousFetch;
+        if (widget?._expiryTimeout) { clearTimeout(widget._expiryTimeout); }
+        widget?._workersPool?.stop();
+    }
+});
+
+test('CaptchaWidget schedules expire timer for future-dated puzzle and still solves it', { timeout: 4000 }, async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { WorkersPool } = await import('../js/workerspool.js');
+    const { STATE_VERIFIED } = await import('../js/html.js');
+    class SolvingWorker {
+        postMessage({ command, argument }) {
+            if (command === 'init') {
+                this.id = argument.id;
+                setTimeout(() => this.onmessage?.({ data: { command: 'init' } }), 0);
+            } else if (command === 'solve') {
+                const solution = new Uint8Array(8);
+                solution[0] = argument.puzzleIndex;
+                setTimeout(() => this.onmessage?.({
+                    data: {
+                        command: 'solve', argument: {
+                            id: this.id, solution, wasm: false,
+                        }
+                    }
+                }), 0);
+            }
+        }
+        terminate() { this.onmessage = null; }
+    }
+    const body = bytesFromHex(protocolFixtures.v1.body);
+    body[26] = 1;
+    const futureTimestamp = Math.floor(Date.now() / 1000) + 3600;
+    body[27] = futureTimestamp & 0xFF;
+    body[28] = (futureTimestamp >>> 8) & 0xFF;
+    body[29] = (futureTimestamp >>> 16) & 0xFF;
+    body[30] = (futureTimestamp >>> 24) & 0xFF;
+    const previousFetch = globalThis.fetch;
+    let fetches = 0;
+    globalThis.fetch = async () => {
+        fetches++;
+        return { ok: true, text: async () => puzzlePayload(body), headers: { get: () => null } };
+    };
+    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}" data-start-mode="load"></div></form>`;
+    const element = document.querySelector('.private-captcha');
+    let widget;
+    try {
+        widget = new CaptchaWidget(element);
+        widget._workersPool = new WorkersPool({
+            workersReady: widget.onWorkersReady.bind(widget),
+            workerError: widget.onWorkerError.bind(widget),
+            workStarted: widget.onWorkStarted.bind(widget),
+            workCompleted: widget.onWorkCompleted.bind(widget),
+            progress: widget.onWorkProgress.bind(widget),
+        }, false, SolvingWorker);
+
+        const finished = new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('future-dated puzzle did not finish')), 2000);
+            element.addEventListener('privatecaptcha:finish', () => { clearTimeout(timeout); resolve(); }, { once: true });
+        });
+        await finished;
+
+        assert.strictEqual(widget._state, STATE_VERIFIED);
+        assert.strictEqual(fetches, 1, 'future-dated puzzle must not refetch during solving');
+        assert.ok(widget.solution(), 'must expose the solution');
+        assert.ok(widget._expiryTimeout, 'must schedule an expiry timer for a future-dated puzzle');
+    } finally {
+        globalThis.fetch = previousFetch;
+        if (widget?._expiryTimeout) { clearTimeout(widget._expiryTimeout); }
+        widget?._workersPool?.stop();
+    }
+});
+
 test('CaptchaWidget reports Argon2id provider initialization errors', async () => {
     const { CaptchaWidget } = await import('../js/widget.js');
     const { STATE_ERROR, STATE_LOADING } = await import('../js/html.js');
