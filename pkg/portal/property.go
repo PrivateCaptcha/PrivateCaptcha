@@ -864,8 +864,18 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 
 	var auditEvent *common.AuditLogEvent
 
+	// The portal slider clamps the displayed level to [MinLevel, MaxLevel]. If the
+	// stored level is outside that range (e.g. from schema migrations or the REST
+	// API), the slider pegs at a boundary and the form resubmits that boundary
+	// value even on an unrelated edit. Preserve the raw stored level unless the
+	// submitted difficulty actually differs from the displayed (clamped) level.
+	level := property.Level.Int16
+	if int16(difficulty) != int16(renderCtx.Property.Level) {
+		level = int16(difficulty)
+	}
+
 	if (name != property.Name) ||
-		(int16(difficulty) != property.Level.Int16) ||
+		(level != property.Level.Int16) ||
 		(growth != property.Growth) ||
 		(challenge != property.Challenge) ||
 		(validityInterval != property.ValidityInterval) ||
@@ -875,7 +885,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 		params := &dbgen.UpdatePropertyParams{
 			ID:               property.ID,
 			Name:             name,
-			Level:            db.Int2(int16(difficulty)),
+			Level:            db.Int2(level),
 			Growth:           growth,
 			Challenge:        dbgen.NullChallengeType{ChallengeType: challenge, Valid: true},
 			ValidityInterval: validityInterval,
