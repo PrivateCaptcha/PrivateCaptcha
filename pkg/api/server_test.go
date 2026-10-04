@@ -223,6 +223,12 @@ func TestAPIServerStoreErrors(t *testing.T) {
 
 		mux.ServeHTTP(w, req)
 
+		if strings.HasSuffix(path, common.RelURL(common.WellKnownEndpoint, common.JWKSFileEndpoint)) {
+			if w.Code != http.StatusOK {
+				t.Errorf("JWKS route should not depend on the store, got %d", w.Code)
+			}
+			continue
+		}
 		if w.Code < 400 && w.Code != http.StatusNotFound && method != "OPTIONS" {
 			t.Errorf("Route %s %s expected error status, got %d", method, path, w.Code)
 		}

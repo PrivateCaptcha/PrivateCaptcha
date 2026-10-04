@@ -8,14 +8,16 @@ import (
 )
 
 type VerifyResult struct {
-	UserID     int32
-	OrgID      int32
-	PropertyID int32
-	PuzzleID   uint64
-	Error      VerifyError
-	CreatedAt  time.Time
-	ExpiresAt  time.Time
-	Domain     string
+	UserID                    int32
+	OrgID                     int32
+	PropertyID                int32
+	PuzzleID                  uint64
+	Error                     VerifyError
+	CreatedAt                 time.Time
+	ExpiresAt                 time.Time
+	Domain                    string
+	ExternalID                []byte
+	EdgeTokenValidityInterval time.Duration
 }
 
 func NewVerifyResult(verr VerifyError) *VerifyResult {

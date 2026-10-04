@@ -158,6 +158,61 @@ paths:
           description: API key rate limited or verification capacity exhausted
       security:
         - ApiKeyAuth: []
+  /.well-known/jwks.json:
+    get:
+      tags: [verify]
+      summary: Discover the public ES256 edge-token verification key
+      description: Returns an empty keys array with Cache-Control no-store when edge-token signing is disabled. Nonempty key sets are cacheable for 300 seconds.
+      operationId: get-edge-jwks
+      responses:
+        "200":
+          description: Public JSON Web Key Set
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: public, max-age=300
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      required: [kty, crv, alg, use, kid, x, y]
+                      properties:
+                        kty: { type: string, example: EC }
+                        crv: { type: string, example: P-256 }
+                        alg: { type: string, example: ES256 }
+                        use: { type: string, example: sig }
+                        kid: { type: string }
+                        x: { type: string }
+                        y: { type: string }
+  /gate/page:
+    get:
+      tags: [verify]
+      summary: Retrieve a hosted challenge page for an edge-enabled property
+      operationId: get-gate-page
+      parameters:
+        - name: sitekey
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "Challenge page with a baked-in sitekey."
+          content:
+            text/html:
+              schema:
+                type: string
+        "400":
+          description: Malformed sitekey
+        "403":
+          description: Known disabled, deleted, test or negative-cached property
   /siteverify:
     post:
       tags:
@@ -618,6 +673,9 @@ components:
           type: string
           format: date-time
           example: "2009-11-10T23:00:00Z"
+        edge_token:
+          type: string
+          description: Optional signed ES256 JWT returned only after successful verification when the property enables edge tokens. Claims include v, iss, aud (sitekey), host, iat and exp. Verify against /.well-known/jwks.json.
     APIResponse:
       type: object
       properties:
@@ -695,6 +753,11 @@ components:
         validity_seconds:
           type: integer
           example: 21600
+        edge_token_validity_seconds:
+          type: integer
+          minimum: 0
+          maximum: 86400
+          description: Edge token lifetime in seconds; zero disables issuance. Omission defaults to disabled on creation and preserves the stored lifetime on update. Nonzero values require a property domain and configured signing keys.
         allow_subdomains:
           type: boolean
         allow_localhost:

@@ -95,6 +95,7 @@ const (
 	UserLimitEventType     MetricEventType = "user_limit"
 	SessionEventType       MetricEventType = "session"
 	SitekeyEventType       MetricEventType = "sitekey"
+	EdgeEventType          MetricEventType = "edge"
 	APIKeyEventType        MetricEventType = "apikey"
 	PropertyRulesEventType MetricEventType = "property_rules"
 	FormEventType          MetricEventType = "form"

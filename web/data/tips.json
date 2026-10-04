@@ -246,5 +246,13 @@
         "patterns": ["/org/{org}"],
         "reports": {"monthly": false, "weekly": false},
         "updated_at": "2026-09-06"
+    },
+    {
+        "id": "edge-protection",
+        "text": "You can protect website against scraping via Edge protection in property settings",
+        "link": "https://docs.privatecaptcha.com/docs/reference/edge-protection/",
+        "patterns": ["/org/{org}"],
+        "reports": {"monthly": true, "weekly": false},
+        "updated_at": "2026-10-04"
     }
 ]

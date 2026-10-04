@@ -13,6 +13,18 @@ type QuerierStub struct {
 
 var _ dbgen.Querier = (*QuerierStub)(nil)
 
+func (s *QuerierStub) GetEdgeSettingsBySitekey(ctx context.Context, externalID pgtype.UUID) (*dbgen.GetEdgeSettingsBySitekeyRow, error) {
+	return nil, s.Error
+}
+
+func (s *QuerierStub) GetEdgeSettingsBySitekeys(ctx context.Context, keys []pgtype.UUID) ([]*dbgen.GetEdgeSettingsBySitekeysRow, error) {
+	return nil, s.Error
+}
+
+func (s *QuerierStub) UpsertEdgeSettings(ctx context.Context, arg *dbgen.UpsertEdgeSettingsParams) (*dbgen.UpsertEdgeSettingsRow, error) {
+	return nil, s.Error
+}
+
 func (s *QuerierStub) ConsumeEmailChangeChallenge(ctx context.Context, arg *dbgen.ConsumeEmailChangeChallengeParams) (*dbgen.ConsumeEmailChangeChallengeRow, error) {
 	return nil, s.Error
 }

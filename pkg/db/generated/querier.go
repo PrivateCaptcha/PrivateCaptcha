@@ -54,6 +54,8 @@ type Querier interface {
 	GetDifficultyRulePositionNeighbors(ctx context.Context, arg *GetDifficultyRulePositionNeighborsParams) (*GetDifficultyRulePositionNeighborsRow, error)
 	GetDifficultyRulesByOrgIDs(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error)
 	GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error)
+	GetEdgeSettingsBySitekey(ctx context.Context, externalID pgtype.UUID) (*GetEdgeSettingsBySitekeyRow, error)
+	GetEdgeSettingsBySitekeys(ctx context.Context, dollar_1 []pgtype.UUID) ([]*GetEdgeSettingsBySitekeysRow, error)
 	GetFormAuditLogs(ctx context.Context, arg *GetFormAuditLogsParams) ([]*GetFormAuditLogsRow, error)
 	GetFormByID(ctx context.Context, id int32) (*Form, error)
 	GetFormByPropertyID(ctx context.Context, propertyID int32) (*Form, error)
@@ -153,6 +155,7 @@ type Querier interface {
 	UpdateSessionPayloads(ctx context.Context, arg *UpdateSessionPayloadsParams) ([]*UpdateSessionPayloadsRow, error)
 	UpdateUserData(ctx context.Context, arg *UpdateUserDataParams) (*User, error)
 	UpdateUserSubscription(ctx context.Context, arg *UpdateUserSubscriptionParams) (*User, error)
+	UpsertEdgeSettings(ctx context.Context, arg *UpsertEdgeSettingsParams) (*UpsertEdgeSettingsRow, error)
 	UpsertUserSettings(ctx context.Context, arg *UpsertUserSettingsParams) (*UserSettings, error)
 }
 

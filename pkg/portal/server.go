@@ -160,6 +160,7 @@ type Server struct {
 	TimeSeries           common.TimeSeriesStore
 	APIURL               string
 	CDNURL               string
+	EdgeTokens           *api.EdgeTokenSigner
 	Prefix               string
 	IDHasher             common.IdentifierHasher
 	template             *Templates

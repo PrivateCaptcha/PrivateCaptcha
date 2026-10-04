@@ -85,6 +85,10 @@ func init() {
 	configKeyToEnvName[common.CacheDirKey] = "CACHE_DIRECTORY"
 	configKeyToEnvName[common.GradualDataCleanupKey] = "PC_GRADUAL_DATA_CLEANUP"
 	configKeyToEnvName[common.Argon2IDMemoryBudgetKey] = "PC_ARGON2_MEMORY_BUDGET_MIB"
+	configKeyToEnvName[common.EdgeTokenPrivateKeyKey] = "PC_EDGE_TOKEN_PRIVATE_KEY"
+	configKeyToEnvName[common.EdgeTokenPublicKeyKey] = "PC_EDGE_TOKEN_PUBLIC_KEY"
+	configKeyToEnvName[common.EdgeTokenPreviousPrivateKeyKey] = "PC_EDGE_TOKEN_PREVIOUS_PRIVATE_KEY"
+	configKeyToEnvName[common.EdgeTokenPreviousPublicKeyKey] = "PC_EDGE_TOKEN_PREVIOUS_PUBLIC_KEY"
 
 	for i, v := range configKeyToEnvName {
 		if len(v) == 0 {

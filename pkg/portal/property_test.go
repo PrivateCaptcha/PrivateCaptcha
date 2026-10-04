@@ -2,7 +2,12 @@ package portal
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/api"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -57,6 +63,35 @@ func TestPropertyToUserPropertyDisplayDomain(t *testing.T) {
 				t.Errorf("HasDomain = %v; want %v", result.HasDomain, tt.hasDomain)
 			}
 		})
+	}
+}
+
+func TestPropertyToUserPropertyEdgeValidity(t *testing.T) {
+	property := &dbgen.Property{ID: 1, OrgID: db.Int(2)}
+	for i, duration := range puzzle.ValidityDurations {
+		property.EdgeTokenValidityInterval = duration
+		if got := propertyToUserProperty(property, server.IDHasher).EdgeTokenValidityInterval; got != i+1 {
+			t.Errorf("exact duration %v: got index %d, want %d", duration, got, i+1)
+		}
+	}
+	for _, tt := range []struct {
+		period time.Duration
+		want   int
+	}{
+		{0, 0},
+		{-time.Minute, 0},
+		{time.Minute, 1},
+		{8 * time.Minute, 2},
+		{20 * time.Minute, 2},
+		{25 * time.Minute, 3},
+		{2 * time.Hour, 4},
+		{5 * time.Hour, 5},
+		{48 * time.Hour, 7},
+	} {
+		property.EdgeTokenValidityInterval = tt.period
+		if got := propertyToUserProperty(property, server.IDHasher).EdgeTokenValidityInterval; got != tt.want {
+			t.Errorf("duration %v: got index %d, want %d", tt.period, got, tt.want)
+		}
 	}
 }
 
@@ -749,7 +784,9 @@ func TestGetOrgPropertySettings(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example.com"), org)
+	params := db_tests.CreateNewPropertyParams(user.ID, "example.com")
+	params.EdgeTokenValidityInterval = time.Hour
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, params, org)
 	if err != nil {
 		t.Fatalf("Failed to create new property: %v", err)
 	}
@@ -780,6 +817,9 @@ func TestGetOrgPropertySettings(t *testing.T) {
 
 	if renderCtx.Tab != propertySettingsTabIndex {
 		t.Errorf("Expected tab to be %d, got %d", propertySettingsTabIndex, renderCtx.Tab)
+	}
+	if renderCtx.EdgeWidgetStartMode != "click" {
+		t.Fatalf("missing edge settings did not use defaults: %q", renderCtx.EdgeWidgetStartMode)
 	}
 
 	if auditEvent == nil {
@@ -1997,6 +2037,20 @@ func TestPutPropertyCannotEdit(t *testing.T) {
 	if renderCtx.ErrorMessage == "" {
 		t.Error("Expected ErrorMessage to be set for permission denial")
 	}
+	if viewModel.View != propertySettingsBasicFormTemplate {
+		t.Fatalf("basic settings view = %q, want %q", viewModel.View, propertySettingsBasicFormTemplate)
+	}
+	form.Set(common.ParamEdgeTokenValidityInterval, "4")
+	form.Set(common.ParamEdgeWidgetStartMode, "load")
+	edgeReq := httptest.NewRequest(http.MethodPut, req.URL.Path, strings.NewReader(form.Encode()))
+	edgeReq.AddCookie(cookie)
+	edgeReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	edgeReq.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	edgeReq.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+	edgeView, err := server.putPropertyEdgeSettings(httptest.NewRecorder(), edgeReq)
+	if err != nil || edgeView.Model.(*edgePropertySettingsRenderContext).ErrorMessage == "" {
+		t.Fatalf("member was allowed to edit edge settings: %+v, err=%v", edgeView, err)
+	}
 }
 
 func TestPutPropertyChangeDifficulty(t *testing.T) {
@@ -2058,6 +2112,217 @@ func TestPutPropertyChangeDifficulty(t *testing.T) {
 
 	if renderCtx.SuccessMessage == "" {
 		t.Error("Expected SuccessMessage to be set after updating property")
+	}
+	if viewModel.View != propertySettingsBasicFormTemplate {
+		t.Fatalf("basic settings view = %q, want %q", viewModel.View, propertySettingsBasicFormTemplate)
+	}
+}
+
+func TestPutPropertyEdgeSettings(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "edge-settings.example.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if property.EdgeTokenValidityInterval != 0 {
+		t.Fatalf("default TTL = %v", property.EdgeTokenValidityInterval)
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicDER, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := server.EdgeTokens
+	edgeConfig := config.NewBaseConfig(config.NewEnvConfig(func(string) string { return "" }))
+	edgeConfig.Add(config.NewStaticValue(common.EdgeTokenPrivateKeyKey, string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER}))))
+	edgeConfig.Add(config.NewStaticValue(common.EdgeTokenPublicKeyKey, string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: publicDER}))))
+	server.EdgeTokens = api.NewEdgeTokenSigner("", edgeConfig)
+	if err := server.EdgeTokens.Update(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { server.EdgeTokens = previous }()
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, property.Name)
+	form.Set(common.ParamDifficulty, strconv.Itoa(int(property.Level.Int16)))
+	form.Set(common.ParamGrowth, strconv.Itoa(growthLevelToIndex(property.Growth)))
+	form.Set(common.ParamValidityInterval, strconv.Itoa(puzzle.ValidityIntervalToIndex(property.ValidityInterval)))
+	form.Set(common.ParamEdgeTokenValidityInterval, "4")
+	form.Set(common.ParamEdgeWidgetStartMode, "load")
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+	w := httptest.NewRecorder()
+	view, err := server.putPropertyEdgeSettings(w, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := view.Model.(*edgePropertySettingsRenderContext)
+	if model.SuccessMessage == "" || model.Property.EdgeTokenValidityInterval != 4 || model.EdgeWidgetStartMode != "load" {
+		t.Fatalf("portal update: %+v", model)
+	}
+	if view.View != propertySettingsEdgeFormTemplate {
+		t.Fatalf("edge settings view = %q, want %q", view.View, propertySettingsEdgeFormTemplate)
+	}
+	if len(view.AuditEvents) != 2 || view.AuditEvents[1].TableName != db.TableNameEdgeSettings {
+		t.Fatalf("edge settings audit events = %+v", view.AuditEvents)
+	}
+	updated, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil || updated.EdgeTokenValidityInterval != time.Hour || updated.Name != property.Name || updated.Level != property.Level {
+		t.Fatalf("stored TTL = %v, err = %v", updated, err)
+	}
+	edge, err := store.Impl().RetrieveEdgeSettingsBySitekey(ctx, db.UUIDToSiteKey(property.ExternalID), false)
+	if err != nil || edge.EdgeWidgetStartMode != "load" {
+		t.Fatalf("stored edge settings = %+v, err=%v", edge, err)
+	}
+
+	for _, handler := range []string{"edge", "basic"} {
+		for _, invalid := range []string{"missing", "", "invalid", "-1", strconv.Itoa(len(puzzle.ValidityDurations) + 1), "+0", "00"} {
+			if handler == "basic" && invalid == "missing" {
+				continue
+			}
+			t.Run(handler+" rejects validity "+invalid, func(t *testing.T) {
+				form.Set(common.ParamEdgeTokenValidityInterval, invalid)
+				if invalid == "missing" {
+					form.Del(common.ParamEdgeTokenValidityInterval)
+				}
+				form.Set(common.ParamEdgeWidgetStartMode, "click")
+				invalidReq := httptest.NewRequest(http.MethodPut, req.URL.Path, strings.NewReader(form.Encode()))
+				invalidReq.AddCookie(cookie)
+				invalidReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+				invalidReq.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+				invalidReq.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+				var invalidView *ViewModel
+				var err error
+				if handler == "edge" {
+					invalidView, err = server.putPropertyEdgeSettings(httptest.NewRecorder(), invalidReq)
+				} else {
+					invalidView, err = server.putProperty(httptest.NewRecorder(), invalidReq)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				var errorMessage string
+				switch model := invalidView.Model.(type) {
+				case *edgePropertySettingsRenderContext:
+					errorMessage = model.ErrorMessage
+				case *propertySettingsRenderContext:
+					errorMessage = model.ErrorMessage
+				}
+				if errorMessage == "" || len(invalidView.AuditEvents) != 0 {
+					t.Errorf("malformed validity was accepted: %+v", invalidView)
+				}
+				stored, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+				if err != nil || stored.EdgeTokenValidityInterval != time.Hour {
+					t.Fatalf("malformed validity changed edge lifetime: %+v, err=%v", stored, err)
+				}
+				settings, err := store.Impl().RetrieveEdgeSettingsBySitekey(ctx, db.UUIDToSiteKey(property.ExternalID), false)
+				if err != nil || settings.EdgeWidgetStartMode != "load" {
+					t.Fatalf("malformed validity changed widget settings: %+v, err=%v", settings, err)
+				}
+			})
+		}
+	}
+	form.Set(common.ParamEdgeTokenValidityInterval, "4")
+	form.Set(common.ParamEdgeWidgetStartMode, "auto")
+	invalidReq := httptest.NewRequest(http.MethodPut, req.URL.Path, strings.NewReader(form.Encode()))
+	invalidReq.AddCookie(cookie)
+	invalidReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	invalidReq.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	invalidReq.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+	view, err = server.putPropertyEdgeSettings(httptest.NewRecorder(), invalidReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Model.(*edgePropertySettingsRenderContext).ErrorMessage == "" {
+		t.Fatal("unsupported start mode was accepted")
+	}
+	edge, err = store.Impl().RetrieveEdgeSettingsBySitekey(ctx, db.UUIDToSiteKey(property.ExternalID), true)
+	if err != nil || edge.EdgeWidgetStartMode != "load" {
+		t.Fatalf("unsupported mode changed settings: %+v, err=%v", edge, err)
+	}
+	form.Del(common.ParamEdgeTokenValidityInterval)
+	form.Del(common.ParamEdgeWidgetStartMode)
+	form.Set(common.ParamName, property.Name+" renamed")
+	basicReq := httptest.NewRequest(http.MethodPut, req.URL.Path, strings.NewReader(form.Encode()))
+	basicReq.AddCookie(cookie)
+	basicReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	basicReq.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	basicReq.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+	if _, err := server.putProperty(httptest.NewRecorder(), basicReq); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil || stored.EdgeTokenValidityInterval != time.Hour {
+		t.Fatalf("basic settings changed edge validity: %+v, err=%v", stored, err)
+	}
+	form.Set(common.ParamEdgeTokenValidityInterval, "0")
+	form.Set(common.ParamEdgeWidgetStartMode, "click")
+	disableReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/property/%s/edge", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), strings.NewReader(form.Encode()))
+	disableReq.AddCookie(cookie)
+	disableReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	disabledResponse := httptest.NewRecorder()
+	srv.ServeHTTP(disabledResponse, disableReq)
+	if disabledResponse.Code != http.StatusOK {
+		t.Fatalf("edge route status=%d", disabledResponse.Code)
+	}
+	var retainedMode string
+	if err := store.Pool.QueryRow(ctx, "SELECT edge_widget_start_mode FROM backend.edge_property_settings WHERE property_id=$1", property.ID).Scan(&retainedMode); err != nil || retainedMode != "load" {
+		t.Fatalf("disabling edge changed widget settings: %q, err=%v", retainedMode, err)
+	}
+	getReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), nil)
+	getReq.AddCookie(cookie)
+	getReq.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	getReq.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+	disabledModel, _, err := server.getOrgPropertySettings(httptest.NewRecorder(), getReq)
+	if err != nil || disabledModel.EdgeWidgetStartMode != "click" {
+		t.Fatalf("disabled edge defaults: %+v, err=%v", disabledModel, err)
+	}
+
+	noDomain, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, ""), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	form.Set(common.ParamName, noDomain.Name)
+	form.Set(common.ParamEdgeTokenValidityInterval, "4")
+	form.Set(common.ParamEdgeWidgetStartMode, "click")
+	noDomainReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(noDomain.ID))), strings.NewReader(form.Encode()))
+	noDomainReq.AddCookie(cookie)
+	noDomainReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	noDomainReq.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	noDomainReq.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(noDomain.ID)))
+	view, err = server.putPropertyEdgeSettings(httptest.NewRecorder(), noDomainReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Model.(*edgePropertySettingsRenderContext).ErrorMessage == "" {
+		t.Fatal("portal accepted edge lifetime for a property without a domain")
+	}
+	stored, err = store.Impl().RetrieveOrgProperty(ctx, org, noDomain.ID)
+	if err != nil || stored.EdgeTokenValidityInterval != 0 {
+		t.Fatalf("domainless property edge lifetime = %v, err = %v", stored, err)
 	}
 }
 

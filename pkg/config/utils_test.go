@@ -12,6 +12,13 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
+func TestURLConfigHostPort(t *testing.T) {
+	cfg := AsURL(t.Context(), NewStaticValue(common.CDNBaseURLKey, "localhost:8080/cdn"))
+	if got := cfg.HostPort(); got != "localhost:8080" {
+		t.Fatalf("host and port = %q, want localhost:8080", got)
+	}
+}
+
 func TestArgon2IDMemoryBudget(t *testing.T) {
 	const (
 		kiBPerMiB      = int64(1024)
