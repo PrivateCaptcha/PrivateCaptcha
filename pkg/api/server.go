@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"time"
 
@@ -480,12 +481,9 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 	}
 	s.Verifier.recordVerificationStats(result, tnow)
 	s.addVerifyRecord(ctx, result, r.UserAgent())
-	if apiKey := ownerSource.cachedKey; apiKey != nil {
-		// if we are not cached, then we will recheck via "delayed" mechanism of OwnerIDSource
-		// when rate limiting is cleaned up (due to inactivity) we should still be able to access on defaults
-		interval := float64(time.Second) / apiKey.RequestsPerSecond
-		s.RateLimiter.UpdateRequestLimits(r, uint32(apiKey.RequestsBurst), time.Duration(interval))
-	}
+	// if we are not cached, then we will recheck via "delayed" mechanism of OwnerIDSource
+	// when rate limiting is cleaned up (due to inactivity) we should still be able to access on defaults
+	s.applyAPIKeyRateLimits(ctx, r, ownerSource.cachedKey)
 
 	vr2 := &VerifyResponseRecaptchaV2{
 		Success:     result.Success() || ((result.Error == puzzle.TestPropertyError) && isExplicitTestSitekey),
@@ -554,16 +552,26 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	s.Verifier.recordVerificationStats(result, tnow)
 	s.addVerifyRecord(ctx, result, r.UserAgent())
-	if apiKey := ownerSource.cachedKey; apiKey != nil {
-		// if we are not cached, then we will recheck via "delayed" mechanism of OwnerIDSource
-		// when rate limiting is cleaned up (due to inactivity) we should still be able to access on defaults
-		interval := float64(time.Second) / apiKey.RequestsPerSecond
-		s.RateLimiter.UpdateRequestLimits(r, uint32(apiKey.RequestsBurst), time.Duration(interval))
-	}
+	// if we are not cached, then we will recheck via "delayed" mechanism of OwnerIDSource
+	// when rate limiting is cleaned up (due to inactivity) we should still be able to access on defaults
+	s.applyAPIKeyRateLimits(ctx, r, ownerSource.cachedKey)
 
 	response := newVerificationResponse(result, isExplicitTestSitekey)
 
 	common.SendJSONResponse(r.Context(), w, response, common.NoCacheHeaders, s.APIHeaders)
+}
+
+func (s *Server) applyAPIKeyRateLimits(ctx context.Context, r *http.Request, apiKey *dbgen.APIKey) {
+	if apiKey == nil {
+		return
+	}
+	if apiKey.RequestsPerSecond > 0 && !math.IsInf(apiKey.RequestsPerSecond, 0) {
+		interval := float64(time.Second) / apiKey.RequestsPerSecond
+		s.RateLimiter.UpdateRequestLimits(r, uint32(apiKey.RequestsBurst), time.Duration(interval))
+	} else {
+		slog.WarnContext(ctx, "Skipping per-key rate limit update due to invalid RequestsPerSecond",
+			"requestsPerSecond", apiKey.RequestsPerSecond)
+	}
 }
 
 func newVerificationResponse(result *puzzle.VerifyResult, isExplicitTestSitekey bool) *VerificationResponse {
