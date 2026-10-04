@@ -112,6 +112,14 @@
         "updated_at": "2026-09-06"
     },
     {
+        "id": "widget-auto-theme",
+        "text": "Widget theme 'auto' can adapt to light or dark website theme automatically",
+        "link": "https://docs.privatecaptcha.com/docs/reference/widget-options/#data-theme",
+        "patterns": ["/org/{org}/property/{property}"],
+        "reports": {"monthly": false, "weekly": false},
+        "updated_at": "2026-10-04"
+    },
+    {
         "id": "property-allow-localhost",
         "text": "To receive and verify CAPTCHA challenges locally, enable 'Allow localhost' setting",
         "link": "https://docs.privatecaptcha.com/docs/reference/property-settings/#localhost",
