@@ -689,6 +689,56 @@ func TestCreateAuditLogsContext(t *testing.T) {
 	}
 }
 
+// TestCreateAuditLogsContextEmptyLargePage reproduces the empty-logs + positive-out-of-range page
+// bug in CreateAuditLogsContext (pkg/portal/audit_enterprise.go): when there are no audit logs in
+// the window, the page parameter is not clamped and leaks through as-is.
+//
+// A freshly created account has zero audit-log rows, so retrieveAuditLogs (run with the valid
+// days=14 window -> maxAuditLogsForDays(14) = 1400 > 0, which passes the limit>0 guard) returns
+// an empty slice and we enter the count==0 branch. We pass page=999 to exercise that branch with
+// a positive out-of-range page. (days=0 would instead make maxLogs=0, which retrieveAuditLogs
+// rejects with ErrInvalidInput before reaching the buggy branch, so it cannot be used here.)
+//
+// Before the fix: renderCtx.Page == 999 (unclamped, leaks through).
+// After the fix:   renderCtx.Page == 0 (clamped).
+func TestCreateAuditLogsContextEmptyLargePage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	renderCtx, err := server.CreateAuditLogsContext(ctx, user, 14 /*days*/, 999 /*page*/)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if renderCtx == nil {
+		t.Fatal("Expected render context to be populated, got nil")
+	}
+
+	// We must be in the empty-logs branch for this test to mean anything.
+	if renderCtx.Count != 0 {
+		t.Fatalf("Test precondition does not hold: Count = %d, expected 0 (fresh account has no audit logs)", renderCtx.Count)
+	}
+	if len(renderCtx.AuditLogs) != 0 {
+		t.Fatalf("Test precondition does not hold: audit logs len = %d, expected 0", len(renderCtx.AuditLogs))
+	}
+
+	if renderCtx.Page != 0 {
+		t.Errorf("Empty-logs page not clamped: Page = %d, want 0", renderCtx.Page)
+	}
+	if renderCtx.From != 0 {
+		t.Errorf("From = %d, want 0 on empty logs", renderCtx.From)
+	}
+	if renderCtx.To != 0 {
+		t.Errorf("To = %d, want 0 on empty logs", renderCtx.To)
+	}
+}
+
 func TestInitFromSubscriptionPlan(t *testing.T) {
 	planService := billing.NewPlanService(nil)
 	ul := &UserAuditLog{}
