@@ -413,6 +413,97 @@ func TestManagerCacheVarLeakyBucket(t *testing.T) {
 	}
 }
 
+func TestManagerSaveCacheConcurrentMutations(t *testing.T) {
+	t.Run("Const", func(t *testing.T) {
+		manager := NewManager[int32, ConstLeakyBucket[int32]](8, 100, time.Hour)
+		testManagerSaveCacheConcurrentMutations(t, manager, nil)
+	})
+	t.Run("Var", func(t *testing.T) {
+		manager := NewManager[int32, VarLeakyBucket[int32]](8, 100, time.Hour)
+		testManagerSaveCacheConcurrentMutations(t, manager, func(tnow time.Time) {
+			SeedVarBucket(manager, 1, 5, 1.0, 8, tnow)
+		})
+	})
+}
+
+func testManagerSaveCacheConcurrentMutations[T any, TBucket BucketConstraint[int32, T]](
+	t *testing.T,
+	manager *Manager[int32, T, TBucket],
+	seed func(time.Time),
+) {
+	t.Helper()
+	tnow := time.Now()
+	manager.Add(1, 1, tnow)
+	mutations := []struct {
+		name string
+		run  func()
+	}{
+		{
+			name: "Add",
+			run:  func() { manager.Add(1, 1, tnow) },
+		},
+		{
+			name: "AddEx",
+			run:  func() { manager.AddEx(1, 1, tnow, 100, time.Hour) },
+		},
+		{
+			name: "Update",
+			run:  func() { manager.Update(1, 100, time.Hour, tnow) },
+		},
+	}
+	if seed != nil {
+		mutations = append(mutations, struct {
+			name string
+			run  func()
+		}{
+			name: "SeedVarBucket",
+			run:  func() { seed(tnow) },
+		})
+	}
+
+	for _, mutation := range mutations {
+		t.Run(mutation.name, func(t *testing.T) {
+			dir := t.TempDir()
+			started := make(chan struct{})
+			stop := make(chan struct{})
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				mutation.run()
+				close(started)
+				for {
+					select {
+					case <-stop:
+						return
+					default:
+						mutation.run()
+					}
+				}
+			}()
+			defer func() {
+				close(stop)
+				<-done
+			}()
+			<-started
+
+			for i := 0; i < 20; i++ {
+				if err := manager.SaveCache(t.Context(), dir, "buckets.gob", 8, tnow); err != nil {
+					t.Fatalf("SaveCache failed: %v", err)
+				}
+			}
+
+			loaded := NewManager[int32, T, TBucket](8, 100, time.Hour)
+			if err := loaded.LoadCache(t.Context(), dir, "buckets.gob", time.Hour); err != nil {
+				t.Fatalf("LoadCache failed: %v", err)
+			}
+			level, found := loaded.Level(1, tnow)
+			if !found || level == 0 || level > 100 {
+				t.Errorf("Loaded level = %v (found=%v), want a level in [1, 100]", level, found)
+			}
+		})
+	}
+}
+
 func TestStaleCalculatorRepro(t *testing.T) {
 	const initCap = 20
 	const initInterval = 1 * time.Second

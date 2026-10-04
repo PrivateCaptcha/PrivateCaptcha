@@ -19,7 +19,7 @@ type BucketCallback[TKey comparable] func(context.Context, LeakyBucket[TKey])
 
 type Manager[TKey comparable, T any, TBucket BucketConstraint[TKey, T]] struct {
 	buckets      *otter.Cache[TKey, TBucket]
-	mu           sync.RWMutex
+	mu           sync.RWMutex // Protects global limits and excludes bucket mutations during saves.
 	capacity     TLevel
 	leakInterval time.Duration
 }
@@ -87,6 +87,9 @@ func (m *Manager[TKey, T, TBucket]) Level(key TKey, tnow time.Time) (TLevel, boo
 }
 
 func (m *Manager[TKey, T, TBucket]) Update(key TKey, capacity TLevel, leakInterval time.Duration, tnow time.Time) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	found := false
 	_, _ = m.buckets.Compute(key, func(existing TBucket, exists bool) (TBucket, otter.ComputeOp) {
 		if !exists {
@@ -148,9 +151,10 @@ func (m *Manager[TKey, T, TBucket]) Add(key TKey, n TLevel, tnow time.Time) AddR
 	}
 
 	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	capacity := m.capacity
 	leakInterval := m.leakInterval
-	m.mu.RUnlock()
 
 	bu := &bucketUpdater[TKey, T, TBucket]{
 		key:          key,
@@ -169,6 +173,9 @@ func (m *Manager[TKey, T, TBucket]) AddEx(key TKey, n TLevel, tnow time.Time, in
 	if n == 0 {
 		return AddResult{}
 	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	bu := &bucketUpdater[TKey, T, TBucket]{
 		key:          key,
@@ -193,9 +200,10 @@ func SeedVarBucket[TKey comparable](
 	tnow time.Time,
 ) AddResult {
 	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	capacity := m.capacity
 	leakInterval := m.leakInterval
-	m.mu.RUnlock()
 
 	var result AddResult
 	_, _ = m.buckets.Compute(key, func(bucket *VarLeakyBucket[TKey], found bool) (*VarLeakyBucket[TKey], otter.ComputeOp) {
@@ -221,6 +229,9 @@ func (m *Manager[TKey, T, TBucket]) Clear() {
 }
 
 func (m *Manager[TKey, T, TBucket]) SaveCache(ctx context.Context, dir, filename string, maxItems int, tnow time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	filter := func(b TBucket) bool {
 		// we only save buckets that are not "full" (which means level > 0, so there is some usage)
 		// NOTE: this is somewhat unfair for VarLeakyBucket beacause we discard learned leakRate/pendingSum/count combo
