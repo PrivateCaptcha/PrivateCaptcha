@@ -2,6 +2,7 @@ package maintenance
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -96,9 +97,14 @@ func (hc *HealthCheckJob) checkClickHouse(ctx context.Context) int32 {
 
 		if err = hc.TimeSeriesDB.Ping(ctx); err == nil {
 			return int32(FlagTrue)
-		} else {
-			slog.WarnContext(ctx, "ClickHouse ping attempt failed", "attempt", i+1, common.ErrAttr(err))
 		}
+
+		if errors.Is(err, db.ErrClickHouseNotConfigured) {
+			slog.WarnContext(ctx, "ClickHouse is not configured")
+			return int32(FlagFalse)
+		}
+
+		slog.WarnContext(ctx, "ClickHouse ping attempt failed", "attempt", i+1, common.ErrAttr(err))
 	}
 
 	slog.ErrorContext(ctx, "Failed to ping ClickHouse", "attempts", maxAttempts, common.ErrAttr(err))

@@ -45,7 +45,8 @@ const (
 )
 
 var (
-	ErrUnsupportedPeriod = errors.New("unsupported period")
+	ErrUnsupportedPeriod       = errors.New("unsupported period")
+	ErrClickHouseNotConfigured = errors.New("clickhouse is not configured")
 )
 
 type TimeSeriesDB struct {
@@ -112,6 +113,9 @@ func (ts *TimeSeriesDB) UpdateConfig(maintenanceMode bool) {
 }
 
 func (ts *TimeSeriesDB) Ping(ctx context.Context) error {
+	if ts.Clickhouse == nil {
+		return ErrClickHouseNotConfigured
+	}
 	rows, err := ts.Clickhouse.Query("SELECT 1")
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to execute ping query", common.ErrAttr(err))
