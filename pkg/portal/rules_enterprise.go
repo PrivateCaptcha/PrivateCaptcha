@@ -338,6 +338,20 @@ func difficultyGrowthActionParser(actionValue string) (int32, common.StatusCode)
 	return int32(val), common.StatusOK
 }
 
+func edgeTokenValidityActionParser(actionValue string) (int32, common.StatusCode) {
+	if actionValue == "" {
+		return 0, common.StatusRuleActionValueRequired
+	}
+	val, err := strconv.ParseInt(actionValue, 10, 32)
+	if err != nil {
+		return 0, common.StatusRuleActionValueInvalid
+	}
+	if _, err := edgeTokenValidityFromIndex(actionValue); err != nil {
+		return 0, common.StatusRuleActionValueInvalid
+	}
+	return int32(val), common.StatusOK
+}
+
 func breakActionParser(actionValue string) (int32, common.StatusCode) {
 	return 0, common.StatusOK
 }
@@ -401,10 +415,11 @@ func NewRuleRegistry() *RuleRegistry {
 			},
 		},
 		actions: map[string]ActionFormParser{
-			string(dbgen.RuleActionPropertyDifficultyLevelPercent): difficultyActionParser,
-			string(dbgen.RuleActionPropertyHTTPRequest):            httpRequestActionParser,
-			string(dbgen.RuleActionPropertyDifficultyGrowth):       difficultyGrowthActionParser,
-			string(dbgen.RuleActionPropertyBreak):                  breakActionParser,
+			string(dbgen.RuleActionPropertyDifficultyLevelPercent):    difficultyActionParser,
+			string(dbgen.RuleActionPropertyHTTPRequest):               httpRequestActionParser,
+			string(dbgen.RuleActionPropertyDifficultyGrowth):          difficultyGrowthActionParser,
+			string(dbgen.RuleActionPropertyEdgeTokenValidityInterval): edgeTokenValidityActionParser,
+			string(dbgen.RuleActionPropertyBreak):                     breakActionParser,
 		},
 	}
 }

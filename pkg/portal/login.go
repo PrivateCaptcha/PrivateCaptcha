@@ -92,7 +92,7 @@ func (s *Server) verifyPortalCaptcha(ctx context.Context, solution, sitekey stri
 	}
 
 	ownerSource := &portalPropertyOwnerSource{Store: s.Store, Sitekey: sitekey}
-	verifyResult, err := s.PuzzleEngine.Verify(ctx, payload, ownerSource, time.Now().UTC())
+	verifyResult, _, err := s.PuzzleEngine.Verify(ctx, payload, ownerSource, time.Now().UTC())
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
 		return err

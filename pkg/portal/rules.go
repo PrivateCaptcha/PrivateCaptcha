@@ -67,6 +67,13 @@ func DifficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 		actionProperty = "Difficulty growth"
 		actionAction = "set"
 		actionValue = string(growthLevelFromIndex(int(rule.ActionValue)))
+	case dbgen.RuleActionPropertyEdgeTokenValidityInterval:
+		actionProperty = "Verified access duration"
+		actionAction = "set"
+		actionValue = "disabled"
+		if validity, err := edgeTokenValidityFromIndex(fmt.Sprint(rule.ActionValue)); err == nil && validity > 0 {
+			actionValue = validity.String()
+		}
 	case dbgen.RuleActionPropertyBreak:
 		actionAction = "stop"
 		actionProperty = "processing rules"

@@ -160,6 +160,7 @@ type Server struct {
 	TimeSeries           common.TimeSeriesStore
 	APIURL               string
 	CDNURL               string
+	EdgeTokens           *api.EdgeTokenSigner
 	Prefix               string
 	IDHasher             common.IdentifierHasher
 	template             *Templates
@@ -168,7 +169,7 @@ type Server struct {
 	Mailer               common.Mailer
 	Stage                string
 	PlanService          billing.PlanService
-	PuzzleEngine         puzzle.Engine
+	PuzzleEngine         api.PuzzleEngine
 	Metrics              common.PortalMetrics
 	maintenanceMode      atomic.Bool
 	canRegister          atomic.Bool

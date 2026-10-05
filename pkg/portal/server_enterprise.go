@@ -47,6 +47,7 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, public, openRead, pr
 	}
 	privateReadWithTip := privateRead.Append(TipMiddleware)
 
+	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.EdgeEndpoint), privateWrite, s.Handler(s.putPropertyEdgeSettings))
 	rg.Handle(rg.Post(common.OrgEndpoint, common.NewEndpoint), privateWrite, http.HandlerFunc(s.postNewOrg))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite, s.Handler(s.postOrgMembers))
 	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint, arg(common.ParamUser)), privateWrite, http.HandlerFunc(s.deleteOrgMembers))

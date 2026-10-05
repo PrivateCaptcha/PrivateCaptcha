@@ -10,10 +10,12 @@ import (
 	"net/netip"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/medama-io/go-useragent"
 )
 
@@ -125,7 +127,10 @@ func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) (difficul
 		return p, false
 	}
 
-	op := &overrideProperty{base: p}
+	op := &overrideProperty{
+		base:   p,
+		ruleID: p.RuleID(),
+	}
 	anyMatched := false
 
 	for _, rule := range cr.rules {
@@ -200,10 +205,11 @@ func (rp *RulesPair) IsRequestBlocked(ri *RequestInfo) bool {
 }
 
 type overrideProperty struct {
-	base   difficulty.Property
-	level  *int16
-	growth *dbgen.DifficultyGrowth
-	ruleID int32
+	base              difficulty.Property
+	level             *int16
+	growth            *dbgen.DifficultyGrowth
+	edgeTokenValidity *time.Duration
+	ruleID            int32
 }
 
 func (op *overrideProperty) ID() int32      { return op.base.ID() }
@@ -222,6 +228,13 @@ func (op *overrideProperty) Growth() dbgen.DifficultyGrowth {
 		return *op.growth
 	}
 	return op.base.Growth()
+}
+
+func (op *overrideProperty) EdgeTokenValidity() time.Duration {
+	if op.edgeTokenValidity != nil {
+		return *op.edgeTokenValidity
+	}
+	return op.base.EdgeTokenValidity()
 }
 
 func (op *overrideProperty) applyLevel(level int16, ruleID int32) {
@@ -281,6 +294,18 @@ type difficultyGrowthRule struct {
 
 func (r *difficultyGrowthRule) Apply(op *overrideProperty) bool {
 	op.applyGrowth(r.Growth, r.RuleID)
+	return r.Terminal
+}
+
+type edgeTokenValidityRule struct {
+	RuleBase
+	Validity time.Duration
+}
+
+func (r *edgeTokenValidityRule) Apply(op *overrideProperty) bool {
+	op.edgeTokenValidity = &r.Validity
+	// NOTE: this is not used anywhere atm (we don't record verify rule usage), but just for correctness
+	op.ruleID = r.RuleID
 	return r.Terminal
 }
 
@@ -368,6 +393,7 @@ func BuildStringMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 func init() {
 	gob.Register(&difficultyLevelRule{})
 	gob.Register(&difficultyGrowthRule{})
+	gob.Register(&edgeTokenValidityRule{})
 	gob.Register(&blockRequestRule{})
 	gob.Register(&breakRule{})
 	gob.Register(&StringMatcher{})
@@ -558,7 +584,11 @@ func (rc *RulesCompiler) CompileRule(ctx context.Context, dbRule *dbgen.Difficul
 		return nil, err
 	}
 
-	base := RuleBase{RuleID: dbRule.ID, Matcher: matcher, Terminal: dbRule.Terminal}
+	base := RuleBase{
+		RuleID:   dbRule.ID,
+		Matcher:  matcher,
+		Terminal: dbRule.Terminal,
+	}
 
 	switch dbRule.ActionProperty {
 	case dbgen.RuleActionPropertyDifficultyLevelPercent:
@@ -576,6 +606,15 @@ func (rc *RulesCompiler) CompileRule(ctx context.Context, dbRule *dbgen.Difficul
 		return &difficultyGrowthRule{
 			RuleBase: base,
 			Growth:   growthFromInt(dbRule.ActionValue),
+		}, nil
+	case dbgen.RuleActionPropertyEdgeTokenValidityInterval:
+		var validity time.Duration
+		if dbRule.ActionValue > 0 && int(dbRule.ActionValue) <= len(puzzle.ValidityDurations) {
+			validity = puzzle.ValidityDurations[dbRule.ActionValue-1]
+		}
+		return &edgeTokenValidityRule{
+			RuleBase: base,
+			Validity: validity,
 		}, nil
 	case dbgen.RuleActionPropertyBreak:
 		base.Terminal = true

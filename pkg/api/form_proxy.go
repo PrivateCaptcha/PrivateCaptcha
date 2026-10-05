@@ -179,7 +179,7 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 	if form, ok := ctx.Value(common.FormContextKey).(*dbgen.Form); ok && form != nil {
 		ownerSource := &formOwnerSource{Store: s.BusinessDB, Form: form}
 		tnow := time.Now().UTC()
-		result, err := s.Verifier.Verify(ctx, payload, ownerSource, tnow)
+		result, _, err := s.Verifier.Verify(ctx, payload, ownerSource, tnow)
 		if err != nil && err != errVerificationBusy {
 			slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -371,7 +371,7 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 		if skipMemorySemaphore {
 			verify = s.Verifier.VerifyUnsafe
 		}
-		result, err := verify(ctx, sub.CaptchaSolution, ownerSource, sub.Time)
+		result, _, err := verify(ctx, sub.CaptchaSolution, ownerSource, sub.Time)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
 			return err

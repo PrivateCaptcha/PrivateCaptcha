@@ -1070,6 +1070,136 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 	return auditEvent, nil
 }
 
+func (impl *BusinessStoreImpl) GetCachedEdgeSettingsBySitekey(ctx context.Context, sitekey string) (*dbgen.GetEdgeSettingsBySitekeyRow, bool, error) {
+	if sitekey == TestPropertySitekey {
+		return nil, false, ErrTestProperty
+	}
+
+	if !CanBeValidSitekey(sitekey) {
+		return nil, false, ErrInvalidInput
+	}
+
+	reader := &CachedRefreshReader[string, dbgen.GetEdgeSettingsBySitekeyRow]{
+		Key:          sitekey,
+		Cache:        impl.cache,
+		CacheKeyFunc: EdgeSettingsBySitekeyCacheKey,
+	}
+	return reader.Read(ctx)
+}
+
+func (impl *BusinessStoreImpl) RetrieveEdgeSettingsBySitekey(ctx context.Context, sitekey string, skipCache bool) (*dbgen.GetEdgeSettingsBySitekeyRow, error) {
+	if sitekey == TestPropertySitekey {
+		return nil, ErrTestProperty
+	}
+
+	if !CanBeValidSitekey(sitekey) {
+		return nil, ErrInvalidInput
+	}
+
+	reader := &StoreOneReader[pgtype.UUID, dbgen.GetEdgeSettingsBySitekeyRow]{
+		CacheKey:    EdgeSettingsBySitekeyCacheKey(sitekey),
+		Cache:       impl.cache,
+		TTL:         propertyTTL,
+		Refresh:     defaultCacheRefresh,
+		DropInvalid: true,
+	}
+
+	if impl.querier != nil {
+		reader.QueryFunc = impl.querier.GetEdgeSettingsBySitekey
+		reader.QueryKeyFunc = queryKeySitekeyUUID
+	}
+
+	var settings *dbgen.GetEdgeSettingsBySitekeyRow
+	var err error
+	if skipCache {
+		settings, err = reader.Query(ctx)
+	} else {
+		settings, err = reader.Read(ctx)
+	}
+
+	if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, ErrNegativeCacheHit) {
+		return nil, ErrRecordNotFound
+	}
+
+	return settings, err
+}
+
+func (impl *BusinessStoreImpl) UpdateEdgeSettings(
+	ctx context.Context,
+	org *dbgen.Organization,
+	user *dbgen.User,
+	property *dbgen.Property,
+	mode dbgen.EdgeWidgetStartMode,
+) (*dbgen.EdgePropertySettings, *common.AuditLogEvent, error) {
+	if org == nil || user == nil || property == nil || (mode != "" && mode != dbgen.EdgeWidgetStartModeClick && mode != dbgen.EdgeWidgetStartModeLoad) {
+		return nil, nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, nil, ErrMaintenance
+	}
+	row, err := impl.querier.UpsertEdgeSettings(ctx, &dbgen.UpsertEdgeSettingsParams{
+		PropertyID: property.ID, OrgID: Int(org.ID), UserID: Int(user.ID),
+		EdgeWidgetStartMode: dbgen.NullEdgeWidgetStartMode{EdgeWidgetStartMode: mode, Valid: mode != ""},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, ErrPermissions
+		}
+		slog.ErrorContext(ctx, "Failed to update edge settings", "propID", property.ID, common.ErrAttr(err))
+		return nil, nil, err
+	}
+	_ = impl.cache.Delete(ctx, propertyAuditLogsCacheKey(property.ID))
+	settings := &dbgen.EdgePropertySettings{PropertyID: row.PropertyID, ExternalID: row.ExternalID, EdgeWidgetStartMode: row.EdgeWidgetStartMode, UpdatedAt: row.UpdatedAt}
+	cacheKey := EdgeSettingsBySitekeyCacheKey(UUIDToSiteKey(settings.ExternalID))
+	if property.EdgeTokenValidityInterval > 0 {
+		cached := &dbgen.GetEdgeSettingsBySitekeyRow{
+			PropertyID:          settings.PropertyID,
+			ExternalID:          settings.ExternalID,
+			EdgeWidgetStartMode: settings.EdgeWidgetStartMode,
+			UpdatedAt:           settings.UpdatedAt,
+			Domain:              property.Domain,
+			Challenge:           property.Challenge,
+		}
+		_ = impl.cache.SetEx(ctx, cacheKey, cached, propertyTTL, defaultCacheRefresh)
+	} else {
+		_ = impl.cache.Delete(ctx, cacheKey)
+	}
+	var event *common.AuditLogEvent
+	if row.OldEdgeWidgetStartMode != row.EdgeWidgetStartMode {
+		event = newUpdateEdgeSettingsAuditLogEvent(property, row.OldEdgeWidgetStartMode, row.EdgeWidgetStartMode, user)
+	}
+	return settings, event, nil
+}
+
+func (impl *BusinessStoreImpl) RetrieveEdgeSettingsBySitekeys(ctx context.Context, sitekeys map[string]uint, minMissingCount uint) ([]*dbgen.GetEdgeSettingsBySitekeyRow, error) {
+	reader := &StoreBulkReader[string, pgtype.UUID, dbgen.GetEdgeSettingsBySitekeyRow]{
+		ArgFunc: func(settings *dbgen.GetEdgeSettingsBySitekeyRow) string { return UUIDToSiteKey(settings.ExternalID) },
+		Cache:   impl.cache, CacheKeyFunc: EdgeSettingsBySitekeyCacheKey, QueryKeyFunc: stringKeySitekeyUUID,
+		MinMissingCount: minMissingCount, DropInvalid: true,
+	}
+	if impl.querier != nil {
+		reader.QueryFunc = func(ctx context.Context, keys []pgtype.UUID) ([]*dbgen.GetEdgeSettingsBySitekeyRow, error) {
+			rows, err := impl.querier.GetEdgeSettingsBySitekeys(ctx, keys)
+			if err != nil {
+				return nil, err
+			}
+			settings := make([]*dbgen.GetEdgeSettingsBySitekeyRow, len(rows))
+			for i, row := range rows {
+				settings[i] = (*dbgen.GetEdgeSettingsBySitekeyRow)(row)
+			}
+			return settings, nil
+		}
+	}
+	cached, items, err := reader.Read(ctx, sitekeys)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		_ = impl.cache.SetEx(ctx, EdgeSettingsBySitekeyCacheKey(UUIDToSiteKey(item.ExternalID)), item, propertyTTL, defaultCacheRefresh)
+	}
+	return append(cached, items...), nil
+}
+
 func (impl *BusinessStoreImpl) RetrievePropertyBySitekey(ctx context.Context, sitekey string) (*dbgen.Property, error) {
 	reader := &StoreOneReader[pgtype.UUID, dbgen.Property]{
 		CacheKey:    PropertyBySitekeyCacheKey(sitekey),
@@ -1096,6 +1226,9 @@ func (impl *BusinessStoreImpl) RetrievePropertyBySitekey(ctx context.Context, si
 		slog.WarnContext(ctx, "Property is soft-deleted", "propID", property.ID, "deletedAt", property.DeletedAt.Time)
 		return property, ErrSoftDeleted
 	}
+
+	// at least verification codepath depends on warm by-ID cache for property
+	_ = impl.cache.Set(ctx, PropertyByIDCacheKey(property.ID), property)
 
 	return property, nil
 }
@@ -1602,6 +1735,7 @@ func (impl *BusinessStoreImpl) deleteCachedProperty(ctx context.Context, propert
 	// cache mostly used in API server
 	sitekey := UUIDToSiteKey(property.ExternalID)
 	_ = impl.cache.SetMissing(ctx, PropertyBySitekeyCacheKey(sitekey))
+	_ = impl.cache.SetMissing(ctx, EdgeSettingsBySitekeyCacheKey(sitekey))
 	_ = impl.cache.SetMissing(ctx, PropertyByIDCacheKey(property.ID))
 }
 
@@ -1612,6 +1746,7 @@ func (impl *BusinessStoreImpl) invalidatePropertyCache(ctx context.Context, prop
 
 	sitekey := UUIDToSiteKey(property.ExternalID)
 	_ = impl.cache.Delete(ctx, PropertyBySitekeyCacheKey(sitekey))
+	_ = impl.cache.Delete(ctx, EdgeSettingsBySitekeyCacheKey(sitekey))
 	_ = impl.cache.Delete(ctx, PropertyByIDCacheKey(property.ID))
 }
 
@@ -1849,26 +1984,27 @@ func (impl *BusinessStoreImpl) GetCachedPropertyByID(ctx context.Context, proper
 
 func createPropertyFromUpdate(row *dbgen.UpdatePropertyRow) *dbgen.Property {
 	return &dbgen.Property{
-		ID:               row.ID,
-		Name:             row.Name,
-		ExternalID:       row.ExternalID,
-		OrgID:            row.OrgID,
-		CreatorID:        row.CreatorID,
-		OrgOwnerID:       row.OrgOwnerID,
-		Domain:           row.Domain,
-		Level:            row.Level,
-		Salt:             row.Salt,
-		Growth:           row.Growth,
-		CreatedAt:        row.CreatedAt,
-		UpdatedAt:        row.UpdatedAt,
-		DeletedAt:        row.DeletedAt,
-		ValidityInterval: row.ValidityInterval,
-		AllowSubdomains:  row.AllowSubdomains,
-		AllowLocalhost:   row.AllowLocalhost,
-		MaxReplayCount:   row.MaxReplayCount,
-		Enabled:          row.Enabled,
-		ShowNotice:       row.ShowNotice,
-		Challenge:        row.Challenge,
+		ID:                        row.ID,
+		Name:                      row.Name,
+		ExternalID:                row.ExternalID,
+		OrgID:                     row.OrgID,
+		CreatorID:                 row.CreatorID,
+		OrgOwnerID:                row.OrgOwnerID,
+		Domain:                    row.Domain,
+		Level:                     row.Level,
+		Salt:                      row.Salt,
+		Growth:                    row.Growth,
+		CreatedAt:                 row.CreatedAt,
+		UpdatedAt:                 row.UpdatedAt,
+		DeletedAt:                 row.DeletedAt,
+		ValidityInterval:          row.ValidityInterval,
+		EdgeTokenValidityInterval: row.EdgeTokenValidityInterval,
+		AllowSubdomains:           row.AllowSubdomains,
+		AllowLocalhost:            row.AllowLocalhost,
+		MaxReplayCount:            row.MaxReplayCount,
+		Enabled:                   row.Enabled,
+		ShowNotice:                row.ShowNotice,
+		Challenge:                 row.Challenge,
 	}
 }
 
@@ -2027,6 +2163,7 @@ func (impl *BusinessStoreImpl) MoveForm(
 
 	impl.cacheForm(ctx, updatedForm)
 	impl.cacheProperty(ctx, updatedProperty)
+	_ = impl.cache.Delete(ctx, EdgeSettingsBySitekeyCacheKey(UUIDToSiteKey(updatedProperty.ExternalID)))
 
 	auditEvents := []*common.AuditLogEvent{
 		newMoveFormAuditLogEvent(user, updatedForm, oldOrgID, org.Organization.Name),
@@ -2108,6 +2245,9 @@ func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Or
 	impl.invalidateOrgPropertiesCache(ctx, updatedProperty.OrgID.Int32, &updatedProperty.ID)
 	impl.cacheProperty(ctx, cacheProperty)
 	_ = impl.cache.Delete(ctx, propertyAuditLogsCacheKey(updatedProperty.ID))
+	if updatedProperty.EdgeTokenValidityInterval != updatedProperty.OldEdgeTokenValidityInterval {
+		_ = impl.cache.Delete(ctx, EdgeSettingsBySitekeyCacheKey(UUIDToSiteKey(cacheProperty.ExternalID)))
+	}
 
 	auditEvent := newUpdatePropertyAuditLogEvent(cacheProperty, updatedProperty, org, user)
 
@@ -3888,6 +4028,7 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 	// and cache property
 	impl.cacheProperty(ctx, updatedProperty)
 
+	_ = impl.cache.Delete(ctx, EdgeSettingsBySitekeyCacheKey(UUIDToSiteKey(updatedProperty.ExternalID)))
 	auditEvent := newMovePropertyAuditLogEvent(user, updatedProperty, oldOrgID, updatedProperty.OrgID.Int32)
 
 	return updatedProperty, auditEvent, nil
