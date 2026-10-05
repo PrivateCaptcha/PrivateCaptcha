@@ -187,13 +187,15 @@ export class CaptchaWidget {
             this._puzzle = new Puzzle(puzzleResult.data);
             if (this._puzzle && this._puzzle.isZero()) { this._errorCode = errors.ERROR_ZERO_PUZZLE; }
             const expirationMillis = this._puzzle.expirationMillis();
-            // Keep short TTLs positive instead of immediately refreshing the puzzle.
-            const expiryDelayMillis = expirationMillis > PUZZLE_EXPIRATION_GRACE_MILLIS
-                ? expirationMillis - PUZZLE_EXPIRATION_GRACE_MILLIS
-                : expirationMillis;
             this.trace(`parsed puzzle buffer. isZero=${this._puzzle.isZero()} ttl=${expirationMillis / 1000}`);
             if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); this._expiryTimeout = null; }
-            if (expiryDelayMillis > 0) { this._expiryTimeout = setTimeout(() => this.expire(), expiryDelayMillis); }
+            // Only arm the refresh when there is genuinely more than 2*GRACE of perceived life left,
+            // so the timer fires at least GRACE before the deadline. Otherwise the perceived TTL is
+            // too short (e.g. a clock-skew band just under the TTL) - let the current puzzle be
+            // solved instead of looping on expire()->reset()->init() with a tiny refresh delay.
+            if (expirationMillis > 2 * PUZZLE_EXPIRATION_GRACE_MILLIS) {
+                this._expiryTimeout = setTimeout(() => this.expire(), expirationMillis - PUZZLE_EXPIRATION_GRACE_MILLIS);
+            }
             try {
                 this._workersPool.init(this._puzzle, startWorkers);
             } catch (error) {

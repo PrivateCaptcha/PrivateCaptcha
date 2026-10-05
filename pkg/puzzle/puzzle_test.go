@@ -496,6 +496,30 @@ func TestValidityIntervalToIndex(t *testing.T) {
 	}
 }
 
+// MinValidityDurationForClientRefresh is the floor below which the client-side widget
+// (widget/js/widget.js) refuses to arm its pre-deadline refresh timer. It mirrors
+// 2 * PUZZLE_EXPIRATION_GRACE_MILLIS (2 * 5000ms = 10s) on the client: when a puzzle's
+// perceived remaining lifetime is at or below this floor, the client leaves the
+// current puzzle in place to solve instead of looping on expire()->reset()->init().
+// If any entry of ValidityDurations is lowered below this floor, a genuine short-TTL
+// puzzle would never be refreshed on the client, so the slice must stay at or above it.
+const MinValidityDurationForClientRefresh = 10 * time.Second
+
+func TestValidityDurationsFloorForClientRefresh(t *testing.T) {
+	t.Parallel()
+
+	if len(ValidityDurations) == 0 {
+		t.Fatal("ValidityDurations must not be empty")
+	}
+	for i, d := range ValidityDurations {
+		if d < MinValidityDurationForClientRefresh {
+			t.Errorf("ValidityDurations[%d] = %v, must be >= %v (client widget 2*GRACE no-arm floor); "+
+				"lowering it would make genuine short-TTL puzzles never refresh on the client",
+				i, d, MinValidityDurationForClientRefresh)
+		}
+	}
+}
+
 func TestComputePuzzleCapsValidity(t *testing.T) {
 	t.Parallel()
 

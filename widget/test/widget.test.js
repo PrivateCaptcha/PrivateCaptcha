@@ -1185,21 +1185,31 @@ test('CaptchaWidget expires five seconds before the server deadline', async (t) 
     assert.strictEqual(expire.mock.calls.length, 1);
 });
 
-test('CaptchaWidget keeps short TTLs positive without extending their deadline', async (t) => {
+test('CaptchaWidget only arms the refresh timer beyond 2x grace and fires grace before the deadline', async (t) => {
     t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1800000000000 });
-    const boundaryWidget = await initExpirationWidget(t, 5);
-    const boundaryExpire = t.mock.method(boundaryWidget, 'expire', () => {});
-    t.mock.timers.tick(4999);
-    assert.strictEqual(boundaryExpire.mock.calls.length, 0);
-    t.mock.timers.tick(1);
-    assert.strictEqual(boundaryExpire.mock.calls.length, 1);
 
-    const shortWidget = await initExpirationWidget(t, 1);
-    const shortExpire = t.mock.method(shortWidget, 'expire', () => {});
-    t.mock.timers.tick(999);
-    assert.strictEqual(shortExpire.mock.calls.length, 0);
+    // Above the 2*GRACE threshold: arm the timer and fire GRACE before the deadline.
+    const safeWidget = await initExpirationWidget(t, 15);
+    const safeExpire = t.mock.method(safeWidget, 'expire', () => {});
+    assert.notStrictEqual(safeWidget._expiryTimeout, null, 'timer armed for perceived TTL above 2x grace');
+    t.mock.timers.tick(9999);
+    assert.strictEqual(safeExpire.mock.calls.length, 0);
     t.mock.timers.tick(1);
-    assert.strictEqual(shortExpire.mock.calls.length, 1);
+    assert.strictEqual(safeExpire.mock.calls.length, 1);
+
+    // At exactly 2*GRACE (10s): the timer is NOT armed, so no tight-loop refresh can occur.
+    const boundaryWidget = await initExpirationWidget(t, 10);
+    const boundaryExpire = t.mock.method(boundaryWidget, 'expire', () => {});
+    assert.strictEqual(boundaryWidget._expiryTimeout, null, 'no timer at exactly 2x grace');
+    t.mock.timers.tick(30000);
+    assert.strictEqual(boundaryExpire.mock.calls.length, 0);
+
+    // Below 2*GRACE (short perceived TTL, e.g. from clock skew just under TTL): NOT armed.
+    const shortWidget = await initExpirationWidget(t, 5);
+    const shortExpire = t.mock.method(shortWidget, 'expire', () => {});
+    assert.strictEqual(shortWidget._expiryTimeout, null, 'no timer for sub-2x-grace perceived TTL');
+    t.mock.timers.tick(30000);
+    assert.strictEqual(shortExpire.mock.calls.length, 0);
 });
 
 test('CaptchaWidget clears previous timers for zero and past-dated expirations', async (t) => {
@@ -1213,6 +1223,47 @@ test('CaptchaWidget clears previous timers for zero and past-dated expirations',
     t.mock.timers.tick(600000);
     assert.strictEqual(zeroExpire.mock.calls.length, 0);
     assert.strictEqual(pastExpire.mock.calls.length, 0);
+});
+
+async function initSkewedClockWidget(t, perceivedTtlSeconds) {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const body = bytesFromHex(protocolFixtures.v1.body);
+    // Re-stamp expiration on every fetch relative to the mocked wall-clock so that the server
+    // appears to track the client clock with a constant offset. The perceived remaining
+    // lifetime stays constant at perceivedTtlSeconds across refetches, which is exactly the
+    // constant-clock-skew condition that drives the tight refetch loop.
+    const fetch = t.mock.method(globalThis, 'fetch', async () => {
+        new DataView(body.buffer).setUint32(27, Math.floor(Date.now() / 1000) + perceivedTtlSeconds, true);
+        return { ok: true, text: async () => puzzlePayload(body), headers: { get: () => null } };
+    });
+    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}" data-start-mode="click"></div></form>`;
+    const widget = new CaptchaWidget(document.querySelector('.private-captcha'));
+    t.mock.method(widget._workersPool, 'init', () => {});
+    await widget.init(false);
+    return { widget, fetch };
+}
+
+test('CaptchaWidget does not enter a tight refetch loop when client clock is ahead of server (perceived TTL 6s)', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1800000000000 });
+    const { widget, fetch } = await initSkewedClockWidget(t, 6);
+    assert.strictEqual(fetch.mock.calls.length, 1, 'initial init fetches exactly once');
+    assert.strictEqual(widget._expiryTimeout, null, 'must not arm a refresh timer in the tight-loop band');
+    const expire = t.mock.method(widget, 'expire', () => {});
+    // Under the bug the timer fired at 1s and re-armed indefinitely; tick well past several cycles.
+    t.mock.timers.tick(5000);
+    assert.strictEqual(expire.mock.calls.length, 0, 'expire must not fire under constant skew');
+    assert.strictEqual(fetch.mock.calls.length, 1, 'must not refetch under constant skew');
+});
+
+test('CaptchaWidget does not enter a tight refetch loop in the rate-limit-unbounded region (perceived TTL 3s)', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1800000000000 });
+    const { widget, fetch } = await initSkewedClockWidget(t, 3);
+    assert.strictEqual(fetch.mock.calls.length, 1);
+    assert.strictEqual(widget._expiryTimeout, null);
+    const expire = t.mock.method(widget, 'expire', () => {});
+    t.mock.timers.tick(15000);
+    assert.strictEqual(expire.mock.calls.length, 0);
+    assert.strictEqual(fetch.mock.calls.length, 1);
 });
 
 test('CaptchaWidget reports Argon2id provider initialization errors', async () => {
