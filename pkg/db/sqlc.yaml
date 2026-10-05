@@ -47,6 +47,10 @@ sql:
           backend_challenge_type: ChallengeType
           backend_challenge_type_blake2b: ChallengeTypeBlake2b
           backend_challenge_type_argon2id: ChallengeTypeArgon2ID
+          backend_edge_widget_start_mode: EdgeWidgetStartMode
+          backend_edge_property_setting: EdgePropertySettings
+          backend_edge_widget_start_mode_click: EdgeWidgetStartModeClick
+          backend_edge_widget_start_mode_load: EdgeWidgetStartModeLoad
           backend_access_level_member: AccessLevelMember
           backend_access_level_invited: AccessLevelInvited
           backend_access_level_owner: AccessLevelOwner
@@ -96,6 +100,7 @@ sql:
           backend_rule_action_property_difficulty_level_percent: RuleActionPropertyDifficultyLevelPercent
           backend_rule_action_property_http_request: RuleActionPropertyHTTPRequest
           backend_rule_action_property_difficulty_growth: RuleActionPropertyDifficultyGrowth
+          backend_rule_action_property_edge_token_validity_interval: RuleActionPropertyEdgeTokenValidityInterval
           backend_rule_action_property_break: RuleActionPropertyBreak
           backend_user_setting: UserSettings
           backend_session: Session

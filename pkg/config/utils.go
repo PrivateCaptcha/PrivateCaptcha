@@ -133,13 +133,18 @@ func splitHostPort(s string) (domain string, port string, err error) {
 }
 
 type urlConfig struct {
-	baseURL string
-	domain  string
-	path    string
+	baseURL  string
+	domain   string
+	hostPort string
+	path     string
 }
 
 func (uc *urlConfig) Domain() string {
 	return uc.domain
+}
+
+func (uc *urlConfig) HostPort() string {
+	return uc.hostPort
 }
 
 func (uc *urlConfig) URL() string {
@@ -167,5 +172,5 @@ func AsURL(ctx context.Context, item common.ConfigItem) *urlConfig {
 		slog.ErrorContext(ctx, "Failed to parse domain from baseURL", common.ErrAttr(err))
 	}
 
-	return &urlConfig{baseURL: baseURL, domain: domain, path: path}
+	return &urlConfig{baseURL: baseURL, domain: domain, hostPort: hostPort, path: path}
 }

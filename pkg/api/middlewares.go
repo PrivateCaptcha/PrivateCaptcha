@@ -37,12 +37,14 @@ type AuthMiddleware struct {
 	Store                 db.Implementor
 	PlanService           billing.PlanService
 	SitekeyChan           chan string
+	EdgeChan              chan string
 	FormChan              chan string
 	UsersChan             chan int32
 	APIKeyLastUsedChan    chan int32
 	RulesChan             chan int32
 	BatchSize             int
 	SitekeyBackfillCancel context.CancelFunc
+	EdgeBackfillCancel    context.CancelFunc
 	FormBackfillCancel    context.CancelFunc
 	UsersBackfillCancel   context.CancelFunc
 	APIKeyLastUsedCancel  context.CancelFunc
@@ -164,6 +166,7 @@ func NewAuthMiddleware(store db.Implementor,
 		Limiter:               userLimiter,
 		PlanService:           planService,
 		SitekeyChan:           make(chan string, 100*batchSize),
+		EdgeChan:              make(chan string, 100*batchSize),
 		FormChan:              make(chan string, 100*batchSize),
 		UsersChan:             make(chan int32, 10*batchSize),
 		APIKeyLastUsedChan:    make(chan int32, apiKeyLastUsedChannelSize),
@@ -172,6 +175,7 @@ func NewAuthMiddleware(store db.Implementor,
 		Metrics:               metrics,
 		RulesCompiler:         rulesCompiler,
 		SitekeyBackfillCancel: func() {},
+		EdgeBackfillCancel:    func() {},
 		FormBackfillCancel:    func() {},
 		UsersBackfillCancel:   func() {},
 		APIKeyLastUsedCancel:  func() {},
@@ -190,6 +194,10 @@ func (am *AuthMiddleware) StartBackfill(backfillDelay, backpressureTimeout time.
 	sitekeyBackfillCtx, am.SitekeyBackfillCancel = context.WithCancel(
 		context.WithValue(sitekeyBackfillBaseCtx, common.TraceIDContextKey, "sitekey_backfill"))
 	go common.ProcessBatchMap(sitekeyBackfillCtx, am.SitekeyChan, backfillDelay, am.BatchSize, am.BatchSize*100, am.backfillSitekeyImpl)
+
+	edgeBackfillCtx, cancel := context.WithCancel(context.WithValue(sitekeyBackfillBaseCtx, common.TraceIDContextKey, "edge_backfill"))
+	am.EdgeBackfillCancel = cancel
+	go common.ProcessBatchMap(edgeBackfillCtx, am.EdgeChan, backfillDelay, am.BatchSize, am.BatchSize*100, am.backfillEdgeImpl)
 
 	var formBackfillCtx context.Context
 	formBackfillBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
@@ -224,6 +232,7 @@ func (am *AuthMiddleware) StartBackfill(backfillDelay, backpressureTimeout time.
 
 func (am *AuthMiddleware) Stop() {
 	am.SitekeyBackfillCancel()
+	am.EdgeBackfillCancel()
 	am.FormBackfillCancel()
 	am.UsersBackfillCancel()
 	am.APIKeyLastUsedCancel()
@@ -233,6 +242,7 @@ func (am *AuthMiddleware) Stop() {
 func (am *AuthMiddleware) Shutdown() {
 	slog.Debug("Shutting down auth middleware")
 	close(am.SitekeyChan)
+	close(am.EdgeChan)
 	close(am.FormChan)
 	close(am.UsersChan)
 	close(am.APIKeyLastUsedChan)
@@ -281,6 +291,21 @@ func (am *AuthMiddleware) backfillFormsImpl(ctx context.Context, batch map[strin
 	}
 
 	return nil
+}
+
+func (am *AuthMiddleware) backfillEdgeImpl(ctx context.Context, batch map[string]uint) error {
+	_, err := am.Store.Impl().RetrieveEdgeSettingsBySitekeys(ctx, batch, am.NegativeSitekeyThreshold)
+	if err != nil {
+		level := slog.LevelError
+		if err == db.ErrNegativeCacheHit {
+			level = slog.LevelWarn
+		}
+		slog.Log(ctx, level, "Failed to retrieve edge settings by sitekey", "count", len(batch), common.ErrAttr(err))
+		if err == db.ErrInvalidInput || err == db.ErrNegativeCacheHit {
+			return nil
+		}
+	}
+	return err
 }
 
 // we cache properties and send owners down the background pipeline
@@ -517,6 +542,18 @@ func (am *AuthMiddleware) SitekeyOptions(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (am *AuthMiddleware) refreshEdgeSettingsBySitekey(ctx context.Context, sitekey string) {
+	timer := time.NewTimer(am.backpressureTimeout)
+	defer timer.Stop()
+	select {
+	case am.EdgeChan <- sitekey:
+	case <-ctx.Done():
+		slog.WarnContext(ctx, "Context cancelled for edge settings refresh", "sitekey", sitekey, common.ErrAttr(ctx.Err()))
+	case <-timer.C:
+		am.Metrics.ObserveEventDropped(common.EdgeEventType)
+	}
 }
 
 func (am *AuthMiddleware) refreshPropertyBySitekey(ctx context.Context, sitekey string) {

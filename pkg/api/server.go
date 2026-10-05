@@ -61,7 +61,8 @@ var (
 
 func init() {
 	var err error
-	invalidPropertyResponse, err = json.Marshal(&VerificationResponse{
+	type plainVerificationResponse VerificationResponse
+	invalidPropertyResponse, err = json.Marshal(&plainVerificationResponse{
 		Success: false,
 		Code:    puzzle.InvalidPropertyError,
 	})
@@ -69,7 +70,8 @@ func init() {
 		panic(err)
 	}
 
-	invalidPropertyRecaptchaResponse, err = json.Marshal(&VerifyResponseRecaptchaV2{
+	type plainVerifyResponseRecaptchaV2 VerifyResponseRecaptchaV2
+	invalidPropertyRecaptchaResponse, err = json.Marshal(&plainVerifyResponseRecaptchaV2{
 		Success:    false,
 		ErrorCodes: []string{puzzle.InvalidPropertyError.String()},
 	})
@@ -107,6 +109,8 @@ type Server struct {
 	AsyncTasks           db.AsyncTasks
 	CountryCodeHeader    common.ConfigItem
 	NoticeProvider       db.PropertyNoticeProvider
+	EdgeTokens           *EdgeTokenSigner
+	GatePage             *GatePage
 }
 
 type apiKeyOwnerSource struct {
@@ -234,6 +238,9 @@ func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 
 func (s *Server) Update(ctx context.Context) {
 	s.Verifier.UpdateMemoryBudget(ctx)
+	if err := s.EdgeTokens.Update(ctx); err != nil {
+		slog.ErrorContext(ctx, "Failed to reload edge token keys", common.ErrAttr(err))
+	}
 }
 
 func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) *common.RouteGenerator {
@@ -557,6 +564,10 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	s.applyAPIKeyRateLimits(ctx, r, ownerSource.cachedKey)
 
 	response := newVerificationResponse(result, isExplicitTestSitekey)
+	if err := s.addEdgeToken(r, response, result, time.Now().UTC()); err != nil {
+		slog.ErrorContext(ctx, "Failed to issue edge token", "propertyID", result.PropertyID, common.ErrAttr(err))
+		// do NOT return an error, primary function is verification for captcha
+	}
 
 	common.SendJSONResponse(r.Context(), w, response, common.NoCacheHeaders, s.APIHeaders)
 }
@@ -586,6 +597,37 @@ func newVerificationResponse(result *puzzle.VerifyResult, isExplicitTestSitekey 
 	}
 
 	return response
+}
+
+func (s *Server) addEdgeToken(r *http.Request, response *VerificationResponse, result *puzzle.VerifyResult, now time.Time) error {
+	if (result.Error != puzzle.VerifyNoError && result.Error != puzzle.MaintenanceModeError) || result.EdgeTokenValidityInterval == 0 {
+		return nil
+	}
+	ctx := r.Context()
+	validity := result.EdgeTokenValidityInterval
+	if s.BusinessDB != nil {
+		if property, err := s.BusinessDB.Impl().GetCachedPropertyByID(ctx, result.PropertyID); err == nil {
+			if rulesPair := s.retrievePropertyRules(ctx, property); rulesPair != nil && (rulesPair.PropertyRules != nil || rulesPair.OrgRules != nil) {
+				countryCodeHeader := ""
+				if s.CountryCodeHeader != nil {
+					countryCodeHeader = s.CountryCodeHeader.Value()
+				}
+				ri := rules.NewRequestInfo(r, countryCodeHeader)
+				propertyForRequest := rulesPair.Apply(ri, difficulty.NewDBProperty(property))
+				validity = propertyForRequest.EdgeTokenValidity()
+			}
+		}
+	}
+	if validity == 0 {
+		return nil
+	}
+	sitekey := hex.EncodeToString(result.ExternalID)
+	token, err := s.EdgeTokens.Sign(ctx, sitekey, result.Domain, now, validity)
+	if err != nil {
+		return err
+	}
+	response.EdgeToken = token
+	return nil
 }
 
 func (s *Server) addVerifyRecord(ctx context.Context, result *puzzle.VerifyResult, userAgent string) {

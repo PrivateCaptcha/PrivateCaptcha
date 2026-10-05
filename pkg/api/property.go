@@ -103,6 +103,13 @@ func (p *apiPropertySettings) Normalize() {
 		minMaxReplayValue = 1
 	)
 	p.MaxReplayCount = max(minMaxReplayValue, min(p.MaxReplayCount, maxMaxReplayValue))
+	if p.EdgeTokenValiditySeconds != nil {
+		seconds := max(0, min(*p.EdgeTokenValiditySeconds, int(maxEdgeTokenTTL/time.Second)))
+		if index := db.EdgeTokenValidityIndex(time.Duration(seconds) * time.Second); index > 0 {
+			seconds = int(puzzle.ValidityDurations[index-1].Seconds())
+		}
+		p.EdgeTokenValiditySeconds = &seconds
+	}
 
 	switch p.Growth {
 	case string(dbgen.DifficultyGrowthConstant),
@@ -434,18 +441,26 @@ func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, proper
 	// instead of StatusPropertyNameDuplicateError
 
 	property.Normalize()
+	var edgeTTL time.Duration
+	if property.EdgeTokenValiditySeconds != nil {
+		edgeTTL = time.Duration(*property.EdgeTokenValiditySeconds) * time.Second
+	}
+	if err := s.EdgeTokens.ValidateProperty(ctx, domain, edgeTTL); err != nil {
+		return common.StatusFailure
+	}
 
 	_, auditEvent, err := s.BusinessDB.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:             property.Name,
-		CreatorID:        db.Int(user.ID),
-		Domain:           domain,
-		Level:            db.Int2(int16(property.Level)),
-		Growth:           dbgen.DifficultyGrowth(property.Growth),
-		ValidityInterval: time.Duration(property.ValiditySeconds) * time.Second,
-		AllowSubdomains:  property.AllowSubdomains,
-		AllowLocalhost:   property.AllowLocalhost,
-		MaxReplayCount:   int32(property.MaxReplayCount),
-		Challenge:        dbgen.NullChallengeType{ChallengeType: dbgen.ChallengeType(property.Challenge), Valid: property.Challenge != ""},
+		Name:                      property.Name,
+		CreatorID:                 db.Int(user.ID),
+		Domain:                    domain,
+		Level:                     db.Int2(int16(property.Level)),
+		Growth:                    dbgen.DifficultyGrowth(property.Growth),
+		ValidityInterval:          time.Duration(property.ValiditySeconds) * time.Second,
+		EdgeTokenValidityInterval: edgeTTL,
+		AllowSubdomains:           property.AllowSubdomains,
+		AllowLocalhost:            property.AllowLocalhost,
+		MaxReplayCount:            int32(property.MaxReplayCount),
+		Challenge:                 dbgen.NullChallengeType{ChallengeType: dbgen.ChallengeType(property.Challenge), Valid: property.Challenge != ""},
 	}, org)
 	if err != nil {
 		tlog.ErrorContext(ctx, "Failed to create the property", common.ErrAttr(err))
@@ -921,17 +936,35 @@ func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, proper
 	}
 
 	propertyInput.Normalize()
+	var edgeTTL time.Duration
+	if propertyInput.EdgeTokenValiditySeconds != nil {
+		edgeTTL = time.Duration(*propertyInput.EdgeTokenValiditySeconds) * time.Second
+	}
+	if err := s.EdgeTokens.ValidateLifetime(ctx, edgeTTL); err != nil {
+		return common.StatusPropertyEdgeIntervalError
+	}
+	if edgeTTL > 0 {
+		if property, err := s.BusinessDB.Impl().GetCachedPropertyByID(ctx, int32(propertyID)); err == nil {
+			if err := s.EdgeTokens.ValidateProperty(ctx, property.Domain, edgeTTL); err != nil {
+				slog.ErrorContext(ctx, "Failed to validate property", "propID", property.ID, "domain", property.Domain, "ttl", edgeTTL, common.ErrAttr(err))
+				return common.StatusPropertyEdgeDomainError
+			}
+		}
+	}
+	// TODO: Validate the existing property domain before enabling edge tokens on update.
 
 	params := &dbgen.UpdatePropertyParams{
-		ID:               int32(propertyID),
-		Name:             propertyInput.Name,
-		Level:            db.Int2(int16(propertyInput.Level)),
-		Growth:           dbgen.DifficultyGrowth(propertyInput.Growth),
-		ValidityInterval: time.Duration(propertyInput.ValiditySeconds) * time.Second,
-		AllowSubdomains:  propertyInput.AllowSubdomains,
-		AllowLocalhost:   propertyInput.AllowLocalhost,
-		MaxReplayCount:   int32(propertyInput.MaxReplayCount),
-		Challenge:        dbgen.NullChallengeType{ChallengeType: dbgen.ChallengeType(propertyInput.Challenge), Valid: propertyInput.Challenge != ""},
+		ID:                        int32(propertyID),
+		Name:                      propertyInput.Name,
+		Level:                     db.Int2(int16(propertyInput.Level)),
+		Growth:                    dbgen.DifficultyGrowth(propertyInput.Growth),
+		ValidityInterval:          time.Duration(propertyInput.ValiditySeconds) * time.Second,
+		EdgeTokenValidityInterval: edgeTTL,
+		PreserveEdgeTokenValidity: propertyInput.EdgeTokenValiditySeconds == nil,
+		AllowSubdomains:           propertyInput.AllowSubdomains,
+		AllowLocalhost:            propertyInput.AllowLocalhost,
+		MaxReplayCount:            int32(propertyInput.MaxReplayCount),
+		Challenge:                 dbgen.NullChallengeType{ChallengeType: dbgen.ChallengeType(propertyInput.Challenge), Valid: propertyInput.Challenge != ""},
 	}
 
 	_, auditEvent, err := s.BusinessDB.Impl().UpdateProperty(ctx, org, user, params)
@@ -1090,17 +1123,18 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := &apiPropertyOutput{
-		ID:              s.IDHasher.Encrypt(int(property.ID)),
-		Name:            property.Name,
-		Challenge:       string(property.Challenge),
-		Domain:          property.Domain,
-		Sitekey:         db.UUIDToSiteKey(property.ExternalID),
-		Level:           int(property.Level.Int16),
-		Growth:          string(property.Growth),
-		ValiditySeconds: int(property.ValidityInterval.Seconds()),
-		AllowSubdomains: property.AllowSubdomains,
-		AllowLocalhost:  property.AllowLocalhost,
-		MaxReplayCount:  int(property.MaxReplayCount),
+		ID:                       s.IDHasher.Encrypt(int(property.ID)),
+		Name:                     property.Name,
+		Challenge:                string(property.Challenge),
+		Domain:                   property.Domain,
+		Sitekey:                  db.UUIDToSiteKey(property.ExternalID),
+		Level:                    int(property.Level.Int16),
+		Growth:                   string(property.Growth),
+		ValiditySeconds:          int(property.ValidityInterval.Seconds()),
+		EdgeTokenValiditySeconds: int(property.EdgeTokenValidityInterval.Seconds()),
+		AllowSubdomains:          property.AllowSubdomains,
+		AllowLocalhost:           property.AllowLocalhost,
+		MaxReplayCount:           int(property.MaxReplayCount),
 	}
 
 	s.sendAPISuccessResponse(ctx, data, w)

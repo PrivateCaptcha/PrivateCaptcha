@@ -343,6 +343,7 @@ const (
 	userFormsCountCacheKeyPrefix
 	orgSearchCacheKeyPrefix
 	orgStatsCacheKeyPrefix
+	edgeSettingsBySitekeyCacheKeyPrefix
 	// IMPORTANT: add new fields ONLY to the end
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
@@ -398,6 +399,7 @@ func init() {
 	cachePrefixToStrings[userFormsCountCacheKeyPrefix] = "userFormsCount/"
 	cachePrefixToStrings[orgSearchCacheKeyPrefix] = "orgSearch/"
 	cachePrefixToStrings[orgStatsCacheKeyPrefix] = "orgStats/"
+	cachePrefixToStrings[edgeSettingsBySitekeyCacheKeyPrefix] = "edgeSitekey/"
 
 	for i, v := range cachePrefixToStrings {
 		if len(v) == 0 && i != int(retiredSessionCacheKeyPrefix) {
@@ -407,6 +409,7 @@ func init() {
 
 	gob.Register(CacheKey{})
 	gob.Register(&dbgen.Property{})
+	gob.Register(&dbgen.GetEdgeSettingsBySitekeyRow{})
 	gob.Register([]*dbgen.SearchOrgRow{})
 	gob.Register(&dbgen.User{})
 	gob.Register(&dbgen.UserSettings{})
@@ -519,6 +522,9 @@ func PropertyByIDCacheKey(propID int32) CacheKey {
 }
 func PropertyBySitekeyCacheKey(sitekey string) CacheKey {
 	return StringCacheKey(propertyBySitekeyCacheKeyPrefix, sitekey)
+}
+func EdgeSettingsBySitekeyCacheKey(sitekey string) CacheKey {
+	return StringCacheKey(edgeSettingsBySitekeyCacheKeyPrefix, sitekey)
 }
 func UserOrgsCacheKey(userID int32) CacheKey { return Int32CacheKey(userOrgsCacheKeyPrefix, userID) }
 func orgUsersCacheKey(orgID int32) CacheKey  { return Int32CacheKey(orgUsersCacheKeyPrefix, orgID) }

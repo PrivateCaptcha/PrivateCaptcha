@@ -3802,6 +3802,26 @@ func TestDifficultyRuleToDisplayAllSwitchCases(t *testing.T) {
 			expectedCondOperator:   "is one of",
 		},
 		{
+			name: "action EdgeTokenValidityInterval",
+			rule: &dbgen.DifficultyRule{
+				ActionProperty: dbgen.RuleActionPropertyEdgeTokenValidityInterval,
+				ActionValue:    4,
+			},
+			expectedActionAction:   "set",
+			expectedActionProperty: "Verified access duration",
+			expectedActionValue:    "1h0m0s",
+		},
+		{
+			name: "action EdgeTokenValidityInterval disabled",
+			rule: &dbgen.DifficultyRule{
+				ActionProperty: dbgen.RuleActionPropertyEdgeTokenValidityInterval,
+				ActionValue:    0,
+			},
+			expectedActionAction:   "set",
+			expectedActionProperty: "Verified access duration",
+			expectedActionValue:    "disabled",
+		},
+		{
 			name: "action Break",
 			rule: &dbgen.DifficultyRule{
 				ID:                5,
@@ -4179,6 +4199,43 @@ func TestParseRuleFormNegativeCases(t *testing.T) {
 		},
 	}
 
+	for _, edge := range []struct {
+		value  string
+		status common.StatusCode
+	}{
+		{"", common.StatusRuleActionValueRequired},
+		{"abc", common.StatusRuleActionValueInvalid},
+		{"-1", common.StatusRuleActionValueInvalid},
+		{"8", common.StatusRuleActionValueInvalid},
+		{"+0", common.StatusRuleActionValueInvalid},
+		{"00", common.StatusRuleActionValueInvalid},
+		{"2147483648", common.StatusRuleActionValueInvalid},
+		{"0", common.StatusOK},
+		{"1", common.StatusOK},
+		{"2", common.StatusOK},
+		{"3", common.StatusOK},
+		{"4", common.StatusOK},
+		{"5", common.StatusOK},
+		{"6", common.StatusOK},
+		{"7", common.StatusOK},
+	} {
+		tests = append(tests, struct {
+			name         string
+			formValues   map[string]string
+			expectedCode common.StatusCode
+		}{
+			name: "edge validity " + edge.value,
+			formValues: map[string]string{
+				common.ParamName:              "Edge validity",
+				common.ParamConditionProperty: string(dbgen.RuleConditionPropertyAlways),
+				common.ParamActionProperty:    string(dbgen.RuleActionPropertyEdgeTokenValidityInterval),
+				common.ParamActionValue:       edge.value,
+				common.ParamTerminal:          "on",
+			},
+			expectedCode: edge.status,
+		})
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := makeServer()
@@ -4194,10 +4251,19 @@ func TestParseRuleFormNegativeCases(t *testing.T) {
 			}
 
 			renderCtx := &RuleWizardRenderContext{}
-			_, statusCode := s.parseRuleForm(t.Context(), req, renderCtx, "example.com")
+			params, statusCode := s.parseRuleForm(t.Context(), req, renderCtx, "example.com")
 
 			if statusCode != tt.expectedCode {
 				t.Errorf("parseRuleForm() = %v, want %v", statusCode, tt.expectedCode)
+			}
+			if statusCode.Success() && renderCtx.ActionProperty == string(dbgen.RuleActionPropertyEdgeTokenValidityInterval) {
+				value, err := strconv.Atoi(tt.formValues[common.ParamActionValue])
+				if err != nil {
+					t.Fatal(err)
+				}
+				if params.ActionProperty != dbgen.RuleActionPropertyEdgeTokenValidityInterval || params.ActionValue != int32(value) || !params.Terminal || !renderCtx.Terminal {
+					t.Errorf("unexpected edge validity action: %+v", params)
+				}
 			}
 		})
 	}

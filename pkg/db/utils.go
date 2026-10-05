@@ -12,6 +12,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/maypok86/otter/v2"
@@ -674,4 +675,38 @@ func NewDefaultPropertyParams(name, domain string, userID int32) *dbgen.CreatePr
 		AllowLocalhost:   false,
 		MaxReplayCount:   1,
 	}
+}
+
+func NewUpdatePropertyParams(property *dbgen.Property) *dbgen.UpdatePropertyParams {
+	return &dbgen.UpdatePropertyParams{
+		ID:                        property.ID,
+		Name:                      property.Name,
+		Level:                     property.Level,
+		Growth:                    property.Growth,
+		Challenge:                 dbgen.NullChallengeType{ChallengeType: property.Challenge, Valid: true},
+		ValidityInterval:          property.ValidityInterval,
+		EdgeTokenValidityInterval: property.EdgeTokenValidityInterval,
+		AllowSubdomains:           property.AllowSubdomains,
+		AllowLocalhost:            property.AllowLocalhost,
+		MaxReplayCount:            property.MaxReplayCount,
+		CreatorID:                 property.CreatorID,
+		OrgID:                     property.OrgID,
+	}
+}
+
+// EdgeTokenValidityIndex picks the nearest supported duration (ties round down),
+// returning its one-based index or zero when disabled.
+func EdgeTokenValidityIndex(period time.Duration) int {
+	if period <= 0 {
+		return 0
+	}
+	for i, duration := range puzzle.ValidityDurations {
+		if period <= duration {
+			if i > 0 && period-puzzle.ValidityDurations[i-1] <= duration-period {
+				return i
+			}
+			return i + 1
+		}
+	}
+	return len(puzzle.ValidityDurations)
 }

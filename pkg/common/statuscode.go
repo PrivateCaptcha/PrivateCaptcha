@@ -47,6 +47,8 @@ const (
 	StatusPropertyIDDuplicateError          StatusCode = 1213
 	StatusPropertyPermissionsError          StatusCode = 1214
 	StatusPropertyChallengeUnsupportedError StatusCode = 1215
+	StatusPropertyEdgeIntervalError         StatusCode = 1216
+	StatusPropertyEdgeDomainError           StatusCode = 1217
 	// subscription errors
 	StatusSubscriptionPropertyLimitError StatusCode = 1300
 	// rules errors
@@ -210,6 +212,10 @@ func (sc StatusCode) String() string {
 		return "Rule name can only contain letters, numbers, spaces, hyphens, and dots."
 	case StatusRuleConditionValueInvalid:
 		return "Condition value is invalid."
+	case StatusPropertyEdgeIntervalError:
+		return "Edge protection token duration is not valid."
+	case StatusPropertyEdgeDomainError:
+		return "Edge protection requires a valid property domain."
 	default:
 		if s, ok := extraStatusCodeStrings[sc]; ok {
 			return s

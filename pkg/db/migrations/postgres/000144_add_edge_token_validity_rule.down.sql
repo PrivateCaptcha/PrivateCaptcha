@@ -1,0 +1,2 @@
+-- PostgreSQL does not support removing values from enum types.
+-- The 'edge_token_validity_interval' value cannot be rolled back automatically.
