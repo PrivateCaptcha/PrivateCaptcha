@@ -505,6 +505,7 @@ func (am *AuthMiddleware) SitekeyOptions(next http.Handler) http.Handler {
 		ctx := r.Context()
 
 		sitekey := r.URL.Query().Get(common.ParamSiteKey)
+		sitekey = strings.ToLower(sitekey)
 		// don't validate all characters for speed reasons
 		if sitekeyLen := len(sitekey); sitekeyLen != db.SitekeyLen {
 			slog.Log(ctx, common.LevelTrace, "Sitekey is not valid", "method", r.Method, "length", sitekeyLen)
@@ -577,6 +578,7 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 
 		// we verify sitekey in the underlying DB call
 		sitekey := r.URL.Query().Get(common.ParamSiteKey)
+		sitekey = strings.ToLower(sitekey)
 		property, needsRefresh, err := am.Store.Impl().GetCachedPropertyBySitekey(ctx, sitekey)
 		if err != nil {
 			switch err {
