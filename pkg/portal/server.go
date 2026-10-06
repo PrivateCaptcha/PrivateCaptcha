@@ -367,6 +367,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	privateWrite := s.MiddlewarePrivateWrite(public, internalTimeout)
 	privateRead := s.MiddlewarePrivateRead(public, internalTimeout)
 	privateReadWithTip := privateRead.Append(TipMiddleware)
+	longPrivateWrite := alice.New(common.WriteDeadlineExtender(30 * time.Second)).Extend(privateWrite)
 
 	rg.Handle(rg.Post(common.LogoutEndpoint), privateWrite, http.HandlerFunc(s.logout))
 	rg.Handle(rg.Post(common.LoginEndpoint), openWrite, http.HandlerFunc(s.postLogin))
@@ -457,7 +458,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Get(common.UserEndpoint, common.StatsEndpoint), privateRead, http.HandlerFunc(s.getAccountStats))
 	rg.Handle(rg.Post(common.APIKeysEndpoint, arg(common.ParamKey)), privateWrite, s.Handler(s.rotateAPIKey))
 	rg.Handle(rg.Delete(common.APIKeysEndpoint, arg(common.ParamKey)), privateWrite, http.HandlerFunc(s.deleteAPIKey))
-	rg.Handle(rg.Delete(common.UserEndpoint), privateWrite, http.HandlerFunc(s.deleteAccount))
+	rg.Handle(rg.Delete(common.UserEndpoint), longPrivateWrite, http.HandlerFunc(s.deleteAccount))
 	rg.Handle(rg.Delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Append(s.private), http.HandlerFunc(s.dismissNotification))
 	rg.Handle(rg.Post(common.ErrorEndpoint), privateRead, http.HandlerFunc(s.postClientSideError))
 	rg.Handle(rg.Get(common.EchoPuzzleEndpoint, arg(common.ParamDifficulty)), privateRead, http.HandlerFunc(s.echoPuzzle))
