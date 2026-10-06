@@ -144,6 +144,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	logLevel := common.SetupLogs(stage, verbose)
 
 	planService := billing.NewPlanService(nil)
+	featureFlags := common.EnabledFeatureFlags{}
 
 	metrics := monitoring.NewService()
 
@@ -187,6 +188,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 
 	apiURLConfig := config.AsURL(ctx, cfg.Get(common.APIBaseURLKey))
 	apiServer := &api.Server{
+		FeatureFlags:        featureFlags,
 		Stage:               stage,
 		Prefix:              apiURLConfig.Path(),
 		BusinessDB:          businessDB,
@@ -282,11 +284,12 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		return errors.New("XSRF key is empty")
 	}
 	portalServer := &portal.Server{
-		Stage:      stage,
-		Prefix:     portalURLConfig.Path(),
-		Store:      businessDB,
-		TimeSeries: timeSeriesDB,
-		XSRF:       &common.XSRFMiddleware{Key: xsrfKey.Value(), Timeout: 1 * time.Hour},
+		FeatureFlags: featureFlags,
+		Stage:        stage,
+		Prefix:       portalURLConfig.Path(),
+		Store:        businessDB,
+		TimeSeries:   timeSeriesDB,
+		XSRF:         &common.XSRFMiddleware{Key: xsrfKey.Value(), Timeout: 1 * time.Hour},
 		Sessions: &session.Manager{
 			CookieName:   "pcsid",
 			Store:        sessionStore,

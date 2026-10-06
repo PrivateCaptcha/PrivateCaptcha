@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"context"
 	"fmt"
 	randv2 "math/rand/v2"
 	"net/http"
@@ -14,6 +15,81 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
+
+type stubRenderFeatureFlags bool
+
+func (s stubRenderFeatureFlags) Enabled(string, string) bool {
+	return bool(s)
+}
+
+type featureFlagsFunc func(context.Context, string, *int32, *int32) bool
+
+func (f featureFlagsFunc) Enabled(ctx context.Context, feature string, userID, orgID *int32) bool {
+	return f(ctx, feature, userID, orgID)
+}
+
+func TestRenderFeatures(t *testing.T) {
+	userID := int32(42)
+	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "feature-salt"))
+	ctx := common.TraceContext(t.Context(), t.Name())
+	tests := []struct {
+		name   string
+		userID *int32
+		orgID  string
+		want   bool
+	}{
+		{
+			name:   "UserAndOrg",
+			userID: &userID,
+			orgID:  hasher.Encrypt(123),
+			want:   true,
+		},
+		{
+			name:   "UserOnly",
+			userID: &userID,
+			want:   true,
+		},
+		{
+			name:  "OrgOnly",
+			orgID: hasher.Encrypt(123),
+			want:  true,
+		},
+		{
+			name: "Anonymous",
+			want: true,
+		},
+		{
+			name:  "InvalidOrg",
+			orgID: "invalid",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := &Server{
+				IDHasher: hasher,
+				FeatureFlags: featureFlagsFunc(func(gotCtx context.Context, feature string, gotUserID, gotOrgID *int32) bool {
+					if gotCtx != ctx || feature != common.FeatureArgon2ID {
+						t.Fatalf("unexpected context or feature: %q", feature)
+					}
+					if gotUserID != tc.userID {
+						t.Fatalf("user ID = %v, want %v", gotUserID, tc.userID)
+					}
+					if tc.orgID == "" {
+						if gotOrgID != nil {
+							t.Fatal("expected absent organization")
+						}
+					} else if gotOrgID == nil || *gotOrgID != 123 {
+						t.Fatalf("organization ID = %v, want 123", gotOrgID)
+					}
+					return true
+				}),
+			}
+			if got := srv.renderFeatures(ctx, tc.userID).Enabled(common.FeatureArgon2ID, tc.orgID); got != tc.want {
+				t.Errorf("enabled = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
 
 func stubProperty(name, orgID string) *userProperty {
 	return &userProperty{
@@ -236,6 +312,7 @@ func TestRenderHTML(t *testing.T) {
 		selector   string
 		enterprise *bool
 		budget     *string
+		features   RenderFeatureFlags
 		matches    []string
 	}{
 		{
@@ -806,6 +883,28 @@ func TestRenderHTML(t *testing.T) {
 		},
 		// same as above, but property settings _template_
 		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint, "feature-disabled"},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: blakeProperty, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			features: stubRenderFeatureFlags(false),
+			selector: `select[name="challenge"]`,
+			matches:  []string{},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint, "existing-feature-disabled"},
+			template: propertyDashboardSettingsTemplate,
+			model: &propertySettingsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: argonProperty, Org: stubOrg("123"), CanEdit: true},
+				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+			},
+			features: stubRenderFeatureFlags(false),
+			selector: `select[name="challenge"] option[value="argon2id"][selected][disabled]`,
+			matches:  []string{"Memory-hard (disabled)"},
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
 			template: propertyDashboardSettingsTemplate,
 			model: &propertySettingsRenderContext{
@@ -1212,7 +1311,14 @@ func TestRenderHTML(t *testing.T) {
 				}
 
 				path := server.RelURL(strings.Join(tc.path, "/"))
-				buf, err := server.RenderResponse(t.Context(), tc.template, tc.model, &RequestContext{Path: server.RelURL(path)}, platformCtx)
+				reqCtx := &RequestContext{
+					Path:     server.RelURL(path),
+					Features: tc.features,
+				}
+				if reqCtx.Features == nil {
+					reqCtx.Features = stubRenderFeatureFlags(true)
+				}
+				buf, err := server.RenderResponse(t.Context(), tc.template, tc.model, reqCtx, platformCtx)
 				if err != nil {
 					t.Fatal(err)
 				}

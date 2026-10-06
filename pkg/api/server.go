@@ -79,6 +79,7 @@ func init() {
 }
 
 type Server struct {
+	FeatureFlags         common.FeatureFlags
 	APIHeaders           map[string][]string
 	Stage                string
 	Prefix               string
@@ -193,6 +194,10 @@ type ServerConfig struct {
 }
 
 func (s *Server) Init(ctx context.Context, config ServerConfig) error {
+	if s.FeatureFlags == nil {
+		s.FeatureFlags = common.EnabledFeatureFlags{}
+	}
+
 	s.APIHeaders = make(map[string][]string)
 
 	if err := s.Verifier.Update(ctx); err != nil {

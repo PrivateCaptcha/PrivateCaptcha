@@ -67,6 +67,15 @@ func listPages(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte(listTemplateEnd))
 }
 
+type previewFeatureFlags struct {
+	ctx   context.Context
+	flags common.FeatureFlags
+}
+
+func (f previewFeatureFlags) Enabled(feature, _ string) bool {
+	return f.flags.Enabled(f.ctx, feature, nil, nil)
+}
+
 func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -74,6 +83,10 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 		model := p.ModelFunc(alert)
 
 		reqCtx := &portal.RequestContext{
+			Features: previewFeatureFlags{
+				ctx:   ctx,
+				flags: srv.FeatureFlags,
+			},
 			Path:        r.URL.Path,
 			CurrentYear: time.Now().Year(),
 			UserName:    "Jane Doe",

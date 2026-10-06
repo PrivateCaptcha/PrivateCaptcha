@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"math"
 	"net/http"
 	"slices"
 	"time"
@@ -14,6 +15,7 @@ import (
 )
 
 type RenderConstants struct {
+	FeatureArgon2ID                 string
 	LoginEndpoint                   string
 	TwoFactorEndpoint               string
 	ResendEndpoint                  string
@@ -134,6 +136,7 @@ type RenderConstants struct {
 
 func NewRenderConstants() *RenderConstants {
 	return &RenderConstants{
+		FeatureArgon2ID:                 common.FeatureArgon2ID,
 		LoginEndpoint:                   common.LoginEndpoint,
 		TwoFactorEndpoint:               common.TwoFactorEndpoint,
 		ResendEndpoint:                  common.ResendEndpoint,
@@ -253,7 +256,45 @@ func NewRenderConstants() *RenderConstants {
 	}
 }
 
+type RenderFeatureFlags interface {
+	Enabled(feature, orgID string) bool
+}
+
+type renderFeatureFlags struct {
+	ctx      context.Context
+	flags    common.FeatureFlags
+	userID   *int32
+	idHasher common.IdentifierHasher
+}
+
+func (f *renderFeatureFlags) Enabled(feature, orgRef string) bool {
+	var orgID *int32
+	if orgRef != "" {
+		id, err := f.idHasher.Decrypt(orgRef)
+		if err != nil || id <= 0 || id > math.MaxInt32 {
+			slog.WarnContext(f.ctx, "Invalid organization ID for feature check", "org", orgRef, common.ErrAttr(err))
+			return false
+		}
+		orgID = new(int32)
+		*orgID = int32(id)
+	}
+	return f.flags.Enabled(f.ctx, feature, f.userID, orgID)
+}
+
+func (s *Server) renderFeatures(ctx context.Context, userID *int32) RenderFeatureFlags {
+	return &renderFeatureFlags{
+		ctx:      ctx,
+		flags:    s.FeatureFlags,
+		userID:   userID,
+		idHasher: s.IDHasher,
+	}
+}
+
 func (s *Server) RenderResponse(ctx context.Context, name string, data interface{}, reqCtx *RequestContext, platformCtx interface{}) (*bytes.Buffer, error) {
+	if reqCtx.Features == nil {
+		reqCtx.Features = s.renderFeatures(ctx, nil)
+	}
+
 	actualData := struct {
 		Params   interface{}
 		Const    interface{}
@@ -301,7 +342,11 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		reqCtx.Pattern = common.RelURL(s.Prefix, pathPattern)
 	}
 
+	var userID *int32
 	if sess, err := s.Sessions.Get(r); err == nil {
+		if authority, ok := sess.Authority(); ok && authority.State == session.StateAuthenticated && authority.UserID > 0 {
+			userID = &authority.UserID
+		}
 		if username, ok := sess.Get(ctx, session.KeyUserName).(string); ok {
 			reqCtx.UserName = username
 		}
@@ -325,6 +370,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		}
 	}
 
+	reqCtx.Features = s.renderFeatures(ctx, userID)
 	out, err := s.RenderResponse(ctx, name, data, reqCtx, s.PlatformCtx)
 	if err == nil {
 		common.WriteHeaders(w, common.SecurityHeaders)

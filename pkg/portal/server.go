@@ -73,6 +73,7 @@ type OrgRulesConstructor func(http.ResponseWriter, *http.Request) (Model, *commo
 type AuditLogParser func(ctx context.Context, log *dbgen.AuditLog, ul *UserAuditLog) error
 
 type RequestContext struct {
+	Features     RenderFeatureFlags
 	Path         string
 	Pattern      string
 	CurrentYear  int
@@ -156,6 +157,7 @@ func singleAuditEvents(event *common.AuditLogEvent) []*common.AuditLogEvent {
 }
 
 type Server struct {
+	FeatureFlags         common.FeatureFlags
 	Store                db.Implementor
 	TimeSeries           common.TimeSeriesStore
 	APIURL               string
@@ -225,6 +227,10 @@ func (s *Server) createSettingsTabs() []*SettingsTab {
 }
 
 func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gitCommit string, sessionPersistInterval time.Duration) error {
+	if s.FeatureFlags == nil {
+		s.FeatureFlags = common.EnabledFeatureFlags{}
+	}
+
 	prefix := common.RelURL(s.Prefix, "/")
 
 	templateBuilder.AddFunctions(ctx, funcMap(prefix))
