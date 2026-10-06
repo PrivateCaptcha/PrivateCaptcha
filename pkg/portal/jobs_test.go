@@ -2,6 +2,7 @@ package portal
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -9,11 +10,111 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
+
+type offboardPlanServiceStub struct {
+	billing.PlanService
+	cancelledID string
+	cancelError error
+}
+
+func (s *offboardPlanServiceStub) CancelSubscription(_ context.Context, sid string) error {
+	s.cancelledID = sid
+	return s.cancelError
+}
+
+func TestOffboardUserJob(t *testing.T) {
+	cancelError := errors.New("subscription cancellation failed")
+	tests := []struct {
+		name          string
+		subscription  *dbgen.Subscription
+		cancelError   error
+		wantCancelled string
+	}{
+		{
+			name: "NoSubscription",
+		},
+		{
+			name: "ActiveSubscription",
+			subscription: &dbgen.Subscription{
+				Status:                 billing.InternalStatusTrialing,
+				ExternalSubscriptionID: db.Text("active-subscription"),
+			},
+			wantCancelled: "active-subscription",
+		},
+		{
+			name: "InactiveSubscription",
+			subscription: &dbgen.Subscription{
+				Status:                 billing.InternalStatusExpired,
+				ExternalSubscriptionID: db.Text("expired-subscription"),
+			},
+		},
+		{
+			name: "NoExternalSubscription",
+			subscription: &dbgen.Subscription{
+				Status: billing.InternalStatusTrialing,
+			},
+		},
+		{
+			name: "ScheduledCancellation",
+			subscription: &dbgen.Subscription{
+				Status:                 billing.InternalStatusTrialing,
+				ExternalSubscriptionID: db.Text("scheduled-subscription"),
+				CancelFrom:             db.Timestampz(time.Now().Add(24 * time.Hour)),
+			},
+		},
+		{
+			name: "PastCancellation",
+			subscription: &dbgen.Subscription{
+				Status:                 billing.InternalStatusTrialing,
+				ExternalSubscriptionID: db.Text("past-cancellation-subscription"),
+				CancelFrom:             db.Timestampz(time.Now().Add(-24 * time.Hour)),
+			},
+			wantCancelled: "past-cancellation-subscription",
+		},
+		{
+			name: "CancellationError",
+			subscription: &dbgen.Subscription{
+				Status:                 billing.InternalStatusTrialing,
+				ExternalSubscriptionID: db.Text("failed-subscription"),
+			},
+			cancelError:   cancelError,
+			wantCancelled: "failed-subscription",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			planService := &offboardPlanServiceStub{
+				PlanService: billing.NewPlanService(nil),
+				cancelError: tt.cancelError,
+			}
+			srv := &Server{
+				PlanService: planService,
+			}
+			user := &dbgen.User{
+				ID: 42,
+			}
+			job := srv.OffboardUser(user, tt.subscription)
+			if planService.cancelledID != "" {
+				t.Fatal("subscription was cancelled before the job ran")
+			}
+			if err := job.RunOnce(t.Context(), job.NewParams()); !errors.Is(err, tt.cancelError) {
+				t.Errorf("RunOnce() error = %v, want %v", err, tt.cancelError)
+			}
+			if planService.cancelledID != tt.wantCancelled {
+				t.Errorf("cancelled subscription = %q, want %q", planService.cancelledID, tt.wantCancelled)
+			}
+		})
+	}
+}
 
 type registrationVerificationStoreStub struct {
 	session.Store

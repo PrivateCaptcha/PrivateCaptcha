@@ -463,20 +463,13 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var subscription *dbgen.Subscription
 	if user.SubscriptionID.Valid {
-		subscription, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, true /*skip cache*/)
+		subscription, err = s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, true /*skip cache*/)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve a subscription", common.ErrAttr(err))
 			s.RedirectError(http.StatusInternalServerError, w, r)
 			return
-		}
-
-		if s.PlanService.IsSubscriptionActive(subscription.Status) && subscription.ExternalSubscriptionID.Valid {
-			if err := s.PlanService.CancelSubscription(ctx, subscription.ExternalSubscriptionID.String); err != nil {
-				slog.ErrorContext(ctx, "Failed to cancel external subscription", "userID", user.ID, common.ErrAttr(err))
-				s.RedirectError(http.StatusInternalServerError, w, r)
-				return
-			}
 		}
 	}
 
@@ -490,7 +483,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		}
 		return []*common.AuditLogEvent{auditEvent}, nil
 	}); err == nil {
-		job := s.Jobs.OffboardUser(user)
+		job := s.Jobs.OffboardUser(user, subscription)
 		go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), job, job.NewParams())
 		s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
 		s.Sessions.ClearCookie(w, r)

@@ -22,8 +22,12 @@ func (s *Server) OnboardUser(user *dbgen.User, plan billing.Plan) common.OneOffJ
 	return &onboardUserJob{user: user, mailer: s.Mailer, store: s.Store}
 }
 
-func (s *Server) OffboardUser(user *dbgen.User) common.OneOffJob {
-	return &common.StubOneOffJob{}
+func (s *Server) OffboardUser(user *dbgen.User, subscription *dbgen.Subscription) common.OneOffJob {
+	return &offboardUserJob{
+		user:         user,
+		subscription: subscription,
+		planService:  s.PlanService,
+	}
 }
 
 func (s *Server) CheckRegistration(sess *session.Session, r *http.Request, orgInviteID int32) common.OneOffJob {
@@ -63,6 +67,38 @@ func (j *onboardUserJob) NewParams() any {
 
 func (j *onboardUserJob) RunOnce(ctx context.Context, params any) error {
 	return j.mailer.SendWelcome(ctx, j.user.Email, common.GuessFirstName(j.user.Name, j.user.Email))
+}
+
+type offboardUserJob struct {
+	user         *dbgen.User
+	subscription *dbgen.Subscription
+	planService  billing.PlanService
+}
+
+func (j *offboardUserJob) Name() string {
+	return "OffboardUser"
+}
+
+func (j *offboardUserJob) InitialPause() time.Duration {
+	return 0
+}
+
+func (j *offboardUserJob) NewParams() any {
+	return struct{}{}
+}
+
+func (j *offboardUserJob) RunOnce(ctx context.Context, params any) error {
+	if j.subscription == nil || !j.planService.IsSubscriptionActive(j.subscription.Status) ||
+		!j.subscription.ExternalSubscriptionID.Valid || HasScheduledCancellation(j.subscription) {
+		return nil
+	}
+
+	if err := j.planService.CancelSubscription(ctx, j.subscription.ExternalSubscriptionID.String); err != nil {
+		slog.ErrorContext(ctx, "Failed to cancel external subscription", "userID", j.user.ID, common.ErrAttr(err))
+		return err
+	}
+
+	return nil
 }
 
 type LoginUserJob struct {

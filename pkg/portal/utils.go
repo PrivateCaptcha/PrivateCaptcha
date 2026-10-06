@@ -7,6 +7,7 @@ import (
 	"math/big"
 	randv2 "math/rand/v2"
 	"net/http"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -214,4 +215,8 @@ func newUserAuthAuditLogEvent(userID int32, action common.AuditLogAction) *commo
 		OldValue:  nil,
 		NewValue:  nil,
 	}
+}
+
+func HasScheduledCancellation(subscription *dbgen.Subscription) bool {
+	return subscription.CancelFrom.Valid && subscription.CancelFrom.Time.After(time.Now())
 }
