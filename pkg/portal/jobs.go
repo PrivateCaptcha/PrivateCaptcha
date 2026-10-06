@@ -23,7 +23,7 @@ func (s *Server) OnboardUser(user *dbgen.User, plan billing.Plan) common.OneOffJ
 }
 
 func (s *Server) OffboardUser(user *dbgen.User, subscription *dbgen.Subscription) common.OneOffJob {
-	return &offboardUserJob{
+	return &OffboardUserJob{
 		user:         user,
 		subscription: subscription,
 		planService:  s.PlanService,
@@ -69,25 +69,25 @@ func (j *onboardUserJob) RunOnce(ctx context.Context, params any) error {
 	return j.mailer.SendWelcome(ctx, j.user.Email, common.GuessFirstName(j.user.Name, j.user.Email))
 }
 
-type offboardUserJob struct {
+type OffboardUserJob struct {
 	user         *dbgen.User
 	subscription *dbgen.Subscription
 	planService  billing.PlanService
 }
 
-func (j *offboardUserJob) Name() string {
+func (j *OffboardUserJob) Name() string {
 	return "OffboardUser"
 }
 
-func (j *offboardUserJob) InitialPause() time.Duration {
+func (j *OffboardUserJob) InitialPause() time.Duration {
 	return 0
 }
 
-func (j *offboardUserJob) NewParams() any {
+func (j *OffboardUserJob) NewParams() any {
 	return struct{}{}
 }
 
-func (j *offboardUserJob) RunOnce(ctx context.Context, params any) error {
+func (j *OffboardUserJob) RunOnce(ctx context.Context, params any) error {
 	if j.subscription == nil || !j.planService.IsSubscriptionActive(j.subscription.Status) ||
 		!j.subscription.ExternalSubscriptionID.Valid || HasScheduledCancellation(j.subscription) {
 		return nil
