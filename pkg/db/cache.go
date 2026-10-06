@@ -20,10 +20,9 @@ import (
 )
 
 var (
-	ErrNegativeCacheHit    = errors.New("negative hit")
-	ErrCacheMiss           = errors.New("cache miss")
-	ErrSetMissing          = errors.New("cannot set missing value directly")
-	errEmptyCacheKeyPrefix = errors.New("cache key prefix is empty")
+	ErrNegativeCacheHit = errors.New("negative hit")
+	ErrCacheMiss        = errors.New("cache miss")
+	ErrSetMissing       = errors.New("cannot set missing value directly")
 )
 
 type CacheMissingValue struct{}
@@ -438,28 +437,6 @@ func init() {
 	gob.Register(&common.OrgTimePeriodStats{})
 	gob.Register([]*common.FormSubmitStat{})
 	gob.Register([]*dbgen.GetFormAuditLogsRow{})
-}
-
-func RegisterCachePrefixString(prefix CacheKeyPrefix, s string) error {
-	if len(s) == 0 {
-		return errEmptyCacheKeyPrefix
-	}
-
-	cachePrefixMux.Lock()
-	defer cachePrefixMux.Unlock()
-
-	if int(prefix) >= len(cachePrefixToStrings) {
-		newSlice := make([]string, int(prefix)+1)
-		copy(newSlice, cachePrefixToStrings)
-		cachePrefixToStrings = newSlice
-	}
-
-	if cachePrefixToStrings[prefix] != "" {
-		return fmt.Errorf("cache: duplicate registration for prefix %v", prefix)
-	}
-
-	cachePrefixToStrings[prefix] = s
-	return nil
 }
 
 // it's a "union" type which is better than doing string concatenation as before

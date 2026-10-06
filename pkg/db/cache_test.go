@@ -28,12 +28,6 @@ func (c *manualCacheClock) Advance(d time.Duration) {
 	c.now.Add(int64(d))
 }
 
-func TestRegisterCachePrefixString(t *testing.T) {
-	if err := RegisterCachePrefixString(CACHE_KEY_PREFIXES_COUNT, "count"); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestCacheKeyPrefixNumericValuesRemainStable(t *testing.T) {
 	fixtures := []struct {
 		prefix CacheKeyPrefix
