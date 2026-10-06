@@ -851,7 +851,8 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 		challenge = property.Challenge
 	}
 	if challenge == dbgen.ChallengeTypeArgon2ID && property.Challenge != dbgen.ChallengeTypeArgon2ID &&
-		config.Argon2IDMemoryBudgetKiB(ctx, s.Argon2IDMemoryBudget, int64(puzzle.Argon2IDMemoryKiB)) == 0 {
+		(config.Argon2IDMemoryBudgetKiB(ctx, s.Argon2IDMemoryBudget, int64(puzzle.Argon2IDMemoryKiB)) == 0 ||
+			!s.FeatureFlags.Enabled(ctx, common.FeatureArgon2ID, &user.ID, &org.ID)) {
 		challenge = property.Challenge
 	}
 	_, allowSubdomains := r.Form[common.ParamAllowSubdomains]

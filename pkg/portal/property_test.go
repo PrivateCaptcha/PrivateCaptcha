@@ -2206,6 +2206,14 @@ func TestPortalPropertyUpdatesChallenge(t *testing.T) {
 	propertyID := server.IDHasher.Encrypt(int(property.ID))
 	platformCtx := server.PlatformCtx.(*PlatformRenderContext)
 	previousBudget := server.Argon2IDMemoryBudget
+	previousFlags := server.FeatureFlags
+	featuresEnabled := true
+	server.FeatureFlags = featureFlagsFunc(func(_ context.Context, feature string, userID, checkedOrgID *int32) bool {
+		if feature != common.FeatureArgon2ID || userID == nil || *userID != user.ID || checkedOrgID == nil || *checkedOrgID != org.ID {
+			t.Error("feature check did not receive the authenticated user and property organization")
+		}
+		return featuresEnabled
+	})
 	setBudget := func(value string) {
 		budget := config.NewStaticValue(common.Argon2IDMemoryBudgetKey, value)
 		server.Argon2IDMemoryBudget = budget
@@ -2213,6 +2221,7 @@ func TestPortalPropertyUpdatesChallenge(t *testing.T) {
 	}
 	setBudget("0")
 	t.Cleanup(func() {
+		server.FeatureFlags = previousFlags
 		server.Argon2IDMemoryBudget = previousBudget
 		platformCtx.Argon2IDMemoryBudget = previousBudget
 	})
@@ -2247,6 +2256,20 @@ func TestPortalPropertyUpdatesChallenge(t *testing.T) {
 	}
 
 	setBudget("256")
+	featuresEnabled = false
+	updateResponse = sendUpdate()
+	if updateResponse.Code != http.StatusOK {
+		t.Fatalf("feature-disabled update status = %d, want %d", updateResponse.Code, http.StatusOK)
+	}
+	updatedProperty, err = server.Store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedProperty.Challenge != dbgen.ChallengeTypeBlake2b {
+		t.Fatalf("challenge while feature disabled = %q, want Blake2b", updatedProperty.Challenge)
+	}
+
+	featuresEnabled = true
 	updateResponse = sendUpdate()
 	if updateResponse.Code != http.StatusOK {
 		t.Fatalf("enabled update status = %d, want %d", updateResponse.Code, http.StatusOK)
@@ -2281,6 +2304,21 @@ func TestPortalPropertyUpdatesChallenge(t *testing.T) {
 	}
 	if updatedProperty.Challenge != dbgen.ChallengeTypeArgon2ID || updatedProperty.Growth != dbgen.DifficultyGrowthFast {
 		t.Fatalf("updated property = challenge %q, growth %q; want preserved Argon2id and fast growth", updatedProperty.Challenge, updatedProperty.Growth)
+	}
+
+	setBudget("256")
+	featuresEnabled = false
+	form.Set(common.ParamGrowth, "1")
+	updateResponse = sendUpdate()
+	if updateResponse.Code != http.StatusOK {
+		t.Fatalf("feature-disabled unrelated update status = %d, want %d", updateResponse.Code, http.StatusOK)
+	}
+	updatedProperty, err = server.Store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updatedProperty.Challenge != dbgen.ChallengeTypeArgon2ID || updatedProperty.Growth != dbgen.DifficultyGrowthSlow {
+		t.Fatal("unrelated update should preserve Argon2id when its feature flag is disabled")
 	}
 }
 

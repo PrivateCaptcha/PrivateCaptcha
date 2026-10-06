@@ -124,7 +124,12 @@ func (p *apiPropertySettings) Normalize() {
 	}
 }
 
-func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Request, orgID int32) ([]*apiCreatePropertyInput, common.StatusCode, error) {
+func (s *Server) canUseArgon2ID(ctx context.Context, userID, orgID *int32) bool {
+	return config.Argon2IDMemoryBudgetKiB(ctx, s.Verifier.Argon2IDMemoryBudgetKey, int64(puzzle.Argon2IDMemoryKiB)) > 0 &&
+		s.FeatureFlags.Enabled(ctx, common.FeatureArgon2ID, userID, orgID)
+}
+
+func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Request, userID, orgID int32) ([]*apiCreatePropertyInput, common.StatusCode, error) {
 	if r.Header.Get(common.HeaderContentType) != common.ContentTypeJSON {
 		return nil, 0, db.ErrInvalidInput
 	}
@@ -149,7 +154,7 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 		return nil, 0, db.ErrInvalidInput
 	}
 
-	canUseArgon2ID := config.Argon2IDMemoryBudgetKiB(ctx, s.Verifier.Argon2IDMemoryBudgetKey, int64(puzzle.Argon2IDMemoryKiB)) > 0
+	canUseArgon2ID := s.canUseArgon2ID(ctx, &userID, &orgID)
 	for decoder.More() {
 		if len(inputs) >= maxPropertiesBatchSize {
 			slog.WarnContext(ctx, "Too many properties in a batch", "count", len(inputs), "max", maxPropertiesBatchSize)
@@ -249,7 +254,7 @@ func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inputs, status, err := s.readCreatePropertiesRequest(ctx, r, org.ID)
+	inputs, status, err := s.readCreatePropertiesRequest(ctx, r, user.ID, org.ID)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
@@ -377,7 +382,7 @@ func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user
 
 	results := make([]*operationResult, 0, len(params.Properties))
 	limitCheckIndex := 1
-	canUseArgon2ID := config.Argon2IDMemoryBudgetKiB(ctx, s.Verifier.Argon2IDMemoryBudgetKey, int64(puzzle.Argon2IDMemoryKiB)) > 0
+	canUseArgon2ID := s.canUseArgon2ID(ctx, &user.ID, &org.ID)
 
 	for i, property := range params.Properties {
 		if i > 0 {
@@ -665,7 +670,7 @@ func (s *Server) doDeleteProperties(ctx context.Context, tlog *slog.Logger, user
 	return results, nil
 }
 
-func (s *Server) readUpdatePropertiesRequest(ctx context.Context, r *http.Request) ([]*apiUpdatePropertyInput, common.StatusCode, error) {
+func (s *Server) readUpdatePropertiesRequest(ctx context.Context, r *http.Request, userID int32, orgID *int32) ([]*apiUpdatePropertyInput, common.StatusCode, error) {
 	if r.Header.Get(common.HeaderContentType) != common.ContentTypeJSON {
 		return nil, 0, db.ErrInvalidInput
 	}
@@ -682,7 +687,7 @@ func (s *Server) readUpdatePropertiesRequest(ctx context.Context, r *http.Reques
 	var inputs []*apiUpdatePropertyInput
 	idsMap := make(map[string]struct{}, maxPropertiesBatchSize/2)
 	nameMap := make(map[string]struct{}, maxPropertiesBatchSize/2)
-	canUseArgon2ID := config.Argon2IDMemoryBudgetKiB(ctx, s.Verifier.Argon2IDMemoryBudgetKey, int64(puzzle.Argon2IDMemoryKiB)) > 0
+	canUseArgon2ID := s.canUseArgon2ID(ctx, &userID, orgID)
 
 	for decoder.More() {
 		if len(inputs) >= maxPropertiesBatchSize {
@@ -760,7 +765,11 @@ func (s *Server) updateProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inputs, status, err := s.readUpdatePropertiesRequest(ctx, r)
+	var orgID *int32
+	if apiKey.OrgID.Valid {
+		orgID = &apiKey.OrgID.Int32
+	}
+	inputs, status, err := s.readUpdatePropertiesRequest(ctx, r, user.ID, orgID)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
@@ -880,7 +889,11 @@ func (s *Server) doUpdateProperties(ctx context.Context, tlog *slog.Logger, user
 		}
 	}
 
-	canUseArgon2ID := config.Argon2IDMemoryBudgetKiB(ctx, s.Verifier.Argon2IDMemoryBudgetKey, int64(puzzle.Argon2IDMemoryKiB)) > 0
+	var orgID *int32
+	if org != nil {
+		orgID = &org.ID
+	}
+	canUseArgon2ID := s.canUseArgon2ID(ctx, &user.ID, orgID)
 	for i, property := range params.Properties {
 		if i > 0 {
 			select {
