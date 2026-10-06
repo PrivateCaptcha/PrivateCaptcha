@@ -387,26 +387,6 @@ func (ts *TimeSeriesDB) RetrieveAccountStats(ctx context.Context, userID int32, 
 	return results, nil
 }
 
-func (ts *TimeSeriesDB) RetrieveAccountStatsByPeriod(ctx context.Context, userID int32, from time.Time, period common.TimePeriod) ([]*common.OrgTimeCount, error) {
-	if !ts.IsAvailable() {
-		return nil, ErrMaintenance
-	}
-
-	var timeFunction string
-	switch period {
-	case common.TimePeriodToday:
-		timeFunction = "toStartOfHour"
-	case common.TimePeriodWeek, common.TimePeriodMonth:
-		timeFunction = "toStartOfDay"
-	case common.TimePeriodYear:
-		timeFunction = "toStartOfMonth"
-	default:
-		return nil, ErrUnsupportedPeriod
-	}
-
-	return ts.retrieveAccountStats(ctx, userID, from.Format(time.DateTime), timeFunction)
-}
-
 func (ts *TimeSeriesDB) retrieveAccountStats(ctx context.Context, userID int32, fromStr, timeFunction string) ([]*common.OrgTimeCount, error) {
 	query := `SELECT org_id, ts, max(count) as count
 FROM (
@@ -1745,28 +1725,6 @@ func (m *MemoryTimeSeries) RetrieveAccountStats(ctx context.Context, userID int3
 		year, month, _ := t.Date()
 		return time.Date(year, month, 1, 0, 0, 0, 0, t.Location())
 	})
-}
-
-func (m *MemoryTimeSeries) RetrieveAccountStatsByPeriod(ctx context.Context, userID int32, from time.Time, period common.TimePeriod) ([]*common.OrgTimeCount, error) {
-	var truncate func(time.Time) time.Time
-	switch period {
-	case common.TimePeriodToday:
-		truncate = func(t time.Time) time.Time { return t.Truncate(time.Hour) }
-	case common.TimePeriodWeek, common.TimePeriodMonth:
-		truncate = func(t time.Time) time.Time {
-			year, month, day := t.Date()
-			return time.Date(year, month, day, 0, 0, 0, 0, t.Location())
-		}
-	case common.TimePeriodYear:
-		truncate = func(t time.Time) time.Time {
-			year, month, _ := t.Date()
-			return time.Date(year, month, 1, 0, 0, 0, 0, t.Location())
-		}
-	default:
-		return nil, ErrUnsupportedPeriod
-	}
-
-	return m.retrieveAccountStats(userID, from, truncate)
 }
 
 func (m *MemoryTimeSeries) retrieveAccountStats(userID int32, from time.Time, truncate func(time.Time) time.Time) ([]*common.OrgTimeCount, error) {

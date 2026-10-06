@@ -925,14 +925,6 @@ func (s *Server) BuildAccountStatsResponse(ctx context.Context, userID int32, ti
 	return s.buildAccountStatsResponse(ctx, userID, stats), nil
 }
 
-func (s *Server) BuildAccountStatsResponseByPeriod(ctx context.Context, userID int32, timeFrom time.Time, period common.TimePeriod) (*AccountStatsResponse, error) {
-	stats, err := s.TimeSeries.RetrieveAccountStatsByPeriod(ctx, userID, timeFrom, period)
-	if err != nil {
-		return nil, err
-	}
-	return s.buildAccountStatsResponse(ctx, userID, stats), nil
-}
-
 func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, stats []*common.OrgTimeCount) *AccountStatsResponse {
 	dataRaw := make([]*AccountStatsRawPoint, 0, len(stats))
 	orgIDs := make(map[int32]struct{}, len(stats))
