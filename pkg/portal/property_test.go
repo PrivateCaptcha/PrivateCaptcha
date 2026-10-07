@@ -2443,7 +2443,11 @@ func TestPutPropertyEdgeSettings(t *testing.T) {
 	}
 	form.Set(common.ParamEdgeTokenValidityInterval, "0")
 	form.Set(common.ParamEdgeWidgetStartMode, "click")
-	disableReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/property/%s/edge", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), strings.NewReader(form.Encode()))
+	disableReq := httptest.NewRequest(
+		http.MethodPut,
+		fmt.Sprintf("/org/%s/property/%s/edge", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))),
+		strings.NewReader(form.Encode()),
+	)
 	disableReq.AddCookie(cookie)
 	disableReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	disabledResponse := httptest.NewRecorder()
@@ -2452,7 +2456,9 @@ func TestPutPropertyEdgeSettings(t *testing.T) {
 		t.Fatalf("edge route status=%d", disabledResponse.Code)
 	}
 	var retainedMode string
-	if err := store.Pool.QueryRow(ctx, "SELECT edge_widget_start_mode FROM backend.edge_property_settings WHERE property_id=$1", property.ID).Scan(&retainedMode); err != nil || retainedMode != "load" {
+	if err := store.Pool.QueryRow(ctx, "SELECT edge_widget_start_mode FROM backend.edge_property_settings WHERE property_id=$1", property.ID).
+		Scan(&retainedMode); err != nil ||
+		retainedMode != "load" {
 		t.Fatalf("disabling edge changed widget settings: %q, err=%v", retainedMode, err)
 	}
 	getReq := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), nil)
@@ -2471,7 +2477,11 @@ func TestPutPropertyEdgeSettings(t *testing.T) {
 	form.Set(common.ParamName, noDomain.Name)
 	form.Set(common.ParamEdgeTokenValidityInterval, "4")
 	form.Set(common.ParamEdgeWidgetStartMode, "click")
-	noDomainReq := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(noDomain.ID))), strings.NewReader(form.Encode()))
+	noDomainReq := httptest.NewRequest(
+		http.MethodPut,
+		fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(noDomain.ID))),
+		strings.NewReader(form.Encode()),
+	)
 	noDomainReq.AddCookie(cookie)
 	noDomainReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	noDomainReq.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))

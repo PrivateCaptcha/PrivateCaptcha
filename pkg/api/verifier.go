@@ -255,7 +255,13 @@ func (v *Verifier) VerifyUnsafe(ctx context.Context, verifyPayload puzzle.Soluti
 	return v.verify(ctx, verifyPayload, expectedOwner, tnow, true /*skip memory semaphore*/)
 }
 
-func (v *Verifier) verify(ctx context.Context, verifyPayload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time, skipMemorySemaphore bool) (*puzzle.VerifyResult, *dbgen.Property, error) {
+func (v *Verifier) verify(
+	ctx context.Context,
+	verifyPayload puzzle.SolutionPayload,
+	expectedOwner puzzle.OwnerIDSource,
+	tnow time.Time,
+	skipMemorySemaphore bool,
+) (*puzzle.VerifyResult, *dbgen.Property, error) {
 	puzzleObject, property, perr := v.verifyPuzzleValid(ctx, verifyPayload, tnow)
 	result := puzzle.NewVerifyResult(perr)
 	if puzzleObject != nil && !puzzleObject.IsZero() {
