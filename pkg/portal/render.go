@@ -16,6 +16,7 @@ import (
 
 type RenderConstants struct {
 	FeatureArgon2ID                 string
+	FeatureEdgeTokens               string
 	LoginEndpoint                   string
 	TwoFactorEndpoint               string
 	ResendEndpoint                  string
@@ -32,6 +33,7 @@ type RenderConstants struct {
 	ReportsEndpoint                 string
 	IntegrationsEndpoint            string
 	EditEndpoint                    string
+	EdgeEndpoint                    string
 	Token                           string
 	Email                           string
 	Name                            string
@@ -63,6 +65,10 @@ type RenderConstants struct {
 	NotificationEndpoint            string
 	ErrorEndpoint                   string
 	ValidityInterval                string
+	EdgeTokenValidityInterval       string
+	EdgeWidgetStartMode             string
+	EdgeWidgetStartModeClick        string
+	EdgeWidgetStartModeLoad         string
 	AllowSubdomains                 string
 	AllowLocalhost                  string
 	AllowReplay                     string
@@ -113,6 +119,7 @@ type RenderConstants struct {
 	GrowthTypeFast                  string
 	ActionPropertyDifficultyLevel   string
 	ActionPropertyDifficultyGrowth  string
+	ActionPropertyEdgeTokenValidity string
 	ActionPropertyHTTPRequest       string
 	ActionPropertyBreak             string
 	Enabled                         string
@@ -137,6 +144,7 @@ type RenderConstants struct {
 func NewRenderConstants() *RenderConstants {
 	return &RenderConstants{
 		FeatureArgon2ID:                 common.FeatureArgon2ID,
+		FeatureEdgeTokens:               common.FeatureEdgeTokens,
 		LoginEndpoint:                   common.LoginEndpoint,
 		TwoFactorEndpoint:               common.TwoFactorEndpoint,
 		ResendEndpoint:                  common.ResendEndpoint,
@@ -168,6 +176,7 @@ func NewRenderConstants() *RenderConstants {
 		ReportsEndpoint:                 common.ReportsEndpoint,
 		IntegrationsEndpoint:            common.IntegrationsEndpoint,
 		EditEndpoint:                    common.EditEndpoint,
+		EdgeEndpoint:                    common.EdgeEndpoint,
 		DeleteEndpoint:                  common.DeleteEndpoint,
 		MembersEndpoint:                 common.MembersEndpoint,
 		OrgLevelInvited:                 string(dbgen.AccessLevelInvited),
@@ -184,6 +193,10 @@ func NewRenderConstants() *RenderConstants {
 		NotificationEndpoint:            common.NotificationEndpoint,
 		ErrorEndpoint:                   common.ErrorEndpoint,
 		ValidityInterval:                common.ParamValidityInterval,
+		EdgeTokenValidityInterval:       common.ParamEdgeTokenValidityInterval,
+		EdgeWidgetStartMode:             common.ParamEdgeWidgetStartMode,
+		EdgeWidgetStartModeClick:        string(dbgen.EdgeWidgetStartModeClick),
+		EdgeWidgetStartModeLoad:         string(dbgen.EdgeWidgetStartModeLoad),
 		AllowSubdomains:                 common.ParamAllowSubdomains,
 		AllowLocalhost:                  common.ParamAllowLocalhost,
 		AllowReplay:                     common.ParamAllowReplay,
@@ -230,6 +243,7 @@ func NewRenderConstants() *RenderConstants {
 		GrowthTypeFast:                  string(dbgen.DifficultyGrowthFast),
 		ActionPropertyDifficultyLevel:   string(dbgen.RuleActionPropertyDifficultyLevelPercent),
 		ActionPropertyDifficultyGrowth:  string(dbgen.RuleActionPropertyDifficultyGrowth),
+		ActionPropertyEdgeTokenValidity: string(dbgen.RuleActionPropertyEdgeTokenValidityInterval),
 		ActionPropertyHTTPRequest:       string(dbgen.RuleActionPropertyHTTPRequest),
 		ActionPropertyBreak:             string(dbgen.RuleActionPropertyBreak),
 		ActionProperty:                  common.ParamActionProperty,

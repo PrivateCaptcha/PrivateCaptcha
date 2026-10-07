@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PuerkitoBio/goquery"
@@ -41,8 +42,8 @@ func (f *StubPuzzleEngine) Write(ctx context.Context, p puzzle.Puzzle, extraSalt
 	return nil
 }
 
-func (f *StubPuzzleEngine) Verify(ctx context.Context, payload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, error) {
-	return f.Result, nil
+func (f *StubPuzzleEngine) Verify(ctx context.Context, payload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, *dbgen.Property, error) {
+	return f.Result, nil, nil
 }
 func wrapScriptContentsWithCDATA(input []byte) []byte {
 	re := regexp.MustCompile(`(?s)(<script[^>]*>)(.*?)(</script>)`)

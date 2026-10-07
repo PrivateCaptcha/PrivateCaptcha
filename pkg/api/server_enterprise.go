@@ -32,6 +32,9 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, publicChain alice.Ch
 		return fmt.Sprintf("{%s}", s)
 	}
 
+	rg.Handle(rg.Get(common.WellKnownEndpoint, common.JWKSFileEndpoint), publicChain.Append(s.Metrics.APIHandler, s.RateLimiter.RateLimit), http.HandlerFunc(s.edgeJWKSHandler))
+	rg.Handle(rg.Get(common.GateEndpoint, common.PageEndpoint), publicChain.Append(s.Metrics.APIHandler, s.RateLimiter.RateLimit, s.Auth.GateSitekey), http.HandlerFunc(s.gatePageHandler))
+
 	// "portal" API
 	portalAPIChain := publicChain.Append(
 		s.Metrics.APIHandlerIDFunc(rg.LastPath),

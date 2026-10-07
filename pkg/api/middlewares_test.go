@@ -13,8 +13,91 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type edgeBackfillQuerier struct {
+	*db.QuerierStub
+	rows          []*dbgen.GetEdgeSettingsBySitekeyRow
+	singleQueries int
+	batchQueries  int
+	batchSize     int
+}
+
+func (q *edgeBackfillQuerier) GetEdgeSettingsBySitekey(_ context.Context, key pgtype.UUID) (*dbgen.GetEdgeSettingsBySitekeyRow, error) {
+	q.singleQueries++
+	if q.Error != nil {
+		return nil, q.Error
+	}
+	for _, row := range q.rows {
+		if row.ExternalID == key {
+			return row, nil
+		}
+	}
+	return nil, pgx.ErrNoRows
+}
+
+func (q *edgeBackfillQuerier) GetEdgeSettingsBySitekeys(_ context.Context, keys []pgtype.UUID) ([]*dbgen.GetEdgeSettingsBySitekeysRow, error) {
+	q.batchQueries++
+	q.batchSize = len(keys)
+	rows := make([]*dbgen.GetEdgeSettingsBySitekeysRow, len(q.rows))
+	for i, row := range q.rows {
+		rows[i] = (*dbgen.GetEdgeSettingsBySitekeysRow)(row)
+	}
+	return rows, q.Error
+}
+
+func TestBackfillEdgeUsesOneBatchQuery(t *testing.T) {
+	first := "11111111222233334444555555555555"
+	second := "22222222222233334444555555555555"
+	missing := "33333333222233334444555555555555"
+	databaseError := errors.New("database unavailable")
+	for _, tc := range []struct {
+		name    string
+		batch   map[string]uint
+		err     error
+		queries int
+	}{
+		{"multiple sitekeys", map[string]uint{first: 1, second: 1, missing: 1}, nil, 1},
+		{"database error", map[string]uint{first: 1, second: 1}, databaseError, 1},
+		{"empty batch", nil, nil, 0},
+		{"invalid sitekey", map[string]uint{"invalid": 1}, nil, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			querier := &edgeBackfillQuerier{
+				QuerierStub: &db.QuerierStub{Error: tc.err},
+				rows: []*dbgen.GetEdgeSettingsBySitekeyRow{
+					{ExternalID: db.UUIDFromSiteKey(first), EdgeWidgetStartMode: dbgen.EdgeWidgetStartModeLoad},
+					{ExternalID: db.UUIDFromSiteKey(second), EdgeWidgetStartMode: dbgen.EdgeWidgetStartModeClick},
+				},
+			}
+			cache := db.NewStaticCache[db.CacheKey, any](10, &db.CacheMissingValue{})
+			business := db.NewBusinessWithQuerier(nil, querier, cache)
+			auth := &AuthMiddleware{Store: business, UsersChan: make(chan int32, 4), Metrics: monitoring.NewStub(), backpressureTimeout: time.Second}
+			if err := auth.backfillEdgeImpl(t.Context(), tc.batch); err != tc.err {
+				t.Fatalf("backfill error=%v, want %v", err, tc.err)
+			}
+			if querier.batchQueries != tc.queries || querier.singleQueries != 0 || len(auth.UsersChan) != 0 {
+				t.Fatalf("batch queries=%d single queries=%d users queued=%d", querier.batchQueries, querier.singleQueries, len(auth.UsersChan))
+			}
+			if tc.queries > 0 && querier.batchSize != len(tc.batch) {
+				t.Fatalf("batch size=%d, want %d", querier.batchSize, len(tc.batch))
+			}
+			if tc.name == "multiple sitekeys" {
+				for _, expected := range querier.rows {
+					got, _, err := business.Impl().GetCachedEdgeSettingsBySitekey(t.Context(), db.UUIDToSiteKey(expected.ExternalID))
+					if err != nil || got.EdgeWidgetStartMode != expected.EdgeWidgetStartMode {
+						t.Fatalf("cached settings=%+v err=%v", got, err)
+					}
+				}
+				if _, _, err := business.Impl().GetCachedEdgeSettingsBySitekey(t.Context(), missing); err != db.ErrNegativeCacheHit {
+					t.Fatalf("missing settings cache=%v", err)
+				}
+			}
+		})
+	}
+}
 
 func TestIsAPIKeyValidNil(t *testing.T) {
 	t.Parallel()

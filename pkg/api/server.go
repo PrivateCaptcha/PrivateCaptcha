@@ -61,7 +61,8 @@ var (
 
 func init() {
 	var err error
-	invalidPropertyResponse, err = json.Marshal(&VerificationResponse{
+	type plainVerificationResponse VerificationResponse
+	invalidPropertyResponse, err = json.Marshal(&plainVerificationResponse{
 		Success: false,
 		Code:    puzzle.InvalidPropertyError,
 	})
@@ -69,7 +70,8 @@ func init() {
 		panic(err)
 	}
 
-	invalidPropertyRecaptchaResponse, err = json.Marshal(&VerifyResponseRecaptchaV2{
+	type plainVerifyResponseRecaptchaV2 VerifyResponseRecaptchaV2
+	invalidPropertyRecaptchaResponse, err = json.Marshal(&plainVerifyResponseRecaptchaV2{
 		Success:    false,
 		ErrorCodes: []string{puzzle.InvalidPropertyError.String()},
 	})
@@ -108,6 +110,8 @@ type Server struct {
 	AsyncTasks           db.AsyncTasks
 	CountryCodeHeader    common.ConfigItem
 	NoticeProvider       db.PropertyNoticeProvider
+	EdgeTokens           *EdgeTokenSigner
+	GatePage             *GatePage
 }
 
 type apiKeyOwnerSource struct {
@@ -239,6 +243,9 @@ func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 
 func (s *Server) Update(ctx context.Context) {
 	s.Verifier.UpdateMemoryBudget(ctx)
+	if err := s.EdgeTokens.Update(ctx); err != nil {
+		slog.ErrorContext(ctx, "Failed to reload edge token keys", common.ErrAttr(err))
+	}
 }
 
 func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) *common.RouteGenerator {
@@ -470,7 +477,7 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 
 	ownerSource := &apiKeyOwnerSource{Store: s.BusinessDB, Auth: s.Auth, scope: dbgen.ApiKeyScopePuzzle}
 	tnow := time.Now().UTC()
-	result, err := s.Verifier.Verify(ctx, payload, ownerSource, tnow)
+	result, _, err := s.Verifier.Verify(ctx, payload, ownerSource, tnow)
 	if err != nil {
 		switch err {
 		case errPuzzleOwner, db.ErrDisabled:
@@ -541,7 +548,7 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 
 	ownerSource := &apiKeyOwnerSource{Store: s.BusinessDB, Auth: s.Auth, scope: dbgen.ApiKeyScopePuzzle}
 	tnow := time.Now().UTC()
-	result, err := s.Verifier.Verify(ctx, payload, ownerSource, tnow)
+	result, property, err := s.Verifier.Verify(ctx, payload, ownerSource, tnow)
 	if err != nil {
 		switch err {
 		case errPuzzleOwner, db.ErrDisabled:
@@ -562,6 +569,10 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	s.applyAPIKeyRateLimits(ctx, r, ownerSource.cachedKey)
 
 	response := newVerificationResponse(result, isExplicitTestSitekey)
+	if err := s.addEdgeToken(r, response, result, property, time.Now().UTC()); err != nil {
+		slog.ErrorContext(ctx, "Failed to issue edge token", "propertyID", result.PropertyID, common.ErrAttr(err))
+		// do NOT return an error, primary function is verification for captcha
+	}
 
 	common.SendJSONResponse(r.Context(), w, response, common.NoCacheHeaders, s.APIHeaders)
 }
@@ -591,6 +602,33 @@ func newVerificationResponse(result *puzzle.VerifyResult, isExplicitTestSitekey 
 	}
 
 	return response
+}
+
+func (s *Server) addEdgeToken(r *http.Request, response *VerificationResponse, result *puzzle.VerifyResult, property *dbgen.Property, now time.Time) error {
+	if (result.Error != puzzle.VerifyNoError && result.Error != puzzle.MaintenanceModeError) || property == nil || property.EdgeTokenValidityInterval == 0 {
+		return nil
+	}
+	ctx := r.Context()
+	validity := property.EdgeTokenValidityInterval
+	if rulesPair := s.retrievePropertyRules(ctx, property); rulesPair != nil && (rulesPair.PropertyRules != nil || rulesPair.OrgRules != nil) {
+		countryCodeHeader := ""
+		if s.CountryCodeHeader != nil {
+			countryCodeHeader = s.CountryCodeHeader.Value()
+		}
+		ri := rules.NewRequestInfo(r, countryCodeHeader)
+		propertyForRequest := rulesPair.Apply(ri, difficulty.NewDBProperty(property))
+		validity = propertyForRequest.EdgeTokenValidity()
+	}
+	if validity == 0 {
+		return nil
+	}
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	token, err := s.EdgeTokens.Sign(ctx, sitekey, property.Domain, now, validity)
+	if err != nil {
+		return err
+	}
+	response.EdgeToken = token
+	return nil
 }
 
 func (s *Server) addVerifyRecord(ctx context.Context, result *puzzle.VerifyResult, userAgent string) {
@@ -630,7 +668,7 @@ func shouldBackfillVerifyAccess(result *puzzle.VerifyResult) bool {
 	return result.Success() && (result.PuzzleID == 0) && !result.CreatedAt.IsZero()
 }
 
-func (s *Server) ReportingVerifier(userAgent string) puzzle.Engine {
+func (s *Server) ReportingVerifier(userAgent string) PuzzleEngine {
 	return &reportingVerifier{
 		verifier:   s.Verifier,
 		reportFunc: s.addVerifyRecord,
@@ -640,13 +678,13 @@ func (s *Server) ReportingVerifier(userAgent string) puzzle.Engine {
 }
 
 type reportingVerifier struct {
-	verifier   puzzle.Engine
+	verifier   PuzzleEngine
 	reportFunc func(context.Context, *puzzle.VerifyResult, string)
 	statsFunc  func(*puzzle.VerifyResult, time.Time)
 	userAgent  string
 }
 
-var _ puzzle.Engine = (*reportingVerifier)(nil)
+var _ PuzzleEngine = (*reportingVerifier)(nil)
 
 func (rv *reportingVerifier) Create(puzzleID uint64, propertyID [puzzle.PropertyIDSize]byte, difficulty uint8) puzzle.Puzzle {
 	return rv.verifier.Create(puzzleID, propertyID, difficulty)
@@ -657,8 +695,8 @@ func (rv *reportingVerifier) Write(ctx context.Context, p puzzle.Puzzle, extraSa
 func (rv *reportingVerifier) ParseSolutionPayload(ctx context.Context, payload []byte) (puzzle.SolutionPayload, error) {
 	return rv.verifier.ParseSolutionPayload(ctx, payload)
 }
-func (rv *reportingVerifier) Verify(ctx context.Context, payload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, error) {
-	result, err := rv.verifier.Verify(ctx, payload, expectedOwner, tnow)
+func (rv *reportingVerifier) Verify(ctx context.Context, payload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, *dbgen.Property, error) {
+	result, property, err := rv.verifier.Verify(ctx, payload, expectedOwner, tnow)
 	if err == nil {
 		if rv.statsFunc != nil {
 			rv.statsFunc(result, tnow)
@@ -667,5 +705,5 @@ func (rv *reportingVerifier) Verify(ctx context.Context, payload puzzle.Solution
 			rv.reportFunc(ctx, result, rv.userAgent)
 		}
 	}
-	return result, err
+	return result, property, err
 }

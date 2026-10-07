@@ -339,12 +339,12 @@ func TestArgon2IDConcurrentReplay(t *testing.T) {
 	}
 	done := make(chan outcome, 1)
 	go func() {
-		result, err := verifier.Verify(ctx, first, owner, time.Now().UTC())
+		result, _, err := verifier.Verify(ctx, first, owner, time.Now().UTC())
 		done <- outcome{result, err}
 	}()
 	<-first.started
 	second := &admissionTestPayload{SolutionPayload: first.SolutionPayload}
-	result, err := verifier.Verify(ctx, second, owner, time.Now().UTC())
+	result, _, err := verifier.Verify(ctx, second, owner, time.Now().UTC())
 	if err != nil || result.Error != puzzle.VerifiedBeforeError || second.calls != 0 {
 		t.Fatalf("concurrent replay: result = %+v, err = %v", result, err)
 	}
@@ -353,23 +353,23 @@ func TestArgon2IDConcurrentReplay(t *testing.T) {
 	if firstOutcome.err != nil || firstOutcome.result.Error != puzzle.VerifyNoError {
 		t.Fatalf("first verification: result = %+v, err = %v", firstOutcome.result, firstOutcome.err)
 	}
-	result, err = verifier.Verify(ctx, second, owner, time.Now().UTC())
+	result, _, err = verifier.Verify(ctx, second, owner, time.Now().UTC())
 	if err != nil || result.Error != puzzle.VerifiedBeforeError {
 		t.Fatalf("serial replay: result = %+v, err = %v", result, err)
 	}
 
 	invalid := newPayload()
 	invalid.result = puzzle.InvalidSolutionError
-	result, err = verifier.Verify(ctx, invalid, owner, time.Now().UTC())
+	result, _, err = verifier.Verify(ctx, invalid, owner, time.Now().UTC())
 	if err != nil || result.Error != puzzle.InvalidSolutionError {
 		t.Fatalf("invalid solution: result = %+v, err = %v", result, err)
 	}
 	valid := &admissionTestPayload{SolutionPayload: invalid.SolutionPayload}
-	result, err = verifier.Verify(ctx, valid, owner, time.Now().UTC())
+	result, _, err = verifier.Verify(ctx, valid, owner, time.Now().UTC())
 	if err != nil || result.Error != puzzle.VerifyNoError {
 		t.Fatalf("retry after invalid solution: result = %+v, err = %v", result, err)
 	}
-	result, err = verifier.Verify(ctx, valid, owner, time.Now().UTC())
+	result, _, err = verifier.Verify(ctx, valid, owner, time.Now().UTC())
 	if err != nil || result.Error != puzzle.VerifiedBeforeError {
 		t.Fatalf("replay after retry: result = %+v, err = %v", result, err)
 	}
@@ -425,10 +425,10 @@ func TestArgon2IDAdmissionAfterValidation(t *testing.T) {
 	t.Cleanup(func() { verifier.verificationSemaphore.Release(int64(puzzle.Argon2IDMemoryKiB)) })
 	shortCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
-	if result, err := verifier.Verify(shortCtx, payload, argonOwner{user.ID}, time.Now().UTC()); err != context.DeadlineExceeded || result != nil {
+	if result, _, err := verifier.Verify(shortCtx, payload, argonOwner{user.ID}, time.Now().UTC()); err != context.DeadlineExceeded || result != nil {
 		t.Fatalf("contended verification: result = %+v, err = %v", result, err)
 	}
-	if result, err := verifier.Verify(ctx, payload, argonOwner{-1}, time.Now().UTC()); err != nil || result.Error != puzzle.WrongOwnerError {
+	if result, _, err := verifier.Verify(ctx, payload, argonOwner{-1}, time.Now().UTC()); err != nil || result.Error != puzzle.WrongOwnerError {
 		t.Fatalf("wrong owner: result = %+v, err = %v", result, err)
 	}
 	parts := bytes.Split(encoded.Bytes(), []byte{'.'})
@@ -444,7 +444,7 @@ func TestArgon2IDAdmissionAfterValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := verifier.Verify(ctx, invalidPayload, argonOwner{user.ID}, time.Now().UTC()); err != nil || result.Error != puzzle.IntegrityError {
+	if result, _, err := verifier.Verify(ctx, invalidPayload, argonOwner{user.ID}, time.Now().UTC()); err != nil || result.Error != puzzle.IntegrityError {
 		t.Fatalf("tampered signature: result = %+v, err = %v", result, err)
 	}
 	blake := puzzle.NewComputePuzzle(puzzle.NextPuzzleID(), property.ExternalID.Bytes, 0)
@@ -469,7 +469,7 @@ func TestArgon2IDAdmissionAfterValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := verifier.Verify(ctx, blakePayload, argonOwner{user.ID}, time.Now().UTC()); err != nil || result.Error != puzzle.VerifyNoError {
+	if result, _, err := verifier.Verify(ctx, blakePayload, argonOwner{user.ID}, time.Now().UTC()); err != nil || result.Error != puzzle.VerifyNoError {
 		t.Fatalf("Blake verification with Argon capacity occupied: result = %+v, err = %v", result, err)
 	}
 	decoded, err := base64.StdEncoding.DecodeString(string(parts[0]))
@@ -482,7 +482,7 @@ func TestArgon2IDAdmissionAfterValidation(t *testing.T) {
 			t.Fatal("wrong-count Argon payload parsed")
 		}
 	}
-	if result, err := verifier.VerifyUnsafe(ctx, payload, argonOwner{user.ID}, time.Now().UTC()); err != nil || result.Error != puzzle.VerifyNoError {
+	if result, _, err := verifier.VerifyUnsafe(ctx, payload, argonOwner{user.ID}, time.Now().UTC()); err != nil || result.Error != puzzle.VerifyNoError {
 		t.Fatalf("unmetered verification: result = %+v, err = %v", result, err)
 	}
 }

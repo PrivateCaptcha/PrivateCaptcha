@@ -34,6 +34,13 @@ var (
 	errVerificationBusy         = errors.New("verification capacity exhausted")
 )
 
+type PuzzleEngine interface {
+	Create(puzzleID uint64, propertyID [puzzle.PropertyIDSize]byte, difficulty uint8) puzzle.Puzzle
+	Write(ctx context.Context, p puzzle.Puzzle, extraSalt []byte, w http.ResponseWriter) error
+	ParseSolutionPayload(ctx context.Context, payload []byte) (puzzle.SolutionPayload, error)
+	Verify(ctx context.Context, payload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, *dbgen.Property, error)
+}
+
 type Verifier struct {
 	Salt                    *puzzleSalt
 	UserFingerprintKey      *userFingerprintKey
@@ -51,7 +58,7 @@ type Verifier struct {
 	verificationCapacityKiB int64
 }
 
-var _ puzzle.Engine = (*Verifier)(nil)
+var _ PuzzleEngine = (*Verifier)(nil)
 
 func NewVerifier(cfg common.ConfigStore, store db.Implementor, fingerprintHeaderKey common.ConfigItem, uaParser *useragent.Parser) *Verifier {
 	if uaParser == nil {
@@ -239,16 +246,16 @@ func (v *Verifier) checkUserPermissions(ctx context.Context, property *dbgen.Pro
 	return false
 }
 
-func (v *Verifier) Verify(ctx context.Context, verifyPayload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, error) {
+func (v *Verifier) Verify(ctx context.Context, verifyPayload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, *dbgen.Property, error) {
 	return v.verify(ctx, verifyPayload, expectedOwner, tnow, false /*skip memory semaphore*/)
 }
 
 // VerifyUnsafe skips Argon2id memory admission. Callers must bound concurrent verifications themselves.
-func (v *Verifier) VerifyUnsafe(ctx context.Context, verifyPayload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, error) {
+func (v *Verifier) VerifyUnsafe(ctx context.Context, verifyPayload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.VerifyResult, *dbgen.Property, error) {
 	return v.verify(ctx, verifyPayload, expectedOwner, tnow, true /*skip memory semaphore*/)
 }
 
-func (v *Verifier) verify(ctx context.Context, verifyPayload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time, skipMemorySemaphore bool) (*puzzle.VerifyResult, error) {
+func (v *Verifier) verify(ctx context.Context, verifyPayload puzzle.SolutionPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time, skipMemorySemaphore bool) (*puzzle.VerifyResult, *dbgen.Property, error) {
 	puzzleObject, property, perr := v.verifyPuzzleValid(ctx, verifyPayload, tnow)
 	result := puzzle.NewVerifyResult(perr)
 	if puzzleObject != nil && !puzzleObject.IsZero() {
@@ -275,7 +282,7 @@ func (v *Verifier) verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 		result.Domain = property.Domain
 	}
 	if perr != puzzle.VerifyNoError && perr != puzzle.MaintenanceModeError {
-		return result, nil
+		return result, property, nil
 	}
 
 	if property != nil {
@@ -284,18 +291,18 @@ func (v *Verifier) verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 		if ownerID, ownerOrgID, err := expectedOwner.OwnerID(ctx, tnow); err == nil {
 			if !v.checkUserPermissions(ctx, property, ownerID) {
 				result.SetError(puzzle.WrongOwnerError)
-				return result, nil
+				return result, property, nil
 			}
 
 			// for scoped API keys, we want to take org ID into account
 			if (ownerOrgID != nil) && property.OrgID.Valid && (property.OrgID.Int32 != *ownerOrgID) {
 				slog.WarnContext(ctx, "Owner org scope does not match property org", "propertyOrgID", property.OrgID.Int32, "ownerOrgID", *ownerOrgID)
 				result.SetError(puzzle.OrgScopeError)
-				return result, nil
+				return result, property, nil
 			}
 		} else {
 			slog.ErrorContext(ctx, "Failed to fetch valid owner ID", "puzzleID", puzzleObject.PuzzleID(), common.ErrAttr(err))
-			return nil, errPuzzleOwner
+			return nil, property, errPuzzleOwner
 		}
 	}
 
@@ -307,7 +314,7 @@ func (v *Verifier) verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 	if !reserved {
 		slog.WarnContext(ctx, "Puzzle is already cached", "count", maxCount, common.PuzzleIDAttr(puzzleObject.PuzzleID()))
 		result.SetError(puzzle.VerifiedBeforeError)
-		return result, nil
+		return result, property, nil
 	}
 
 	metadata, verr, err := v.verifyPayload(ctx, verifyPayload, skipMemorySemaphore)
@@ -315,7 +322,7 @@ func (v *Verifier) verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 		reservation.Release()
 	}
 	if err != nil {
-		return nil, err
+		return nil, property, err
 	}
 	if verr != puzzle.VerifyNoError {
 		// NOTE: unlike solutions/puzzle, diagnostics bytes can be totally tampered
@@ -326,10 +333,10 @@ func (v *Verifier) verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 		vlog.WarnContext(ctx, "Failed to verify solutions")
 
 		result.SetError(verr)
-		return result, nil
+		return result, property, nil
 	}
 
-	return result, nil
+	return result, property, nil
 }
 
 func (v *Verifier) verifyPayload(ctx context.Context, payload puzzle.SolutionPayload, skipMemorySemaphore bool) (*puzzle.Metadata, puzzle.VerifyError, error) {

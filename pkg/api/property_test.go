@@ -16,6 +16,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	common_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
@@ -192,6 +193,339 @@ func TestNormalizeApiPropertyInput(t *testing.T) {
 				t.Errorf("ValiditySeconds: got %d, want %d", input.ValiditySeconds, tt.expected.ValiditySeconds)
 			}
 		})
+	}
+}
+
+func TestNormalizeEdgeTokenLifetime(t *testing.T) {
+	for _, tt := range []struct {
+		name, input string
+		want        *int
+	}{
+		{"omitted", `{"name":"test"}`, nil},
+		{"null", `{"name":"test","edge_token_validity_seconds":null}`, nil},
+		{"disabled", `{"name":"test","edge_token_validity_seconds":0}`, new(0)},
+		{"enabled", `{"name":"test","edge_token_validity_seconds":3600}`, new(3600)},
+		{"minimum", `{"name":"test","edge_token_validity_seconds":1}`, new(300)},
+		{"nearest lower", `{"name":"test","edge_token_validity_seconds":2400}`, new(1800)},
+		{"tie rounds down", `{"name":"test","edge_token_validity_seconds":2700}`, new(1800)},
+		{"nearest upper", `{"name":"test","edge_token_validity_seconds":3000}`, new(3600)},
+		{"negative", `{"name":"test","edge_token_validity_seconds":-1}`, new(0)},
+		{"capped at one day", `{"name":"test","edge_token_validity_seconds":99999999}`, new(86400)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var input apiPropertySettings
+			if err := json.Unmarshal([]byte(tt.input), &input); err != nil {
+				t.Fatal(err)
+			}
+			input.Normalize()
+			if (input.EdgeTokenValiditySeconds == nil) != (tt.want == nil) {
+				t.Fatalf("edge token validity presence = %v, want %v", input.EdgeTokenValiditySeconds != nil, tt.want != nil)
+			}
+			if tt.want != nil && *input.EdgeTokenValiditySeconds != *tt.want {
+				t.Fatalf("edge token validity = %d, want %d", *input.EdgeTokenValiditySeconds, *tt.want)
+			}
+		})
+	}
+}
+
+func TestPropertyAPIDoesNotExposeWidgetStartMode(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		property any
+	}{
+		{"create", &apiCreatePropertyInput{}},
+		{"update", &apiUpdatePropertyInput{}},
+		{"output", &apiPropertyOutput{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := json.Unmarshal([]byte(`{"name":"test","edge_widget_start_mode":"load"}`), tc.property); err != nil {
+				t.Fatal(err)
+			}
+			data, err := json.Marshal(tc.property)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]any
+			if err := json.Unmarshal(data, &fields); err != nil {
+				t.Fatal(err)
+			}
+			if _, found := fields["edge_widget_start_mode"]; found {
+				t.Fatalf("property API exposes widget start mode: %s", data)
+			}
+		})
+	}
+}
+
+func TestEdgeTokenSettingRequiresSigner(t *testing.T) {
+	s := &Server{IDHasher: common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "test"))}
+	create := &apiCreatePropertyInput{Domain: "example.com", apiPropertySettings: apiPropertySettings{Name: "Test", EdgeTokenValiditySeconds: new(3600)}}
+	if code := s.doCreateProperty(t.Context(), slog.Default(), create, &dbgen.User{}, &dbgen.Organization{}); code.Success() {
+		t.Fatal("create accepted edge lifetime without signing key")
+	}
+	update := &apiUpdatePropertyInput{ID: s.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Test", EdgeTokenValiditySeconds: new(3600)}}
+	if code := s.doUpdateProperty(t.Context(), slog.Default(), update, &dbgen.User{}, &dbgen.Organization{}); code.Success() {
+		t.Fatal("update accepted edge lifetime without signing key")
+	}
+}
+
+func TestUpdatePropertyEdgeLifetimeRequiresDomain(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	noDomain, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, ""), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withDomain, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "edge.example.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	localhost, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "localhost"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	private, public := newTestEdgeKeyPair(t)
+	signer := NewEdgeTokenSigner(
+		"",
+		newEdgeTestConfig(config.NewStaticValue(common.EdgeTokenSigningPrivateKeyKey, private), config.NewStaticValue(common.EdgeTokenSigningPublicKeyKey, public)),
+	)
+	if err := signer.Update(ctx); err != nil {
+		t.Fatal(err)
+	}
+	previous := server.EdgeTokens
+	server.EdgeTokens = signer
+	t.Cleanup(func() { server.EdgeTokens = previous })
+	for _, tt := range []struct {
+		name     string
+		property *dbgen.Property
+		ttl      time.Duration
+		code     common.StatusCode
+		uncached bool
+	}{
+		{"cached no domain with edge enabled", noDomain, time.Hour, common.StatusPropertyEdgeDomainError, false},
+		{"uncached no domain with edge enabled", noDomain, time.Hour, common.StatusOrgPermissionsError, true},
+		{"cached localhost with edge enabled", localhost, time.Hour, common.StatusPropertyEdgeDomainError, false},
+		{"cached domain with edge enabled", withDomain, time.Hour, common.StatusOK, false},
+		{"uncached domain with edge enabled", withDomain, time.Hour, common.StatusOK, true},
+		{"no domain with edge disabled", noDomain, 0, common.StatusOK, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.uncached {
+				store.Cache.Delete(ctx, db.PropertyByIDCacheKey(tt.property.ID))
+			} else if err := store.Cache.Set(ctx, db.PropertyByIDCacheKey(tt.property.ID), tt.property); err != nil {
+				t.Fatal(err)
+			}
+			input := &apiUpdatePropertyInput{
+				ID: server.IDHasher.Encrypt(int(tt.property.ID)),
+				apiPropertySettings: apiPropertySettings{
+					Name: tt.property.Name, EdgeTokenValiditySeconds: new(int(tt.ttl.Seconds())),
+				},
+			}
+			code := server.doUpdateProperty(ctx, slog.Default(), input, user, nil)
+			if code != tt.code {
+				t.Fatalf("update for domain %q and lifetime %v: status %v, want %v", tt.property.Domain, tt.ttl, code, tt.code)
+			}
+			stored, err := store.Impl().RetrieveOrgProperty(ctx, org, tt.property.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantTTL := time.Duration(0)
+			if tt.code.Success() {
+				wantTTL = tt.ttl
+			}
+			if stored.EdgeTokenValidityInterval != wantTTL {
+				t.Fatalf("stored edge lifetime = %v, want %v", stored.EdgeTokenValidityInterval, wantTTL)
+			}
+		})
+	}
+}
+
+func TestUpdatePropertyEdgeLifetimePresence(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "edge-presence.example.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := server.EdgeTokens
+	t.Cleanup(func() { server.EdgeTokens = previous })
+	signer := newTestEdgeSigner(t)
+	for _, scoped := range []bool{false, true} {
+		for _, tc := range []struct {
+			name, field   string
+			initial, want time.Duration
+			needsSigner   bool
+		}{
+			{name: "omitted", initial: time.Hour, want: time.Hour},
+			{name: "null", field: `,"edge_token_validity_seconds":null`, initial: time.Hour, want: time.Hour},
+			{name: "disabled", field: `,"edge_token_validity_seconds":0`, initial: time.Hour},
+			{name: "enabled", field: `,"edge_token_validity_seconds":3600`, want: time.Hour, needsSigner: true},
+			{name: "changed", field: `,"edge_token_validity_seconds":1800`, initial: time.Hour, want: 30 * time.Minute, needsSigner: true},
+		} {
+			t.Run(fmt.Sprintf("%s scoped %v", tc.name, scoped), func(t *testing.T) {
+				params := db.NewUpdatePropertyParams(property)
+				params.EdgeTokenValidityInterval = tc.initial
+				if _, _, err := store.Impl().UpdateProperty(ctx, org, user, params); err != nil {
+					t.Fatal(err)
+				}
+				server.EdgeTokens = nil
+				if tc.needsSigner {
+					server.EdgeTokens = signer
+				}
+				body := fmt.Sprintf(`[{"id":%q,"name":"Updated edge property"%s}]`, server.IDHasher.Encrypt(int(property.ID)), tc.field)
+				req := httptest.NewRequest(http.MethodPut, "/"+common.PropertiesEndpoint, bytes.NewBufferString(body))
+				req.Header.Set(common.HeaderContentType, common.ContentTypeJSON)
+				inputs, status, err := server.readUpdatePropertiesRequest(ctx, req, user.ID, nil)
+				if err != nil || !status.Success() {
+					t.Fatalf("read update request: status=%v, err=%v", status, err)
+				}
+				task := &asyncTaskUpdateProperties{Properties: inputs}
+				if scoped {
+					task.AllowedOrgID = org.ID
+				}
+				data, err := json.Marshal(task)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var savedTask asyncTaskUpdateProperties
+				if err := json.Unmarshal(data, &savedTask); err != nil {
+					t.Fatal(err)
+				}
+				results, err := server.doUpdateProperties(ctx, slog.Default(), user, &savedTask)
+				if err != nil || len(results) != 1 || !results[0].Code.Success() {
+					t.Fatalf("update results=%+v, err=%v", results, err)
+				}
+				stored, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+				if err != nil || stored.EdgeTokenValidityInterval != tc.want || stored.Name != "Updated edge property" {
+					t.Fatalf("stored property=%+v, want lifetime %v, err=%v", stored, tc.want, err)
+				}
+			})
+		}
+	}
+}
+
+func TestAPIPropertyEdgeTokenFeatureFlag(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	for _, operation := range []string{"Create", "Update"} {
+		for _, scoped := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/Scoped%v", operation, scoped), func(t *testing.T) {
+				ctx := t.Context()
+				user, org, key, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, false, scoped)
+				if err != nil {
+					t.Fatal(err)
+				}
+				property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "edge-feature.example.com"), org)
+				if err != nil {
+					t.Fatal(err)
+				}
+				previousFlags, previousSigner := server.FeatureFlags, server.EdgeTokens
+				server.EdgeTokens = newTestEdgeSigner(t)
+				server.FeatureFlags = featureFlagsFunc(func(_ context.Context, feature string, userID, orgID *int32) bool {
+					if feature != common.FeatureEdgeTokens {
+						return true
+					}
+					if userID == nil || *userID != user.ID {
+						t.Error("feature check did not receive the authenticated user")
+					}
+					if (operation == "Create" || scoped) && (orgID == nil || *orgID != org.ID) {
+						t.Error("feature check did not receive the property organization")
+					}
+					return false
+				})
+				t.Cleanup(func() {
+					server.FeatureFlags = previousFlags
+					server.EdgeTokens = previousSigner
+				})
+				settings := apiPropertySettings{
+					Name:                     "Feature-gated edge property",
+					EdgeTokenValiditySeconds: new(3600),
+				}
+				var input any
+				method, endpoint := http.MethodPut, "/"+common.PropertiesEndpoint
+				if operation == "Create" {
+					method = http.MethodPost
+					endpoint = fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint)
+					input = []*apiCreatePropertyInput{{
+						Domain:              property.Domain,
+						apiPropertySettings: settings,
+					}}
+				} else {
+					input = []*apiUpdatePropertyInput{{
+						ID:                  server.IDHasher.Encrypt(int(property.ID)),
+						apiPropertySettings: settings,
+					}}
+				}
+				output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, input, method, endpoint, key)
+				if err != nil || !meta.Code.Success() {
+					t.Fatalf("submit request: status=%v, err=%v", meta.Code, err)
+				}
+				result := waitForAsyncTaskCompletionWithResult(ctx, t, output.ID, key)
+				if result == nil {
+					t.Fatal("edge settings task did not finish")
+				}
+				data, err := json.Marshal(result.Result)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var results []*operationResult
+				if err := json.Unmarshal(data, &results); err != nil {
+					t.Fatal(err)
+				}
+				if len(results) != 1 || results[0].Code != common.StatusPropertyPermissionsError {
+					t.Fatalf("disabled edge feature results = %+v", results)
+				}
+				properties, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(properties) != 1 || properties[0].Name != property.Name || properties[0].EdgeTokenValidityInterval != 0 {
+					t.Fatal("rejected edge settings request modified properties")
+				}
+			})
+		}
+	}
+}
+
+func TestPropertyEdgeLifetimeUpdateBounds(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "edge-bounds.example.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range []time.Duration{-time.Second, 25 * time.Hour} {
+		_, _, err := store.Impl().UpdateProperty(ctx, org, user, &dbgen.UpdatePropertyParams{
+			ID: property.ID, Name: property.Name, Level: property.Level, Growth: property.Growth,
+			ValidityInterval: property.ValidityInterval, EdgeTokenValidityInterval: invalid,
+			AllowSubdomains: property.AllowSubdomains, AllowLocalhost: property.AllowLocalhost,
+			MaxReplayCount: property.MaxReplayCount,
+		})
+		if err == nil {
+			t.Fatalf("SQL accepted invalid edge lifetime %v", invalid)
+		}
+	}
+	stored, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil || stored.EdgeTokenValidityInterval != 0 {
+		t.Fatalf("invalid update changed edge lifetime: property=%+v, err=%v", stored, err)
 	}
 }
 
@@ -670,6 +1004,9 @@ func verifyPropertyUpdate(t *testing.T, property *dbgen.Property, expected *apiU
 	if int(property.ValidityInterval.Seconds()) != expected.ValiditySeconds {
 		t.Errorf("ValiditySeconds: got %d, want %d", int(property.ValidityInterval.Seconds()), expected.ValiditySeconds)
 	}
+	if expected.EdgeTokenValiditySeconds != nil && int(property.EdgeTokenValidityInterval.Seconds()) != *expected.EdgeTokenValiditySeconds {
+		t.Errorf("EdgeTokenValiditySeconds: got %v, want %d", property.EdgeTokenValidityInterval.Seconds(), *expected.EdgeTokenValiditySeconds)
+	}
 	if property.AllowSubdomains != expected.AllowSubdomains {
 		t.Errorf("AllowSubdomains: got %v, want %v", property.AllowSubdomains, expected.AllowSubdomains)
 	}
@@ -694,6 +1031,9 @@ func TestPropertyChallengeLifecycle(t *testing.T) {
 	if existingProperty.Challenge != dbgen.ChallengeTypeBlake2b {
 		t.Fatalf("existing property challenge = %q, want %q", existingProperty.Challenge, dbgen.ChallengeTypeBlake2b)
 	}
+	if existingProperty.EdgeTokenValidityInterval != 0 {
+		t.Fatalf("existing property edge token TTL = %v, want 0", existingProperty.EdgeTokenValidityInterval)
+	}
 
 	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
@@ -705,6 +1045,9 @@ func TestPropertyChallengeLifecycle(t *testing.T) {
 	}
 	if property.Challenge != dbgen.ChallengeTypeBlake2b {
 		t.Fatalf("new property challenge = %q, want %q", property.Challenge, dbgen.ChallengeTypeBlake2b)
+	}
+	if property.EdgeTokenValidityInterval != 0 {
+		t.Fatalf("new property edge token TTL = %v, want 0", property.EdgeTokenValidityInterval)
 	}
 
 	var selectedChallenge string
@@ -742,6 +1085,9 @@ func TestApiUpdateProperties(t *testing.T) {
 	}
 
 	ctx := common.TraceContext(t.Context(), t.Name())
+	previousSigner := server.EdgeTokens
+	server.EdgeTokens = newTestEdgeSigner(t)
+	defer func() { server.EdgeTokens = previousSigner }()
 
 	user, org1, apiKey, err := setupAPISuite(ctx, t.Name())
 	if err != nil {
@@ -756,8 +1102,13 @@ func TestApiUpdateProperties(t *testing.T) {
 
 	// Create properties
 	// P1 in Org1
-	p1, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p1.com"), org1)
+	propertyParams := db_test.CreateNewPropertyParams(user.ID, "p1.com")
+	propertyParams.EdgeTokenValidityInterval = time.Hour
+	p1, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, propertyParams, org1)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.Impl().UpdateEdgeSettings(ctx, org1, user, p1, dbgen.EdgeWidgetStartModeLoad); err != nil {
 		t.Fatal(err)
 	}
 	// P2 in Org2
@@ -771,14 +1122,15 @@ func TestApiUpdateProperties(t *testing.T) {
 		{
 			ID: server.IDHasher.Encrypt(int(p1.ID)),
 			apiPropertySettings: apiPropertySettings{
-				Name:            "Updated Property 1",
-				Challenge:       string(dbgen.ChallengeTypeArgon2ID),
-				Level:           int(common.DifficultyLevelHigh),
-				Growth:          string(dbgen.DifficultyGrowthMedium),
-				ValiditySeconds: int(puzzle.ValidityDurations[6].Seconds()),
-				AllowSubdomains: true,
-				AllowLocalhost:  false,
-				MaxReplayCount:  500,
+				Name:                     "Updated Property 1",
+				Challenge:                string(dbgen.ChallengeTypeArgon2ID),
+				Level:                    int(common.DifficultyLevelHigh),
+				Growth:                   string(dbgen.DifficultyGrowthMedium),
+				ValiditySeconds:          int(puzzle.ValidityDurations[6].Seconds()),
+				EdgeTokenValiditySeconds: new(3600),
+				AllowSubdomains:          true,
+				AllowLocalhost:           false,
+				MaxReplayCount:           500,
 			},
 		},
 		{
@@ -837,8 +1189,25 @@ func TestApiUpdateProperties(t *testing.T) {
 		t.Fatal(err)
 	}
 	verifyPropertyUpdate(t, updatedP1, updates[0])
+	propertyOutput, meta, err := requestResponseAPISuite[*apiPropertyOutput](
+		ctx,
+		nil,
+		http.MethodGet,
+		"/"+common.OrgEndpoint+"/"+server.IDHasher.Encrypt(int(org1.ID))+"/"+common.PropertyEndpoint+"/"+server.IDHasher.Encrypt(int(p1.ID)),
+		apiKey,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !meta.Code.Success() || propertyOutput.EdgeTokenValiditySeconds != 3600 {
+		t.Fatalf("GET property edge lifetime: %+v, %+v", propertyOutput, meta)
+	}
 	if updatedP1.Challenge != dbgen.ChallengeTypeArgon2ID {
 		t.Fatalf("updated challenge = %q, want %q", updatedP1.Challenge, dbgen.ChallengeTypeArgon2ID)
+	}
+	settings, err := store.Impl().RetrieveEdgeSettingsBySitekey(ctx, db.UUIDToSiteKey(p1.ExternalID), false)
+	if err != nil || settings.EdgeWidgetStartMode != dbgen.EdgeWidgetStartModeLoad {
+		t.Fatalf("property API changed edge settings: settings=%+v, err=%v", settings, err)
 	}
 
 	// Verify P2 updated
@@ -847,6 +1216,9 @@ func TestApiUpdateProperties(t *testing.T) {
 		t.Fatal(err)
 	}
 	verifyPropertyUpdate(t, updatedP2, updates[1])
+	if updatedP2.EdgeTokenValidityInterval != 0 {
+		t.Fatalf("default edge token lifetime: %v", updatedP2.EdgeTokenValidityInterval)
+	}
 }
 
 func TestApiGetProperties(t *testing.T) {

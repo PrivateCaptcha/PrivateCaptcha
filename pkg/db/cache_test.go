@@ -65,7 +65,8 @@ func TestCacheKeyPrefixNumericValuesRemainStable(t *testing.T) {
 		{userFormsCountCacheKeyPrefix, 35},
 		{orgSearchCacheKeyPrefix, 36},
 		{orgStatsCacheKeyPrefix, 37},
-		{CACHE_KEY_PREFIXES_COUNT, 38},
+		{edgeSettingsBySitekeyCacheKeyPrefix, 38},
+		{CACHE_KEY_PREFIXES_COUNT, 39},
 	}
 	for _, fixture := range fixtures {
 		if fixture.prefix != fixture.value {

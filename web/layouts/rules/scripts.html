@@ -120,6 +120,7 @@ function ruleFormData() {
         actionProperty: formDataActionProperty,
         actionValueDifficultyLevel: formDataActionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}' ? (formDataActionValue || '50') : '50',
         actionValueDifficultyGrowth: formDataActionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}' ? (formDataActionValue || '0') : '0',
+        actionValueEdgeTokenValidity: formDataActionProperty === '{{ .Const.ActionPropertyEdgeTokenValidity }}' ? (formDataActionValue || '0') : '0',
 
         get showConditionOperator() {
             const config = conditionRegistry[this.conditionProperty];
@@ -152,6 +153,8 @@ function ruleFormData() {
                 return this.actionValueDifficultyLevel;
             } else if (this.actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}') {
                 return this.actionValueDifficultyGrowth;
+            } else if (this.actionProperty === '{{ .Const.ActionPropertyEdgeTokenValidity }}') {
+                return this.actionValueEdgeTokenValidity;
             } else if (this.actionProperty === '{{ .Const.ActionPropertyHTTPRequest }}') {
                 return '1'; // HTTP Request block is always 1 when selected
             } else if (this.actionProperty === '{{ .Const.ActionPropertyBreak }}') {
@@ -205,6 +208,8 @@ function ruleFormData() {
                     this.actionValueDifficultyLevel = '50';
                 } else if (value === '{{ .Const.ActionPropertyDifficultyGrowth }}' && this.actionValueDifficultyGrowth === '') {
                     this.actionValueDifficultyGrowth = '0';
+                } else if (value === '{{ .Const.ActionPropertyEdgeTokenValidity }}' && this.actionValueEdgeTokenValidity === '') {
+                    this.actionValueEdgeTokenValidity = '0';
                 }
             });
         },

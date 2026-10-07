@@ -49,6 +49,31 @@ func TestAuditLogPersistsSessionHashWithoutSessionID(t *testing.T) {
 	}
 }
 
+func TestNewUpdateEdgeSettingsAuditLogEvent(t *testing.T) {
+	property := &dbgen.Property{ID: 100, Name: "Main site", OrgID: Int(10), CreatorID: Int(20)}
+	event := newUpdateEdgeSettingsAuditLogEvent(property, dbgen.EdgeWidgetStartModeClick, dbgen.EdgeWidgetStartModeLoad, &dbgen.User{ID: 99})
+	querier := &auditCaptureQuerier{QuerierStub: &QuerierStub{}}
+	if err := NewAuditLog(querier, 1).PersistAuditLog(t.Context(), []*common.AuditLogEvent{event}); err != nil {
+		t.Fatal(err)
+	}
+	if len(querier.batch) != 1 {
+		t.Fatalf("persisted batch length = %d, want 1", len(querier.batch))
+	}
+	stored := querier.batch[0]
+	if stored.EntityTable != TableNameEdgeSettings || stored.EntityID.Int64 != int64(property.ID) || stored.UserID.Int32 != 99 || stored.Action != dbgen.AuditLogActionUpdate {
+		t.Fatalf("persisted edge audit metadata = %+v", stored)
+	}
+	oldValue, newValue, err := ParseAuditLogPayloads[AuditLogEdgeSettings](t.Context(), &dbgen.AuditLog{OldValue: stored.OldValue, NewValue: stored.NewValue})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantOld := AuditLogEdgeSettings{Name: property.Name, OrgID: 10, CreatorID: 20, EdgeWidgetStartMode: "click"}
+	wantNew := AuditLogEdgeSettings{Name: property.Name, OrgID: 10, CreatorID: 20, EdgeWidgetStartMode: "load"}
+	if oldValue == nil || newValue == nil || *oldValue != wantOld || *newValue != wantNew {
+		t.Fatalf("persisted edge audit values = (%+v, %+v), want (%+v, %+v)", oldValue, newValue, wantOld, wantNew)
+	}
+}
+
 func TestNewUpdateFormAuditLogEventStoresRequestsPerMinute(t *testing.T) {
 	updatedForm := &dbgen.Form{
 		ID:                100,

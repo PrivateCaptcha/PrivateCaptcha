@@ -110,19 +110,20 @@
               <a href="https://docs.privatecaptcha.com/docs/reference/property-settings/" target="_blank" class="pc-docs-link">Docs</a>
             </p>
         </div>
-        <form
-            x-init="window.portalUnsavedChanges.registerForm($el)"
-            hx-put='{{ partsURL .Const.OrgEndpoint .Params.Org.ID .Const.PropertyEndpoint .Params.Property.ID .Const.EditEndpoint }}'
-            hx-target="#property-tabs"
-            hx-swap="innerHTML"
-            hx-disabled-elt="input, button"
-            data-unsaved-changes-key="property-settings"
-            data-unsaved-changes-scope="property-settings"
-            data-unsaved-changes-initial="{{ if or .Params.ErrorMessage .Params.NameError }}dirty{{ else }}clean{{ end }}"
-            class="md:col-span-2 sm:max-w-lg">
-            {{template "settings-basic-form.html" .}}
-        </form>
+        {{template "settings-basic-form.html" .}}
     </div>
+    {{ if and $.Platform.Enterprise .Params.Property.HasDomain ($.Ctx.Features.Enabled $.Const.FeatureEdgeTokens $.Params.Org.ID) }}
+    <div class="grid max-w-4xl grid-cols-1 gap-x-10 gap-y-10 px-4 py-12 sm:px-6 md:grid-cols-3 lg:px-8 lg:py-10">
+        <div>
+            <h2 class="pc-section-heading">Edge protection</h2>
+            <p class="pc-section-desc">Configure access verification gate for your website to use at the edge/proxy.</p>
+            <p class="mt-1">
+              <a href="https://docs.privatecaptcha.com/docs/reference/edge-protection/" target="_blank" class="pc-docs-link">Docs</a>
+            </p>
+        </div>
+        {{template "settings-edge-form.html" .}}
+    </div>
+    {{ end }}
     {{ if $.Platform.Enterprise }}
     <div class="grid max-w-4xl grid-cols-1 gap-x-10 gap-y-10 px-4 py-16 sm:px-6 md:grid-cols-3 lg:px-8">
         <div>

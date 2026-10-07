@@ -159,6 +159,7 @@
                 <select name="{{ .Const.ActionProperty }}" id="{{ .Const.ActionProperty }}" x-model="actionProperty" class="w-full pc-internal-form-select">
                     {{ with .Const.ActionPropertyDifficultyLevel }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Adjust Difficulty Level</option>{{end}}
                     {{ with .Const.ActionPropertyDifficultyGrowth }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Change Difficulty Growth</option>{{end}}
+                    {{ with .Const.ActionPropertyEdgeTokenValidity }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Change Verified Access Duration</option>{{end}}
                     {{ with .Const.ActionPropertyHTTPRequest }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Block HTTP Request</option>{{end}}
                     {{ with .Const.ActionPropertyBreak }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Stop Processing Following Rules</option>{{end}}
                 </select>
@@ -193,13 +194,29 @@
             </div>
         </div>
 
+        <div x-cloak x-show="actionProperty === '{{ .Const.ActionPropertyEdgeTokenValidity }}'">
+            <label for="edge_validity_select" class="pc-internal-form-label tooltip" data-tooltip="Verified users can access protected resource for this duration.">Verified access duration</label>
+            <div class="mt-2">
+                <select x-model="actionValueEdgeTokenValidity" id="edge_validity_select" class="w-full pc-internal-form-select">
+                    <option value="0">Disabled</option>
+                    <option value="1">5 minutes</option>
+                    <option value="2">10 minutes</option>
+                    <option value="3">30 minutes</option>
+                    <option value="4">1 hour</option>
+                    <option value="5">6 hours</option>
+                    <option value="6">12 hours</option>
+                    <option value="7">1 day</option>
+                </select>
+            </div>
+        </div>
+
         <input type="hidden" name="{{ .Const.ActionValue }}" :value="activeActionValue" />
 
-        <div x-cloak x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}' || actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}'">
+        <div x-cloak x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}' || actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}' || actionProperty === '{{ .Const.ActionPropertyEdgeTokenValidity }}'">
             <div class="flex gap-3">
                 <div class="flex h-6 shrink-0 items-center">
                     <div class="group grid size-4 grid-cols-1">
-                        <input id="{{ .Const.Terminal }}" name="{{ .Const.Terminal }}" type="checkbox" {{ if .Params.Terminal }}checked{{ end }} :disabled="actionProperty !== '{{ .Const.ActionPropertyDifficultyLevel }}' && actionProperty !== '{{ .Const.ActionPropertyDifficultyGrowth }}'" class="col-start-1 row-start-1 pc-internal-form-checkbox" />
+                        <input id="{{ .Const.Terminal }}" name="{{ .Const.Terminal }}" type="checkbox" {{ if .Params.Terminal }}checked{{ end }} :disabled="actionProperty !== '{{ .Const.ActionPropertyDifficultyLevel }}' && actionProperty !== '{{ .Const.ActionPropertyDifficultyGrowth }}' && actionProperty !== '{{ .Const.ActionPropertyEdgeTokenValidity }}'" class="col-start-1 row-start-1 pc-internal-form-checkbox" />
                         <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-pc-grey-950/25" viewBox="0 0 14 14" fill="none">
                             <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                             <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />

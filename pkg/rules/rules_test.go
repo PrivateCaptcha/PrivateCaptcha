@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -490,6 +491,71 @@ func TestDifficultyGrowthApply(t *testing.T) {
 	}
 	if result.Level() != 50 {
 		t.Errorf("Expected level to remain 50, got %d", result.Level())
+	}
+}
+
+func TestEdgeTokenValidityApply(t *testing.T) {
+	tests := []struct {
+		value    int32
+		validity time.Duration
+	}{
+		{0, 0},
+		{1, 5 * time.Minute},
+		{2, 10 * time.Minute},
+		{3, 30 * time.Minute},
+		{4, time.Hour},
+		{5, 6 * time.Hour},
+		{6, 12 * time.Hour},
+		{7, 24 * time.Hour},
+		{-1, 0},
+		{8, 0},
+	}
+	for _, tt := range tests {
+		for _, terminal := range []bool{false, true} {
+			dbRule := &dbgen.DifficultyRule{
+				ID:                42,
+				ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+				ConditionOperator: dbgen.RuleConditionOperatorContains,
+				ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+				ActionProperty:    dbgen.RuleActionPropertyEdgeTokenValidityInterval,
+				ActionValue:       tt.value,
+				Enabled:           true,
+				Terminal:          terminal,
+			}
+			compiled, err := testCompiler.CompileRule(t.Context(), dbRule)
+			if err != nil {
+				t.Fatal(err)
+			}
+			property := &overrideProperty{
+				base: difficulty.NewDBProperty(&dbgen.Property{
+					Level:                     pgtype.Int2{Int16: 50, Valid: true},
+					Growth:                    dbgen.DifficultyGrowthSlow,
+					EdgeTokenValidityInterval: time.Hour,
+				}),
+				ruleID: 7,
+			}
+			decoded := roundTripCompiledRules(t, NewCompiledRules([]rule{compiled}))
+			matched, stopped := decoded.Apply(newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4")), property)
+			if got := matched.EdgeTokenValidity(); got != tt.validity {
+				t.Errorf("value %d: validity = %v, want %v", tt.value, got, tt.validity)
+			}
+			if stopped != terminal {
+				t.Errorf("terminal = %v, want %v", stopped, terminal)
+			}
+			if matched.Level() != property.Level() || matched.Growth() != property.Growth() {
+				t.Error("edge validity rule changed difficulty")
+			}
+			if matched.RuleID() == property.RuleID() {
+				t.Error("edge validity rule did not change the attribution")
+			}
+			if property.EdgeTokenValidity() != time.Hour {
+				t.Error("edge validity rule mutated the base property")
+			}
+			unmatched, stopped := decoded.Apply(newTestRequestInfo("Mozilla/5.0", netip.MustParseAddr("1.2.3.4")), property)
+			if unmatched != property || stopped {
+				t.Error("non-matching rule changed the property")
+			}
+		}
 	}
 }
 

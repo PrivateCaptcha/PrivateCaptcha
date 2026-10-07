@@ -2,7 +2,10 @@ package common
 
 import "context"
 
-const FeatureArgon2ID = "argon2id"
+const (
+	FeatureArgon2ID   = "argon2id"
+	FeatureEdgeTokens = "edge_tokens"
+)
 
 // Nil IDs mean that the user or organization is absent.
 type FeatureFlags interface {

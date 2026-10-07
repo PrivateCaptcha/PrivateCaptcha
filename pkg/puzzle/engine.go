@@ -3,7 +3,6 @@ package puzzle
 import (
 	"context"
 	"encoding"
-	"net/http"
 	"time"
 )
 
@@ -76,11 +75,4 @@ type SolutionPayload interface {
 	Puzzle() Puzzle
 	NeedsExtraSalt() bool
 	VerifySignature(ctx context.Context, salt *Salt, extraSalt []byte) error
-}
-
-type Engine interface {
-	Create(puzzleID uint64, propertyID [PropertyIDSize]byte, difficulty uint8) Puzzle
-	Write(ctx context.Context, p Puzzle, extraSalt []byte, w http.ResponseWriter) error
-	ParseSolutionPayload(ctx context.Context, payload []byte) (SolutionPayload, error)
-	Verify(ctx context.Context, payload SolutionPayload, expectedOwner OwnerIDSource, tnow time.Time) (*VerifyResult, error)
 }
