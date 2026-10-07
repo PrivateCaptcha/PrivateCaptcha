@@ -25,10 +25,18 @@ func (s stubFeatureFlags) Enabled(context.Context, string, *int32, *int32) bool 
 	return bool(s)
 }
 
+func (s stubFeatureFlags) Cleanup(context.Context, *int32, *int32) {
+	// BUMP
+}
+
 type featureFlagsFunc func(context.Context, string, *int32, *int32) bool
 
 func (f featureFlagsFunc) Enabled(ctx context.Context, feature string, userID, orgID *int32) bool {
 	return f(ctx, feature, userID, orgID)
+}
+
+func (s featureFlagsFunc) Cleanup(context.Context, *int32, *int32) {
+	// BUMP
 }
 
 type propertyBudgetConfigItem struct {

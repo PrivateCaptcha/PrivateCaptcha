@@ -28,6 +28,10 @@ func (f featureFlagsFunc) Enabled(ctx context.Context, feature string, userID, o
 	return f(ctx, feature, userID, orgID)
 }
 
+func (f featureFlagsFunc) Cleanup(ctx context.Context, userID, orgID *int32) {
+	// BUMP
+}
+
 func TestRenderFeatures(t *testing.T) {
 	userID := int32(42)
 	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "feature-salt"))

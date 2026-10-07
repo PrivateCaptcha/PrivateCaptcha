@@ -174,6 +174,8 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		ctx = context.WithValue(ctx, common.SessionHashContextKey, result.SessionHash)
 		s.Store.AuditLog().RecordEvent(ctx, newUserAuthAuditLogEvent(result.UserID, common.AuditLogActionLogout), common.AuditLogSourcePortal)
 		s.Store.Impl().CleanupUserCache(ctx, result.UserID)
+		// we don't cleanup all orgs because they might be shared
+		s.FeatureFlags.Cleanup(ctx, &result.UserID, nil /*org ID*/)
 	}
 	common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusOK, w, r)
 }
