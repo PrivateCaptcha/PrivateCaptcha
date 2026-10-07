@@ -30,6 +30,28 @@ func (s *Server) OffboardUser(user *dbgen.User, subscription *dbgen.Subscription
 	}
 }
 
+// runOffboardJob launches the offboard (external subscription cancellation)
+// job on a goroutine that is tracked by jobsWG and runs against shutdownCtx.
+// Tracking lets Shutdown wait for the cancellation to complete during a
+// deploy/SIGTERM (the in-flight request is gone), and shutdownCtx (derived
+// from context.Background(), not the request) ensures the job is not cancelled
+// when the HTTP response is sent. This replaces the previous detached,
+// untracked `go common.RunOneOffJob(... context.Background() ...)` that could
+// be silently dropped by a deploy or crash between the soft-delete commit and
+// CancelSubscription returning.
+func (s *Server) runOffboardJob(ctx context.Context, user *dbgen.User, subscription *dbgen.Subscription) {
+	job := s.Jobs.OffboardUser(user, subscription)
+	shutdownCtx := s.shutdownCtx
+	if shutdownCtx == nil {
+		shutdownCtx = context.Background()
+	}
+	s.jobsWG.Add(1)
+	go func() {
+		defer s.jobsWG.Done()
+		common.RunOneOffJob(common.CopyTraceID(ctx, shutdownCtx), job, job.NewParams())
+	}()
+}
+
 func (s *Server) CheckRegistration(sess *session.Session, r *http.Request, orgInviteID int32) common.OneOffJob {
 	return &registrationCheckJob{
 		Sess:         sess,

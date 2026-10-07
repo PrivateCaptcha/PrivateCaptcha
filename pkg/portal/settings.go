@@ -483,8 +483,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		}
 		return []*common.AuditLogEvent{auditEvent}, nil
 	}); err == nil {
-		job := s.Jobs.OffboardUser(user, subscription)
-		go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), job, job.NewParams())
+		s.runOffboardJob(ctx, user, subscription)
 		s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
 		s.Sessions.ClearCookie(w, r)
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusOK, w, r)

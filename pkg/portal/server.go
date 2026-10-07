@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -195,6 +196,17 @@ type Server struct {
 	TwoFactorDuration    time.Duration
 	LicenseService       common.LicenseService
 	Rules                *RuleRegistry
+
+	// jobsWG tracks in-flight, billing-affecting offboard goroutines spawned by
+	// deleteAccount so that graceful shutdown (Shutdown) can wait for them to
+	// finish instead of dropping the external subscription cancellation.
+	jobsWG sync.WaitGroup
+	// shutdownCtx is the parent context for offboard goroutines. It is derived
+	// from context.Background() (not the request) so the cancellation outlives
+	// the in-flight HTTP request, and is cancelled by Shutdown once the wait
+	// budget is exhausted so a stuck call cannot block shutdown indefinitely.
+	shutdownCtx    context.Context
+	shutdownCancel context.CancelFunc
 }
 
 func (s *Server) createSettingsTabs() []*SettingsTab {
@@ -273,7 +285,41 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 		s.TwoFactorDuration = 10*time.Minute + 5*time.Minute
 	}
 
+	// shutdownCtx backs the offboard goroutine launched by deleteAccount. It
+	// must outlive the in-flight request so the external subscription
+	// cancellation is not dropped when the response is sent. It is created
+	// once and cancelled by Shutdown. A nil check lets tests pre-set a custom
+	// context without Init overwriting it.
+	if s.shutdownCtx == nil {
+		s.shutdownCtx, s.shutdownCancel = context.WithCancel(context.Background())
+	}
+
 	return nil
+}
+
+// Shutdown waits for in-flight offboard goroutines (tracked by jobsWG) to
+// finish, giving the external subscription cancellation a chance to complete
+// during a deploy/SIGTERM. If maxWait elapses first, shutdownCtx is cancelled
+// to unblock any remaining goroutine and Shutdown then waits for it to return.
+// httpServer.Shutdown must have already returned before calling this so that
+// no new offboard goroutines are spawned while waiting (all jobsWG.Add calls
+// happen synchronously in deleteAccount before the request handler returns).
+func (s *Server) Shutdown(maxWait time.Duration) {
+	done := make(chan struct{})
+	go func() {
+		s.jobsWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(maxWait):
+		if s.shutdownCancel != nil {
+			s.shutdownCancel()
+		}
+		// Wait for the cancelled goroutine to actually return so we do not
+		// leak it past process exit.
+		<-done
+	}
 }
 
 func (s *Server) UpdateConfig(ctx context.Context, cfg common.ConfigStore) {

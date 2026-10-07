@@ -38,13 +38,20 @@ import (
 )
 
 const (
-	modeMigrate             = "migrate"
-	modeRollback            = "rollback"
-	modeServer              = "server"
-	modeAuto                = "auto"
-	_readinessDrainDelay    = 5 * time.Second
-	_shutdownHardPeriod     = 5 * time.Second
-	_shutdownPeriod         = 10 * time.Second
+	modeMigrate          = "migrate"
+	modeRollback         = "rollback"
+	modeServer           = "server"
+	modeAuto             = "auto"
+	_readinessDrainDelay = 5 * time.Second
+	_shutdownHardPeriod  = 5 * time.Second
+	_shutdownPeriod      = 10 * time.Second
+	// _offboardShutdownPeriod bounds how long Shutdown waits for in-flight
+	// offboard (external subscription cancellation) goroutines before
+	// cancelling their context. The external billing API may take up to ~30s
+	// (per the write-deadline extension in commit a807476d), so this gives the
+	// cancellation room to complete during a deploy/SIGTERM rather than being
+	// dropped.
+	_offboardShutdownPeriod = 35 * time.Second
 	_dbConnectTimeout       = 30 * time.Second
 	_sessionPersistInterval = 10 * time.Second
 	_auditLogInterval       = 10 * time.Second
@@ -563,6 +570,12 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		defer cancel()
 		httpServer.SetKeepAlivesEnabled(false)
 		serr := httpServer.Shutdown(shutdownCtx)
+		// Wait for in-flight offboard goroutines (spawned by deleteAccount) to
+		// finish their external subscription cancellation. This must run after
+		// httpServer.Shutdown so no new offboard goroutines are spawned while
+		// waiting (deleteAccount calls jobsWG.Add synchronously before the
+		// request handler returns).
+		portalServer.Shutdown(_offboardShutdownPeriod)
 		stopOngoingGracefully()
 		sessionStore.Stop()
 		if serr != nil {
