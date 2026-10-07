@@ -22,11 +22,9 @@ func (s *Server) OnboardUser(user *dbgen.User, plan billing.Plan) common.OneOffJ
 	return &onboardUserJob{user: user, mailer: s.Mailer, store: s.Store}
 }
 
-func (s *Server) OffboardUser(user *dbgen.User, subscription *dbgen.Subscription) common.OneOffJob {
+func (s *Server) OffboardUser(user *dbgen.User) common.OneOffJob {
 	return &OffboardUserJob{
-		user:         user,
-		subscription: subscription,
-		planService:  s.PlanService,
+		user: user,
 	}
 }
 
@@ -70,9 +68,7 @@ func (j *onboardUserJob) RunOnce(ctx context.Context, params any) error {
 }
 
 type OffboardUserJob struct {
-	user         *dbgen.User
-	subscription *dbgen.Subscription
-	planService  billing.PlanService
+	user *dbgen.User
 }
 
 func (j *OffboardUserJob) Name() string {
@@ -88,16 +84,6 @@ func (j *OffboardUserJob) NewParams() any {
 }
 
 func (j *OffboardUserJob) RunOnce(ctx context.Context, params any) error {
-	if j.subscription == nil || !j.planService.IsSubscriptionActive(j.subscription.Status) ||
-		!j.subscription.ExternalSubscriptionID.Valid || HasScheduledCancellation(j.subscription) {
-		return nil
-	}
-
-	if err := j.planService.CancelSubscription(ctx, j.subscription.ExternalSubscriptionID.String); err != nil {
-		slog.ErrorContext(ctx, "Failed to cancel external subscription", "userID", j.user.ID, common.ErrAttr(err))
-		return err
-	}
-
 	return nil
 }
 

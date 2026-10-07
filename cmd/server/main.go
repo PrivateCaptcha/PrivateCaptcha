@@ -297,6 +297,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 			SecureCookie: (*certFileFlag != "") && (*keyFileFlag != ""),
 		},
 		PlanService:          planService,
+		AsyncTasks:           asyncTasksJob,
 		APIURL:               apiURLConfig.URL(),
 		CDNURL:               cdnURLConfig.URL(),
 		PuzzleEngine:         apiServer.ReportingVerifier(string(common.VerifyClientPortal)),

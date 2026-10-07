@@ -167,6 +167,7 @@ func TestMain(m *testing.M) {
 		PuzzleEngine:       puzzleEngine,
 		Metrics:            stubMetrics,
 		PlanService:        planService,
+		AsyncTasks:         maintenance.NewAsyncTasksJob(store),
 		DataCtx:            dataCtx,
 		PlatformCtx:        platformCtx,
 		IDHasher:           common.NewIDHasher(cfg.Get(common.IDHasherSaltKey)),

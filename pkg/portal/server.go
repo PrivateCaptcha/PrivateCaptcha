@@ -178,6 +178,7 @@ type Server struct {
 	RateLimiter          ratelimit.HTTPRateLimiter
 	RenderConstants      interface{}
 	Jobs                 db.UserJobs
+	AsyncTasks           db.AsyncTasks
 	PlatformCtx          interface{}
 	DataCtx              interface{}
 	Tips                 []*web.Tip
@@ -244,6 +245,11 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 	s.Sessions.Init(PortalService, prefix, sessionPersistInterval)
 
 	s.Jobs = s
+	if s.AsyncTasks != nil {
+		if ok := s.AsyncTasks.Register(DeleteAccountHandlerID, s.HandleDeleteAccount); !ok {
+			slog.ErrorContext(ctx, "Failed to register async task handler", "handler", DeleteAccountHandlerID)
+		}
+	}
 	s.SettingsTabs = s.createSettingsTabs()
 	s.RenderConstants = NewRenderConstants()
 	s.AuditLogsFunc = s.CreateAuditLogsContext

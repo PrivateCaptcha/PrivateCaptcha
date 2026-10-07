@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -922,6 +924,7 @@ func TestDeleteAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	runner, tasks := deferAccountDeletionTasks(t)
 	req := httptest.NewRequest("DELETE", "/user", nil)
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
@@ -943,6 +946,15 @@ func TestDeleteAccount(t *testing.T) {
 		t.Fatal("account deletion did not clear the current session cookie")
 	}
 
+	select {
+	case task := <-tasks:
+		if err := runner.Execute(ctx, task); err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Account deletion did not start async task execution")
+	}
+
 	otherReq := httptest.NewRequest(http.MethodGet, "/", nil)
 	otherReq.AddCookie(otherCookie)
 	otherW := httptest.NewRecorder()
@@ -954,6 +966,138 @@ func TestDeleteAccount(t *testing.T) {
 	_, err = store.Impl().RetrieveUser(ctx, user.ID)
 	if err != db.ErrSoftDeleted {
 		t.Errorf("Expected ErrSoftDeleted after deleting user, got: %v", err)
+	}
+}
+
+type deferredAccountDeletionTasks struct {
+	db.AsyncTasks
+	tasks chan *dbgen.AsyncTask
+}
+
+func (d *deferredAccountDeletionTasks) Execute(ctx context.Context, task *dbgen.AsyncTask) error {
+	select {
+	case d.tasks <- task:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func deferAccountDeletionTasks(t *testing.T) (db.AsyncTasks, <-chan *dbgen.AsyncTask) {
+	t.Helper()
+	runner := server.AsyncTasks
+	deferred := &deferredAccountDeletionTasks{
+		AsyncTasks: runner,
+		tasks:      make(chan *dbgen.AsyncTask, 1),
+	}
+	server.AsyncTasks = deferred
+	t.Cleanup(func() {
+		server.AsyncTasks = runner
+	})
+	return runner, deferred.tasks
+}
+
+type accountDeletionPlanService struct {
+	billing.PlanService
+	cancelledID string
+	cancelError error
+}
+
+func (s *accountDeletionPlanService) CancelSubscription(_ context.Context, sid string) error {
+	s.cancelledID = sid
+	return s.cancelError
+}
+
+func TestDeleteAccountCreatesAsyncTask(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	params := db_tests.CreateNewSubscriptionParams(testPlan)
+	user, _, err := db_tests.CreateNewAccountForTestEx(ctx, store, t.Name(), params)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	runner, tasks := deferAccountDeletionTasks(t)
+	req := httptest.NewRequest(http.MethodDelete, "/user", nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), "203.0.113.25")
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("Unexpected status code %v", w.Code)
+	}
+
+	if _, err := store.Impl().RetrieveUser(ctx, user.ID); err != nil {
+		t.Fatalf("Account was deleted before async task execution: %v", err)
+	}
+
+	var savedTask dbgen.AsyncTask
+	if err := store.Pool.QueryRow(ctx, "SELECT id, handler FROM backend.async_tasks WHERE user_id = $1", user.ID).Scan(&savedTask.ID, &savedTask.Handler); err != nil {
+		t.Fatalf("Failed to retrieve account deletion async task: %v", err)
+	}
+	if savedTask.Handler != "portal-delete-account" {
+		t.Errorf("Async task handler = %q, want portal-delete-account", savedTask.Handler)
+	}
+	var task *dbgen.AsyncTask
+	select {
+	case task = <-tasks:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Account deletion did not start async task execution")
+	}
+	if task.ID != savedTask.ID || !task.UserID.Valid || task.UserID.Int32 != user.ID {
+		t.Fatalf("Unexpected account deletion task: %+v", task)
+	}
+	var payload struct {
+		RequesterIP string `json:"requester_ip"`
+		SessionHash string `json:"session_hash"`
+	}
+	if err := json.Unmarshal(task.Input, &payload); err != nil {
+		t.Fatal(err)
+	}
+	sid, err := url.QueryUnescape(cookie.Value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if payload.RequesterIP != "203.0.113.0" || payload.SessionHash != common.HashSessionID(sid).String() {
+		t.Fatalf("Account deletion task lost audit context: %+v", payload)
+	}
+
+	originalPlanService := server.PlanService
+	planService := &accountDeletionPlanService{
+		PlanService: originalPlanService,
+		cancelError: errors.New("subscription cancellation failed"),
+	}
+	server.PlanService = planService
+	t.Cleanup(func() {
+		server.PlanService = originalPlanService
+	})
+	if err := runner.Execute(ctx, task); !errors.Is(err, planService.cancelError) {
+		t.Fatalf("Async task error = %v, want %v", err, planService.cancelError)
+	}
+	if planService.cancelledID != params.ExternalSubscriptionID.String {
+		t.Fatalf("Cancelled subscription = %q, want %q", planService.cancelledID, params.ExternalSubscriptionID.String)
+	}
+	if _, err := store.Impl().RetrieveUser(ctx, user.ID); err != nil {
+		t.Fatalf("Account was deleted despite cancellation failure: %v", err)
+	}
+
+	planService.cancelError = nil
+	if err := runner.Execute(ctx, task); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Impl().RetrieveUser(ctx, user.ID); err != db.ErrSoftDeleted {
+		t.Fatalf("Expected ErrSoftDeleted after async task execution, got: %v", err)
 	}
 }
 

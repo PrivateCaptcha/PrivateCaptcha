@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -463,36 +464,34 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var subscription *dbgen.Subscription
-	if user.SubscriptionID.Valid {
-		subscription, err = s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, true /*skip cache*/)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve a subscription", common.ErrAttr(err))
-			s.RedirectError(http.StatusInternalServerError, w, r)
-			return
-		}
+	const (
+		scheduleBuffer   = 5 * time.Minute
+		immediateTimeout = scheduleBuffer - 1*time.Minute
+	)
+	request := &AsyncTaskDeleteAccount{}
+	if ip, ok := ctx.Value(common.RateLimitKeyContextKey).(netip.Addr); ok && ip.IsValid() {
+		request.RequesterIP = common.MaskIPAddress(ip).String()
 	}
-
-	if auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
-		auditEvent, err := impl.SoftDeleteUser(ctx, user)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := impl.RevokeUserSessions(ctx, user.ID); err != nil {
-			return nil, err
-		}
-		return []*common.AuditLogEvent{auditEvent}, nil
-	}); err == nil {
-		job := s.Jobs.OffboardUser(user, subscription)
-		go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), job, job.NewParams())
-		s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
-		s.Sessions.ClearCookie(w, r)
-		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusOK, w, r)
-	} else {
-		slog.ErrorContext(ctx, "Failed to delete user", common.ErrAttr(err))
+	if hash, ok := ctx.Value(common.SessionHashContextKey).(common.SessionHash); ok {
+		request.SessionHash = hash.String()
+	}
+	task, err := s.Store.Impl().CreateNewAsyncTask(ctx, request, DeleteAccountHandlerID, user, time.Now().UTC().Add(scheduleBuffer), "")
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create account deletion task", "userID", user.ID, common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
+
+	s.Sessions.ClearCookie(w, r)
+	common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusOK, w, r)
+
+	go func(bctx context.Context) {
+		handlerCtx, cancel := context.WithTimeout(bctx, immediateTimeout)
+		defer cancel()
+		if err := s.AsyncTasks.Execute(handlerCtx, task); err != nil {
+			slog.ErrorContext(bctx, "Failed to execute account deletion task", "taskID", db.UUIDToString(task.ID), common.ErrAttr(err))
+		}
+	}(common.CopyTraceID(ctx, context.Background()))
 }
 
 func (s *Server) createAPIKeysSettingsModel(ctx context.Context, user *dbgen.User) *settingsAPIKeysRenderContext {
