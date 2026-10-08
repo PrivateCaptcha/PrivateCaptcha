@@ -25,10 +25,10 @@ type CreateFormParams struct {
 	OrgOwnerID        pgtype.Int4 `db:"org_owner_id" json:"org_owner_id"`
 	CreatorID         pgtype.Int4 `db:"creator_id" json:"creator_id"`
 	Fields            []byte      `db:"fields" json:"fields"`
-	Enabled           bool        `db:"enabled" json:"enabled"`
 	RequestsPerMinute int16       `db:"requests_per_minute" json:"requests_per_minute"`
 	RetryRequestCount int16       `db:"retry_request_count" json:"retry_request_count"`
 	Method            FormMethod  `db:"method" json:"method"`
+	Enabled           bool        `db:"enabled" json:"enabled"`
 }
 
 func (q *Queries) CreateForm(ctx context.Context, arg *CreateFormParams) (*Form, error) {
@@ -578,12 +578,12 @@ type UpdateFormParams struct {
 	ID                int32       `db:"id" json:"id"`
 	Name              string      `db:"name" json:"name"`
 	URL               string      `db:"url" json:"url"`
-	Active            bool        `db:"active" json:"active"`
 	RetryRequestCount int16       `db:"retry_request_count" json:"retry_request_count"`
 	RequestsPerMinute int16       `db:"requests_per_minute" json:"requests_per_minute"`
 	Method            FormMethod  `db:"method" json:"method"`
 	CreatorID         pgtype.Int4 `db:"creator_id" json:"creator_id"`
 	OrgID             pgtype.Int4 `db:"org_id" json:"org_id"`
+	Active            bool        `db:"active" json:"active"`
 }
 
 type UpdateFormRow struct {
@@ -599,19 +599,19 @@ type UpdateFormRow struct {
 	DeletedAt            pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	PropertyID           int32              `db:"property_id" json:"property_id"`
 	Fields               []byte             `db:"fields" json:"fields"`
-	Enabled              bool               `db:"enabled" json:"enabled"`
-	Active               bool               `db:"active" json:"active"`
 	RequestsPerMinute    int16              `db:"requests_per_minute" json:"requests_per_minute"`
 	RetryRequestCount    int16              `db:"retry_request_count" json:"retry_request_count"`
 	Method               FormMethod         `db:"method" json:"method"`
 	RedirectCount        int16              `db:"redirect_count" json:"redirect_count"`
 	OldName              string             `db:"old_name" json:"old_name"`
 	OldURL               string             `db:"old_url" json:"old_url"`
-	OldActive            bool               `db:"old_active" json:"old_active"`
 	OldRetryRequestCount int16              `db:"old_retry_request_count" json:"old_retry_request_count"`
 	OldRequestsPerMinute int16              `db:"old_requests_per_minute" json:"old_requests_per_minute"`
 	OldMethod            FormMethod         `db:"old_method" json:"old_method"`
 	OldRedirectCount     int16              `db:"old_redirect_count" json:"old_redirect_count"`
+	Enabled              bool               `db:"enabled" json:"enabled"`
+	Active               bool               `db:"active" json:"active"`
+	OldActive            bool               `db:"old_active" json:"old_active"`
 }
 
 func (q *Queries) UpdateForm(ctx context.Context, arg *UpdateFormParams) (*UpdateFormRow, error) {

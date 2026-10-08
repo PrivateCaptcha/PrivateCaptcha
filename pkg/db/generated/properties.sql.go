@@ -27,11 +27,11 @@ type CreatePropertyParams struct {
 	Level                     pgtype.Int2       `db:"level" json:"level"`
 	Growth                    DifficultyGrowth  `db:"growth" json:"growth"`
 	ValidityInterval          time.Duration     `db:"validity_interval" json:"validity_interval"`
-	AllowSubdomains           bool              `db:"allow_subdomains" json:"allow_subdomains"`
-	AllowLocalhost            bool              `db:"allow_localhost" json:"allow_localhost"`
 	MaxReplayCount            int32             `db:"max_replay_count" json:"max_replay_count"`
 	Challenge                 NullChallengeType `db:"challenge" json:"challenge"`
 	EdgeTokenValidityInterval time.Duration     `db:"edge_token_validity_interval" json:"edge_token_validity_interval"`
+	AllowSubdomains           bool              `db:"allow_subdomains" json:"allow_subdomains"`
+	AllowLocalhost            bool              `db:"allow_localhost" json:"allow_localhost"`
 }
 
 func (q *Queries) CreateProperty(ctx context.Context, arg *CreatePropertyParams) (*Property, error) {
@@ -967,14 +967,14 @@ type UpdatePropertyParams struct {
 	Level                     pgtype.Int2       `db:"level" json:"level"`
 	Growth                    DifficultyGrowth  `db:"growth" json:"growth"`
 	ValidityInterval          time.Duration     `db:"validity_interval" json:"validity_interval"`
-	AllowSubdomains           bool              `db:"allow_subdomains" json:"allow_subdomains"`
-	AllowLocalhost            bool              `db:"allow_localhost" json:"allow_localhost"`
 	MaxReplayCount            int32             `db:"max_replay_count" json:"max_replay_count"`
 	CreatorID                 pgtype.Int4       `db:"creator_id" json:"creator_id"`
 	OrgID                     pgtype.Int4       `db:"org_id" json:"org_id"`
 	Challenge                 NullChallengeType `db:"challenge" json:"challenge"`
-	PreserveEdgeTokenValidity bool              `db:"preserve_edge_token_validity" json:"preserve_edge_token_validity"`
 	EdgeTokenValidityInterval time.Duration     `db:"edge_token_validity_interval" json:"edge_token_validity_interval"`
+	AllowSubdomains           bool              `db:"allow_subdomains" json:"allow_subdomains"`
+	AllowLocalhost            bool              `db:"allow_localhost" json:"allow_localhost"`
+	PreserveEdgeTokenValidity bool              `db:"preserve_edge_token_validity" json:"preserve_edge_token_validity"`
 }
 
 type UpdatePropertyRow struct {
@@ -992,22 +992,22 @@ type UpdatePropertyRow struct {
 	UpdatedAt                    pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	DeletedAt                    pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	ValidityInterval             time.Duration      `db:"validity_interval" json:"validity_interval"`
-	AllowSubdomains              bool               `db:"allow_subdomains" json:"allow_subdomains"`
-	AllowLocalhost               bool               `db:"allow_localhost" json:"allow_localhost"`
 	MaxReplayCount               int32              `db:"max_replay_count" json:"max_replay_count"`
-	Enabled                      bool               `db:"enabled" json:"enabled"`
-	ShowNotice                   bool               `db:"show_notice" json:"show_notice"`
 	Challenge                    ChallengeType      `db:"challenge" json:"challenge"`
 	EdgeTokenValidityInterval    time.Duration      `db:"edge_token_validity_interval" json:"edge_token_validity_interval"`
 	OldName                      string             `db:"old_name" json:"old_name"`
 	OldLevel                     pgtype.Int2        `db:"old_level" json:"old_level"`
 	OldGrowth                    DifficultyGrowth   `db:"old_growth" json:"old_growth"`
 	OldValidityInterval          time.Duration      `db:"old_validity_interval" json:"old_validity_interval"`
-	OldAllowSubdomains           bool               `db:"old_allow_subdomains" json:"old_allow_subdomains"`
-	OldAllowLocalhost            bool               `db:"old_allow_localhost" json:"old_allow_localhost"`
 	OldMaxReplayCount            int32              `db:"old_max_replay_count" json:"old_max_replay_count"`
 	OldChallenge                 ChallengeType      `db:"old_challenge" json:"old_challenge"`
 	OldEdgeTokenValidityInterval time.Duration      `db:"old_edge_token_validity_interval" json:"old_edge_token_validity_interval"`
+	AllowSubdomains              bool               `db:"allow_subdomains" json:"allow_subdomains"`
+	AllowLocalhost               bool               `db:"allow_localhost" json:"allow_localhost"`
+	Enabled                      bool               `db:"enabled" json:"enabled"`
+	ShowNotice                   bool               `db:"show_notice" json:"show_notice"`
+	OldAllowSubdomains           bool               `db:"old_allow_subdomains" json:"old_allow_subdomains"`
+	OldAllowLocalhost            bool               `db:"old_allow_localhost" json:"old_allow_localhost"`
 }
 
 func (q *Queries) UpdateProperty(ctx context.Context, arg *UpdatePropertyParams) (*UpdatePropertyRow, error) {

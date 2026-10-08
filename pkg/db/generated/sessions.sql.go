@@ -60,8 +60,8 @@ type ConsumeEmailChangeChallengeRow struct {
 	ChallengeEmail       pgtype.Text              `db:"challenge_email" json:"challenge_email"`
 	ChallengeExpiresAt   pgtype.Timestamptz       `db:"challenge_expires_at" json:"challenge_expires_at"`
 	FailedAttempts       int32                    `db:"failed_attempts" json:"failed_attempts"`
-	VerifyRegistration   pgtype.Bool              `db:"verify_registration" json:"verify_registration"`
 	RegistrationInviteID pgtype.Int4              `db:"registration_invite_id" json:"registration_invite_id"`
+	VerifyRegistration   pgtype.Bool              `db:"verify_registration" json:"verify_registration"`
 }
 
 func (q *Queries) ConsumeEmailChangeChallenge(ctx context.Context, arg *ConsumeEmailChangeChallengeParams) (*ConsumeEmailChangeChallengeRow, error) {
@@ -129,8 +129,8 @@ type ConsumeRegistrationChallengeRow struct {
 	ChallengeEmail       pgtype.Text              `db:"challenge_email" json:"challenge_email"`
 	ChallengeExpiresAt   pgtype.Timestamptz       `db:"challenge_expires_at" json:"challenge_expires_at"`
 	FailedAttempts       int32                    `db:"failed_attempts" json:"failed_attempts"`
-	VerifyRegistration   pgtype.Bool              `db:"verify_registration" json:"verify_registration"`
 	RegistrationInviteID pgtype.Int4              `db:"registration_invite_id" json:"registration_invite_id"`
+	VerifyRegistration   pgtype.Bool              `db:"verify_registration" json:"verify_registration"`
 }
 
 func (q *Queries) ConsumeRegistrationChallenge(ctx context.Context, arg *ConsumeRegistrationChallengeParams) (*ConsumeRegistrationChallengeRow, error) {
@@ -218,7 +218,6 @@ type ConsumeSignInChallengeRow struct {
 	ChallengeEmail         pgtype.Text              `db:"challenge_email" json:"challenge_email"`
 	ChallengeExpiresAt     pgtype.Timestamptz       `db:"challenge_expires_at" json:"challenge_expires_at"`
 	FailedAttempts         int32                    `db:"failed_attempts" json:"failed_attempts"`
-	VerifyRegistration     pgtype.Bool              `db:"verify_registration" json:"verify_registration"`
 	RegistrationInviteID   pgtype.Int4              `db:"registration_invite_id" json:"registration_invite_id"`
 	SessionID_2            pgtype.Text              `db:"session_id_2" json:"session_id_2"`
 	State_2                NullSessionState         `db:"state_2" json:"state_2"`
@@ -231,8 +230,9 @@ type ConsumeSignInChallengeRow struct {
 	ChallengeEmail_2       pgtype.Text              `db:"challenge_email_2" json:"challenge_email_2"`
 	ChallengeExpiresAt_2   pgtype.Timestamptz       `db:"challenge_expires_at_2" json:"challenge_expires_at_2"`
 	FailedAttempts_2       pgtype.Int4              `db:"failed_attempts_2" json:"failed_attempts_2"`
-	VerifyRegistration_2   pgtype.Bool              `db:"verify_registration_2" json:"verify_registration_2"`
 	RegistrationInviteID_2 pgtype.Int4              `db:"registration_invite_id_2" json:"registration_invite_id_2"`
+	VerifyRegistration     pgtype.Bool              `db:"verify_registration" json:"verify_registration"`
+	VerifyRegistration_2   pgtype.Bool              `db:"verify_registration_2" json:"verify_registration_2"`
 }
 
 func (q *Queries) ConsumeSignInChallenge(ctx context.Context, arg *ConsumeSignInChallengeParams) (*ConsumeSignInChallengeRow, error) {
@@ -423,10 +423,10 @@ WHERE session_id = $1
 type InspectSessionChallengeRow struct {
 	State              SessionState             `db:"state" json:"state"`
 	ChallengeKind      NullSessionChallengeKind `db:"challenge_kind" json:"challenge_kind"`
-	SessionExpired     bool                     `db:"session_expired" json:"session_expired"`
-	ChallengeExpired   pgtype.Bool              `db:"challenge_expired" json:"challenge_expired"`
 	FailedAttempts     int32                    `db:"failed_attempts" json:"failed_attempts"`
+	ChallengeExpired   pgtype.Bool              `db:"challenge_expired" json:"challenge_expired"`
 	VerifyRegistration pgtype.Bool              `db:"verify_registration" json:"verify_registration"`
+	SessionExpired     bool                     `db:"session_expired" json:"session_expired"`
 }
 
 func (q *Queries) InspectSessionChallenge(ctx context.Context, sessionID string) (*InspectSessionChallengeRow, error) {
@@ -796,8 +796,8 @@ RETURNING sessions.session_id, sessions.state, sessions.version, sessions.user_i
 `
 
 type SetVerifyRegistrationParams struct {
-	Value     pgtype.Bool `db:"value" json:"value"`
 	SessionID string      `db:"session_id" json:"session_id"`
+	Value     pgtype.Bool `db:"value" json:"value"`
 }
 
 func (q *Queries) SetVerifyRegistration(ctx context.Context, arg *SetVerifyRegistrationParams) (*Session, error) {

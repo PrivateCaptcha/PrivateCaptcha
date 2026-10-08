@@ -24,8 +24,8 @@ type CreateAPIKeyParams struct {
 	RequestsBurst     int32              `db:"requests_burst" json:"requests_burst"`
 	Period            time.Duration      `db:"period" json:"period"`
 	Scope             ApiKeyScope        `db:"scope" json:"scope"`
-	Readonly          bool               `db:"readonly" json:"readonly"`
 	OrgID             pgtype.Int4        `db:"org_id" json:"org_id"`
+	Readonly          bool               `db:"readonly" json:"readonly"`
 }
 
 func (q *Queries) CreateAPIKey(ctx context.Context, arg *CreateAPIKeyParams) (*APIKey, error) {
@@ -260,8 +260,8 @@ UPDATE backend.apikeys SET expires_at = $1, enabled = $2, updated_at = NOW() WHE
 
 type UpdateAPIKeyParams struct {
 	ExpiresAt  pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
-	Enabled    pgtype.Bool        `db:"enabled" json:"enabled"`
 	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
+	Enabled    pgtype.Bool        `db:"enabled" json:"enabled"`
 }
 
 func (q *Queries) UpdateAPIKey(ctx context.Context, arg *UpdateAPIKeyParams) (*APIKey, error) {

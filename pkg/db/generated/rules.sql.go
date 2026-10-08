@@ -47,18 +47,18 @@ type CreateDifficultyRuleParams struct {
 	Name                     string                `db:"name" json:"name"`
 	PropertyID               pgtype.Int4           `db:"property_id" json:"property_id"`
 	OrgID                    pgtype.Int4           `db:"org_id" json:"org_id"`
-	Enabled                  bool                  `db:"enabled" json:"enabled"`
 	ConditionProperty        RuleConditionProperty `db:"condition_property" json:"condition_property"`
 	ConditionOperator        RuleConditionOperator `db:"condition_operator" json:"condition_operator"`
-	ConditionOperatorNegated bool                  `db:"condition_operator_negated" json:"condition_operator_negated"`
 	ConditionValueStr        pgtype.Text           `db:"condition_value_str" json:"condition_value_str"`
 	ConditionValueInt        pgtype.Int4           `db:"condition_value_int" json:"condition_value_int"`
 	ConditionValueSeparator  pgtype.Text           `db:"condition_value_separator" json:"condition_value_separator"`
 	ActionProperty           RuleActionProperty    `db:"action_property" json:"action_property"`
 	ActionValue              int32                 `db:"action_value" json:"action_value"`
 	CreatorID                pgtype.Int4           `db:"creator_id" json:"creator_id"`
-	Terminal                 bool                  `db:"terminal" json:"terminal"`
 	Column15                 float64               `db:"column_15" json:"column_15"`
+	Enabled                  bool                  `db:"enabled" json:"enabled"`
+	ConditionOperatorNegated bool                  `db:"condition_operator_negated" json:"condition_operator_negated"`
+	Terminal                 bool                  `db:"terminal" json:"terminal"`
 }
 
 func (q *Queries) CreateDifficultyRule(ctx context.Context, arg *CreateDifficultyRuleParams) (*DifficultyRule, error) {
@@ -428,20 +428,20 @@ CROSS JOIN old
 type UpdateDifficultyRuleParams struct {
 	ID                       int32                 `db:"id" json:"id"`
 	Name                     string                `db:"name" json:"name"`
-	Enabled                  bool                  `db:"enabled" json:"enabled"`
 	ConditionProperty        RuleConditionProperty `db:"condition_property" json:"condition_property"`
 	ConditionOperator        RuleConditionOperator `db:"condition_operator" json:"condition_operator"`
-	ConditionOperatorNegated bool                  `db:"condition_operator_negated" json:"condition_operator_negated"`
 	ConditionValueStr        pgtype.Text           `db:"condition_value_str" json:"condition_value_str"`
 	ConditionValueInt        pgtype.Int4           `db:"condition_value_int" json:"condition_value_int"`
 	ConditionValueSeparator  pgtype.Text           `db:"condition_value_separator" json:"condition_value_separator"`
 	ActionProperty           RuleActionProperty    `db:"action_property" json:"action_property"`
 	ActionValue              int32                 `db:"action_value" json:"action_value"`
-	Terminal                 bool                  `db:"terminal" json:"terminal"`
 	CreatorID                pgtype.Int4           `db:"creator_id" json:"creator_id"`
 	Column14                 interface{}           `db:"column_14" json:"column_14"`
 	PropertyID               pgtype.Int4           `db:"property_id" json:"property_id"`
 	OrgID                    pgtype.Int4           `db:"org_id" json:"org_id"`
+	Enabled                  bool                  `db:"enabled" json:"enabled"`
+	ConditionOperatorNegated bool                  `db:"condition_operator_negated" json:"condition_operator_negated"`
+	Terminal                 bool                  `db:"terminal" json:"terminal"`
 }
 
 type UpdateDifficultyRuleRow struct {
@@ -450,29 +450,29 @@ type UpdateDifficultyRuleRow struct {
 	PropertyID                  pgtype.Int4           `db:"property_id" json:"property_id"`
 	OrgID                       pgtype.Int4           `db:"org_id" json:"org_id"`
 	CreatorID                   pgtype.Int4           `db:"creator_id" json:"creator_id"`
-	Enabled                     bool                  `db:"enabled" json:"enabled"`
 	ConditionProperty           RuleConditionProperty `db:"condition_property" json:"condition_property"`
 	ConditionOperator           RuleConditionOperator `db:"condition_operator" json:"condition_operator"`
-	ConditionOperatorNegated    bool                  `db:"condition_operator_negated" json:"condition_operator_negated"`
 	ConditionValueStr           pgtype.Text           `db:"condition_value_str" json:"condition_value_str"`
 	ConditionValueInt           pgtype.Int4           `db:"condition_value_int" json:"condition_value_int"`
 	ConditionValueSeparator     pgtype.Text           `db:"condition_value_separator" json:"condition_value_separator"`
 	Position                    float64               `db:"position" json:"position"`
 	ActionProperty              RuleActionProperty    `db:"action_property" json:"action_property"`
 	ActionValue                 int32                 `db:"action_value" json:"action_value"`
-	Terminal                    bool                  `db:"terminal" json:"terminal"`
 	CreatedAt                   pgtype.Timestamptz    `db:"created_at" json:"created_at"`
 	UpdatedAt                   pgtype.Timestamptz    `db:"updated_at" json:"updated_at"`
 	OldName                     string                `db:"old_name" json:"old_name"`
-	OldEnabled                  bool                  `db:"old_enabled" json:"old_enabled"`
 	OldPosition                 float64               `db:"old_position" json:"old_position"`
 	OldConditionProperty        RuleConditionProperty `db:"old_condition_property" json:"old_condition_property"`
 	OldConditionOperator        RuleConditionOperator `db:"old_condition_operator" json:"old_condition_operator"`
-	OldConditionOperatorNegated bool                  `db:"old_condition_operator_negated" json:"old_condition_operator_negated"`
 	OldConditionValueStr        pgtype.Text           `db:"old_condition_value_str" json:"old_condition_value_str"`
 	OldConditionValueInt        pgtype.Int4           `db:"old_condition_value_int" json:"old_condition_value_int"`
 	OldActionProperty           RuleActionProperty    `db:"old_action_property" json:"old_action_property"`
 	OldActionValue              int32                 `db:"old_action_value" json:"old_action_value"`
+	Enabled                     bool                  `db:"enabled" json:"enabled"`
+	ConditionOperatorNegated    bool                  `db:"condition_operator_negated" json:"condition_operator_negated"`
+	Terminal                    bool                  `db:"terminal" json:"terminal"`
+	OldEnabled                  bool                  `db:"old_enabled" json:"old_enabled"`
+	OldConditionOperatorNegated bool                  `db:"old_condition_operator_negated" json:"old_condition_operator_negated"`
 	OldTerminal                 bool                  `db:"old_terminal" json:"old_terminal"`
 }
 

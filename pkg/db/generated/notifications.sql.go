@@ -107,10 +107,10 @@ type CreateUserNotificationParams struct {
 	Payload              []byte             `db:"payload" json:"payload"`
 	ScheduledAt          pgtype.Timestamptz `db:"scheduled_at" json:"scheduled_at"`
 	PersistUntil         pgtype.Timestamptz `db:"persist_until" json:"persist_until"`
-	RequiresSubscription pgtype.Bool        `db:"requires_subscription" json:"requires_subscription"`
 	EmailFrom            pgtype.Text        `db:"email_from" json:"email_from"`
 	ReplyToEmail         pgtype.Text        `db:"reply_to_email" json:"reply_to_email"`
 	EmailTo              pgtype.Text        `db:"email_to" json:"email_to"`
+	RequiresSubscription pgtype.Bool        `db:"requires_subscription" json:"requires_subscription"`
 }
 
 func (q *Queries) CreateUserNotification(ctx context.Context, arg *CreateUserNotificationParams) (*UserNotification, error) {

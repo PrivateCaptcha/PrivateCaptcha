@@ -242,6 +242,7 @@ sqlc:
 	echo "CREATE SCHEMA backend;" > $(SQLC_MIGRATION_FIX)
 	cd pkg/db && sqlc generate --no-remote
 	go run cmd/clumpbools/main.go -w pkg/db/generated/models.go
+	find pkg/db -type f -name '*.sql.go' -exec go run cmd/clumpbools/main.go -w {} \;
 	gofmt -w pkg/db/generated/models.go
 	rm -v $(SQLC_MIGRATION_FIX)
 

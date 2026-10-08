@@ -179,9 +179,9 @@ RETURNING id, user_id, weekly_report, monthly_report, notifications_email, creat
 
 type UpsertUserSettingsParams struct {
 	UserID             int32       `db:"user_id" json:"user_id"`
+	NotificationsEmail pgtype.Text `db:"notifications_email" json:"notifications_email"`
 	WeeklyReport       bool        `db:"weekly_report" json:"weekly_report"`
 	MonthlyReport      bool        `db:"monthly_report" json:"monthly_report"`
-	NotificationsEmail pgtype.Text `db:"notifications_email" json:"notifications_email"`
 }
 
 func (q *Queries) UpsertUserSettings(ctx context.Context, arg *UpsertUserSettingsParams) (*UserSettings, error) {
