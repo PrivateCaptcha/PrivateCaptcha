@@ -75,6 +75,10 @@ func (s *Server) putPropertyEdgeSettings(w http.ResponseWriter, r *http.Request)
 		renderCtx.ErrorMessage = "Invalid edge widget start mode."
 		return view, nil
 	}
+	if err := s.EdgeTokens.ValidateLifetime(ctx, validity); err != nil {
+		renderCtx.ErrorMessage = "Edge protection is not configured on this server. Please contact your operator."
+		return view, nil
+	}
 	if err := s.EdgeTokens.ValidateProperty(ctx, property.Domain, validity); err != nil {
 		renderCtx.ErrorMessage = common.StatusPropertyEdgeDomainError.String()
 		return view, nil

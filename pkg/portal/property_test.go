@@ -2493,9 +2493,78 @@ func TestPutPropertyEdgeSettings(t *testing.T) {
 	if view.Model.(*edgePropertySettingsRenderContext).ErrorMessage == "" {
 		t.Fatal("portal accepted edge lifetime for a property without a domain")
 	}
+	if got := view.Model.(*edgePropertySettingsRenderContext).ErrorMessage; got != common.StatusPropertyEdgeDomainError.String() {
+		t.Fatalf("domainless property error = %q, want %q", got, common.StatusPropertyEdgeDomainError.String())
+	}
 	stored, err = store.Impl().RetrieveOrgProperty(ctx, org, noDomain.ID)
 	if err != nil || stored.EdgeTokenValidityInterval != 0 {
 		t.Fatalf("domainless property edge lifetime = %v, err = %v", stored, err)
+	}
+}
+
+func TestPutPropertyEdgeSettingsKeysAbsent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "edge-keys-absent.example.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if property.EdgeTokenValidityInterval != 0 {
+		t.Fatalf("default TTL = %v", property.EdgeTokenValidityInterval)
+	}
+	previousSigner := server.EdgeTokens
+	emptyConfig := config.NewBaseConfig(config.NewEnvConfig(func(string) string { return "" }))
+	server.EdgeTokens = api.NewEdgeTokenSigner("", emptyConfig)
+	if err := server.EdgeTokens.Update(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { server.EdgeTokens = previousSigner })
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, property.Name)
+	form.Set(common.ParamEdgeTokenValidityInterval, "4")
+	form.Set(common.ParamEdgeWidgetStartMode, "click")
+	keysReq := httptest.NewRequest(
+		http.MethodPut,
+		fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))),
+		strings.NewReader(form.Encode()),
+	)
+	keysReq.AddCookie(cookie)
+	keysReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	keysReq.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	keysReq.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+	keysView, err := server.putPropertyEdgeSettings(httptest.NewRecorder(), keysReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keysModel := keysView.Model.(*edgePropertySettingsRenderContext)
+	const wantKeysError = "Edge protection is not configured on this server. Please contact your operator."
+	if keysModel.ErrorMessage != wantKeysError {
+		t.Fatalf("keys-missing with valid domain: got error %q, want %q", keysModel.ErrorMessage, wantKeysError)
+	}
+	if keysModel.ErrorMessage == common.StatusPropertyEdgeDomainError.String() {
+		t.Fatal("keys-missing error was misattributed to the property domain (bug)")
+	}
+	if len(keysView.AuditEvents) != 0 {
+		t.Fatalf("expected no audit events for keys-missing, got %+v", keysView.AuditEvents)
+	}
+	storedKeys, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil || storedKeys.EdgeTokenValidityInterval != 0 {
+		t.Fatalf("keys-missing changed edge lifetime: got %v, err = %v", storedKeys.EdgeTokenValidityInterval, err)
 	}
 }
 

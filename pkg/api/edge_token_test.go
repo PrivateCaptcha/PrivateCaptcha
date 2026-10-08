@@ -631,6 +631,27 @@ func TestEdgeTokenPropertyDomain(t *testing.T) {
 	}
 }
 
+func TestValidatePropertyKeysNotConfigured(t *testing.T) {
+	signer, err := newEdgeTokenSignerFromStrings(t.Context(), "", "", "")
+	if err != nil {
+		t.Fatalf("failed to create signer with empty config: %v", err)
+	}
+	if err := signer.ValidateLifetime(t.Context(), time.Hour); err != errEdgeInvalidLifetime {
+		t.Fatalf("ValidateLifetime with keys absent: got err = %q, want errEdgeInvalidLifetime = %q", err, errEdgeInvalidLifetime)
+	}
+	err = signer.ValidateProperty(t.Context(), "freya.example.com", time.Hour)
+	if err == nil {
+		t.Fatal("expected error when keys not configured, got nil")
+	}
+	if err != errEdgeInvalidLifetime {
+		t.Fatalf("ValidateProperty with valid domain and keys absent: got err = %q, want errEdgeInvalidLifetime = %q (not errEdgeInvalidDomain = %q)",
+			err, errEdgeInvalidLifetime, errEdgeInvalidDomain)
+	}
+	if err == errEdgeInvalidDomain {
+		t.Fatal("domain error reported even when keys are absent and the domain is valid; bug confirmed")
+	}
+}
+
 func TestEdgeTokenKeysAndClaims(t *testing.T) {
 	private, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
