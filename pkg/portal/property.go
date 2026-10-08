@@ -577,24 +577,9 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 		period = common.TimePeriodToday
 	}
 
-	requested := []*PropertyStatsPoint{}
-	verified := []*PropertyStatsPoint{}
-
+	var requested, verified []*PropertyStatsPoint
 	if stats, err := s.TimeSeries.RetrievePropertyStatsByPeriod(ctx, org.ID, property.ID, period); err == nil {
-		anyNonZero := false
-		for _, st := range stats {
-			if (st.RequestsCount > 0) || (st.VerifiesCount > 0) {
-				anyNonZero = true
-			}
-			requested = append(requested, &PropertyStatsPoint{Date: st.Timestamp.Unix(), Value: st.RequestsCount})
-			verified = append(verified, &PropertyStatsPoint{Date: st.Timestamp.Unix(), Value: st.VerifiesCount})
-		}
-
-		// we want to show "No data available" on the client
-		if !anyNonZero {
-			requested = []*PropertyStatsPoint{}
-			verified = []*PropertyStatsPoint{}
-		}
+		requested, verified = buildPropertyStatsPoints(stats)
 	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve property stats", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -607,6 +592,23 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
+}
+
+func buildPropertyStatsPoints(stats []*common.TimePeriodStat) (requested, verified []*PropertyStatsPoint) {
+	anyNonZero := false
+	for _, st := range stats {
+		if st.RequestsCount > 0 || st.VerifiesCount > 0 {
+			anyNonZero = true
+		}
+		requested = append(requested, &PropertyStatsPoint{Date: st.Timestamp.Unix(), Value: st.RequestsCount})
+		verified = append(verified, &PropertyStatsPoint{Date: st.Timestamp.Unix(), Value: st.VerifiesCount})
+	}
+
+	// we want to show "No data available" on the client
+	if !anyNonZero {
+		return []*PropertyStatsPoint{}, []*PropertyStatsPoint{}
+	}
+	return requested, verified
 }
 
 func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*propertyDashboardRenderContext, *dbgen.Property, error) {
