@@ -2499,6 +2499,118 @@ func TestPutPropertyEdgeSettings(t *testing.T) {
 	}
 }
 
+func TestPutPropertyPreservesConcurrentEdgeDisable(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "edge-concurrent.example.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicDER, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := server.EdgeTokens
+	edgeConfig := config.NewBaseConfig(config.NewEnvConfig(func(string) string { return "" }))
+	edgeConfig.Add(config.NewStaticValue(common.EdgeTokenSigningPrivateKeyKey, string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER}))))
+	edgeConfig.Add(config.NewStaticValue(common.EdgeTokenSigningPublicKeyKey, string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: publicDER}))))
+	server.EdgeTokens = api.NewEdgeTokenSigner("", edgeConfig)
+	if err := server.EdgeTokens.Update(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { server.EdgeTokens = previous }()
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	enableForm := url.Values{}
+	enableForm.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	enableForm.Set(common.ParamEdgeTokenValidityInterval, "4")
+	enableForm.Set(common.ParamEdgeWidgetStartMode, "load")
+	enableReq := httptest.NewRequest(
+		http.MethodPut,
+		fmt.Sprintf("/org/%s/property/%s/edge", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))),
+		strings.NewReader(enableForm.Encode()),
+	)
+	enableReq.AddCookie(cookie)
+	enableReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	enableReq.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	enableReq.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+	enableView, err := server.putPropertyEdgeSettings(httptest.NewRecorder(), enableReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enableView.Model.(*edgePropertySettingsRenderContext).SuccessMessage == "" {
+		t.Fatalf("enabling edge protection failed: %+v", enableView)
+	}
+	enabled, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil || enabled.EdgeTokenValidityInterval != time.Hour {
+		t.Fatalf("edge protection not enabled with 1h validity: %+v, err=%v", enabled, err)
+	}
+
+	// Commit a concurrent authorized change that disables edge protection
+	// directly against the DB, leaving the property cache holding the stale
+	// 1-hour value that putProperty read at the start of its request. This
+	// reproduces the race window between putProperty's initial read and its
+	// UPDATE, without relying on goroutine timing.
+	if _, err := store.Pool.Exec(ctx, "UPDATE backend.properties SET edge_token_validity_interval = INTERVAL '0 seconds', updated_at = NOW() WHERE id = $1", property.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	basicForm := url.Values{}
+	basicForm.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	basicForm.Set(common.ParamName, property.Name+" renamed")
+	basicForm.Set(common.ParamDifficulty, strconv.Itoa(int(property.Level.Int16)))
+	basicForm.Set(common.ParamGrowth, strconv.Itoa(growthLevelToIndex(property.Growth)))
+	basicForm.Set(common.ParamValidityInterval, strconv.Itoa(puzzle.ValidityIntervalToIndex(property.ValidityInterval)))
+	basicReq := httptest.NewRequest(
+		http.MethodPut,
+		fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))),
+		strings.NewReader(basicForm.Encode()),
+	)
+	basicReq.AddCookie(cookie)
+	basicReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	basicReq.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	basicReq.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+	view, err := server.putProperty(httptest.NewRecorder(), basicReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model := view.Model.(*propertySettingsRenderContext); model.ErrorMessage != "" {
+		t.Fatalf("basic settings save returned error: %q", model.ErrorMessage)
+	}
+
+	stored, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Name != property.Name+" renamed" {
+		t.Errorf("basic settings save did not rename: got %q, want %q", stored.Name, property.Name+" renamed")
+	}
+	if stored.EdgeTokenValidityInterval != 0 {
+		t.Fatalf("basic settings save reverted concurrent edge disable: edge validity = %v, want 0", stored.EdgeTokenValidityInterval)
+	}
+}
+
 func TestPortalPropertyUpdatesChallenge(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

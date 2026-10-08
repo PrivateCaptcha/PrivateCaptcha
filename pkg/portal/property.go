@@ -867,7 +867,8 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 	growth := growthLevelFromValue(ctx, r.FormValue(common.ParamGrowth))
 	validityInterval := puzzle.ValidityIntervalFromIndex(ctx, r.FormValue(common.ParamValidityInterval))
 	edgeTokenValidity := property.EdgeTokenValidityInterval
-	if _, supplied := r.Form[common.ParamEdgeTokenValidityInterval]; supplied {
+	_, supplied := r.Form[common.ParamEdgeTokenValidityInterval]
+	if supplied {
 		edgeTokenValidity, err = edgeTokenValidityFromIndex(r.FormValue(common.ParamEdgeTokenValidityInterval))
 		if err != nil {
 			renderCtx.ErrorMessage = "Invalid edge token validity."
@@ -928,6 +929,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 			Challenge:                 dbgen.NullChallengeType{ChallengeType: challenge, Valid: true},
 			ValidityInterval:          validityInterval,
 			EdgeTokenValidityInterval: edgeTokenValidity,
+			PreserveEdgeTokenValidity: !supplied,
 			AllowSubdomains:           allowSubdomains,
 			AllowLocalhost:            allowLocalhost,
 			MaxReplayCount:            maxReplayCount,
