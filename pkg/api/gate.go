@@ -153,12 +153,15 @@ func (am *AuthMiddleware) GateSitekey(next http.Handler) http.Handler {
 				am.refreshEdgeSettingsBySitekey(ctx, sitekey)
 			}
 		case db.ErrCacheMiss, db.ErrNegativeCacheHit, db.ErrRecordNotFound:
-			property, _, propertyErr := am.Store.Impl().GetCachedPropertyBySitekey(ctx, sitekey)
+			property, propertyNeedsRefresh, propertyErr := am.Store.Impl().GetCachedPropertyBySitekey(ctx, sitekey)
 			switch propertyErr {
 			case nil:
 				if !property.Enabled || property.DeletedAt.Valid {
 					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 					return
+				}
+				if propertyNeedsRefresh {
+					am.refreshPropertyBySitekey(ctx, sitekey)
 				}
 			case db.ErrCacheMiss:
 				am.refreshPropertyBySitekey(ctx, sitekey)
