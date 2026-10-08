@@ -972,14 +972,16 @@ func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, proper
 			tlog.WarnContext(ctx, "Edge tokens are not enabled", "userID", user.ID, "orgID", orgID)
 			return common.StatusPropertyPermissionsError
 		}
-		if property, err := s.BusinessDB.Impl().GetCachedPropertyByID(ctx, int32(propertyID)); err == nil {
-			if err := s.EdgeTokens.ValidateProperty(ctx, property.Domain, edgeTTL); err != nil {
-				slog.ErrorContext(ctx, "Failed to validate property", "propID", property.ID, "domain", property.Domain, "ttl", edgeTTL, common.ErrAttr(err))
-				return common.StatusPropertyEdgeDomainError
-			}
+		property, err := s.BusinessDB.Impl().RetrieveOrgProperty(ctx, org, int32(propertyID))
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to load property for edge token validation", "propID", propertyID, common.ErrAttr(err))
+			return common.StatusPropertyEdgeDomainError
+		}
+		if err := s.EdgeTokens.ValidateProperty(ctx, property.Domain, edgeTTL); err != nil {
+			slog.ErrorContext(ctx, "Failed to validate property", "propID", property.ID, "domain", property.Domain, "ttl", edgeTTL, common.ErrAttr(err))
+			return common.StatusPropertyEdgeDomainError
 		}
 	}
-	// TODO: Validate the existing property domain before enabling edge tokens on update.
 
 	params := &dbgen.UpdatePropertyParams{
 		ID:                        int32(propertyID),

@@ -3605,14 +3605,20 @@ func (impl *BusinessStoreImpl) RetrieveUserOrganization(ctx context.Context, use
 }
 
 func (impl *BusinessStoreImpl) RetrieveOrgProperty(ctx context.Context, org *dbgen.Organization, propID int32) (*dbgen.Property, error) {
-	property, err := impl.retrieveOrgProperty(ctx, org.ID, propID)
+	var orgID int32
+	if org != nil {
+		orgID = org.ID
+	}
+	property, err := impl.retrieveOrgProperty(ctx, orgID, propID)
 	if err != nil {
 		return nil, err
 	}
 
-	if !property.OrgID.Valid || (property.OrgID.Int32 != org.ID) {
-		slog.ErrorContext(ctx, "Property org does not match", "propertyOrgID", property.OrgID.Int32, "orgID", org.ID)
-		return nil, ErrPermissions
+	if org != nil {
+		if !property.OrgID.Valid || (property.OrgID.Int32 != org.ID) {
+			slog.ErrorContext(ctx, "Property org does not match", "propertyOrgID", property.OrgID.Int32, "orgID", org.ID)
+			return nil, ErrPermissions
+		}
 	}
 
 	if property.DeletedAt.Valid {
