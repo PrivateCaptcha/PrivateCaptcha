@@ -217,3 +217,84 @@ func TestGatePagePropertyLifecycle(t *testing.T) {
 		t.Fatalf("invalid sitekey: %d", w.Code)
 	}
 }
+
+// staleStaticCache wraps a StaticCache and forces GetWithRefresh to report
+// needsRefresh=true for present (non-missing) entries, so the stale-but-present
+// refresh path can be exercised deterministically without waiting for the real
+// cache refresh threshold.
+type staleStaticCache struct {
+	*db.StaticCache[db.CacheKey, any]
+}
+
+func newStaleStaticCache(capacity int) *staleStaticCache {
+	return &staleStaticCache{StaticCache: db.NewStaticCache[db.CacheKey, any](capacity, &db.CacheMissingValue{})}
+}
+
+func (c *staleStaticCache) GetWithRefresh(ctx context.Context, key db.CacheKey) (any, bool, error) {
+	val, err := c.StaticCache.Get(ctx, key)
+	if err != nil {
+		return val, false, err
+	}
+	return val, true, nil
+}
+
+func TestGateSitekeyQueuesPropertyRefreshWhenStale(t *testing.T) {
+	sitekey := "11111111222233334444555555555555"
+	for _, tc := range []struct {
+		name           string
+		property       *dbgen.Property
+		negativeEdge   bool
+		status         int
+		edgeQueued     int
+		propertyQueued int
+	}{
+		{
+			name:           "stale enabled property with cold edge settings queues property refresh",
+			property:       &dbgen.Property{Enabled: true, EdgeTokenValidityInterval: time.Hour},
+			status:         http.StatusOK,
+			edgeQueued:     1,
+			propertyQueued: 1,
+		},
+		{
+			name:           "stale enabled property with negative edge settings still queues property refresh",
+			property:       &dbgen.Property{Enabled: true, EdgeTokenValidityInterval: time.Hour},
+			negativeEdge:   true,
+			status:         http.StatusOK,
+			edgeQueued:     0,
+			propertyQueued: 1,
+		},
+		{
+			name:           "stale disabled property still returns forbidden and does not queue refresh",
+			property:       &dbgen.Property{EdgeTokenValidityInterval: time.Hour},
+			status:         http.StatusForbidden,
+			edgeQueued:     0,
+			propertyQueued: 0,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cache := newStaleStaticCache(10)
+			store := db.NewBusinessEx(nil, cache)
+			if tc.property != nil {
+				if err := cache.Set(t.Context(), db.PropertyBySitekeyCacheKey(sitekey), tc.property); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.negativeEdge {
+				if err := cache.SetMissing(t.Context(), db.EdgeSettingsBySitekeyCacheKey(sitekey)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			auth := &AuthMiddleware{Store: store, SitekeyChan: make(chan string, 1), EdgeChan: make(chan string, 1), Metrics: monitoring.NewStub(), backpressureTimeout: time.Second}
+			w := httptest.NewRecorder()
+			auth.GateSitekey(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Context().Value(common.SitekeyContextKey) != sitekey {
+					t.Fatal("gate request is missing sitekey context")
+				}
+				w.WriteHeader(http.StatusOK)
+			})).ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/gate/page?sitekey="+sitekey, nil))
+			if w.Code != tc.status || len(auth.EdgeChan) != tc.edgeQueued || len(auth.SitekeyChan) != tc.propertyQueued {
+				t.Fatalf("status=%d edge queued=%d property queued=%d", w.Code, len(auth.EdgeChan), len(auth.SitekeyChan))
+			}
+		})
+	}
+}
