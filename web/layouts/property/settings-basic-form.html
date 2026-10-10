@@ -95,7 +95,7 @@
                 <div class="min-h-0 px-4 pb-6 pt-1">
                     {{- $argon2idAllowed := $.Ctx.Features.Enabled $.Const.FeatureArgon2ID $.Params.Org.ID }}
                     {{- $argon2idAvailable := and $argon2idAllowed $.Platform.Argon2IDEnabled }}
-                    {{- if or (and $.Platform.ShowChallengeType $argon2idAllowed) (not (eq $.Params.Property.Challenge .Const.ChallengeTypeBlake2b)) }}
+                    {{- if or $argon2idAllowed (not (eq $.Params.Property.Challenge .Const.ChallengeTypeBlake2b)) }}
                     <label for="{{ .Const.Challenge }}" class="pc-internal-form-label">Challenge type</label>
                     <div class="mt-2 mb-4">
                         <select id="{{ .Const.Challenge }}" name="{{ .Const.Challenge }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">

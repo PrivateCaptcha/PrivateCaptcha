@@ -1443,7 +1443,6 @@ func TestRenderHTML(t *testing.T) {
 					Enterprise:           enterprise,
 					Argon2IDMemoryBudget: config.NewStaticValue(common.Argon2IDMemoryBudgetKey, budget),
 					licenseService:       server.LicenseService,
-					ShowChallengeType:    true,
 				}
 
 				path := server.RelURL(strings.Join(tc.path, "/"))
