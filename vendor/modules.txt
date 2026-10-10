@@ -249,7 +249,7 @@ go.opentelemetry.io/otel/trace/internal/telemetry
 ## explicit; go 1.26.0
 golang.org/x/crypto/argon2
 golang.org/x/crypto/blake2b
-# golang.org/x/net v0.59.0
+# golang.org/x/net v0.60.0
 ## explicit; go 1.26.0
 golang.org/x/net/html
 golang.org/x/net/html/atom
