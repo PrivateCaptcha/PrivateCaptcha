@@ -289,6 +289,10 @@ func TestUpdatePropertyEdgeLifetimeRequiresDomain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	ipAddr, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "192.168.0.1"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
 	private, public := newTestEdgeKeyPair(t)
 	signer := NewEdgeTokenSigner(
 		"",
@@ -308,8 +312,11 @@ func TestUpdatePropertyEdgeLifetimeRequiresDomain(t *testing.T) {
 		uncached bool
 	}{
 		{"cached no domain with edge enabled", noDomain, time.Hour, common.StatusPropertyEdgeDomainError, false},
-		{"uncached no domain with edge enabled", noDomain, time.Hour, common.StatusOrgPermissionsError, true},
+		{"uncached no domain with edge enabled", noDomain, time.Hour, common.StatusPropertyEdgeDomainError, true},
 		{"cached localhost with edge enabled", localhost, time.Hour, common.StatusPropertyEdgeDomainError, false},
+		{"uncached localhost with edge enabled", localhost, time.Hour, common.StatusPropertyEdgeDomainError, true},
+		{"cached ip with edge enabled", ipAddr, time.Hour, common.StatusPropertyEdgeDomainError, false},
+		{"uncached ip with edge enabled", ipAddr, time.Hour, common.StatusPropertyEdgeDomainError, true},
 		{"cached domain with edge enabled", withDomain, time.Hour, common.StatusOK, false},
 		{"uncached domain with edge enabled", withDomain, time.Hour, common.StatusOK, true},
 		{"no domain with edge disabled", noDomain, 0, common.StatusOK, false},
