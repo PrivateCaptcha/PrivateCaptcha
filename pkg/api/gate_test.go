@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +17,17 @@ import (
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 )
+
+func TestGatePageCompletionPolicy(t *testing.T) {
+	page := NewGatePage("//cdn.privatecaptcha.com", "//api.privatecaptcha.com", "cdn.privatecaptcha.com", "api.privatecaptcha.com", false)
+	if !strings.Contains(page.csp, "connect-src 'self' https://api.privatecaptcha.com") || !strings.Contains(page.csp, "frame-ancestors 'none'") {
+		t.Fatal("gate CSP does not permit same-origin completion while denying framing")
+	}
+	hash := sha256.Sum256([]byte(gatePageScript))
+	if !strings.Contains(page.csp, "'sha256-"+base64.StdEncoding.EncodeToString(hash[:])+"'") {
+		t.Fatal("gate CSP does not authorize the exact hosted script")
+	}
+}
 
 func TestGatePageTemplateRenders(t *testing.T) {
 	for _, domain := range []string{"", "example.com"} {

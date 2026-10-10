@@ -18,13 +18,31 @@ import (
 const (
 	GateCompletePath = "/__privatecaptcha/complete"
 	// Defer error resets so the widget can finish handling the failed click.
-	gatePageScript = `function onCaptchaSolved() {
+	gatePageScript = `let gateCompleting = false;
+async function onCaptchaSolved(widget) {
+  if (gateCompleting) return;
+  gateCompleting = true;
   document.getElementById('gate-title').textContent = 'Challenge completed';
   document.getElementById('gate-status').textContent = 'Waiting for the website to respond...';
   document.getElementById('gate-help').hidden = true;
   const form = document.getElementById('gate-form');
   form.hidden = true;
-  form.requestSubmit();
+  try {
+    const response = await fetch(form.action, {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: new URLSearchParams(new FormData(form)),
+      redirect: 'error',
+      cache: 'no-store'
+    });
+    if (response.status !== 204) throw new Error('Verification failed');
+    window.location.reload();
+  } catch (_) {
+    gateCompleting = false;
+    form.hidden = false;
+    document.getElementById('gate-title').textContent = 'Verify your request';
+    onCaptchaError(widget);
+  }
 }
 function onCaptchaError(widget) {
   setTimeout(function() { widget.reset({ startMode: 'click' }); }, 0);
@@ -136,7 +154,7 @@ func NewGatePage(cdnURL, apiURL, cdnDomain, apiDomain string, allowHTTP bool) *G
 		puzzleURL: apiURL + "/" + common.PuzzleEndpoint,
 		csp: "default-src 'none'; base-uri 'none'; object-src 'none'; form-action 'self'; script-src " + cdnSource + " 'sha256-" + base64.StdEncoding.EncodeToString(
 			scriptHash[:],
-		) + "' 'wasm-unsafe-eval'; connect-src " + apiSource + "; worker-src blob:; style-src 'unsafe-inline'; img-src data: " + cdnSource,
+		) + "' 'wasm-unsafe-eval'; connect-src 'self' " + apiSource + "; worker-src blob:; style-src 'unsafe-inline'; img-src data: " + cdnSource + "; frame-ancestors 'none'",
 	}
 }
 
