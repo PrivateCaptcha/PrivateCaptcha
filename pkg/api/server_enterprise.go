@@ -75,7 +75,7 @@ func (s *Server) requestUser(ctx context.Context, readOnly bool) (*dbgen.User, *
 }
 
 func (s *Server) requestUserEx(ctx context.Context, readOnly bool, requiresSubscription bool) (*dbgen.User, *dbgen.APIKey, error) {
-	portalOwnerSource := &apiKeyOwnerSource{Store: s.BusinessDB, scope: dbgen.ApiKeyScopePortal}
+	portalOwnerSource := &apiKeyOwnerSource{Store: s.BusinessDB, Auth: s.Auth, scope: dbgen.ApiKeyScopePortal}
 	id, _, err := portalOwnerSource.OwnerID(ctx, time.Now().UTC())
 	if err != nil {
 		return nil, nil, err
