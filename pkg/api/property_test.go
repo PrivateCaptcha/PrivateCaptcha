@@ -169,6 +169,213 @@ func TestNormalizeApiPropertyInput(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "snaps sub-bucket input to nearest lower bucket",
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 60,
+					MaxReplayCount:  5,
+				},
+			},
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 300,
+					MaxReplayCount:  5,
+				},
+			},
+		},
+		{
+			name: "snaps in-range non-canonical input to nearest bucket",
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 1200,
+					MaxReplayCount:  1,
+				},
+			},
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 600,
+					MaxReplayCount:  1,
+				},
+			},
+		},
+		{
+			name: "validity tie rounds down to lower bucket",
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 2700,
+					MaxReplayCount:  1,
+				},
+			},
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 1800,
+					MaxReplayCount:  1,
+				},
+			},
+		},
+		{
+			name: "validity snaps to nearest upper bucket",
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 3000,
+					MaxReplayCount:  1,
+				},
+			},
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 3600,
+					MaxReplayCount:  1,
+				},
+			},
+		},
+		{
+			name: "snaps 40m down to 30m bucket",
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 2400,
+					MaxReplayCount:  1,
+				},
+			},
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 1800,
+					MaxReplayCount:  1,
+				},
+			},
+		},
+		{
+			name: "preserves exact bucket value 6h",
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 21600,
+					MaxReplayCount:  1,
+				},
+			},
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 21600,
+					MaxReplayCount:  1,
+				},
+			},
+		},
+		{
+			name: "snaps 7h down to 6h instead of silently dropping to 1h",
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 25200,
+					MaxReplayCount:  1,
+				},
+			},
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 21600,
+					MaxReplayCount:  1,
+				},
+			},
+		},
+		{
+			name: "snaps 2h down to 1h",
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 7200,
+					MaxReplayCount:  1,
+				},
+			},
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 3600,
+					MaxReplayCount:  1,
+				},
+			},
+		},
+		{
+			name: "minimum positive input snaps to 5m bucket",
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 1,
+					MaxReplayCount:  1,
+				},
+			},
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           int(common.DifficultyLevelSmall),
+					Growth:          "medium",
+					ValiditySeconds: 300,
+					MaxReplayCount:  1,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
