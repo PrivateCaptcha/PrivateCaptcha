@@ -581,12 +581,12 @@ func (s *Server) applyAPIKeyRateLimits(ctx context.Context, r *http.Request, api
 	if apiKey == nil {
 		return
 	}
-	if apiKey.RequestsPerSecond > 0 && !math.IsInf(apiKey.RequestsPerSecond, 0) {
+	if apiKey.RequestsPerSecond > 0 && !math.IsInf(apiKey.RequestsPerSecond, 0) && apiKey.RequestsBurst > 0 {
 		interval := float64(time.Second) / apiKey.RequestsPerSecond
 		s.RateLimiter.UpdateRequestLimits(r, uint32(apiKey.RequestsBurst), time.Duration(interval))
 	} else {
-		slog.WarnContext(ctx, "Skipping per-key rate limit update due to invalid RequestsPerSecond",
-			"requestsPerSecond", apiKey.RequestsPerSecond)
+		slog.WarnContext(ctx, "Skipping per-key rate limit update due to invalid RequestsPerSecond/RequestsBurst",
+			"requestsPerSecond", apiKey.RequestsPerSecond, "requestsBurst", apiKey.RequestsBurst)
 	}
 }
 
