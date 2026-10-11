@@ -65,6 +65,17 @@ func (s *Server) Org(user *dbgen.User, r *http.Request) (*dbgen.Organization, db
 	return org, level, nil
 }
 
+// assertOrgMember rejects users who are only invited (not full members) of the
+// org. It returns db.ErrPermissions when the access level is missing or
+// AccessLevelInvited, logging the rejection; otherwise it returns nil.
+func (s *Server) assertOrgMember(ctx context.Context, org *dbgen.Organization, level dbgen.NullAccessLevel, user *dbgen.User) error {
+	if !level.Valid || level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		return db.ErrPermissions
+	}
+	return nil
+}
+
 func (s *Server) OrgID(r *http.Request) (int32, error) {
 	ctx := r.Context()
 
