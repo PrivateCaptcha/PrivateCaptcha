@@ -49,6 +49,78 @@ func TestAuditLogPersistsSessionHashWithoutSessionID(t *testing.T) {
 	}
 }
 
+func TestAuditLogRecordEventAfterShutdownDoesNotPanic(t *testing.T) {
+	querier := &auditCaptureQuerier{QuerierStub: &QuerierStub{}}
+	auditLog := NewAuditLog(querier, 1)
+	ctx := context.WithValue(t.Context(), common.RateLimitKeyContextKey, netip.MustParseAddr("192.0.2.1"))
+	event := &common.AuditLogEvent{
+		UserID:    1,
+		Action:    common.AuditLogActionDelete,
+		EntityID:  1,
+		TableName: TableNameUsers,
+		OldValue:  &AuditLogUser{Name: "test"},
+	}
+
+	auditLog.Shutdown()
+
+	// Detached producers (e.g. HandleDeleteAccount) can outlive Shutdown() and
+	// call RecordEvent afterwards. Sending on a closed channel panics
+	// unconditionally in Go, so this must not panic once the channel is no
+	// longer closed during Shutdown.
+	panicked := false
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				panicked = true
+			}
+		}()
+		auditLog.RecordEvent(ctx, event, common.AuditLogSourcePortal)
+	}()
+
+	if panicked {
+		t.Fatal("RecordEvent panicked after Shutdown: send on closed persistChan")
+	}
+
+	select {
+	case queued := <-auditLog.persistChan:
+		if queued != event {
+			t.Fatalf("queued event mismatch: got %+v", queued)
+		}
+	default:
+		t.Fatal("expected event to be buffered in persistChan after Shutdown")
+	}
+}
+
+func TestAuditLogRepeatedShutdownDoesNotPanic(t *testing.T) {
+	querier := &auditCaptureQuerier{QuerierStub: &QuerierStub{}}
+	auditLog := NewAuditLog(querier, 1)
+	ctx := context.WithValue(t.Context(), common.RateLimitKeyContextKey, netip.MustParseAddr("192.0.2.1"))
+	event := &common.AuditLogEvent{
+		UserID:    1,
+		Action:    common.AuditLogActionDelete,
+		EntityID:  1,
+		TableName: TableNameUsers,
+		OldValue:  &AuditLogUser{Name: "test"},
+	}
+
+	panicked := false
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				panicked = true
+			}
+		}()
+		auditLog.Stop()
+		auditLog.Shutdown()
+		auditLog.Shutdown()
+		auditLog.RecordEvent(ctx, event, common.AuditLogSourcePortal)
+	}()
+
+	if panicked {
+		t.Fatal("repeated Shutdown (and Stop+Shutdown) panicked")
+	}
+}
+
 func TestNewUpdateEdgeSettingsAuditLogEvent(t *testing.T) {
 	property := &dbgen.Property{ID: 100, Name: "Main site", OrgID: Int(10), CreatorID: Int(20)}
 	event := newUpdateEdgeSettingsAuditLogEvent(property, dbgen.EdgeWidgetStartModeClick, dbgen.EdgeWidgetStartModeLoad, &dbgen.User{ID: 99})
