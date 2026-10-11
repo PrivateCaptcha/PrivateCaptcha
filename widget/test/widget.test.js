@@ -1538,24 +1538,12 @@ test('getPuzzle advertises the bundle version', async () => {
     }
 });
 
-test('getPuzzle per-call timeout triggers with 1 attempt', async (t) => {
-    const http = await import('node:http');
-    const { getPuzzle } = await import('../js/puzzle.js');
-
-    // Create a slow server that takes 500ms to respond
-    const server = http.createServer((req, res) => {
-        setTimeout(() => {
-            res.writeHead(200, { 'Content-Type': 'text/plain' });
-            res.end('slow response');
-        }, 500);
-    });
-
-    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    const port = server.address().port;
-
-    const originalFetch = globalThis.fetch;
-
-    globalThis.fetch = async (url, options = {}) => {
+// Shared fetch override backed by node:http. When `withSignal` is true, the
+// per-call AbortSignal is wired to req.destroy() so aborts cancel the request;
+// when false the in-flight request keeps going (models fetch polyfills / mocks
+// that don't propagate abort), used by the 5xx-after-abort race tests.
+function makeNodeHttpFetch(http, { withSignal = false } = {}) {
+    return async (url, options = {}) => {
         return new Promise((resolve, reject) => {
             const parsedUrl = new URL(url);
             const req = http.request({
@@ -1577,7 +1565,7 @@ test('getPuzzle per-call timeout triggers with 1 attempt', async (t) => {
                 });
             });
 
-            if (options.signal) {
+            if (withSignal && options.signal) {
                 options.signal.addEventListener('abort', () => {
                     req.destroy();
                     reject(new Error('Aborted'));
@@ -1588,6 +1576,26 @@ test('getPuzzle per-call timeout triggers with 1 attempt', async (t) => {
             req.end();
         });
     };
+}
+
+test('getPuzzle per-call timeout triggers with 1 attempt', async (t) => {
+    const http = await import('node:http');
+    const { getPuzzle } = await import('../js/puzzle.js');
+
+    // Create a slow server that takes 500ms to respond
+    const server = http.createServer((req, res) => {
+        setTimeout(() => {
+            res.writeHead(200, { 'Content-Type': 'text/plain' });
+            res.end('slow response');
+        }, 500);
+    });
+
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+
+    const originalFetch = globalThis.fetch;
+
+    globalThis.fetch = makeNodeHttpFetch(http, { withSignal: true });
 
     try {
         const startTime = Date.now();
@@ -1677,32 +1685,9 @@ async function setup5xxAfterAbortHarness() {
     const port = server.address().port;
     const originalFetch = globalThis.fetch;
 
-    globalThis.fetch = async (url, options = {}) => {
-        return new Promise((resolve, reject) => {
-            const parsedUrl = new URL(url);
-            const req = http.request({
-                hostname: parsedUrl.hostname,
-                port: parsedUrl.port,
-                path: parsedUrl.pathname + parsedUrl.search,
-                method: options.method || 'GET',
-                headers: options.headers ? Object.fromEntries(options.headers) : {}
-            }, (res) => {
-                let data = '';
-                res.on('data', (chunk) => data += chunk);
-                res.on('end', () => {
-                    resolve({
-                        ok: res.statusCode >= 200 && res.statusCode < 300,
-                        status: res.statusCode,
-                        text: async () => data,
-                        json: async () => JSON.parse(data)
-                    });
-                });
-            });
-
-            req.on('error', reject);
-            req.end();
-        });
-    };
+    // No signal wiring: the in-flight request is not cancelled on abort,
+    // modeling the abort-then-resolve race (response resolves after abort).
+    globalThis.fetch = makeNodeHttpFetch(http);
 
     return {
         port,
