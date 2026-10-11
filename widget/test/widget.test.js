@@ -1291,6 +1291,145 @@ test('CaptchaWidget reports Argon2id provider initialization errors', async () =
     assert.ok(widget._errorCode > 0);
 });
 
+test('fetch failure after user clicks checkbox renders STATE_ERROR, not STATE_VERIFIED (auto mode, public API)', { timeout: 4000 }, async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { STATE_ERROR } = await import('../js/html.js');
+
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = async () => ({
+        ok: false, status: 403,
+        json: async () => ({ error: 'forbidden' }),
+        text: async () => '',
+        headers: { get: () => null },
+    });
+
+    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}"></div></form>`;
+    const element = document.querySelector('.private-captcha');
+    let errored = 0, finished = 0;
+    element.addEventListener('privatecaptcha:error', () => { errored++; });
+    element.addEventListener('privatecaptcha:finish', () => { finished++; });
+
+    let widget;
+    try {
+        widget = new CaptchaWidget(element);
+        // Drive through the public interaction surface: onChecked is the handler
+        // bound to 'privatecaptcha:checked' (widget.js:64). It sets _userStarted=true
+        // and calls _triggerSolving -> init(true).
+        widget.onChecked({ stopPropagation() {} });
+        await new Promise(r => setTimeout(r, 500));
+
+        assert.strictEqual(widget._state, STATE_ERROR, 'widget internal state must be ERROR');
+        const pcElement = widget._element.querySelector('private-captcha');
+        assert.strictEqual(pcElement._state, STATE_ERROR, 'rendered UI state must be ERROR, not VERIFIED');
+        const shadow = pcElement._root;
+        assert.ok(!shadow.querySelector('svg.verified'), 'must not render the green verified checkmark on fetch failure');
+        assert.ok(!shadow.textContent.includes('Verified'), `must not show "Verified" label; got: ${shadow.textContent}`);
+        assert.ok(shadow.querySelector('#pc-debug'), 'error caption span is present');
+        assert.ok(shadow.querySelector('#pc-checkbox'), 'error checkbox is present so the user can retry');
+        assert.strictEqual(finished, 0, 'signalFinished must NOT be called on fetch failure');
+        assert.strictEqual(errored, 1, 'signalErrored must be called once');
+        assert.strictEqual(widget.solution(), null, 'no degenerate solution payload must be injected');
+        assert.strictEqual(element.querySelector('input[name="private-captcha-solution"]'), null, 'no hidden solution input in the form');
+        assert.ok(widget._errorCode > 0, 'error code is set');
+    } finally {
+        globalThis.fetch = previousFetch;
+        if (widget?._expiryTimeout) { clearTimeout(widget._expiryTimeout); }
+        widget?._workersPool?.stop();
+    }
+});
+
+test('fetch failure in load mode renders STATE_ERROR, not STATE_VERIFIED', { timeout: 4000 }, async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { STATE_ERROR } = await import('../js/html.js');
+
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = async () => ({
+        ok: false, status: 403,
+        json: async () => ({ error: 'forbidden' }),
+        text: async () => '',
+        headers: { get: () => null },
+    });
+
+    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}" data-start-mode="load"></div></form>`;
+    const element = document.querySelector('.private-captcha');
+    let errored = 0, finished = 0;
+    element.addEventListener('privatecaptcha:error', () => { errored++; });
+    element.addEventListener('privatecaptcha:finish', () => { finished++; });
+
+    let widget;
+    try {
+        widget = new CaptchaWidget(element);
+        await new Promise(r => setTimeout(r, 500));
+
+        assert.strictEqual(widget._state, STATE_ERROR, 'widget internal state must be ERROR');
+        const pcElement = widget._element.querySelector('private-captcha');
+        assert.strictEqual(pcElement._state, STATE_ERROR, 'rendered UI state must be ERROR, not VERIFIED');
+        const shadow = pcElement._root;
+        assert.ok(!shadow.querySelector('svg.verified'), 'must not render the green verified checkmark on fetch failure');
+        assert.ok(!shadow.textContent.includes('Verified'), `must not show "Verified" label; got: ${shadow.textContent}`);
+        assert.ok(shadow.querySelector('#pc-checkbox'), 'error checkbox is present so the user can retry');
+        assert.strictEqual(finished, 0, 'signalFinished must NOT be called on fetch failure');
+        assert.strictEqual(errored, 1, 'signalErrored must be called once');
+        assert.strictEqual(widget.solution(), null, 'no degenerate solution payload must be injected');
+        assert.strictEqual(element.querySelector('input[name="private-captcha-solution"]'), null, 'no hidden solution input in the form');
+        assert.ok(widget._errorCode > 0, 'error code is set');
+    } finally {
+        globalThis.fetch = previousFetch;
+        if (widget?._expiryTimeout) { clearTimeout(widget._expiryTimeout); }
+        widget?._workersPool?.stop();
+    }
+});
+
+test('fetch failure then reset() restores the empty checkbox and allows retry (auto mode)', { timeout: 4000 }, async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { STATE_EMPTY, STATE_ERROR } = await import('../js/html.js');
+
+    let calls = 0;
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+        calls++;
+        return {
+            ok: false, status: 403,
+            json: async () => ({ error: 'forbidden' }),
+            text: async () => '',
+            headers: { get: () => null },
+        };
+    };
+
+    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}"></div></form>`;
+    const element = document.querySelector('.private-captcha');
+    let errored = 0, resetEvent = 0;
+    element.addEventListener('privatecaptcha:error', () => { errored++; });
+    element.addEventListener('privatecaptcha:reset', () => { resetEvent++; });
+
+    let widget;
+    try {
+        widget = new CaptchaWidget(element);
+        widget.onChecked({ stopPropagation() {} });
+        await new Promise(r => setTimeout(r, 500));
+
+        assert.strictEqual(widget._state, STATE_ERROR);
+        assert.strictEqual(errored, 1);
+
+        // Recovery: an errored-callback (or any integrator) can reset the widget.
+        widget.reset({ startMode: 'click' });
+        assert.strictEqual(widget._state, STATE_EMPTY, 'reset restores STATE_EMPTY');
+        assert.strictEqual(widget.solution(), null);
+        assert.strictEqual(element.querySelector('input[name="private-captcha-solution"]'), null, 'no stale hidden input after reset');
+        assert.strictEqual(resetEvent, 1, 'reset event fires');
+        const pcElement = widget._element.querySelector('private-captcha');
+        assert.strictEqual(pcElement._state, STATE_EMPTY, 'UI is back to the empty checkbox');
+        const shadow = pcElement._root;
+        assert.ok(!shadow.querySelector('svg.verified'), 'no verified checkmark after reset');
+        assert.ok(shadow.querySelector('#pc-checkbox'), 'empty checkbox is available for the user to retry');
+        assert.strictEqual(calls, 1, 'reset in click mode does not refetch');
+    } finally {
+        globalThis.fetch = previousFetch;
+        if (widget?._expiryTimeout) { clearTimeout(widget._expiryTimeout); }
+        widget?._workersPool?.stop();
+    }
+});
+
 for (const mode of ['wasm', 'noble', 'blake']) {
     test(`CaptchaWidget ${mode} search failure after partial work emits only error and permits retry`, async () => {
         const { CaptchaWidget } = await import('../js/widget.js');
