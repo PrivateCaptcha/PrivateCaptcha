@@ -14,6 +14,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
+	"github.com/PuerkitoBio/goquery"
 )
 
 type stubRenderFeatureFlags bool
@@ -1481,4 +1482,127 @@ func TestRenderHTML(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestRenderReplayCheckboxAutoEnablesCount(t *testing.T) {
+	ctx := t.Context()
+
+	render := func(t *testing.T, allowReplay bool, storedCount int) *goquery.Document {
+		t.Helper()
+		prop := stubProperty("Foo", "123")
+		prop.AllowReplay = allowReplay
+		prop.MaxReplayCount = storedCount
+		model := &propertySettingsRenderContext{
+			propertyDashboardRenderContext: propertyDashboardRenderContext{
+				CsrfRenderContext: stubToken(),
+				Property:          prop,
+				Org:               stubOrg("123"),
+				CanEdit:           true,
+			},
+			difficultyLevelsRenderContext: createDifficultyLevelsRenderContext(),
+		}
+		platformCtx := &PlatformRenderContext{
+			GitCommit:            "qwerty123",
+			Enterprise:           true,
+			Argon2IDMemoryBudget: config.NewStaticValue(common.Argon2IDMemoryBudgetKey, "256"),
+			licenseService:       server.LicenseService,
+		}
+		reqCtx := &RequestContext{
+			Path:     server.RelURL("/org/123/property/456/edit"),
+			Features: stubRenderFeatureFlags(true),
+		}
+		buf, err := server.RenderResponse(ctx, propertySettingsBasicFormTemplate, model, reqCtx, platformCtx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return portal_tests.ParseHTML(t, buf)
+	}
+
+	changeHandler := func(t *testing.T, doc *goquery.Document) string {
+		t.Helper()
+		checkbox := doc.Find(`input[name="allow_replay"]`)
+		if checkbox.Length() != 1 {
+			t.Fatalf("expected one allow_replay checkbox, got %d", checkbox.Length())
+		}
+		// AssertWellFormedHTML rewrites @change -> change for its XML check, but
+		// goquery parses the original buffer, so the attribute is named @change.
+		if v, ok := checkbox.Attr("@change"); ok {
+			return v
+		}
+		if v, ok := checkbox.Attr("change"); ok {
+			return v
+		}
+		t.Fatal("allow_replay checkbox is missing an @change handler")
+		return ""
+	}
+
+	t.Run("DisabledPrepopulatesOneWithChangeHandler", func(t *testing.T) {
+		doc := render(t, false, 1)
+
+		handler := changeHandler(t, doc)
+		if !strings.Contains(handler, "replayEnabled") {
+			t.Errorf("expected @change handler to guard on replayEnabled, got: %s", handler)
+		}
+		if !strings.Contains(handler, "$refs.maxReplayCount.value") {
+			t.Errorf("expected @change handler to reference max_replay_count input, got: %s", handler)
+		}
+		if !strings.Contains(handler, "<= 1") {
+			t.Errorf("expected @change handler to compare count <= 1, got: %s", handler)
+		}
+		if !strings.Contains(handler, "'2'") {
+			t.Errorf("expected @change handler to bump count to '2', got: %s", handler)
+		}
+
+		countInput := doc.Find(`input[name="max_replay_count"]`)
+		if countInput.Length() != 1 {
+			t.Fatalf("expected one max_replay_count input, got %d", countInput.Length())
+		}
+		if v, ok := countInput.Attr("value"); !ok || v != "1" {
+			t.Errorf("expected pre-populated max_replay_count value=1, got %q (ok=%v)", v, ok)
+		}
+
+		// The Alpine container must initialize replayEnabled from the stored state
+		// so the checkbox renders unchecked for disabled properties.
+		container := doc.Find(`div.pc-advanced-settings`)
+		if container.Length() != 1 {
+			t.Fatalf("expected one pc-advanced-settings container, got %d", container.Length())
+		}
+		xdata, ok := container.Attr("x-data")
+		if !ok {
+			t.Fatal("expected pc-advanced-settings container to have x-data")
+		}
+		if !strings.Contains(xdata, "replayEnabled: false") {
+			t.Errorf("expected x-data to initialize replayEnabled: false, got: %s", xdata)
+		}
+	})
+
+	t.Run("EnabledReflectsStoredCount", func(t *testing.T) {
+		doc := render(t, true, 3)
+
+		// The @change handler must be present regardless of the stored state.
+		handler := changeHandler(t, doc)
+		if !strings.Contains(handler, "'2'") {
+			t.Errorf("expected @change handler to bump count to '2', got: %s", handler)
+		}
+
+		countInput := doc.Find(`input[name="max_replay_count"]`)
+		if countInput.Length() != 1 {
+			t.Fatalf("expected one max_replay_count input, got %d", countInput.Length())
+		}
+		if v, ok := countInput.Attr("value"); !ok || v != "3" {
+			t.Errorf("expected pre-populated max_replay_count value=3, got %q (ok=%v)", v, ok)
+		}
+
+		container := doc.Find(`div.pc-advanced-settings`)
+		if container.Length() != 1 {
+			t.Fatalf("expected one pc-advanced-settings container, got %d", container.Length())
+		}
+		xdata, ok := container.Attr("x-data")
+		if !ok {
+			t.Fatal("expected pc-advanced-settings container to have x-data")
+		}
+		if !strings.Contains(xdata, "replayEnabled: true") {
+			t.Errorf("expected x-data to initialize replayEnabled: true, got: %s", xdata)
+		}
+	})
 }

@@ -2237,6 +2237,123 @@ func TestPutPropertyRenameOnlyPreservesOutOfDifficultyRange(t *testing.T) {
 	}
 }
 
+func TestPutPropertyEnableReplayWithDefaultCount(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Verifies that checking "Accept repeated solutions" (allow_replay) enables
+	// replay even when the accompanying max_replay_count is left at the
+	// disabled value of 1 (or empty). Before the fix, this combination was a
+	// silent no-op: the handler persisted 1 and the checkbox reverted to
+	// unchecked. After the fix, the checkbox intent is honored and a
+	// replay-enabling count (2) is persisted.
+	cases := []struct {
+		name            string
+		allowReplay     bool
+		replayCount     string
+		newName         string
+		initialCount    int32
+		wantAllowReplay bool
+		wantStoredCount int32
+		wantUpdate      bool
+	}{
+		{name: "NoRenameCountOne", allowReplay: true, replayCount: "1", newName: "", initialCount: 1, wantAllowReplay: true, wantStoredCount: 2, wantUpdate: true},
+		{name: "NoRenameCountEmpty", allowReplay: true, replayCount: "", newName: "", initialCount: 1, wantAllowReplay: true, wantStoredCount: 2, wantUpdate: true},
+		{name: "RenameCountOne", allowReplay: true, replayCount: "1", newName: "renamed", initialCount: 1, wantAllowReplay: true, wantStoredCount: 2, wantUpdate: true},
+		{name: "EnableExplicitCount", allowReplay: true, replayCount: "5", newName: "", initialCount: 1, wantAllowReplay: true, wantStoredCount: 5, wantUpdate: true},
+		{name: "DisableReplay", allowReplay: false, replayCount: "", newName: "", initialCount: 2, wantAllowReplay: false, wantStoredCount: 1, wantUpdate: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			user, org, err := db_tests.CreateNewAccountForTest(ctx, store, "EnableReplay"+tc.name, testPlan)
+			if err != nil {
+				t.Fatalf("Failed to create account: %v", err)
+			}
+
+			params := db_tests.CreateNewPropertyParams(user.ID, "replay-"+tc.name+".com")
+			params.MaxReplayCount = tc.initialCount
+			property, _, err := server.Store.Impl().CreateNewProperty(ctx, params, org)
+			if err != nil {
+				t.Fatalf("Failed to create new property: %v", err)
+			}
+			if property.MaxReplayCount != tc.initialCount {
+				t.Fatalf("Setup failed: stored MaxReplayCount = %d, want %d", property.MaxReplayCount, tc.initialCount)
+			}
+
+			srv := http.NewServeMux()
+			server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+			cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+			if err != nil {
+				t.Fatal(err)
+			}
+			csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+			submitName := property.Name
+			if tc.newName != "" {
+				submitName = property.Name + "-" + tc.newName
+			}
+
+			form := url.Values{}
+			form.Set(common.ParamCSRFToken, csrfToken)
+			form.Set(common.ParamName, submitName)
+			form.Set(common.ParamDifficulty, strconv.Itoa(int(property.Level.Int16)))
+			form.Set(common.ParamGrowth, strconv.Itoa(growthLevelToIndex(property.Growth)))
+			form.Set(common.ParamValidityInterval, strconv.Itoa(puzzle.ValidityIntervalToIndex(property.ValidityInterval)))
+			if tc.allowReplay {
+				form.Set(common.ParamAllowReplay, "on")
+			}
+			form.Set(common.ParamMaxReplayCount, tc.replayCount)
+
+			req := httptest.NewRequest("PUT", fmt.Sprintf("/org/%s/property/%s",
+				server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))),
+				strings.NewReader(form.Encode()))
+			req.AddCookie(cookie)
+			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+			req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+			req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+
+			w := httptest.NewRecorder()
+			viewModel, err := server.putProperty(w, req)
+			if err != nil {
+				t.Fatalf("Expected no error, got: %v", err)
+			}
+			if viewModel == nil {
+				t.Fatal("Expected ViewModel, got nil")
+			}
+
+			renderCtx, ok := viewModel.Model.(*propertySettingsRenderContext)
+			if !ok {
+				t.Fatalf("Expected Model to be *propertySettingsRenderContext, got %T", viewModel.Model)
+			}
+
+			if tc.wantUpdate && renderCtx.SuccessMessage == "" {
+				t.Error("Expected SuccessMessage to be set after updating property")
+			}
+			if !tc.wantUpdate && renderCtx.SuccessMessage != "" {
+				t.Errorf("Expected no update, but SuccessMessage was set: %q", renderCtx.SuccessMessage)
+			}
+
+			if renderCtx.Property.AllowReplay != tc.wantAllowReplay {
+				t.Errorf("AllowReplay = %v, want %v", renderCtx.Property.AllowReplay, tc.wantAllowReplay)
+			}
+			if renderCtx.Property.MaxReplayCount != int(tc.wantStoredCount) {
+				t.Errorf("MaxReplayCount = %d, want %d", renderCtx.Property.MaxReplayCount, tc.wantStoredCount)
+			}
+
+			persisted, err := store.Impl().GetCachedPropertyByID(ctx, property.ID)
+			if err != nil {
+				t.Fatalf("Failed to fetch persisted property: %v", err)
+			}
+			if persisted.MaxReplayCount != tc.wantStoredCount {
+				t.Errorf("persisted MaxReplayCount = %d, want %d", persisted.MaxReplayCount, tc.wantStoredCount)
+			}
+		})
+	}
+}
+
 func TestPutPropertyEdgeSettings(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
