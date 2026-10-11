@@ -155,6 +155,11 @@ type VarLeakyBucket[TKey comparable] struct {
 	// total count of items added to the bucket. NOTE: in the unlikely case of uint64 overflow
 	// we just reset all stats and continue as usual
 	count uint64
+	// fractional leak credit carried across Add calls. Without it, int64(leakRate*intervals)
+	// drops to 0 whenever leakRate*intervals < 1.0 (common for low-traffic properties seeded
+	// with leakRate < 1), and lastAccessTime advances by the floor, permanently losing the
+	// fractional leak so the bucket never drains and the level climbs without bound.
+	leakResidual float64
 }
 
 func (lb *VarLeakyBucket[TKey]) GobEncode() ([]byte, error) {
@@ -205,6 +210,7 @@ func (lb *VarLeakyBucket[TKey]) Init(key TKey, capacity TLevel, leakInterval tim
 	lb.leakRate = 1.0 // to start like the ConstLeakyBucket, we leak 1 level per leakInterval
 	lb.pendingSum = 0
 	lb.count = 1 // this is needed to have "previous" empty bucket for averages
+	lb.leakResidual = 0
 }
 
 func (lb *VarLeakyBucket[TKey]) LeakInterval() time.Duration {
@@ -224,12 +230,26 @@ func (lb *VarLeakyBucket[TKey]) seed(tnow time.Time, historicalLevel TLevel, lea
 	lb.leakRate = leakRate
 	lb.count = max(sampleCount, 1)
 	// Historical traffic is represented by leakRate; pendingSum contains only live traffic.
+	// Reset any carried fractional leak credit so the seeded rate starts cleanly.
+	lb.leakResidual = 0
 	return lb.level, TLevel(max(0, int64(lb.level)-int64(currLevel)))
 }
 
 func (lb *VarLeakyBucket[TKey]) Level(tnow time.Time) TLevel {
 	diff := tnow.Sub(lb.lastAccessTime)
-	var leaked = int64(lb.leakRate * float64(diff) / float64(lb.leakInterval))
+	if diff < 0 {
+		diff = 0
+	}
+	intervals := max(diff/lb.leakInterval, 0)
+	// Mirror Add()'s leak computation (floored intervals + carried residual) so Level()
+	// and Add() report the same value for the same wall-clock instant, fixing the
+	// Level-vs-persisted-level divergence that previously arose because Level()
+	// used the full fractional diff while Add() floored to whole intervals.
+	leakFloat := lb.leakRate*float64(intervals) + lb.leakResidual
+	leaked := int64(leakFloat)
+	if leaked < 0 {
+		leaked = 0
+	}
 	var currLevel = max(0, int64(lb.level)-leaked)
 	return TLevel(currLevel)
 }
@@ -237,7 +257,17 @@ func (lb *VarLeakyBucket[TKey]) Level(tnow time.Time) TLevel {
 func (lb *VarLeakyBucket[TKey]) Add(tnow time.Time, n TLevel) (TLevel, TLevel) {
 	diff := tnow.Sub(lb.lastAccessTime)
 	intervals := max(diff/lb.leakInterval, 0)
-	var leaked = int64(lb.leakRate * float64(intervals))
+	// Carry the fractional leak across Add calls so leakRate < 1 (e.g. low-traffic
+	// properties seeded at total/12) still drains once enough fractional credit
+	// accumulates, instead of silently truncating to 0 on every call. The integer
+	// truncation of leakRate*intervals used here loses only the sub-1 fractional
+	// part, which leakResidual preserves for the next call.
+	leakFloat := lb.leakRate*float64(intervals) + lb.leakResidual
+	leaked := int64(leakFloat)
+	lb.leakResidual = leakFloat - float64(leaked)
+	if leaked < 0 {
+		leaked = 0
+	}
 	if diff > 0 {
 		lb.lastAccessTime = lb.lastAccessTime.Add(time.Duration(intervals) * lb.leakInterval)
 	}

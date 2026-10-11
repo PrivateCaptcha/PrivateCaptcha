@@ -421,3 +421,147 @@ func TestVarLeakyBucketSeedNoUnderflowWhenLevelExceedsCapacity(t *testing.T) {
 		t.Errorf("Expected Added=0 when level(10) > capacity(5), got %v (uint32 underflow)", added)
 	}
 }
+
+// TestVarLeakyBucketFractionalLeakDrains reproduces the production bug for
+// low-traffic properties post-backfill: a bucket seeded with leakRate = total/12 < 1
+// (the case for any property with fewer than 12 requests in the last hour, the
+// common case for staging/internal properties) would never drain because
+// int64(leakRate * intervals) truncates to 0 on every Add while lastAccessTime
+// advanced, discarding the fractional leak permanently and growing the level
+// without bound. With leakResidual carrying the fractional credit, the bucket
+// drains at approximately the running-mean rate.
+func TestVarLeakyBucketFractionalLeakDrains(t *testing.T) {
+	leakInterval := 5 * time.Minute
+	t0 := time.Now().Truncate(leakInterval)
+	bucket := NewVarBucket[int32](0, math.MaxUint32, leakInterval, t0)
+	bucket.seed(t0, 12 /*level*/, 1.0/12.0 /*rate*/, 12 /*count*/)
+
+	for i := 1; i <= 100; i++ {
+		_, _ = bucket.Add(t0.Add(time.Duration(i)*leakInterval), 1)
+	}
+
+	// Without the fix: level == 12 + 100 == 112 (zero leak across all 100 Adds).
+	// With the fix: level is well below 100 because fractional leak accumulates
+	// and the bucket drains approximately at the running-mean rate r_k = k/(k+12).
+	if bucket.level >= 100 {
+		t.Errorf("Fractional leak not applied: level=%d after 100 Adds at leakRate<1 (want < 100, residual=%v)", bucket.level, bucket.leakResidual)
+	}
+	if bucket.level == 0 {
+		t.Errorf("Bucket overdrained: level=0 after 100 Adds with leakRate<1 (residual=%v)", bucket.leakResidual)
+	}
+	// The carried residual must always stay in [0, 1) so each Add credits at most
+	// one additional unit of leak. A residual >= 1 would mean we are double-counting.
+	if bucket.leakResidual < 0 || bucket.leakResidual >= 1.0 {
+		t.Errorf("leakResidual out of range [0, 1): %v", bucket.leakResidual)
+	}
+}
+
+// TestVarLeakyBucketResidualCarriesFractionalLeak isolates the residual behavior.
+// With leakRate = 0.5 an Add over exactly one interval produces leakFloat = 0.5
+// and stores the remainder in leakResidual instead of discarding it. A second
+// Add accumulates the carried 0.5 onto the new 0.5 fractional, reaching 1.0 and
+// draining exactly one unit. A count >>= 1 keeps the running-mean update from
+// meaningfully perturbing leakRate across the two-step test.
+func TestVarLeakyBucketResidualCarriesFractionalLeak(t *testing.T) {
+	interval := 1 * time.Second
+	t0 := time.Now().Truncate(interval)
+	bucket := NewVarBucket[int32](0, math.MaxUint32, interval, t0)
+	bucket.leakRate = 0.5
+	bucket.count = 1 << 60
+	bucket.level = 10
+	bucket.leakResidual = 0
+
+	curr, added := bucket.Add(t0.Add(interval), 0)
+	if added != 0 {
+		t.Errorf("Add(n=0) returned added=%v, want 0", added)
+	}
+	if curr != 10 {
+		t.Errorf("First Add should drain 0 (leakFloat=0.5 truncates), got level=%v (want 10)", curr)
+	}
+	if math.Abs(bucket.leakResidual-0.5) > 1e-9 {
+		t.Errorf("Residual after first Add should be ~0.5, got %v", bucket.leakResidual)
+	}
+
+	curr, _ = bucket.Add(t0.Add(2*interval), 0)
+	if curr != 9 {
+		t.Errorf("Second Add should drain 1 (0.5 carried + 0.5 new = 1.0), got level=%v (want 9)", curr)
+	}
+	if math.Abs(bucket.leakResidual) > 1e-9 {
+		t.Errorf("Residual after draining Add should be ~0, got %v", bucket.leakResidual)
+	}
+}
+
+// TestVarLeakyBucketLevelMatchesAddAfterPartialLeak verifies the Level/Add
+// divergence fix (the report's Evidence B). Previously Level() used the full
+// fractional diff while Add() floored to whole intervals before computing the
+// leak, so they reported different levels for the same wall-clock instant.
+// After the fix both use the floored-intervals-plus-residual formula, so
+// Level(t) returns the same value Add(t, 0) will persist into lb.level.
+func TestVarLeakyBucketLevelMatchesAddAfterPartialLeak(t *testing.T) {
+	interval := 1 * time.Second
+	t0 := time.Now().Truncate(interval)
+	bucket := NewVarBucket[int32](0, math.MaxUint32, interval, t0)
+	bucket.leakRate = 1.5
+	bucket.count = 1 << 60
+	bucket.level = 50
+	bucket.leakResidual = 0
+
+	// Off-grid query time: 1.5 intervals after t0. The original Level() computed
+	// leaked = int64(1.5 * 1.5) = 2 (full diff), while Add() computed
+	// leaked = int64(1.5 * 1) = 1 (floored intervals); they disagreed.
+	query := t0.Add(3 * interval / 2)
+
+	reportedLevel := bucket.Level(query)
+	addedLevel, _ := bucket.Add(query, 0)
+	persistedLevel := bucket.level
+
+	if reportedLevel != addedLevel {
+		t.Errorf("Level(t)=%v != Add(t,0).CurrLevel=%v at the same wall-clock instant", reportedLevel, addedLevel)
+	}
+	if reportedLevel != persistedLevel {
+		t.Errorf("Level(t)=%v != persisted lb.level=%v after Add(t, 0)", reportedLevel, persistedLevel)
+	}
+	if reportedLevel != 49 {
+		t.Errorf("Expected drained level 49 (50 - 1), got %v", reportedLevel)
+	}
+}
+
+// TestVarLeakyBucketGobDecodeLeavesResidualZero verifies that buckets encoded
+// before the leakResidual field was introduced still decode cleanly and that
+// leakResidual defaults to its zero value. The gob wire format is intentionally
+// unchanged so existing on-disk caches keep loading; the residual rebuilds from
+// the next Add onward, losing at most one unit of fractional leak credit.
+func TestVarLeakyBucketGobDecodeLeavesResidualZero(t *testing.T) {
+	tnow := time.Now().Truncate(1 * time.Second)
+	b1 := NewVarBucket("test-key", 100, 10*time.Millisecond, tnow)
+	b1.Add(tnow, 50)
+	b1.leakRate = 1.5
+	b1.pendingSum = 10
+	b1.count = 5
+	// Charge the residual to a non-zero value before encoding; the encoder does
+	// not serialize it, so the decoder must report zero.
+	b1.leakResidual = 0.75
+
+	enc, err := b1.GobEncode()
+	if err != nil {
+		t.Fatalf("GobEncode failed: %v", err)
+	}
+
+	b2 := &VarLeakyBucket[string]{}
+	if err := b2.GobDecode(enc); err != nil {
+		t.Fatalf("GobDecode failed: %v", err)
+	}
+
+	if b2.leakResidual != 0 {
+		t.Errorf("Decoded leakResidual = %v, want 0 (residual is not part of the gob wire format)", b2.leakResidual)
+	}
+	// Existing fields must round-trip intact so old caches keep loading.
+	if b1.leakRate != b2.leakRate || b1.pendingSum != b2.pendingSum || b1.count != b2.count {
+		t.Errorf("Decoded var fields mismatch: leakRate %v/%v, pendingSum %v/%v, count %v/%v",
+			b2.leakRate, b1.leakRate, b2.pendingSum, b1.pendingSum, b2.count, b1.count)
+	}
+	if b1.level != b2.level || !b1.lastAccessTime.Equal(b2.lastAccessTime) {
+		t.Errorf("Decoded base fields mismatch: level %v/%v, lastAccessTime %v/%v",
+			b2.level, b1.level, b2.lastAccessTime, b1.lastAccessTime)
+	}
+}
