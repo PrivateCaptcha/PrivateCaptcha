@@ -565,3 +565,45 @@ func TestVarLeakyBucketGobDecodeLeavesResidualZero(t *testing.T) {
 			b2.level, b1.level, b2.lastAccessTime, b1.lastAccessTime)
 	}
 }
+
+// TestVarLeakyBucketLevelWithPastTime exercises the negative-diff guard in Level().
+// When tnow is before lastAccessTime the elapsed diff is negative; Level() must
+// clamp it to 0 and return the current level instead of inflating the leak.
+func TestVarLeakyBucketLevelWithPastTime(t *testing.T) {
+	interval := 1 * time.Second
+	t0 := time.Now().Truncate(interval)
+	bucket := NewVarBucket[int32](0, math.MaxUint32, interval, t0)
+	bucket.level = 5
+	bucket.leakRate = 1.0
+
+	// Query before lastAccessTime: diff < 0, so the guard sets diff = 0 and
+	// intervals = 0, yielding leaked = 0 and the unchanged level.
+	got := bucket.Level(t0.Add(-interval))
+	if got != 5 {
+		t.Errorf("Level() with past time should return current level, got %v want 5", got)
+	}
+}
+
+// TestVarLeakyBucketNegativeLeakRateGuards covers the leaked < 0 defensive
+// guards in both Level() and Add(). A negative leakRate would otherwise produce
+// a negative leaked amount; the guard clamps it to 0 so the level does not
+// grow from a negative leak.
+func TestVarLeakyBucketNegativeLeakRateGuards(t *testing.T) {
+	interval := 1 * time.Second
+	t0 := time.Now().Truncate(interval)
+	bucket := NewVarBucket[int32](0, math.MaxUint32, interval, t0)
+	bucket.level = 5
+	bucket.leakRate = -1.0
+	bucket.leakResidual = 0
+
+	// Level(): leakFloat = -1.0*1 + 0 = -1.0, int64(-1.0) = -1 < 0, guard sets leaked = 0.
+	if got := bucket.Level(t0.Add(interval)); got != 5 {
+		t.Errorf("Level() with negative leakRate should return current level, got %v want 5", got)
+	}
+
+	// Add(): same negative-leak path; leaked clamped to 0 so level stays at 5.
+	curr, added := bucket.Add(t0.Add(interval), 0)
+	if curr != 5 || added != 0 {
+		t.Errorf("Add() with negative leakRate should not change level, got curr=%v added=%v want 5/0", curr, added)
+	}
+}
