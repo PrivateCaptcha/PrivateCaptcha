@@ -210,12 +210,10 @@ export class CaptchaWidget {
             this._errorCode = errors.ERROR_FETCH_PUZZLE;
             this._internalError = e.internalError || e.message;
             this.setState(STATE_ERROR);
-            const shouldFinalize = this.shouldFinalizeWork();
-            this.setProgressState(shouldFinalize ? STATE_VERIFIED : STATE_EMPTY);
-            if (shouldFinalize) {
-                this.saveSolutions();
-                this.signalErrored();
-            }
+            this._solution = null;
+            this.ensureNoSolutionField();
+            this.setProgressState(STATE_EMPTY);
+            this.signalErrored();
         }
     }
 
