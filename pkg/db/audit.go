@@ -42,7 +42,11 @@ func (al *AuditLog) Stop() {
 
 func (al *AuditLog) Shutdown() {
 	slog.Debug("Shutting down audit log persistence")
-	close(al.persistChan)
+	// background goroutines (e.g. HandleDeleteAccount) can still call RecordEvent()
+	// after Shutdown(), so we don't close the channel here: sending on a closed
+	// channel panics unconditionally in Go and would silently drop audit events
+	// via the recover() in the async-task/job wrappers.
+	// close(al.persistChan)
 }
 
 func (al *AuditLog) PersistAuditLog(ctx context.Context, batch []*common.AuditLogEvent) error {
