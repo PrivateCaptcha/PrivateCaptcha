@@ -898,6 +898,13 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 	var maxReplayCount int32 = 1
 	if _, allowReplay := r.Form[common.ParamAllowReplay]; allowReplay {
 		maxReplayCount = parseMaxReplayCount(ctx, r.FormValue(common.ParamMaxReplayCount))
+		// "Accept repeated solutions" expresses intent to enable replay; a count
+		// of 1 means "replay disabled". The portal template bumps the count to 2 on
+		// the client, but honor the checkbox intent server-side too: a checked box
+		// must never persist a disabled count (see 1d62e7f1 for the integer model).
+		if maxReplayCount <= 1 {
+			maxReplayCount = 2
+		}
 	}
 
 	var auditEvent *common.AuditLogEvent
