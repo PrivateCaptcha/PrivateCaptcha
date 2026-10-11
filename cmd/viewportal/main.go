@@ -99,12 +99,7 @@ func stubGateCompleteHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
-	w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
-	_, _ = w.Write(
-		[]byte(
-			`<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="icon" href="data:,"><title>Challenge submitted</title></head><body style="margin: 0; min-height: 100vh; background-color: green"></body></html>`,
-		),
-	)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func servePage(p portal.ViewPortalPage) http.HandlerFunc {
