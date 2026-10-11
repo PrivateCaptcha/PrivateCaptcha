@@ -48,10 +48,12 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, r *http
 				reqCtx.UserName = username
 			}
 
+			if authority, ok := sess.Authority(); ok && authority.State == session.StateAuthenticated && authority.UserID > 0 {
+				reqCtx.LoggedIn = true
+				data.Token = s.XSRF.Token(strconv.Itoa(int(authority.UserID)))
+			}
+
 			if reqCtx.LoggedIn {
-				if authority, ok := sess.Authority(); ok && authority.State == session.StateAuthenticated && authority.UserID > 0 {
-					data.Token = s.XSRF.Token(strconv.Itoa(int(authority.UserID)))
-				}
 				if _, ok := sess.Get(ctx, session.KeyFirstSession).(bool); ok {
 					reqCtx.FirstSession = true
 				}
@@ -129,6 +131,12 @@ func (s *Server) expired(w http.ResponseWriter, r *http.Request) {
 		ErrorCode:    http.StatusForbidden,
 		ErrorMessage: "Session expired",
 		Detail:       "Please begin again.",
+	}
+
+	if sess, err := s.Sessions.Get(r); err == nil {
+		if authority, ok := sess.Authority(); ok && authority.State == session.StateAuthenticated && authority.UserID > 0 {
+			data.Token = s.XSRF.Token(strconv.Itoa(int(authority.UserID)))
+		}
 	}
 
 	common.WriteHeaders(w, common.CachedHeaders)
