@@ -360,6 +360,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 	if sess, err := s.Sessions.Get(r); err == nil {
 		if authority, ok := sess.Authority(); ok && authority.State == session.StateAuthenticated && authority.UserID > 0 {
 			userID = &authority.UserID
+			reqCtx.LoggedIn = true
 		}
 		if username, ok := sess.Get(ctx, session.KeyUserName).(string); ok {
 			reqCtx.UserName = username

@@ -73,6 +73,87 @@ func TestSignedInErrorPageIncludesLogoutCSRF(t *testing.T) {
 	assertLogoutCSRF(t, w.Body, user.ID)
 }
 
+func TestSignedInErrorPageOnPublicChainIncludesLogoutCSRF(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/error/500", nil)
+	req.SetPathValue(common.ParamCode, "500")
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	server.error(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %v, want %v", w.Code, http.StatusInternalServerError)
+	}
+
+	assertLogoutCSRF(t, w.Body, user.ID)
+}
+
+func TestAnonymousErrorPageOmitsLogoutCSRF(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	for _, code := range []int{http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError} {
+		req := httptest.NewRequest(http.MethodGet, "/error/"+strconv.Itoa(code), nil)
+		req.SetPathValue(common.ParamCode, strconv.Itoa(code))
+		w := httptest.NewRecorder()
+		server.error(w, req)
+
+		if w.Code != code {
+			t.Errorf("status = %v, want %v", w.Code, code)
+		}
+
+		document := portal_tests.ParseHTML(t, w.Body)
+		if _, ok := document.Find("body").Attr("hx-headers"); ok {
+			t.Errorf("anonymous error page (%d) must not include inherited HTMX CSRF headers", code)
+		}
+	}
+}
+
+func TestExpiredPageIncludesLogoutCSRFForAuthenticatedUser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/expired", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	server.expired(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	assertLogoutCSRF(t, w.Body, user.ID)
+}
+
 func TestNotFoundHandler(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
