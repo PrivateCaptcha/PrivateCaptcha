@@ -1660,13 +1660,12 @@ test('getPuzzle global timeout triggers with 2 attempts', async (t) => {
     console.log('✓ getPuzzle global timeout test passed');
 });
 
-test('getPuzzle honors globalTimeout when fetch resolves with 5xx after abort (abort-then-resolve race)', async (t) => {
+// Shared harness for the two 5xx-after-abort race tests below: spins up a
+// server that returns 500 after 30ms (i.e. AFTER the 20ms global timeout has
+// fired) and installs a fetch override that does NOT wire the per-call
+// AbortSignal to req.destroy(), modeling the abort-then-resolve race.
+async function setup5xxAfterAbortHarness() {
     const http = await import('node:http');
-    const { getPuzzle } = await import('../js/puzzle.js');
-
-    // Server that returns 500 after 30ms, i.e. AFTER the 20ms global timeout
-    // has already fired. This models the abort-then-resolve race: by the time
-    // the response arrives at the JS fetch promise, globalSignal is aborted.
     const server = http.createServer((req, res) => {
         setTimeout(() => {
             res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -1676,13 +1675,8 @@ test('getPuzzle honors globalTimeout when fetch resolves with 5xx after abort (a
 
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const port = server.address().port;
-
     const originalFetch = globalThis.fetch;
 
-    // Custom fetch that resolves with the 5xx response WITHOUT wiring the
-    // per-call AbortSignal to req.destroy(). This models fetch polyfills and
-    // mock-fetch helpers where the in-flight request is not cancelled when
-    // the abort fires (the response has already resolved at the JS layer).
     globalThis.fetch = async (url, options = {}) => {
         return new Promise((resolve, reject) => {
             const parsedUrl = new URL(url);
@@ -1710,12 +1704,23 @@ test('getPuzzle honors globalTimeout when fetch resolves with 5xx after abort (a
         });
     };
 
+    return {
+        port,
+        cleanup: () => {
+            globalThis.fetch = originalFetch;
+            server.close();
+        }
+    };
+}
+
+async function assert5xxAfterAbortGlobalTimeout(getPuzzle, harness, attempts) {
+    const { port, cleanup } = harness;
     try {
         const startTime = Date.now();
         await assert.rejects(
             async () => {
                 await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
-                    attempts: 5,
+                    attempts,
                     timeout: 5000,
                     globalTimeout: 20
                 });
@@ -1733,86 +1738,29 @@ test('getPuzzle honors globalTimeout when fetch resolves with 5xx after abort (a
         // remaining backoff attempts (~17s). Budget 200ms for jitter.
         assert.ok(elapsed < 200, `Should honor global timeout (took ${elapsed}ms, budget 200ms)`);
     } finally {
-        globalThis.fetch = originalFetch;
-        server.close();
+        cleanup();
     }
+}
 
+test('getPuzzle honors globalTimeout when fetch resolves with 5xx after abort (abort-then-resolve race)', async (t) => {
+    const { getPuzzle } = await import('../js/puzzle.js');
+    const harness = await setup5xxAfterAbortHarness();
+    // With attempts=5 both the wait() abort check and the 5xx retry-branch
+    // globalSignal.aborted check are exercised (wait() is called between
+    // attempts). Pre-fix this took ~17s and reported internalError='HTTP 500'.
+    await assert5xxAfterAbortGlobalTimeout(getPuzzle, harness, 5);
     console.log('✓ getPuzzle honors globalTimeout on 5xx-after-abort race');
 });
 
 test('getPuzzle 5xx-after-abort race with single attempt classifies abort as global timeout', async (t) => {
-    const http = await import('node:http');
     const { getPuzzle } = await import('../js/puzzle.js');
-
+    const harness = await setup5xxAfterAbortHarness();
     // With maxAttempts=1 the retry loop never calls wait(), so the only thing
     // that can classify the abort correctly is the globalSignal.aborted check
     // on the 5xx retry path (the bug-fixed continue branch). Without that
     // check, the loop falls through to the "maximum retry attempts" error with
     // internalError='HTTP 500' instead of 'Global time out'.
-    const server = http.createServer((req, res) => {
-        setTimeout(() => {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end('{"error": "server error"}');
-        }, 30);
-    });
-
-    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    const port = server.address().port;
-
-    const originalFetch = globalThis.fetch;
-
-    globalThis.fetch = async (url, options = {}) => {
-        return new Promise((resolve, reject) => {
-            const parsedUrl = new URL(url);
-            const req = http.request({
-                hostname: parsedUrl.hostname,
-                port: parsedUrl.port,
-                path: parsedUrl.pathname + parsedUrl.search,
-                method: options.method || 'GET',
-                headers: options.headers ? Object.fromEntries(options.headers) : {}
-            }, (res) => {
-                let data = '';
-                res.on('data', (chunk) => data += chunk);
-                res.on('end', () => {
-                    resolve({
-                        ok: res.statusCode >= 200 && res.statusCode < 300,
-                        status: res.statusCode,
-                        text: async () => data,
-                        json: async () => JSON.parse(data)
-                    });
-                });
-            });
-
-            req.on('error', reject);
-            req.end();
-        });
-    };
-
-    try {
-        const startTime = Date.now();
-        await assert.rejects(
-            async () => {
-                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
-                    attempts: 1,
-                    timeout: 5000,
-                    globalTimeout: 20
-                });
-            },
-            (err) => {
-                assert.strictEqual(err.message, 'Fetch timed out',
-                    `Expected 'Fetch timed out', got: ${err.message}`);
-                assert.strictEqual(err.internalError, 'Global time out',
-                    `Expected internalError='Global time out', got: ${err.internalError}`);
-                return true;
-            }
-        );
-        const elapsed = Date.now() - startTime;
-        assert.ok(elapsed < 200, `Should honor global timeout (took ${elapsed}ms, budget 200ms)`);
-    } finally {
-        globalThis.fetch = originalFetch;
-        server.close();
-    }
-
+    await assert5xxAfterAbortGlobalTimeout(getPuzzle, harness, 1);
     console.log('✓ getPuzzle classifies abort as Global time out on single-attempt 5xx race');
 });
 
