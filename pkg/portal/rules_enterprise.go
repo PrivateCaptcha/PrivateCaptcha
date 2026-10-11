@@ -486,12 +486,8 @@ func (s *Server) getPropertyNewRule(w http.ResponseWriter, r *http.Request) (*Vi
 		return nil, err
 	}
 
-	org, level, err := s.Org(user, r)
+	org, err := s.OrgAsMember(user, r)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := s.assertOrgMember(ctx, org, level, user); err != nil {
 		return nil, err
 	}
 
@@ -516,12 +512,8 @@ func (s *Server) getOrgNewRule(w http.ResponseWriter, r *http.Request) (*ViewMod
 		return nil, err
 	}
 
-	org, level, err := s.Org(user, r)
+	org, err := s.OrgAsMember(user, r)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := s.assertOrgMember(ctx, org, level, user); err != nil {
 		return nil, err
 	}
 
@@ -878,12 +870,8 @@ func (s *Server) getPropertyEditRule(w http.ResponseWriter, r *http.Request) (*V
 		return nil, err
 	}
 
-	org, level, err := s.Org(user, r)
+	org, err := s.OrgAsMember(user, r)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := s.assertOrgMember(ctx, org, level, user); err != nil {
 		return nil, err
 	}
 
@@ -922,12 +910,8 @@ func (s *Server) getOrgEditRule(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, err
 	}
 
-	org, level, err := s.Org(user, r)
+	org, err := s.OrgAsMember(user, r)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := s.assertOrgMember(ctx, org, level, user); err != nil {
 		return nil, err
 	}
 
