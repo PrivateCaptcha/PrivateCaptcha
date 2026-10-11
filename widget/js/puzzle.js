@@ -49,6 +49,9 @@ export async function getPuzzle(endpoint, sitekey, options = {}) {
 
 function wait(delay, signal) {
     return new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+            return reject(signal.reason || new Error('Aborted'));
+        }
         const timeoutId = setTimeout(resolve, delay);
         if (signal) {
             signal.addEventListener('abort', () => {
@@ -117,9 +120,16 @@ async function fetchWithBackoff(url, options = {}) {
                 !ACCEPTABLE_CLIENT_ERRORS.includes(response.status)) {
                 // we don't retry on most client errors
                 break;
-            } else {
-                continue;
             }
+
+            if (globalSignal.aborted) {
+                clearTimeout(globalTimeoutId);
+                lastError = 'Global time out';
+                const error = new Error('Fetch timed out');
+                error.internalError = lastError;
+                throw error;
+            }
+            continue;
         } catch (err) {
             clearTimeout(fetchTimeoutId);
             globalSignal.removeEventListener('abort', globalAbortHandler);
