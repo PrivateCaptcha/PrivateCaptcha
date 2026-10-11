@@ -486,9 +486,13 @@ func (s *Server) getPropertyNewRule(w http.ResponseWriter, r *http.Request) (*Vi
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
 	}
 
 	property, err := s.Property(org, r)
@@ -512,9 +516,13 @@ func (s *Server) getOrgNewRule(w http.ResponseWriter, r *http.Request) (*ViewMod
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
 	}
 
 	if !s.checkUserOrgAccess(user, org) {
@@ -870,9 +878,13 @@ func (s *Server) getPropertyEditRule(w http.ResponseWriter, r *http.Request) (*V
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
 	}
 
 	property, err := s.Property(org, r)
@@ -910,9 +922,13 @@ func (s *Server) getOrgEditRule(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
 	}
 
 	if !s.checkUserOrgAccess(user, org) {
