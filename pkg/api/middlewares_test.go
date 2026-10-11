@@ -494,3 +494,140 @@ func TestAuthMiddlewareFormNormalizesExternalIDToLowerCase(t *testing.T) {
 		}
 	})
 }
+
+func TestAuthMiddlewareAPIKeyNormalizesSecretToLowerCase(t *testing.T) {
+	apiKey := &dbgen.APIKey{
+		ID:         77,
+		ExternalID: db.TestPropertyUUID,
+		UserID:     pgtype.Int4{Int32: 1, Valid: true},
+		Enabled:    pgtype.Bool{Valid: true, Bool: true},
+		ExpiresAt:  pgtype.Timestamptz{Valid: true, Time: time.Now().Add(time.Hour)},
+		Scope:      dbgen.ApiKeyScopePuzzle,
+	}
+	lowerSecret := db.UUIDToSecret(apiKey.ExternalID)
+	upperSecret := "pc_" + strings.ToUpper(strings.TrimPrefix(lowerSecret, db.APIKeyPrefix))
+	if lowerSecret == upperSecret {
+		t.Fatalf("test UUID should contain hex letters so uppercasing produces a distinct secret")
+	}
+	if len(upperSecret) != db.SecretLen {
+		t.Fatalf("uppercase secret length = %d, want %d", len(upperSecret), db.SecretLen)
+	}
+	if got := db.UUIDFromSecret(upperSecret); got != apiKey.ExternalID {
+		t.Fatalf("uppercase secret should decode to the same UUID")
+	}
+
+	newMiddleware := func(cache common.Cache[db.CacheKey, any]) *AuthMiddleware {
+		store := db.NewBusinessWithQuerier(nil, &db.QuerierStub{}, cache)
+		return &AuthMiddleware{
+			Store:               store,
+			Limiter:             errUserLimiter{},
+			APIKeyLastUsedChan:  make(chan int32, 1),
+			backpressureTimeout: time.Second,
+			Metrics:             monitoring.NewStub(),
+		}
+	}
+
+	t.Run("CacheHitCanonicalizesLookupAndContextValue", func(t *testing.T) {
+		cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
+		if err := cache.Set(context.Background(), db.APIKeyCacheKey(lowerSecret), apiKey); err != nil {
+			t.Fatalf("Failed to seed cache: %v", err)
+		}
+		am := newMiddleware(cache)
+
+		var capturedAPIKey *dbgen.APIKey
+		var capturedSecret string
+		var gotSecret bool
+		handler := am.APIKey(headerAPIKey, dbgen.ApiKeyScopePuzzle)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedAPIKey, _ = r.Context().Value(common.APIKeyContextKey).(*dbgen.APIKey)
+			capturedSecret, gotSecret = r.Context().Value(common.SecretContextKey).(string)
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req.Header.Set(common.HeaderAPIKey, upperSecret)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d (uppercase-hex secret should hit the lowercase cache entry after normalization)", w.Code, http.StatusOK)
+		}
+		if capturedAPIKey == nil {
+			t.Fatal("APIKeyContextKey not set; expected cache hit after normalizing uppercase-hex secret to the lowercase cache key")
+		}
+		if capturedAPIKey.ID != apiKey.ID {
+			t.Fatalf("APIKeyContextKey ID = %d, want %d", capturedAPIKey.ID, apiKey.ID)
+		}
+		if gotSecret {
+			t.Fatalf("SecretContextKey should not be set on cache hit, got %q", capturedSecret)
+		}
+	})
+
+	t.Run("CacheMissCanonicalizesContextValue", func(t *testing.T) {
+		cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
+		am := newMiddleware(cache)
+
+		var capturedAPIKey *dbgen.APIKey
+		var capturedSecret string
+		var gotSecret bool
+		handler := am.APIKey(headerAPIKey, dbgen.ApiKeyScopePuzzle)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedAPIKey, _ = r.Context().Value(common.APIKeyContextKey).(*dbgen.APIKey)
+			capturedSecret, gotSecret = r.Context().Value(common.SecretContextKey).(string)
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req.Header.Set(common.HeaderAPIKey, upperSecret)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d (cache miss should be postponed, not rejected)", w.Code, http.StatusOK)
+		}
+		if capturedAPIKey != nil {
+			t.Fatal("APIKeyContextKey should not be set on cache miss")
+		}
+		if !gotSecret {
+			t.Fatal("SecretContextKey not set; expected the secret to be stored on cache miss for postponed DB lookup")
+		}
+		if capturedSecret != lowerSecret {
+			t.Fatalf("SecretContextKey = %q, want lowercase %q (secret should be canonicalized before being stored in context)", capturedSecret, lowerSecret)
+		}
+
+		// The downstream postponed-DB-lookup path (apiKeyOwnerSource.apiKey in
+		// server.go) calls RetrieveAPIKey with the context-stored secret.  Verify
+		// that the canonical lowercase secret would hit the primed cache, proving
+		// no fragmentation occurs when the entry is later warmed by CreateAPIKey.
+		if err := cache.Set(context.Background(), db.APIKeyCacheKey(lowerSecret), apiKey); err != nil {
+			t.Fatalf("Failed to seed cache: %v", err)
+		}
+		if _, err := am.Store.Impl().GetCachedAPIKey(context.Background(), capturedSecret); err != nil {
+			t.Fatalf("GetCachedAPIKey(canonical secret from context) err = %v, want nil (context-stored secret should hit the canonical cache entry)", err)
+		}
+	})
+
+	t.Run("LowerCaseSecretUnchanged", func(t *testing.T) {
+		cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
+		if err := cache.Set(context.Background(), db.APIKeyCacheKey(lowerSecret), apiKey); err != nil {
+			t.Fatalf("Failed to seed cache: %v", err)
+		}
+		am := newMiddleware(cache)
+
+		var capturedAPIKey *dbgen.APIKey
+		handler := am.APIKey(headerAPIKey, dbgen.ApiKeyScopePuzzle)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			capturedAPIKey, _ = r.Context().Value(common.APIKeyContextKey).(*dbgen.APIKey)
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req.Header.Set(common.HeaderAPIKey, lowerSecret)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+		}
+		if capturedAPIKey == nil || capturedAPIKey.ID != apiKey.ID {
+			t.Fatalf("APIKeyContextKey = %v, want key ID %d (canonical lowercase secret should still hit the cache)", capturedAPIKey, apiKey.ID)
+		}
+	})
+}

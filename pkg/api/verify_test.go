@@ -2112,3 +2112,66 @@ func TestMaintenanceWithoutEdgeTokenPreservesSuccess(t *testing.T) {
 		t.Fatalf("maintenance without an edge token lost verification metadata: %+v", response)
 	}
 }
+
+func TestVerifyUppercaseHexSecretHitsLowercaseCacheEntry(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+
+	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	lowerSecret := db.UUIDToSecret(apikey.ExternalID)
+	upperSecret := "pc_" + strings.ToUpper(strings.TrimPrefix(lowerSecret, db.APIKeyPrefix))
+	if lowerSecret == upperSecret {
+		t.Fatalf("test UUID should contain hex letters so uppercasing produces a distinct secret")
+	}
+	if got := db.UUIDFromSecret(upperSecret); got != apikey.ExternalID {
+		t.Fatalf("uppercase secret should decode to the same UUID")
+	}
+
+	// CreateAPIKey primes the cache under the canonical lowercase key.
+	if _, err := store.Impl().GetCachedAPIKey(ctx, lowerSecret); err != nil {
+		t.Fatalf("GetCachedAPIKey(lower) err = %v, want nil (CreateAPIKey should prime the lowercase cache entry)", err)
+	}
+
+	// Produce a valid puzzle solution.
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := fmt.Sprintf("%s.%s", solutionsStr, puzzleStr)
+
+	// Verify with the uppercase-hex secret: should succeed (correctness preserved) and
+	// hit the warm lowercase cache entry (no DB read, no fragmentation).
+	resp, err := verifySuite(payload, upperSecret, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("Expected status OK for uppercase-hex secret, got %d: %s", resp.StatusCode, body)
+	}
+
+	// The lowercase cache entry must still be warm after the uppercase request.
+	if _, err := store.Impl().GetCachedAPIKey(ctx, lowerSecret); err != nil {
+		t.Fatalf("GetCachedAPIKey(lower) err = %v after uppercase verify, want nil (normalization should hit the lowercase entry, not evict it)", err)
+	}
+}

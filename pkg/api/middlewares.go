@@ -769,6 +769,7 @@ func (am *AuthMiddleware) APIKey(keyFunc func(r *http.Request) string, scope dbg
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			secret := keyFunc(r)
+			secret = strings.ToLower(secret)
 			if len(secret) != db.SecretLen {
 				slog.Log(ctx, common.LevelTrace, "Invalid secret length", "length", len(secret))
 				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
