@@ -2,6 +2,7 @@ package portal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -4608,4 +4609,372 @@ func TestAttackerCannotUpdateVictimOrgRule(t *testing.T) {
 	if updatedRule.Name != "Victim Org Rule" {
 		t.Errorf("IDOR vulnerability: victim's rule name was changed to %q", updatedRule.Name)
 	}
+}
+
+// inviteAndJoinMember invites member to org and has them join, returning the
+// member's membership level to AccessLevelMember.
+func inviteAndJoinMember(ctx context.Context, t *testing.T, owner *dbgen.User, org *dbgen.Organization, member *dbgen.User) {
+	t.Helper()
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member: %v", err)
+	}
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to join org: %v", err)
+	}
+}
+
+// authenticateNewServer sets up a fresh serve mux, registers the portal routes
+// and authenticates the given user, returning the session cookie.
+func authenticateNewServer(ctx context.Context, t *testing.T, user *dbgen.User) (srv *http.ServeMux, cookie *http.Cookie) {
+	t.Helper()
+	srv = http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	c, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return srv, c
+}
+
+// TestInvitedMemberCannotViewPropertyRuleEditForm reproduces the primary
+// disclosure path: a member creates a property and a property rule, leaves the
+// org (downgraded to AccessLevelInvited), and then attempts to load the rule
+// edit form. The invited former member must be rejected with db.ErrPermissions
+// rather than receiving the current rule configuration.
+func TestInvitedMemberCannotViewPropertyRuleEditForm(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	inviteAndJoinMember(ctx, t, owner, org, member)
+
+	// Member creates their own property (member is property.CreatorID).
+	safeName := strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
+	memberProp, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(member.ID, safeName+"-member.example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create member property: %v", err)
+	}
+
+	// Member creates a rule on their property (member is rule.CreatorID).
+	memberRule, _, err := store.Impl().CreateDifficultyRule(ctx, member, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Member Rule",
+		PropertyID:        db.Int(memberProp.ID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("test"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		CreatorID:         db.Int(member.ID),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create member rule: %v", err)
+	}
+
+	// Member leaves the org -> membership downgraded to AccessLevelInvited.
+	if _, err := store.Impl().LeaveOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to leave org: %v", err)
+	}
+
+	_, cookie := authenticateNewServer(ctx, t, member)
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	propID := server.IDHasher.Encrypt(int(memberProp.ID))
+	ruleID := server.IDHasher.Encrypt(int(memberRule.ID))
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", orgID, propID, ruleID), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, orgID)
+	req.SetPathValue(common.ParamProperty, propID)
+	req.SetPathValue(common.ParamRule, ruleID)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getPropertyEditRule(w, req)
+	if err == nil {
+		t.Fatalf("Invited former member was able to view property rule edit form (rule config disclosed): viewModel=%v", viewModel)
+	}
+
+	if !errors.Is(err, db.ErrPermissions) {
+		t.Fatalf("Expected db.ErrPermissions for invited former member, got: %v", err)
+	}
+}
+
+// TestInvitedMemberCannotViewOrgRuleEditForm verifies the org rule edit form
+// rejects an invited former member who is still the rule's creator (the
+// condition reachable via org ownership transfer followed by LeaveOrg).
+func TestInvitedMemberCannotViewOrgRuleEditForm(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	owner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-org", owner.ID)
+	if err != nil {
+		t.Fatalf("Failed to create org: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	inviteAndJoinMember(ctx, t, owner, org, member)
+
+	// Simulate a rule the member is the creator of (e.g. former owner who
+	// transferred the org and remains the rule's CreatorID). canEditRule()
+	// returns true for the creator regardless of membership level.
+	rule, _, err := store.Impl().CreateDifficultyRule(ctx, member, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Member Org Rule",
+		OrgID:             db.Int(org.ID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("test"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		CreatorID:         db.Int(member.ID),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create org rule: %v", err)
+	}
+
+	// Member leaves the org -> membership downgraded to AccessLevelInvited.
+	if _, err := store.Impl().LeaveOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to leave org: %v", err)
+	}
+
+	_, cookie := authenticateNewServer(ctx, t, member)
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	ruleID := server.IDHasher.Encrypt(int(rule.ID))
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/rules/%s/edit", orgID, ruleID), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, orgID)
+	req.SetPathValue(common.ParamRule, ruleID)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getOrgEditRule(w, req)
+	if err == nil {
+		t.Fatalf("Invited former member was able to view org rule edit form (rule config disclosed): viewModel=%v", viewModel)
+	}
+
+	if !errors.Is(err, db.ErrPermissions) {
+		t.Fatalf("Expected db.ErrPermissions for invited former member, got: %v", err)
+	}
+}
+
+// TestInvitedMemberCannotViewPropertyNewRuleWizard verifies the property
+// new-rule wizard rejects an invited former member who is still the property
+// creator (canEditProperty would otherwise let them through).
+func TestInvitedMemberCannotViewPropertyNewRuleWizard(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	inviteAndJoinMember(ctx, t, owner, org, member)
+
+	// Member creates their own property (member is property.CreatorID).
+	safeName := strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
+	memberProp, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(member.ID, safeName+"-member.example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create member property: %v", err)
+	}
+
+	// Member leaves the org -> membership downgraded to AccessLevelInvited.
+	if _, err := store.Impl().LeaveOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to leave org: %v", err)
+	}
+
+	_, cookie := authenticateNewServer(ctx, t, member)
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	propID := server.IDHasher.Encrypt(int(memberProp.ID))
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/rules/new", orgID, propID), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, orgID)
+	req.SetPathValue(common.ParamProperty, propID)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getPropertyNewRule(w, req)
+	if err == nil {
+		t.Fatalf("Invited former member was able to view property new-rule wizard: viewModel=%v", viewModel)
+	}
+
+	if !errors.Is(err, db.ErrPermissions) {
+		t.Fatalf("Expected db.ErrPermissions for invited former member, got: %v", err)
+	}
+}
+
+// TestInvitedMemberCannotViewOrgNewRuleWizard verifies the org new-rule wizard
+// rejects any invited user, even one who never created anything in the org.
+// Before the fix, getOrgNewRule had no canEditRule/canEditProperty check, so
+// any invited user could load the wizard.
+func TestInvitedMemberCannotViewOrgNewRuleWizard(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	owner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-org", owner.ID)
+	if err != nil {
+		t.Fatalf("Failed to create org: %v", err)
+	}
+
+	// A user who is merely invited (never joined) is at AccessLevelInvited.
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member: %v", err)
+	}
+
+	_, cookie := authenticateNewServer(ctx, t, member)
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/rules/new", orgID), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, orgID)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getOrgNewRule(w, req)
+	if err == nil {
+		t.Fatalf("Invited member was able to view org new-rule wizard: viewModel=%v", viewModel)
+	}
+
+	if !errors.Is(err, db.ErrPermissions) {
+		t.Fatalf("Expected db.ErrPermissions for invited member, got: %v", err)
+	}
+}
+
+// TestMemberCanViewPropertyRuleForms is a regression guard: a current Member
+// (not invited) who is the property and rule creator must still be able to
+// load the property edit/new-rule forms. This confirms the invited-user gate
+// does not over-block legitimate members.
+func TestMemberCanViewPropertyRuleForms(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	inviteAndJoinMember(ctx, t, owner, org, member)
+
+	// Member creates their own property and a rule on it (still a full Member).
+	safeName := strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
+	memberProp, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(member.ID, safeName+"-member.example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create member property: %v", err)
+	}
+
+	memberRule, _, err := store.Impl().CreateDifficultyRule(ctx, member, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Member Rule",
+		PropertyID:        db.Int(memberProp.ID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("test"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		CreatorID:         db.Int(member.ID),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create member rule: %v", err)
+	}
+
+	_, cookie := authenticateNewServer(ctx, t, member)
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	propID := server.IDHasher.Encrypt(int(memberProp.ID))
+	ruleID := server.IDHasher.Encrypt(int(memberRule.ID))
+
+	t.Run("getPropertyEditRule", func(t *testing.T) {
+		req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", orgID, propID, ruleID), nil)
+		req.AddCookie(cookie)
+		req.SetPathValue(common.ParamOrg, orgID)
+		req.SetPathValue(common.ParamProperty, propID)
+		req.SetPathValue(common.ParamRule, ruleID)
+
+		w := httptest.NewRecorder()
+		viewModel, err := server.getPropertyEditRule(w, req)
+		if err != nil {
+			t.Fatalf("Current member should be able to view property rule edit form, got: %v", err)
+		}
+		if viewModel == nil {
+			t.Fatal("Expected ViewModel for current member, got nil")
+		}
+		if !viewModel.Model.(*RuleWizardRenderContext).IsEdit {
+			t.Error("Expected IsEdit to be true for property rule edit form")
+		}
+	})
+
+	t.Run("getPropertyNewRule", func(t *testing.T) {
+		req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/rules/new", orgID, propID), nil)
+		req.AddCookie(cookie)
+		req.SetPathValue(common.ParamOrg, orgID)
+		req.SetPathValue(common.ParamProperty, propID)
+
+		w := httptest.NewRecorder()
+		viewModel, err := server.getPropertyNewRule(w, req)
+		if err != nil {
+			t.Fatalf("Current member should be able to view property new-rule wizard, got: %v", err)
+		}
+		if viewModel == nil {
+			t.Fatal("Expected ViewModel for current member, got nil")
+		}
+	})
 }
