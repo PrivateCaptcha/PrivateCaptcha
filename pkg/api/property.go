@@ -123,8 +123,9 @@ func (p *apiPropertySettings) Normalize() {
 	if p.ValiditySeconds > 0 {
 		validitySeconds := min(p.ValiditySeconds, int(puzzle.MaxValidityPeriod/time.Second))
 		validity := time.Duration(validitySeconds) * time.Second
-		validityIndex := puzzle.ValidityIntervalToIndex(validity)
-		p.ValiditySeconds = int(puzzle.ValidityDurations[validityIndex].Seconds())
+		if index := db.EdgeTokenValidityIndex(validity); index > 0 {
+			p.ValiditySeconds = int(puzzle.ValidityDurations[index-1].Seconds())
+		}
 	} else {
 		const defaultValidityPeriod = 6 * time.Hour
 		p.ValiditySeconds = int(defaultValidityPeriod.Seconds())
