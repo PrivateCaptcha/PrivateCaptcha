@@ -507,7 +507,7 @@ func StringCacheKey(prefix CacheKeyPrefix, value string) CacheKey {
 
 func UserCacheKey(id int32) CacheKey     { return Int32CacheKey(userCacheKeyPrefix, id) }
 func APIKeyCacheKey(str string) CacheKey { return StringCacheKey(apiKeyCacheKeyPrefix, str) }
-func orgCacheKey(orgID int32) CacheKey   { return Int32CacheKey(orgCacheKeyPrefix, orgID) }
+func OrgCacheKey(orgID int32) CacheKey   { return Int32CacheKey(orgCacheKeyPrefix, orgID) }
 func OrgPropertiesCacheKey(orgID int32, key string) CacheKey {
 	return CacheKey{Prefix: orgPropertiesCacheKeyPrefix, IntValue: orgID, StrValue: key}
 }

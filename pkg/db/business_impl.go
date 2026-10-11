@@ -978,7 +978,7 @@ func (impl *BusinessStoreImpl) CreateNewOrganization(ctx context.Context, name s
 	if org != nil {
 		slog.InfoContext(ctx, "Created organization in DB", "name", name, "id", org.ID)
 
-		cacheKey := orgCacheKey(org.ID)
+		cacheKey := OrgCacheKey(org.ID)
 		_ = impl.cache.Set(ctx, cacheKey, org)
 
 		// invalidate user orgs in cache as we just created another one
@@ -1049,7 +1049,7 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 				continue
 			}
 			// owned org: actually deleted at the DB level, so negative-cache the org key.
-			_ = impl.cache.SetMissing(ctx, orgCacheKey(org.Organization.ID))
+			_ = impl.cache.SetMissing(ctx, OrgCacheKey(org.Organization.ID))
 			impl.invalidateOrgPropertiesCache(ctx, org.Organization.ID, nil)
 			impl.invalidateOrgFormsCache(ctx, org.Organization.ID, nil)
 			if members, mErr := impl.querier.GetOrganizationUsers(ctx, org.Organization.ID); mErr == nil {
@@ -1601,7 +1601,7 @@ func (impl *BusinessStoreImpl) RetrieveOrganizationStats(ctx context.Context, us
 }
 
 func (impl *BusinessStoreImpl) retrieveOrganizationWithAccess(ctx context.Context, userID, orgID int32) (*dbgen.Organization, dbgen.NullAccessLevel, error) {
-	cacheKey := orgCacheKey(orgID)
+	cacheKey := OrgCacheKey(orgID)
 
 	if org, err := FetchCachedOne[dbgen.Organization](ctx, impl.cache, cacheKey); err == nil {
 		if org.UserID.Int32 == userID {
@@ -2553,7 +2553,7 @@ func (impl *BusinessStoreImpl) UpdateOrganization(ctx context.Context, user *dbg
 
 	slog.InfoContext(ctx, "Updated organization", "name", name, "orgID", org.ID)
 
-	cacheKey := orgCacheKey(updatedOrg.ID)
+	cacheKey := OrgCacheKey(updatedOrg.ID)
 	_ = impl.cache.Set(ctx, cacheKey, updatedOrg)
 	// invalidate user org. in cache as we just updated name
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(updatedOrg.UserID.Int32))
@@ -2579,7 +2579,7 @@ func (impl *BusinessStoreImpl) SoftDeleteOrganization(ctx context.Context, org *
 	}
 
 	// update caches
-	_ = impl.cache.SetMissing(ctx, orgCacheKey(org.ID))
+	_ = impl.cache.SetMissing(ctx, OrgCacheKey(org.ID))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(org.ID))
 	impl.invalidateOrganizationStatsCache(ctx, user.ID)
 	// invalidate user orgs in cache as we just deleted one
@@ -2743,7 +2743,7 @@ func (impl *BusinessStoreImpl) JoinOrg(ctx context.Context, orgID int32, user *d
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(orgID))
 
 	var orgName string
-	if org, err := FetchCachedOne[dbgen.Organization](ctx, impl.cache, orgCacheKey(orgID)); err == nil {
+	if org, err := FetchCachedOne[dbgen.Organization](ctx, impl.cache, OrgCacheKey(orgID)); err == nil {
 		orgName = org.Name
 	}
 
@@ -2776,7 +2776,7 @@ func (impl *BusinessStoreImpl) LeaveOrg(ctx context.Context, orgID int32, user *
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(orgID))
 
 	var orgName string
-	if org, err := FetchCachedOne[dbgen.Organization](ctx, impl.cache, orgCacheKey(orgID)); err == nil {
+	if org, err := FetchCachedOne[dbgen.Organization](ctx, impl.cache, OrgCacheKey(orgID)); err == nil {
 		orgName = org.Name
 	}
 
@@ -2978,7 +2978,7 @@ func (impl *BusinessStoreImpl) CreateAPIKey(ctx context.Context, user *dbgen.Use
 
 		var orgName string
 		if params.OrgID.Valid {
-			if org, err := FetchCachedOne[dbgen.Organization](ctx, impl.cache, orgCacheKey(params.OrgID.Int32)); err == nil {
+			if org, err := FetchCachedOne[dbgen.Organization](ctx, impl.cache, OrgCacheKey(params.OrgID.Int32)); err == nil {
 				orgName = org.Name
 			}
 		}
@@ -4111,7 +4111,7 @@ func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *d
 	}
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(user.ID))
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(newOwner.ID))
-	_ = impl.cache.Delete(ctx, orgCacheKey(org.ID))
+	_ = impl.cache.Delete(ctx, OrgCacheKey(org.ID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
 	impl.invalidateOrgPropertiesCache(ctx, org.ID, nil /*all properties*/)
 	impl.invalidateOrgFormsCache(ctx, org.ID, nil /*all forms*/)
@@ -4883,7 +4883,7 @@ func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *d
 
 	// for UI (portal) codepath org will always be cached because we opened it first and we care about cache cleanup
 	// only for portal (even if we use this method from API and it's not cached - noone cares)
-	if org, err := FetchCachedOne[dbgen.Organization](ctx, impl.cache, orgCacheKey(rule.OrgID.Int32)); err == nil {
+	if org, err := FetchCachedOne[dbgen.Organization](ctx, impl.cache, OrgCacheKey(rule.OrgID.Int32)); err == nil {
 		impl.invalidateOrganizationStatsCache(ctx, org.UserID.Int32)
 	}
 
