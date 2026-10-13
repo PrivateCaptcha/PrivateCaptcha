@@ -43,9 +43,8 @@ const (
 	modeServer              = "server"
 	modeAuto                = "auto"
 	modeCheckConfig         = "check-config"
-	_readinessDrainDelay    = 5 * time.Second
-	_shutdownHardPeriod     = 5 * time.Second
 	_shutdownPeriod         = 10 * time.Second
+	_cachePersistTimeout    = 5 * time.Second
 	_dbConnectTimeout       = 30 * time.Second
 	_sessionPersistInterval = 10 * time.Second
 	_auditLogInterval       = 10 * time.Second
@@ -243,38 +242,13 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Metrics:         metrics,
 	}
 	var closeQuitOnce sync.Once
-	quit := make(chan struct{})
+	quit := make(chan bool, 1)
 	quitFunc := func(ctx context.Context, immediately bool) {
-		slog.DebugContext(ctx, "Server quit triggered", "immediately", immediately)
-		healthCheck.Shutdown(ctx)
-		healthCheckTime := 1 * time.Second
-
-		if !immediately {
-			healthCheckTime = min(_readinessDrainDelay, healthCheck.Interval())
-			persistCtx, cancel := context.WithTimeout(context.Background(), healthCheckTime)
-			defer cancel()
-			go common.RunAdHocFunc(persistCtx, func(bctx context.Context) error {
-				cacheDir := cfg.Get(common.CacheDirKey).Value()
-				var errs []error
-				if err := businessDB.SaveCache(bctx, cacheDir); err != nil {
-					errs = append(errs, err)
-				}
-				if err := ipRateLimiter.SaveCache(bctx, cacheDir); err != nil {
-					errs = append(errs, err)
-				}
-				if err := apiServer.Levels.SaveCache(bctx, cacheDir); err != nil {
-					errs = append(errs, err)
-				}
-				if len(errs) > 0 {
-					return fmt.Errorf("cache save errors: %v", errs)
-				}
-				return nil
-			})
-		}
-
-		// Give time for readiness check to propagate
-		time.Sleep(healthCheckTime)
-		closeQuitOnce.Do(func() { close(quit) })
+		closeQuitOnce.Do(func() {
+			slog.DebugContext(ctx, "Server quit triggered", "immediately", immediately)
+			healthCheck.Shutdown(ctx)
+			quit <- immediately
+		})
 	}
 	checkLicenseJob, err := maintenance.NewCheckLicenseJob(businessDB, cfg, GitCommit, quitFunc)
 	if err != nil {
@@ -560,35 +534,73 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		<-quit
+		immediately := <-quit
 		slog.DebugContext(ctx, "Shutting down gracefully")
 		jobs.Stop()
-		apiServer.Stop()
-		businessDB.Stop()
+		if localServer != nil {
+			if lerr := localServer.Close(); lerr != nil {
+				slog.ErrorContext(ctx, "Failed to shutdown local server", common.ErrAttr(lerr))
+			}
+		}
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), _shutdownPeriod)
 		defer cancel()
 		httpServer.SetKeepAlivesEnabled(false)
 		serr := httpServer.Shutdown(shutdownCtx)
 		stopOngoingGracefully()
-		sessionStore.Stop()
 		if serr != nil {
 			slog.ErrorContext(ctx, "Failed to shutdown gracefully", common.ErrAttr(serr))
 			fmt.Fprintf(stderr, "error shutting down http server gracefully: %s\n", serr)
-			time.Sleep(_shutdownHardPeriod)
-		}
-		sessionStore.Shutdown()
-		apiServer.Shutdown()
-		businessDB.Shutdown()
-		if localServer != nil {
-			if lerr := localServer.Close(); lerr != nil {
-				slog.ErrorContext(ctx, "Failed to shutdown local server", common.ErrAttr(lerr))
+			if cerr := httpServer.Close(); cerr != nil {
+				slog.ErrorContext(ctx, "Failed to close HTTP server", common.ErrAttr(cerr))
 			}
+		}
+		if !immediately {
+			persistCtx, cancelPersist := context.WithTimeout(context.Background(), _cachePersistTimeout)
+			persistShutdownCaches(persistCtx, func(bctx context.Context) error {
+				cacheDir := cfg.Get(common.CacheDirKey).Value()
+				var errs []error
+				if err := businessDB.SaveCache(bctx, cacheDir); err != nil {
+					errs = append(errs, err)
+				}
+				if err := ipRateLimiter.SaveCache(bctx, cacheDir); err != nil {
+					errs = append(errs, err)
+				}
+				if err := apiServer.Levels.SaveCache(bctx, cacheDir); err != nil {
+					errs = append(errs, err)
+				}
+				if len(errs) > 0 {
+					return fmt.Errorf("cache save errors: %v", errs)
+				}
+				return nil
+			})
+			cancelPersist()
+		}
+		apiServer.Stop()
+		businessDB.Stop()
+		sessionStore.Stop()
+		if serr == nil {
+			sessionStore.Shutdown()
+			apiServer.Shutdown()
+			businessDB.Shutdown()
 		}
 		slog.DebugContext(ctx, "Shutdown finished")
 	}()
 
 	wg.Wait()
 	return nil
+}
+
+func persistShutdownCaches(ctx context.Context, persist func(context.Context) error) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		common.RunAdHocFunc(ctx, persist)
+	}()
+	select {
+	case <-done:
+	case <-ctx.Done():
+		slog.WarnContext(ctx, "Shutdown cache persistence timed out", common.ErrAttr(ctx.Err()))
+	}
 }
 
 func migrate(ctx context.Context, cfg common.ConfigStore, up bool) error {
