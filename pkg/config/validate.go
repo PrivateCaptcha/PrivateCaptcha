@@ -138,9 +138,9 @@ func validateItem(ctx context.Context, item common.ConfigItem) error {
 		if strings.HasPrefix(value, "/") && !strings.ContainsRune(value, 0) {
 			return nil
 		}
-		return validateHost(value)
+		return ValidateHost(value)
 	case common.HostKey:
-		return validateHost(value)
+		return ValidateHost(value)
 	case common.ClickHouseHostKey:
 		return validateAddress(value + ":9000")
 	case common.LocalAddressKey:
@@ -148,7 +148,7 @@ func validateItem(ctx context.Context, item common.ConfigItem) error {
 	case common.SmtpEndpointKey:
 		endpoint, err := url.Parse(value)
 		if err != nil || (endpoint.Scheme != "smtp" && endpoint.Scheme != "smtps") ||
-			endpoint.Hostname() == "" || endpoint.User != nil || validateHost(endpoint.Hostname()) != nil {
+			endpoint.Hostname() == "" || endpoint.User != nil || ValidateHost(endpoint.Hostname()) != nil {
 			return errors.New("invalid SMTP URL; expected smtp://host[:port] or smtps://host[:port]")
 		}
 		if port := endpoint.Port(); port != "" {
@@ -229,7 +229,7 @@ func validateEdgeKeyPair(cfg common.ConfigStore) error {
 	return nil
 }
 
-func validateHost(value string) error {
+func ValidateHost(value string) error {
 	if net.ParseIP(value) != nil {
 		return nil
 	}
@@ -244,7 +244,7 @@ func validateHost(value string) error {
 
 func validateAddress(value string) error {
 	host, port, err := net.SplitHostPort(value)
-	if err != nil || port == "" || validateHost(host) != nil {
+	if err != nil || port == "" || ValidateHost(host) != nil {
 		return errors.New("invalid TCP address; expected host:port")
 	}
 	if _, err := net.LookupPort("tcp", port); err != nil {
@@ -257,7 +257,7 @@ func validateBaseURL(ctx context.Context, item common.ConfigItem) (err error) {
 	parsed, parseErr := url.Parse("//" + strings.TrimRight(item.Value(), "/"))
 	if parseErr != nil || parsed.Hostname() == "" || parsed.User != nil ||
 		parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" ||
-		strings.HasSuffix(parsed.Host, ":") || validateHost(parsed.Hostname()) != nil {
+		strings.HasSuffix(parsed.Host, ":") || ValidateHost(parsed.Hostname()) != nil {
 		return errors.New("invalid base URL; expected host[:port][/path] without a scheme")
 	}
 	if _, _, err := splitHostPort(parsed.Host); err != nil {
@@ -278,9 +278,14 @@ func validateBaseURL(ctx context.Context, item common.ConfigItem) (err error) {
 	return nil
 }
 
-func validatePositiveInt(item common.ConfigItem, maximum int) error {
-	if value := AsInt(item, 0); value <= 0 || value > maximum {
-		return fmt.Errorf("integer must be between 1 and %d", maximum)
+func ValidateInt(raw string, minimum, maximum int) error {
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < minimum || value > maximum {
+		return fmt.Errorf("integer must be between %d and %d", minimum, maximum)
 	}
 	return nil
+}
+
+func validatePositiveInt(item common.ConfigItem, maximum int) error {
+	return ValidateInt(item.Value(), 1, math.MaxInt-1)
 }
