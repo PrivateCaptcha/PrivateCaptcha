@@ -32,32 +32,38 @@ func Argon2IDMemoryBudgetKiB(ctx context.Context, item common.ConfigItem, minimu
 	if value == "" {
 		return 0
 	}
-	budgetMiB, err := strconv.ParseInt(value, 10, 64)
-	if err == nil && budgetMiB == 0 {
-		return 0
-	}
-	reason := ""
-
-	switch {
-	case err != nil:
-		reason = "value is not a valid integer"
-	case budgetMiB < 0:
-		reason = "value must be positive"
-	case budgetMiB > math.MaxInt64/kiBPerMiB:
-		reason = "value overflows the semaphore capacity"
-	case budgetMiB*kiBPerMiB < minimumKiB:
-		reason = "value is below the selected profile minimum"
-	default:
-		return budgetMiB * kiBPerMiB
+	capacity, err := parseArgon2IDMemoryBudget(value, minimumKiB)
+	if err == nil {
+		return capacity
 	}
 
 	slog.WarnContext(ctx, "Invalid Argon2id memory budget; using fallback",
 		"environment", "PC_ARGON2_MEMORY_BUDGET_MIB",
 		"value", value,
-		"reason", reason,
+		"reason", err.Error(),
 		"minimumKiB", minimumKiB,
 		"fallbackMiB", defaultArgon2IDMemoryBudgetMiB)
 	return defaultArgon2IDMemoryBudgetMiB * kiBPerMiB
+}
+
+func parseArgon2IDMemoryBudget(value string, minimumKiB int64) (int64, error) {
+	budgetMiB, err := strconv.ParseInt(value, 10, 64)
+	if err == nil && budgetMiB == 0 {
+		return 0, nil
+	}
+
+	switch {
+	case err != nil:
+		return 0, errors.New("value is not a valid integer")
+	case budgetMiB < 0:
+		return 0, errors.New("value must be positive")
+	case budgetMiB > math.MaxInt64/kiBPerMiB:
+		return 0, errors.New("value overflows the semaphore capacity")
+	case budgetMiB*kiBPerMiB < minimumKiB:
+		return 0, errors.New("value is below the selected profile minimum")
+	default:
+		return budgetMiB * kiBPerMiB, nil
+	}
 }
 
 func AsInt(item common.ConfigItem, fallback int) int {

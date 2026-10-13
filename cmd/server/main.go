@@ -42,6 +42,7 @@ const (
 	modeRollback            = "rollback"
 	modeServer              = "server"
 	modeAuto                = "auto"
+	modeCheckConfig         = "check-config"
 	_readinessDrainDelay    = 5 * time.Second
 	_shutdownHardPeriod     = 5 * time.Second
 	_shutdownPeriod         = 10 * time.Second
@@ -70,7 +71,7 @@ const (
 
 var (
 	GitCommit       string
-	flagMode        = flag.String("mode", "", strings.Join([]string{modeMigrate, modeServer, modeRollback, modeAuto}, " | "))
+	flagMode        = flag.String("mode", "", strings.Join([]string{modeMigrate, modeServer, modeRollback, modeAuto, modeCheckConfig}, " | "))
 	envFileFlag     = flag.String("env", "", "Path to .env file, 'stdin' or empty")
 	versionFlag     = flag.Bool("version", false, "Print version and exit")
 	migrateHashFlag = flag.String("migrate-hash", "", "Target migration version (git commit)")
@@ -661,6 +662,16 @@ func main() {
 	cfg := config.NewEnvConfig(env.Get)
 
 	switch *flagMode {
+	case modeCheckConfig:
+		checkCfg := config.NewEnvConfig(func(name string) string {
+			value, _ := env.GetEx(name)
+			return value
+		})
+		cctx := common.TraceContext(context.Background(), "check_config")
+		err = config.Validate(cctx, checkCfg)
+		if err == nil {
+			fmt.Fprintln(os.Stdout, "Configuration is valid")
+		}
 	case modeServer:
 		err = serve(cfg)
 	case modeMigrate:

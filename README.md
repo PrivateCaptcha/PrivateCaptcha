@@ -46,6 +46,14 @@ Please refer to the [official documentation](https://docs.privatecaptcha.com).
 
 Self-hosting setup is in [another repository](https://github.com/PrivateCaptcha/self-hosting) and documentation - on main docs website.
 
+To check server configuration before starting it:
+
+```sh
+./bin/server -mode check-config -env /path/to/pc.env
+```
+
+This checks required values and validates supplied optional config values without starting the server or connecting to services. It exits with status 1 on invalid configuration. The `-env` flag also accepts `stdin`; omit it to read the process environment.
+
 ## License
 
 This project is distributed under a PolyForm Noncommercial License (see [LICENSE](./LICENSE) for more information). This allows you to self-host community edition of Private Captcha for non-commercial use. Commercial licenses available for enterprise edition - please contact us at hello@privatecaptcha.com
