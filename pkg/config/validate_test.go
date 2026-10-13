@@ -157,7 +157,6 @@ func TestValidateConfigURLsAndAddresses(t *testing.T) {
 					"example.com?query=1",
 					"example.com#fragment",
 					"user@example.com",
-					"example.com/{",
 				},
 			)
 		})

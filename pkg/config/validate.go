@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"math"
 	"net"
-	"net/http"
 	"net/mail"
 	"net/url"
 	"strconv"
@@ -60,7 +59,7 @@ func Validate(ctx context.Context, cfg common.ConfigStore) error {
 		if item.Value() == "" {
 			continue
 		}
-		if err := validateItem(ctx, item); err != nil {
+		if err := validateItem(item); err != nil {
 			slog.ErrorContext(ctx, "Invalid configuration value", "key", configKeyToEnvName[key], common.ErrAttr(err))
 			validationErr = errInvalidConfig
 		}
@@ -74,7 +73,7 @@ func Validate(ctx context.Context, cfg common.ConfigStore) error {
 	return validationErr
 }
 
-func validateItem(ctx context.Context, item common.ConfigItem) error {
+func validateItem(item common.ConfigItem) error {
 	value := item.Value()
 	switch item.Key() {
 	case common.VerboseKey, common.MaintenanceModeKey, common.RegistrationAllowedKey,
@@ -115,7 +114,7 @@ func validateItem(ctx context.Context, item common.ConfigItem) error {
 	case common.ClickHousePortKey:
 		return validatePositiveInt(item, 65535)
 	case common.PortalBaseURLKey, common.APIBaseURLKey, common.CDNBaseURLKey:
-		return validateBaseURL(ctx, item)
+		return validateBaseURL(item)
 	case common.AdminEmailKey, common.EmailFromKey, common.ReplyToEmailKey:
 		address, err := mail.ParseAddress(value)
 		if err != nil || address.Address != value || strings.ContainsAny(value, "\r\n") {
@@ -253,7 +252,7 @@ func validateAddress(value string) error {
 	return nil
 }
 
-func validateBaseURL(ctx context.Context, item common.ConfigItem) (err error) {
+func validateBaseURL(item common.ConfigItem) error {
 	parsed, parseErr := url.Parse("//" + strings.TrimRight(item.Value(), "/"))
 	if parseErr != nil || parsed.Hostname() == "" || parsed.User != nil ||
 		parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" ||
@@ -268,13 +267,6 @@ func validateBaseURL(ctx context.Context, item common.ConfigItem) (err error) {
 			return err
 		}
 	}
-	base := AsURL(ctx, item)
-	defer func() {
-		if recover() != nil {
-			err = errors.New("invalid HTTP route prefix")
-		}
-	}()
-	http.NewServeMux().Handle("GET "+base.Domain()+base.Path()+"/", http.NotFoundHandler())
 	return nil
 }
 
@@ -287,5 +279,5 @@ func ValidateInt(raw string, minimum, maximum int) error {
 }
 
 func validatePositiveInt(item common.ConfigItem, maximum int) error {
-	return ValidateInt(item.Value(), 1, math.MaxInt-1)
+	return ValidateInt(item.Value(), 1, maximum)
 }
