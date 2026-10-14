@@ -5,11 +5,70 @@ import (
 	"encoding/json"
 	"net/netip"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
+
+type shutdownAuditQuerier struct {
+	*QuerierStub
+	first        atomic.Bool
+	started      chan struct{}
+	flushStarted chan struct{}
+	release      chan struct{}
+}
+
+func (q *shutdownAuditQuerier) CreateAuditLogs(ctx context.Context, batch []*dbgen.CreateAuditLogsParams) (int64, error) {
+	if q.first.CompareAndSwap(false, true) {
+		close(q.started)
+		<-ctx.Done()
+		return 0, ctx.Err()
+	}
+	close(q.flushStarted)
+	select {
+	case <-q.release:
+		return int64(len(batch)), nil
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
+}
+
+func TestAuditShutdownWaitsForFinalFlush(t *testing.T) {
+	q := &shutdownAuditQuerier{
+		QuerierStub:  &QuerierStub{},
+		started:      make(chan struct{}),
+		flushStarted: make(chan struct{}),
+		release:      make(chan struct{}),
+	}
+	log := NewAuditLog(q, 1)
+	var workers sync.WaitGroup
+	log.Start(t.Context(), time.Hour, &workers)
+	defer log.Stop()
+	log.persistChan <- &common.AuditLogEvent{
+		UserID: 1,
+		Action: common.AuditLogActionLogin,
+	}
+	<-q.started
+	log.Stop()
+	<-q.flushStarted
+	done := make(chan struct{})
+	go func() { _ = common.WaitWorkers(t.Context(), &workers); close(done) }()
+	select {
+	case <-done:
+		t.Fatal("shutdown returned while the final audit flush was running")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(q.release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("shutdown did not finish after the audit flush completed")
+	}
+}
 
 type auditCaptureQuerier struct {
 	*QuerierStub
@@ -61,7 +120,7 @@ func TestAuditLogRecordEventAfterShutdownDoesNotPanic(t *testing.T) {
 		OldValue:  &AuditLogUser{Name: "test"},
 	}
 
-	auditLog.Shutdown()
+	auditLog.Stop()
 
 	// Detached producers (e.g. HandleDeleteAccount) can outlive Shutdown() and
 	// call RecordEvent afterwards. Sending on a closed channel panics
@@ -111,8 +170,8 @@ func TestAuditLogRepeatedShutdownDoesNotPanic(t *testing.T) {
 			}
 		}()
 		auditLog.Stop()
-		auditLog.Shutdown()
-		auditLog.Shutdown()
+		auditLog.Stop()
+		auditLog.Stop()
 		auditLog.RecordEvent(ctx, event, common.AuditLogSourcePortal)
 	}()
 

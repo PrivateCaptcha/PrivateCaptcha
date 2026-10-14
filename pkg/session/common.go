@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -73,5 +74,5 @@ type Store interface {
 	ConsumeEmailChangeChallenge(ctx context.Context, consume EmailChangeChallengeConsume) (*ChallengeResult, error)
 	RevokeSession(ctx context.Context, sid string) (*RevocationResult, error)
 	RevokeUserSessions(ctx context.Context, userID int32) error
-	Start(ctx context.Context, interval time.Duration)
+	Start(ctx context.Context, interval time.Duration, workers *sync.WaitGroup)
 }

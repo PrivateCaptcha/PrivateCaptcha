@@ -56,6 +56,7 @@ const (
 	EdgeTokenSigningPrivateKeyKey
 	EdgeTokenSigningPublicKeyKey
 	EdgeTokenSecondaryPublicKeyKey
+	ShutdownDelayKey
 	// Add new fields _above_
 	COMMON_CONFIG_KEYS_COUNT
 )

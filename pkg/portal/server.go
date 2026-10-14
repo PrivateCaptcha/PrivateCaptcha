@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -227,7 +228,7 @@ func (s *Server) createSettingsTabs() []*SettingsTab {
 	}
 }
 
-func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gitCommit string, sessionPersistInterval time.Duration) error {
+func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gitCommit string, sessionPersistInterval time.Duration, workers *sync.WaitGroup) error {
 	if s.FeatureFlags == nil {
 		s.FeatureFlags = common.EnabledFeatureFlags{}
 	}
@@ -242,7 +243,7 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 		return err
 	}
 
-	s.Sessions.Init(PortalService, prefix, sessionPersistInterval)
+	s.Sessions.Init(PortalService, prefix, sessionPersistInterval, workers)
 
 	s.Jobs = s
 	if s.AsyncTasks != nil {

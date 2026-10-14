@@ -872,7 +872,7 @@ func TestFormProxyQueuesWhenVerificationIsBusy(t *testing.T) {
 
 	body := url.Values{common.ParamPrivateCaptchaSolution: {solutionsText + "." + puzzleText}}
 	s := *server
-	s.FormSubmissionChan = make(chan *FormSubmission, 1)
+	s.formSubmissionChan = make(chan *FormSubmission, 1)
 	rateLimiter := &ratelimit.StubRateLimiter{}
 	s.RateLimiter = rateLimiter
 	req := httptest.NewRequest(http.MethodPost, "/form/"+db.UUIDToString(form.ExternalID), strings.NewReader(body.Encode()))
@@ -888,7 +888,7 @@ func TestFormProxyQueuesWhenVerificationIsBusy(t *testing.T) {
 		t.Fatalf("busy form rate limit: calls = %d, capacity = %d, interval = %s", rateLimiter.UpdateCalls, rateLimiter.UpdatedCapacity, rateLimiter.UpdatedLeakInterval)
 	}
 	select {
-	case queued := <-s.FormSubmissionChan:
+	case queued := <-s.formSubmissionChan:
 		if queued.CaptchaSolution == nil {
 			t.Fatal("busy verification was not deferred")
 		}
@@ -928,7 +928,7 @@ func TestQueuedArgonFormSubmissionBypassesBusyCapacity(t *testing.T) {
 
 	var delivered atomic.Int32
 	s := *server
-	s.FormSubmissionChan = make(chan *FormSubmission, 1)
+	s.formSubmissionChan = make(chan *FormSubmission, 1)
 	s.FormSubmitLogChan = make(chan *common.FormSubmitRecord, 1)
 	s.FailingForms = common.NewExpiringCounterMap[int32]()
 	s.FormURLVerifier = &stubSubmitFormURLVerifier{}
@@ -949,7 +949,7 @@ func TestQueuedArgonFormSubmissionBypassesBusyCapacity(t *testing.T) {
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("uncached form response = %d, want 202", w.Code)
 	}
-	submission := <-s.FormSubmissionChan
+	submission := <-s.formSubmissionChan
 	if submission.CaptchaSolution == nil {
 		t.Fatal("queued submission lost its captcha solution")
 	}
@@ -992,8 +992,8 @@ func busyInlineFormProxyForTest(t *testing.T, domain string, transport submitFor
 	}
 
 	s := *server
-	s.FormSubmissionChan = make(chan *FormSubmission, 1)
-	s.FormSubmissionChan <- &FormSubmission{}
+	s.formSubmissionChan = make(chan *FormSubmission, 1)
+	s.formSubmissionChan <- &FormSubmission{}
 	s.FormSubmitLogChan = make(chan *common.FormSubmitRecord, 1)
 	s.FailingForms = common.NewExpiringCounterMap[int32]()
 	s.FormURLVerifier = &stubSubmitFormURLVerifier{}

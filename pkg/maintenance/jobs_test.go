@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -151,7 +152,7 @@ func (j *stubOnDemandJob) RunOnce(ctx context.Context, params any) error {
 }
 
 func TestOneOffJobExecution(t *testing.T) {
-	jobsManager := NewJobs(nil, 2)
+	jobsManager := NewJobs(nil, 2, &sync.WaitGroup{})
 	defer jobsManager.Stop()
 
 	stubJob := &stubOneOffJob{}
@@ -167,8 +168,41 @@ func TestOneOffJobExecution(t *testing.T) {
 	}
 }
 
+func TestHTTPMaintenanceJobDoesNotJoinRootWorkers(t *testing.T) {
+	var workers sync.WaitGroup
+	manager := NewJobs(nil, 2, &workers)
+	defer manager.Stop()
+	job := &stubOnDemandJob{
+		executed:  make(chan onDemandJobExecution, 1),
+		cancelled: make(chan struct{}),
+	}
+	manager.AddOnDemand(job)
+	mux := http.NewServeMux()
+	manager.Setup(mux, alice.New())
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/maintenance/ondemand/stubOnDemandJob", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("maintenance launch returned %d", response.Code)
+	}
+	select {
+	case <-job.executed:
+	case <-time.After(time.Second):
+		t.Fatal("HTTP-launched job did not start")
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	if err := common.WaitWorkers(ctx, &workers); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-job.cancelled:
+		t.Fatal("waiting for root workers canceled the HTTP-launched job")
+	default:
+	}
+}
+
 func TestPeriodicJobExecution(t *testing.T) {
-	jobsManager := NewJobs(nil, 2)
+	jobsManager := NewJobs(nil, 2, &sync.WaitGroup{})
 	defer jobsManager.Stop()
 
 	stubJob := &stubPeriodicJob{
@@ -187,7 +221,7 @@ func TestPeriodicJobExecution(t *testing.T) {
 }
 
 func TestHandlePeriodicJobWithAPIKey(t *testing.T) {
-	jobsManager := NewJobs(nil, 2)
+	jobsManager := NewJobs(nil, 2, &sync.WaitGroup{})
 	defer jobsManager.Stop()
 
 	stubJob := &stubPeriodicJob{
@@ -213,7 +247,7 @@ func TestHandlePeriodicJobWithAPIKey(t *testing.T) {
 }
 
 func TestHandlePeriodicJobNoAPIKey(t *testing.T) {
-	jobsManager := NewJobs(nil, 2)
+	jobsManager := NewJobs(nil, 2, &sync.WaitGroup{})
 	defer jobsManager.Stop()
 
 	mux := http.NewServeMux()
@@ -229,7 +263,7 @@ func TestHandlePeriodicJobNoAPIKey(t *testing.T) {
 }
 
 func TestHandlePeriodicJobWrongAPIKey(t *testing.T) {
-	jobsManager := NewJobs(nil, 2)
+	jobsManager := NewJobs(nil, 2, &sync.WaitGroup{})
 	defer jobsManager.Stop()
 
 	mux := http.NewServeMux()
@@ -246,7 +280,7 @@ func TestHandlePeriodicJobWrongAPIKey(t *testing.T) {
 }
 
 func TestHandlePeriodicJobNotFound(t *testing.T) {
-	jobsManager := NewJobs(nil, 2)
+	jobsManager := NewJobs(nil, 2, &sync.WaitGroup{})
 	defer jobsManager.Stop()
 
 	mux := http.NewServeMux()
@@ -263,7 +297,7 @@ func TestHandlePeriodicJobNotFound(t *testing.T) {
 }
 
 func TestHandleOneOffJobWithAPIKey(t *testing.T) {
-	jobsManager := NewJobs(nil, 2)
+	jobsManager := NewJobs(nil, 2, &sync.WaitGroup{})
 	defer jobsManager.Stop()
 
 	stubJob := &stubOneOffJob{}
@@ -289,7 +323,7 @@ func TestHandleOneOffJobWithAPIKey(t *testing.T) {
 }
 
 func TestHandleOneOffJobNotFound(t *testing.T) {
-	jobsManager := NewJobs(nil, 2)
+	jobsManager := NewJobs(nil, 2, &sync.WaitGroup{})
 	defer jobsManager.Stop()
 
 	mux := http.NewServeMux()
@@ -306,7 +340,7 @@ func TestHandleOneOffJobNotFound(t *testing.T) {
 }
 
 func TestSecurityMiddlewareNoConfiguredKey(t *testing.T) {
-	jobsManager := NewJobs(nil, 2)
+	jobsManager := NewJobs(nil, 2, &sync.WaitGroup{})
 	defer jobsManager.Stop()
 
 	mux := http.NewServeMux()
@@ -323,7 +357,7 @@ func TestSecurityMiddlewareNoConfiguredKey(t *testing.T) {
 }
 
 func TestJobsSpawn(t *testing.T) {
-	jobsManager := NewJobs(nil, 2)
+	jobsManager := NewJobs(nil, 2, &sync.WaitGroup{})
 	defer jobsManager.Stop()
 
 	stubJob := &stubPeriodicJob{
@@ -340,7 +374,7 @@ func TestJobsSpawn(t *testing.T) {
 }
 
 func TestOnDemandOneOffJobIgnoresStop(t *testing.T) {
-	jobsManager := NewJobs(nil, 2)
+	jobsManager := NewJobs(nil, 2, &sync.WaitGroup{})
 	stubJob := &slowOneOffJob{}
 	jobsManager.AddOneOff(stubJob)
 
@@ -367,7 +401,7 @@ func TestOnDemandOneOffJobIgnoresStop(t *testing.T) {
 }
 
 func TestOnDemandJobExecution(t *testing.T) {
-	jobsManager := NewJobs(nil, 2)
+	jobsManager := NewJobs(nil, 2, &sync.WaitGroup{})
 	defer jobsManager.Stop()
 	stubJob := &stubOnDemandJob{
 		executed:  make(chan onDemandJobExecution, 1),
@@ -416,7 +450,7 @@ func TestOnDemandJobExecution(t *testing.T) {
 }
 
 func TestOnDemandJobRejectsOversizedRequest(t *testing.T) {
-	jobsManager := NewJobs(nil, 2)
+	jobsManager := NewJobs(nil, 2, &sync.WaitGroup{})
 	defer jobsManager.Stop()
 	stubJob := &stubOnDemandJob{
 		executed:  make(chan onDemandJobExecution, 1),

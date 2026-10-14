@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,8 +23,8 @@ type stubStore struct {
 	revokeSession      func(context.Context, string) (*RevocationResult, error)
 }
 
-func (s *stubStore) Start(ctx context.Context, interval time.Duration)        {}
-func (s *stubStore) EnqueueExpirationRenewal(ctx context.Context, sid string) {}
+func (s *stubStore) Start(ctx context.Context, interval time.Duration, workers *sync.WaitGroup) {}
+func (s *stubStore) EnqueueExpirationRenewal(ctx context.Context, sid string)                   {}
 func (s *stubStore) StartAnonymousSession(sid string) *Session {
 	return NewAnonymousSession(sid, PayloadStoreStub{})
 }

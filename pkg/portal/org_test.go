@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -3892,6 +3893,7 @@ func TestInviteRegistrationPreservesContinuationAcrossSessionStores(t *testing.T
 	originalManager := server.Sessions
 	replicaStore := db.NewBusiness(store.Pool)
 	freshStore := db.NewSessionStore(replicaStore, server.Metrics)
+	var freshWorkers sync.WaitGroup
 	server.Store = replicaStore
 	server.Sessions = &session.Manager{
 		CookieName:   originalManager.CookieName,
@@ -3900,10 +3902,14 @@ func TestInviteRegistrationPreservesContinuationAcrossSessionStores(t *testing.T
 		Path:         originalManager.Path,
 		SecureCookie: originalManager.SecureCookie,
 	}
-	server.Sessions.Init(PortalService, originalManager.Path, time.Second)
+	server.Sessions.Init(PortalService, originalManager.Path, time.Second, &freshWorkers)
 	t.Cleanup(func() {
 		freshStore.Stop()
-		freshStore.Shutdown()
+		waitCtx, cancelWait := context.WithTimeout(context.Background(), time.Second)
+		defer cancelWait()
+		if err := common.WaitWorkers(waitCtx, &freshWorkers); err != nil {
+			t.Error(err)
+		}
 		server.Store = originalStore
 		server.Sessions = originalManager
 	})

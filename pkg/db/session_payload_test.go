@@ -178,7 +178,7 @@ func TestSessionStoreStartRunsOnlyPayloadAndExpirationRenewalWorkers(t *testing.
 		State: session.StateAuthenticated, Version: 7, ExpiresAt: time.Now().Add(time.Hour),
 	})
 	store.EnqueueExpirationRenewal(t.Context(), renewalSID)
-	store.Start(t.Context(), time.Hour)
+	store.Start(t.Context(), time.Hour, &sync.WaitGroup{})
 	t.Cleanup(store.Stop)
 
 	waitSessionVersion(t, store, payloadSID, 2)
@@ -199,7 +199,7 @@ func TestSessionStoreStartRunsOnlyPayloadAndExpirationRenewalWorkers(t *testing.
 		}
 	}
 
-	store.Shutdown()
+	store.Stop()
 }
 
 func TestSessionPayloadWorkerPersistsMutationQueuedDuringWrite(t *testing.T) {
@@ -218,7 +218,7 @@ func TestSessionPayloadWorkerPersistsMutationQueuedDuringWrite(t *testing.T) {
 	})
 	store := newPayloadWorkerStore(q)
 	store.batchSize = 1
-	store.Start(t.Context(), time.Hour)
+	store.Start(t.Context(), time.Hour, &sync.WaitGroup{})
 	t.Cleanup(store.Stop)
 
 	expiresAt := time.Now().Add(time.Hour)
@@ -377,7 +377,7 @@ func TestSessionPayloadMutationDuringShutdownIsSafe(t *testing.T) {
 		close(done)
 	}()
 	close(start)
-	store.Shutdown()
+	store.Stop()
 	<-done
 	if err := payload.Set(t.Context(), session.KeyUserName, "after shutdown"); err != nil {
 		t.Fatal(err)
@@ -390,6 +390,6 @@ func TestSessionPayloadMutationDuringShutdownIsSafe(t *testing.T) {
 func TestSessionStoreShutdownIsIdempotent(t *testing.T) {
 	store := newPayloadWorkerStore(newScriptedPayloadQuerier())
 
-	store.Shutdown()
-	store.Shutdown()
+	store.Stop()
+	store.Stop()
 }

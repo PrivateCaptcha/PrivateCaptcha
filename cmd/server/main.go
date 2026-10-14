@@ -43,9 +43,8 @@ const (
 	modeServer              = "server"
 	modeAuto                = "auto"
 	modeCheckConfig         = "check-config"
-	_readinessDrainDelay    = 5 * time.Second
-	_shutdownHardPeriod     = 5 * time.Second
 	_shutdownPeriod         = 10 * time.Second
+	_shutdownDrainPeriod    = 5 * time.Second
 	_dbConnectTimeout       = 30 * time.Second
 	_sessionPersistInterval = 10 * time.Second
 	_auditLogInterval       = 10 * time.Second
@@ -143,6 +142,10 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	stage := cfg.Get(common.StageKey).Value()
 	verbose := config.AsBool(cfg.Get(common.VerboseKey))
 	logLevel := common.SetupLogs(stage, verbose)
+	shutdownDelay := max(time.Duration(0), config.AsDuration(cfg.Get(common.ShutdownDelayKey), 0))
+	var workers sync.WaitGroup
+	startupCtx, cancelStartup := context.WithCancel(ctx)
+	defer cancelStartup()
 
 	planService := billing.NewPlanService(nil)
 	featureFlags := common.EnabledFeatureFlags{}
@@ -199,7 +202,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Auth:                api.NewAuthMiddleware(businessDB, userLimiter, planService, metrics, rulesCompiler),
 		VerifyLogChan:       make(chan *common.VerifyRecord, 10*api.VerifyBatchSize),
 		FormSubmitLogChan:   make(chan *common.FormSubmitRecord, 10*api.FormSubmitLogBatchSize),
-		FormSubmissionChan:  make(chan *api.FormSubmission, 10*api.FormBatchSize),
 		Verifier:            puzzleVerifier,
 		FormURLVerifier:     api.NewFormURLVerifier(),
 		Metrics:             metrics,
@@ -219,9 +221,10 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		VerifyFlushInterval: 10 * time.Second,
 		AuthBackfillDelay:   1 * time.Second,
 		FormFlushInterval:   50 * time.Millisecond,
+		FormQueueCapacity:   10 * api.FormBatchSize,
 		BackpressureTimeout: 5 * time.Second,
 	}
-	if err := apiServer.Init(ctx, apiServerCfg); err != nil {
+	if err := apiServer.Init(ctx, apiServerCfg, &workers); err != nil {
 		return err
 	}
 
@@ -243,38 +246,12 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Metrics:         metrics,
 	}
 	var closeQuitOnce sync.Once
-	quit := make(chan struct{})
+	quit := make(chan bool, 1)
 	quitFunc := func(ctx context.Context, immediately bool) {
 		slog.DebugContext(ctx, "Server quit triggered", "immediately", immediately)
-		healthCheck.Shutdown(ctx)
-		healthCheckTime := 1 * time.Second
-
-		if !immediately {
-			healthCheckTime = min(_readinessDrainDelay, healthCheck.Interval())
-			persistCtx, cancel := context.WithTimeout(context.Background(), healthCheckTime)
-			defer cancel()
-			go common.RunAdHocFunc(persistCtx, func(bctx context.Context) error {
-				cacheDir := cfg.Get(common.CacheDirKey).Value()
-				var errs []error
-				if err := businessDB.SaveCache(bctx, cacheDir); err != nil {
-					errs = append(errs, err)
-				}
-				if err := ipRateLimiter.SaveCache(bctx, cacheDir); err != nil {
-					errs = append(errs, err)
-				}
-				if err := apiServer.Levels.SaveCache(bctx, cacheDir); err != nil {
-					errs = append(errs, err)
-				}
-				if len(errs) > 0 {
-					return fmt.Errorf("cache save errors: %v", errs)
-				}
-				return nil
-			})
-		}
-
-		// Give time for readiness check to propagate
-		time.Sleep(healthCheckTime)
-		closeQuitOnce.Do(func() { close(quit) })
+		notifyShutdown(ctx, healthCheck, shutdownDelay, func(immediate bool) {
+			closeQuitOnce.Do(func() { quit <- immediate })
+		}, immediately)
 	}
 	checkLicenseJob, err := maintenance.NewCheckLicenseJob(businessDB, cfg, GitCommit, quitFunc)
 	if err != nil {
@@ -328,7 +305,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		return err
 	}
 
-	if err := portalServer.Init(ctx, templatesBuilder, GitCommit, _sessionPersistInterval); err != nil {
+	if err := portalServer.Init(ctx, templatesBuilder, GitCommit, _sessionPersistInterval, &workers); err != nil {
 		return err
 	}
 
@@ -346,8 +323,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}
 	updateConfigFunc(ctx)
 
-	// nolint:errcheck
-	go common.RunPeriodicJobOnce(common.TraceContext(context.Background(), "check_license"), checkLicenseJob, checkLicenseJob.NewParams(), 1*time.Second)
+	workers.Go(func() {
+		_ = common.RunPeriodicJobOnce(common.TraceContext(startupCtx, "check_license"), checkLicenseJob, checkLicenseJob.NewParams(), 1*time.Second)
+	})
 
 	router := http.NewServeMux()
 	apiServer.Setup(apiURLConfig.Domain(), verbose, common.NoopMiddleware).Register(router)
@@ -420,34 +398,37 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		}
 	}()
 
-	go common.RunAdHocFunc(ctx, func(ctx context.Context) error {
-		cacheDir := cfg.Get(common.CacheDirKey).Value()
-		var errs []error
-		if err := businessDB.LoadCache(ctx, cacheDir); err != nil {
-			errs = append(errs, err)
-		}
-		if err := ipRateLimiter.LoadCache(ctx, cacheDir); err != nil {
-			errs = append(errs, err)
-		}
-		if err := apiServer.Levels.LoadCache(ctx, cacheDir); err != nil {
-			errs = append(errs, err)
-		}
-		if len(errs) > 0 {
-			return fmt.Errorf("cache load errors: %v", errs)
-		}
-		return nil
+	workers.Go(func() {
+		common.RunAdHocFunc(startupCtx, func(ctx context.Context) error {
+			cacheDir := cfg.Get(common.CacheDirKey).Value()
+			var errs []error
+			if err := businessDB.LoadCache(ctx, cacheDir); err != nil {
+				errs = append(errs, err)
+			}
+			if err := ipRateLimiter.LoadCache(ctx, cacheDir); err != nil {
+				errs = append(errs, err)
+			}
+			if err := apiServer.Levels.LoadCache(ctx, cacheDir); err != nil {
+				errs = append(errs, err)
+			}
+			if len(errs) > 0 {
+				return fmt.Errorf("cache load errors: %v", errs)
+			}
+			return nil
+		})
 	})
 
-	businessDB.Start(ctx, _auditLogInterval)
+	businessDB.Start(ctx, _auditLogInterval, &workers)
 
 	jobConcurrency := config.AsInt(cfg.Get(common.MaintenanceJobConcurrencyKey), 2)
-	jobs := maintenance.NewJobs(businessDB, jobConcurrency)
+	jobs := maintenance.NewJobs(businessDB, jobConcurrency, &workers)
 
 	// nolint:staticcheck
 	fetchBrowserVersions, refreshBrowserVersions := maintenance.NewBrowserVersionJobs(businessDB, rulesCompiler.BrowserVersions())
 	if refreshBrowserVersions != nil { // nolint:staticcheck
-		// nolint:errcheck
-		go common.RunPeriodicJobOnce(context.Background(), refreshBrowserVersions, refreshBrowserVersions.NewParams(), 1*time.Second)
+		workers.Go(func() {
+			_ = common.RunPeriodicJobOnce(startupCtx, refreshBrowserVersions, refreshBrowserVersions.NewParams(), 1*time.Second)
+		})
 	}
 
 	jobs.Spawn(healthCheck)
@@ -556,39 +537,75 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		slog.DebugContext(ctx, "Skipping serving local API")
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		<-quit
-		slog.DebugContext(ctx, "Shutting down gracefully")
-		jobs.Stop()
-		apiServer.Stop()
-		businessDB.Stop()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), _shutdownPeriod)
-		defer cancel()
-		httpServer.SetKeepAlivesEnabled(false)
-		serr := httpServer.Shutdown(shutdownCtx)
-		stopOngoingGracefully()
-		sessionStore.Stop()
-		if serr != nil {
-			slog.ErrorContext(ctx, "Failed to shutdown gracefully", common.ErrAttr(serr))
-			fmt.Fprintf(stderr, "error shutting down http server gracefully: %s\n", serr)
-			time.Sleep(_shutdownHardPeriod)
+	immediately := <-quit
+	slog.DebugContext(ctx, "Shutting down gracefully")
+	jobs.Stop()
+	if localServer != nil {
+		if lerr := localServer.Close(); lerr != nil {
+			slog.ErrorContext(ctx, "Failed to shutdown local server", common.ErrAttr(lerr))
 		}
-		sessionStore.Shutdown()
-		apiServer.Shutdown()
-		businessDB.Shutdown()
-		if localServer != nil {
-			if lerr := localServer.Close(); lerr != nil {
-				slog.ErrorContext(ctx, "Failed to shutdown local server", common.ErrAttr(lerr))
+	}
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), _shutdownPeriod)
+	defer cancel()
+	httpServer.SetKeepAlivesEnabled(false)
+	serr := httpServer.Shutdown(shutdownCtx)
+	stopOngoingGracefully()
+	if serr != nil {
+		slog.ErrorContext(ctx, "Failed to shutdown gracefully", common.ErrAttr(serr))
+		fmt.Fprintf(stderr, "error shutting down http server gracefully: %s\n", serr)
+		if cerr := httpServer.Close(); cerr != nil {
+			slog.ErrorContext(ctx, "Failed to close HTTP server", common.ErrAttr(cerr))
+		}
+	}
+	businessDB.Stop()
+	sessionStore.Stop()
+	apiServer.Stop()
+	cancelStartup()
+	completionCtx, cancelCompletion := context.WithTimeout(context.Background(), max(_shutdownDrainPeriod, shutdownDelay))
+	defer cancelCompletion()
+	werr := finishShutdown(completionCtx, &workers, func(bctx context.Context) error {
+		if !immediately {
+			cacheDir := cfg.Get(common.CacheDirKey).Value()
+			var errs []error
+			if err := businessDB.SaveCache(bctx, cacheDir); err != nil {
+				errs = append(errs, err)
+			}
+			if err := ipRateLimiter.SaveCache(bctx, cacheDir); err != nil {
+				errs = append(errs, err)
+			}
+			if err := apiServer.Levels.SaveCache(bctx, cacheDir); err != nil {
+				errs = append(errs, err)
+			}
+			if len(errs) > 0 {
+				return fmt.Errorf("cache save errors: %v", errs)
 			}
 		}
-		slog.DebugContext(ctx, "Shutdown finished")
-	}()
-
-	wg.Wait()
+		return nil
+	})
+	if werr != nil {
+		apiServer.FormSubmitCancel()
+		slog.ErrorContext(ctx, "Failed to finish shutdown workers", common.ErrAttr(werr))
+	}
+	slog.DebugContext(ctx, "Shutdown finished")
 	return nil
+}
+
+// finishShutdown runs worker completion and cache persistence concurrently under one deadline.
+func finishShutdown(ctx context.Context, workers *sync.WaitGroup, persist func(context.Context) error) error {
+	workers.Go(func() { common.RunAdHocFunc(ctx, persist) })
+	return common.WaitWorkers(ctx, workers)
+}
+
+func notifyShutdown(ctx context.Context, healthCheck *maintenance.HealthCheckJob, delay time.Duration, notify func(bool), immediately bool) {
+	healthCheck.Shutdown(ctx)
+	if !immediately && delay > 0 {
+		slog.InfoContext(ctx, "Waiting for readiness propagation", "delay", delay)
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+		}
+	}
+	notify(immediately)
 }
 
 func migrate(ctx context.Context, cfg common.ConfigStore, up bool) error {

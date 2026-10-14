@@ -60,6 +60,37 @@ func TestValidateConfigRequired(t *testing.T) {
 	}
 }
 
+func TestValidateShutdownDelay(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		local   string
+		delay   string
+		invalid bool
+	}{
+		{name: "Unset"},
+		{name: "LocalRequiresExplicitDelay", local: "localhost:9090", invalid: true},
+		{name: "ExplicitZero", local: "localhost:9090", delay: "0s"},
+		{name: "ReadinessDrain", local: "localhost:9090", delay: "5s"},
+		{name: "FractionalDelay", delay: "250ms"},
+		{name: "Negative", delay: "-1s", invalid: true},
+		{name: "Invalid", delay: "5", invalid: true},
+		{name: "Overflow", delay: "999999999999999999999h", invalid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			values := requiredConfigValues()
+			values[common.LocalAddressKey] = tc.local
+			values[common.ShutdownDelayKey] = tc.delay
+			err := Validate(t.Context(), configWithValues(values))
+			if tc.invalid && err != errInvalidConfig {
+				t.Fatalf("expected invalid configuration, got %v", err)
+			}
+			if !tc.invalid && err != nil {
+				t.Fatalf("expected valid configuration, got %v", err)
+			}
+		})
+	}
+}
+
 func TestValidateConfigNumbersAndBooleans(t *testing.T) {
 	for _, key := range []common.ConfigKey{
 		common.VerboseKey, common.MaintenanceModeKey, common.RegistrationAllowedKey,
@@ -124,6 +155,7 @@ func testConfigFormats(t *testing.T, key common.ConfigKey, valid, invalid []stri
 	t.Helper()
 	for _, value := range valid {
 		values := requiredConfigValues()
+		values[common.ShutdownDelayKey] = "0s"
 		values[key] = value
 		if err := Validate(t.Context(), configWithValues(values)); err != nil {
 			t.Errorf("key %v rejected valid value %q: %v", key, value, err)
@@ -131,6 +163,7 @@ func testConfigFormats(t *testing.T, key common.ConfigKey, valid, invalid []stri
 	}
 	for _, value := range invalid {
 		values := requiredConfigValues()
+		values[common.ShutdownDelayKey] = "0s"
 		values[key] = value
 		err := Validate(t.Context(), configWithValues(values))
 		if err != errInvalidConfig {
@@ -343,6 +376,7 @@ func TestValidateConfigAllKeys(t *testing.T) {
 		common.StageKey:                     "prod",
 		common.VerboseKey:                   "1",
 		common.LocalAddressKey:              "localhost:9090",
+		common.ShutdownDelayKey:             "0s",
 		common.MaintenanceModeKey:           "false",
 		common.RegistrationAllowedKey:       "true",
 		common.HealthCheckIntervalKey:       "60",

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -32,6 +33,7 @@ type Levels struct {
 	backfillChan        chan *common.BackfillRequest
 	batchSize           int
 	accessLogCancel     context.CancelFunc
+	backfillCancel      context.CancelFunc
 	backpressureTimeout time.Duration
 }
 
@@ -64,6 +66,7 @@ func NewLevelsEx(timeSeries common.TimeSeriesStore, algorithm Algorithm, batchSi
 		backfillChan:        make(chan *common.BackfillRequest, batchSize),
 		batchSize:           batchSize,
 		accessLogCancel:     func() {},
+		backfillCancel:      func() {},
 		backpressureTimeout: defaultBackpressureTimeout,
 	}
 
@@ -74,7 +77,7 @@ func (levels *Levels) BackfillTimeout() time.Duration {
 	return levels.backpressureTimeout
 }
 
-func (levels *Levels) Init(accessLogInterval, backfillInterval, backpressureTimeout time.Duration) {
+func (levels *Levels) Init(accessLogInterval, backfillInterval, backpressureTimeout time.Duration, workers *sync.WaitGroup) {
 	levels.backpressureTimeout = max(backpressureTimeout, defaultBackpressureTimeout)
 
 	const (
@@ -85,21 +88,28 @@ func (levels *Levels) Init(accessLogInterval, backfillInterval, backpressureTime
 	accessBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, levelsService)
 	accessCtx, levels.accessLogCancel = context.WithCancel(
 		context.WithValue(accessBaseCtx, common.TraceIDContextKey, "access_log"))
-	go common.ProcessBatchArray(accessCtx, levels.accessChan, accessLogInterval, levels.batchSize, maxPendingBatchSize, levels.timeSeries.WriteAccessLogBatch)
+	workers.Go(func() {
+		common.ProcessBatchArray(accessCtx, levels.accessChan, accessLogInterval, levels.batchSize, maxPendingBatchSize, levels.timeSeries.WriteAccessLogBatch)
+	})
 
 	difficultyBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, levelsService)
-	go levels.backfillDifficulty(context.WithValue(difficultyBaseCtx, common.TraceIDContextKey, "backfill_difficulty"),
-		backfillInterval)
+	backfillCtx, cancel := context.WithCancel(context.WithValue(difficultyBaseCtx, common.TraceIDContextKey, "backfill_difficulty"))
+	levels.backfillCancel = cancel
+	workers.Go(func() { levels.backfillDifficulty(backfillCtx, backfillInterval) })
 }
 
 func (l *Levels) Stop() {
 	slog.Debug("Shutting down levels routines")
+	l.StopAccessLog()
+	l.StopBackfill()
+}
+
+func (l *Levels) StopAccessLog() {
 	l.accessLogCancel()
 }
 
-func (l *Levels) Shutdown() {
-	close(l.accessChan)
-	close(l.backfillChan)
+func (l *Levels) StopBackfill() {
+	l.backfillCancel()
 }
 
 func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time, verificationRate float64) (uint8, leakybucket.TLevel, error) {
@@ -208,7 +218,18 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 	cache := make(map[string]time.Time, maxCacheSize/3)
 	lastCleanupTime := time.Now()
 
-	for r := range l.backfillChan {
+	defer slog.DebugContext(ctx, "Finished backfilling difficulty")
+	for {
+		var r *common.BackfillRequest
+		var ok bool
+		select {
+		case <-ctx.Done():
+			return
+		case r, ok = <-l.backfillChan:
+			if !ok {
+				return
+			}
+		}
 		blog := slog.With("pid", r.PropertyID)
 		cacheKey := r.Key()
 		tnow := time.Now()
@@ -252,7 +273,6 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 		}
 	}
 
-	slog.DebugContext(ctx, "Finished backfilling difficulty")
 }
 
 func (l *Levels) SaveCache(ctx context.Context, dir string) error {

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -93,8 +94,9 @@ type Server struct {
 	VerifyLogCancel      context.CancelFunc
 	FormSubmitLogChan    chan *common.FormSubmitRecord
 	FormSubmitLogCancel  context.CancelFunc
-	FormSubmissionChan   chan *FormSubmission
 	FormSubmitCancel     context.CancelFunc
+	formSubmissionChan   chan *FormSubmission
+	formQueue            *formQueueState
 	formInlineBypassSlot chan struct{}
 	FailingForms         *common.ExpiringCounterMap[int32]
 	APICors              *cors.Cors
@@ -194,10 +196,11 @@ type ServerConfig struct {
 	VerifyFlushInterval time.Duration
 	AuthBackfillDelay   time.Duration
 	FormFlushInterval   time.Duration
+	FormQueueCapacity   int
 	BackpressureTimeout time.Duration
 }
 
-func (s *Server) Init(ctx context.Context, config ServerConfig) error {
+func (s *Server) Init(ctx context.Context, config ServerConfig, workers *sync.WaitGroup) error {
 	if s.FeatureFlags == nil {
 		s.FeatureFlags = common.EnabledFeatureFlags{}
 	}
@@ -208,16 +211,22 @@ func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 		slog.ErrorContext(ctx, "Failed to update puzzle verifier", common.ErrAttr(err))
 		return err
 	}
+	if s.formSubmissionChan == nil {
+		s.formSubmissionChan = make(chan *FormSubmission, config.FormQueueCapacity)
+	}
+	s.formQueue = &formQueueState{}
 
-	s.Levels.Init(2*time.Second /*access log interval*/, PropertyBucketSize /*backfill interval*/, config.BackpressureTimeout)
-	s.Auth.StartBackfill(config.AuthBackfillDelay, config.BackpressureTimeout)
+	s.Levels.Init(2*time.Second /*access log interval*/, PropertyBucketSize /*backfill interval*/, config.BackpressureTimeout, workers)
+	s.Auth.StartBackfill(config.AuthBackfillDelay, config.BackpressureTimeout, workers)
 	s.RegisterTaskHandlers(ctx)
 
 	baseVerifyCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
 	var cancelVerifyCtx context.Context
 	cancelVerifyCtx, s.VerifyLogCancel = context.WithCancel(context.WithValue(baseVerifyCtx, common.TraceIDContextKey, "flush_verify_log"))
 
-	go common.ProcessBatchArray(cancelVerifyCtx, s.VerifyLogChan, config.VerifyFlushInterval, VerifyBatchSize, maxVerifyBatchSize, s.TimeSeries.WriteVerifyLogBatch)
+	workers.Go(func() {
+		common.ProcessBatchArray(cancelVerifyCtx, s.VerifyLogChan, config.VerifyFlushInterval, VerifyBatchSize, maxVerifyBatchSize, s.TimeSeries.WriteVerifyLogBatch)
+	})
 
 	if s.FailingForms == nil {
 		s.FailingForms = common.NewExpiringCounterMap[int32]()
@@ -231,12 +240,19 @@ func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 	baseFormSubmitLogCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
 	var cancelFormSubmitLogCtx context.Context
 	cancelFormSubmitLogCtx, s.FormSubmitLogCancel = context.WithCancel(context.WithValue(baseFormSubmitLogCtx, common.TraceIDContextKey, "flush_form_submit_log"))
-	go common.ProcessBatchArray(cancelFormSubmitLogCtx, s.FormSubmitLogChan, config.FormFlushInterval, FormSubmitLogBatchSize, maxFormSubmitLogBatchSize, s.TimeSeries.WriteFormSubmitBatch)
+	workers.Go(func() {
+		common.ProcessBatchArray(cancelFormSubmitLogCtx, s.FormSubmitLogChan, config.FormFlushInterval, FormSubmitLogBatchSize, maxFormSubmitLogBatchSize, s.TimeSeries.WriteFormSubmitBatch)
+	})
 
 	baseFormCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
 	var cancelFormCtx context.Context
 	cancelFormCtx, s.FormSubmitCancel = context.WithCancel(context.WithValue(baseFormCtx, common.TraceIDContextKey, "submit_forms"))
-	go common.ProcessBatchArray(cancelFormCtx, s.FormSubmissionChan, config.FormFlushInterval, FormBatchSize, maxFormBatchSize, s.submitFormBatch)
+	workers.Go(func() {
+		// Recording consumers stay available until the queued forms finish.
+		defer s.stopRecording()
+		defer s.FormSubmitCancel()
+		common.ProcessBatchArray(cancelFormCtx, s.formSubmissionChan, config.FormFlushInterval, FormBatchSize, maxFormBatchSize, s.submitFormBatch)
+	})
 
 	return nil
 }
@@ -293,24 +309,25 @@ func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) 
 }
 
 func (s *Server) Stop() {
-	s.Levels.Stop()
 	s.Auth.Stop()
-
-	s.VerifyLogCancel()
-	// cancel producer before consumer
-	s.FormSubmitCancel()
-	s.FormSubmitLogCancel()
+	s.Levels.StopBackfill()
+	if s.formQueue != nil {
+		s.formQueue.mu.Lock()
+		if !s.formQueue.stopped {
+			s.formQueue.stopped = true
+			close(s.formSubmissionChan)
+		}
+		s.formQueue.mu.Unlock()
+		return
+	}
+	s.stopRecording()
 }
 
-func (s *Server) Shutdown() {
-	s.Levels.Shutdown()
-	s.Auth.Shutdown()
+func (s *Server) stopRecording() {
+	s.Levels.StopAccessLog()
 
-	slog.Debug("Shutting down API server routines")
-	// background goroutines can call addFormSubmitRecord()/addVerifyRecord()  so we don't close channels here
-	// close(s.VerifyLogChan)
-	// close(s.FormSubmitLogChan)
-	// close(s.FormSubmissionChan)
+	s.VerifyLogCancel()
+	s.FormSubmitLogCancel()
 }
 
 func (s *Server) setupWithPrefix(rg *common.RouteGenerator, apiCorsHandler, formCorsHandler, security alice.Constructor) {

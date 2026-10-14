@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -125,16 +126,12 @@ func (s *BusinessStore) Impl() *BusinessStoreImpl {
 	return s.defaultImpl
 }
 
-func (s *BusinessStore) Start(ctx context.Context, auditLogInterval time.Duration) {
-	s.auditLog.Start(ctx, auditLogInterval)
+func (s *BusinessStore) Start(ctx context.Context, auditLogInterval time.Duration, workers *sync.WaitGroup) {
+	s.auditLog.Start(ctx, auditLogInterval, workers)
 }
 
 func (s *BusinessStore) Stop() {
 	s.auditLog.Stop()
-}
-
-func (s *BusinessStore) Shutdown() {
-	s.auditLog.Shutdown()
 }
 
 func (s *BusinessStore) WithTx(ctx context.Context, fn func(*BusinessStoreImpl) ([]*common.AuditLogEvent, error)) ([]*common.AuditLogEvent, error) {
