@@ -9,6 +9,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -121,8 +122,7 @@ func TestPuzzleRequestStats(t *testing.T) {
 		accessRecords:   make(chan *common.AccessRecord, 1),
 	}
 	levels := difficulty.NewLevels(capture, 1, time.Minute)
-	levels.Init(time.Hour, time.Hour, time.Second)
-	defer levels.Shutdown()
+	levels.Init(time.Hour, time.Hour, time.Second, &sync.WaitGroup{})
 	defer levels.Stop()
 	uaParser := useragent.NewParser()
 	verifier := NewVerifier(testsConfigStore(), nil, config.NewStaticValue(common.FingerprintHeaderKey, ""), uaParser)

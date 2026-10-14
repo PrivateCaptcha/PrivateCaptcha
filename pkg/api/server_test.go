@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 
 	"context"
 	"database/sql"
@@ -101,7 +102,6 @@ func TestMain(m *testing.M) {
 		Auth:                NewAuthMiddleware(store, NewUserLimiter(store, planService), planService, metrics, rules.NewRulesCompiler(useragent.NewParser())),
 		VerifyLogChan:       make(chan *common.VerifyRecord, 10*VerifyBatchSize),
 		FormSubmitLogChan:   make(chan *common.FormSubmitRecord, 10*FormSubmitLogBatchSize),
-		FormSubmissionChan:  make(chan *FormSubmission, 10*FormBatchSize),
 		FormSubmitLogCancel: func() {},
 		FormSubmitCancel:    func() {},
 		Verifier:            NewVerifier(cfg, store, cfg.Get(common.FingerprintHeaderKey), useragent.NewParser()),
@@ -120,12 +120,13 @@ func TestMain(m *testing.M) {
 		VerifyFlushInterval: verifyFlushInterval,
 		AuthBackfillDelay:   authBackfillDelay,
 		FormFlushInterval:   formFlushInterval,
+		FormQueueCapacity:   10 * FormBatchSize,
 		BackpressureTimeout: 100 * time.Millisecond,
 	}
-	if err := server.Init(context.TODO(), serverCfg); err != nil {
+	if err := server.Init(context.TODO(), serverCfg, &sync.WaitGroup{}); err != nil {
 		panic(err)
 	}
-	defer server.Shutdown()
+	defer server.Stop()
 
 	// TODO: seed data
 
@@ -155,7 +156,6 @@ func TestAPIServerStoreErrors(t *testing.T) {
 		Auth:                NewAuthMiddleware(store, NewUserLimiter(store, planService), planService, metrics, rules.NewRulesCompiler(useragent.NewParser())),
 		VerifyLogChan:       make(chan *common.VerifyRecord, 10),
 		FormSubmitLogChan:   make(chan *common.FormSubmitRecord, 10),
-		FormSubmissionChan:  make(chan *FormSubmission, 10),
 		FormSubmitLogCancel: func() {},
 		FormURLVerifier:     AllowAllFormURLVerifier{},
 		Verifier:            NewVerifier(testsConfigStore(), store, config.NewStaticValue(common.FingerprintHeaderKey, "FP"), useragent.NewParser()),
@@ -173,8 +173,9 @@ func TestAPIServerStoreErrors(t *testing.T) {
 		VerifyFlushInterval: verifyFlushInterval,
 		AuthBackfillDelay:   authBackfillDelay,
 		FormFlushInterval:   formFlushInterval,
+		FormQueueCapacity:   10 * FormBatchSize,
 		BackpressureTimeout: 100 * time.Millisecond,
-	}); err != nil {
+	}, &sync.WaitGroup{}); err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
 

@@ -8,9 +8,42 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
+
+func TestAsDuration(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  time.Duration
+	}{
+		{
+			value: "",
+			want:  time.Second,
+		},
+		{
+			value: "invalid",
+			want:  time.Second,
+		},
+		{
+			value: "0s",
+			want:  0,
+		},
+		{
+			value: "250ms",
+			want:  250 * time.Millisecond,
+		},
+		{
+			value: "5s",
+			want:  5 * time.Second,
+		},
+	} {
+		if got := AsDuration(NewStaticValue(common.ShutdownDelayKey, tc.value), time.Second); got != tc.want {
+			t.Errorf("duration %q: got %v, want %v", tc.value, got, tc.want)
+		}
+	}
+}
 
 func TestURLConfigHostPort(t *testing.T) {
 	cfg := AsURL(t.Context(), NewStaticValue(common.CDNBaseURLKey, "localhost:8080/cdn"))

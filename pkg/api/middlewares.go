@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/maypok86/otter/v2"
@@ -186,31 +187,39 @@ func NewAuthMiddleware(store db.Implementor,
 	return am
 }
 
-func (am *AuthMiddleware) StartBackfill(backfillDelay, backpressureTimeout time.Duration) {
+func (am *AuthMiddleware) StartBackfill(backfillDelay, backpressureTimeout time.Duration, workers *sync.WaitGroup) {
 	am.backpressureTimeout = max(backpressureTimeout, defaultBackpressureTimeout)
 
 	var sitekeyBackfillCtx context.Context
 	sitekeyBackfillBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
 	sitekeyBackfillCtx, am.SitekeyBackfillCancel = context.WithCancel(
 		context.WithValue(sitekeyBackfillBaseCtx, common.TraceIDContextKey, "sitekey_backfill"))
-	go common.ProcessBatchMap(sitekeyBackfillCtx, am.SitekeyChan, backfillDelay, am.BatchSize, am.BatchSize*100, am.backfillSitekeyImpl)
+	workers.Go(func() {
+		common.ProcessBatchMap(sitekeyBackfillCtx, am.SitekeyChan, backfillDelay, am.BatchSize, am.BatchSize*100, am.backfillSitekeyImpl)
+	})
 
 	edgeBackfillCtx, cancel := context.WithCancel(context.WithValue(sitekeyBackfillBaseCtx, common.TraceIDContextKey, "edge_backfill"))
 	am.EdgeBackfillCancel = cancel
-	go common.ProcessBatchMap(edgeBackfillCtx, am.EdgeChan, backfillDelay, am.BatchSize, am.BatchSize*100, am.backfillEdgeImpl)
+	workers.Go(func() {
+		common.ProcessBatchMap(edgeBackfillCtx, am.EdgeChan, backfillDelay, am.BatchSize, am.BatchSize*100, am.backfillEdgeImpl)
+	})
 
 	var formBackfillCtx context.Context
 	formBackfillBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
 	formBackfillCtx, am.FormBackfillCancel = context.WithCancel(
 		context.WithValue(formBackfillBaseCtx, common.TraceIDContextKey, "form_backfill"))
-	go common.ProcessBatchMap(formBackfillCtx, am.FormChan, backfillDelay, am.BatchSize, am.BatchSize*100, am.backfillFormsImpl)
+	workers.Go(func() {
+		common.ProcessBatchMap(formBackfillCtx, am.FormChan, backfillDelay, am.BatchSize, am.BatchSize*100, am.backfillFormsImpl)
+	})
 
 	var usersBackfillCtx context.Context
 	userBackfillBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
 	usersBackfillCtx, am.UsersBackfillCancel = context.WithCancel(
 		context.WithValue(userBackfillBaseCtx, common.TraceIDContextKey, "users_backfill"))
 	// NOTE: we use the same backfill delay because users processing is slower and sitekey channel will block on it
-	go common.ProcessBatchMap(usersBackfillCtx, am.UsersChan, backfillDelay, am.BatchSize, am.BatchSize*10, am.backfillUsersImpl)
+	workers.Go(func() {
+		common.ProcessBatchMap(usersBackfillCtx, am.UsersChan, backfillDelay, am.BatchSize, am.BatchSize*10, am.backfillUsersImpl)
+	})
 
 	// API key last used - use generous timeouts and batch sizes since we don't need to update too often
 	const apiKeyLastUsedBatchSize = 100
@@ -221,13 +230,17 @@ func (am *AuthMiddleware) StartBackfill(backfillDelay, backpressureTimeout time.
 		context.WithValue(apiKeyLastUsedBaseCtx, common.TraceIDContextKey, "apikey_lastused"))
 	// Use a more generous delay (5x the regular backfill delay) since we don't need frequent updates
 	apiKeyLastUsedDelay := backfillDelay * 5
-	go common.ProcessBatchMap(apiKeyLastUsedCtx, am.APIKeyLastUsedChan, apiKeyLastUsedDelay, apiKeyLastUsedBatchSize, apiKeyLastUsedMaxBatchSize, am.backfillAPIKeyLastUsedImpl)
+	workers.Go(func() {
+		common.ProcessBatchMap(apiKeyLastUsedCtx, am.APIKeyLastUsedChan, apiKeyLastUsedDelay, apiKeyLastUsedBatchSize, apiKeyLastUsedMaxBatchSize, am.backfillAPIKeyLastUsedImpl)
+	})
 
 	var rulesBackfillCtx context.Context
 	rulesBackfillBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
 	rulesBackfillCtx, am.RulesBackfillCancel = context.WithCancel(
 		context.WithValue(rulesBackfillBaseCtx, common.TraceIDContextKey, "rules_backfill"))
-	go common.ProcessBatchMap(rulesBackfillCtx, am.RulesChan, backfillDelay, am.BatchSize, am.BatchSize*10, am.backfillRulesImpl)
+	workers.Go(func() {
+		common.ProcessBatchMap(rulesBackfillCtx, am.RulesChan, backfillDelay, am.BatchSize, am.BatchSize*10, am.backfillRulesImpl)
+	})
 }
 
 func (am *AuthMiddleware) Stop() {
@@ -237,16 +250,6 @@ func (am *AuthMiddleware) Stop() {
 	am.UsersBackfillCancel()
 	am.APIKeyLastUsedCancel()
 	am.RulesBackfillCancel()
-}
-
-func (am *AuthMiddleware) Shutdown() {
-	slog.Debug("Shutting down auth middleware")
-	close(am.SitekeyChan)
-	close(am.EdgeChan)
-	close(am.FormChan)
-	close(am.UsersChan)
-	close(am.APIKeyLastUsedChan)
-	close(am.RulesChan)
 }
 
 func (am *AuthMiddleware) backfillFormsImpl(ctx context.Context, batch map[string]uint) error {

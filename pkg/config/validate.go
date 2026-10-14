@@ -64,6 +64,10 @@ func Validate(ctx context.Context, cfg common.ConfigStore) error {
 			validationErr = errInvalidConfig
 		}
 	}
+	if cfg.Get(common.LocalAddressKey).Value() != "" && cfg.Get(common.ShutdownDelayKey).Value() == "" {
+		slog.ErrorContext(ctx, "Set PC_SHUTDOWN_DELAY explicitly when PC_LOCAL_ADDRESS is configured; use 0s to disable readiness draining")
+		validationErr = errInvalidConfig
+	}
 	if err := validateEdgeKeyPair(cfg); err != nil {
 		slog.ErrorContext(ctx, "Invalid edge token signing key pair",
 			"privateKeyConfig", configKeyToEnvName[common.EdgeTokenSigningPrivateKeyKey],
@@ -89,6 +93,11 @@ func validateItem(item common.ConfigItem) error {
 		}
 	case common.HealthCheckIntervalKey:
 		return validatePositiveInt(item, int(math.MaxInt64/int64(time.Second)))
+	case common.ShutdownDelayKey:
+		delay, err := time.ParseDuration(value)
+		if err != nil || delay < 0 {
+			return errors.New("shutdown delay must be a non-negative duration")
+		}
 	case common.MaintenanceJobConcurrencyKey:
 		return validatePositiveInt(item, math.MaxInt)
 	case common.EnterpriseAuditLogDaysKey:

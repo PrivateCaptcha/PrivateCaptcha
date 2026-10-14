@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -258,9 +259,9 @@ func (m *Manager) ClearCookie(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Cache-Control", `no-cache="Set-Cookie"`)
 }
 
-func (m *Manager) Init(svc string, path string, interval time.Duration) {
+func (m *Manager) Init(svc string, path string, interval time.Duration, workers *sync.WaitGroup) {
 	m.Path = path
-	m.Store.Start(context.WithValue(context.Background(), common.ServiceContextKey, svc), interval)
+	m.Store.Start(context.WithValue(context.Background(), common.ServiceContextKey, svc), interval, workers)
 }
 
 // ScheduleExpirationRenewal refreshes the cookie and queues persistence without request-time I/O.

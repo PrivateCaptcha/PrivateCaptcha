@@ -44,12 +44,16 @@ func NewSessionStore(store Implementor, metrics common.BaseMetrics) *SessionStor
 	}
 }
 
-func (ss *SessionStore) Start(ctx context.Context, interval time.Duration) {
+func (ss *SessionStore) Start(ctx context.Context, interval time.Duration, workers *sync.WaitGroup) {
 	var cancelCtx context.Context
 	cancelCtx, ss.processCancel = context.WithCancel(
 		context.WithValue(ctx, common.TraceIDContextKey, "persist_session"))
-	go common.ProcessBatchMap(cancelCtx, ss.payloadChan, interval, ss.batchSize, ss.batchSize*100, ss.persistPayloads)
-	go common.ProcessBatchMap(cancelCtx, ss.renewalChan, interval, ss.batchSize, ss.batchSize*100, ss.renewSessionExpirations)
+	workers.Go(func() {
+		common.ProcessBatchMap(cancelCtx, ss.payloadChan, interval, ss.batchSize, ss.batchSize*100, ss.persistPayloads)
+	})
+	workers.Go(func() {
+		common.ProcessBatchMap(cancelCtx, ss.renewalChan, interval, ss.batchSize, ss.batchSize*100, ss.renewSessionExpirations)
+	})
 }
 
 var _ session.Store = (*SessionStore)(nil)
@@ -379,24 +383,6 @@ func (ss *SessionStore) Stop() {
 	ss.renewalStopped = true
 	ss.renewalMu.Unlock()
 	ss.processCancel()
-	ss.dropQueuedPayloads(context.Background())
-	ss.dropQueuedExpirationRenewals(context.Background())
-}
-
-func (ss *SessionStore) Shutdown() {
-	slog.Debug("Shutting down persisting sessions")
-	ss.payloadMu.Lock()
-	if !ss.payloadStopped {
-		ss.payloadStopped = true
-		close(ss.payloadChan)
-	}
-	ss.payloadMu.Unlock()
-	ss.renewalMu.Lock()
-	if !ss.renewalStopped {
-		ss.renewalStopped = true
-		close(ss.renewalChan)
-	}
-	ss.renewalMu.Unlock()
 	ss.dropQueuedPayloads(context.Background())
 	ss.dropQueuedExpirationRenewals(context.Background())
 }

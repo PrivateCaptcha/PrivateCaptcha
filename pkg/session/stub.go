@@ -2,13 +2,14 @@ package session
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
 // StubSessionStore implements Store with no-ops.
 type StubSessionStore struct{}
 
-func (s *StubSessionStore) Start(_ context.Context, _ time.Duration) {}
+func (s *StubSessionStore) Start(_ context.Context, _ time.Duration, _ *sync.WaitGroup) {}
 func (s *StubSessionStore) EnqueueExpirationRenewal(_ context.Context, _ string) {
 }
 func (s *StubSessionStore) UpdatePayload(_ context.Context, _ string) {}

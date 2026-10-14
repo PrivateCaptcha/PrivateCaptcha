@@ -9,6 +9,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -77,6 +78,13 @@ func AsInt(item common.ConfigItem, fallback int) int {
 	} else {
 		return i
 	}
+}
+
+func AsDuration(item common.ConfigItem, fallback time.Duration) time.Duration {
+	if value, err := time.ParseDuration(item.Value()); err == nil {
+		return value
+	}
+	return fallback
 }
 
 func AsBool(item common.ConfigItem) bool {

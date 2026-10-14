@@ -3,6 +3,7 @@ package api
 import (
 	"log/slog"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,8 +26,8 @@ func TestBackfillLevels(t *testing.T) {
 
 	// minutes per bucket
 	levels := difficulty.NewLevels(timeSeries, 200, testBucketSize)
-	levels.Init(500*time.Millisecond /*access log*/, 700*time.Millisecond /*backfill*/, 100*time.Millisecond)
-	defer levels.Shutdown()
+	levels.Init(500*time.Millisecond /*access log*/, 700*time.Millisecond /*backfill*/, 100*time.Millisecond, &sync.WaitGroup{})
+	defer levels.Stop()
 	tnow := time.Now()
 	userID := int32(123)
 

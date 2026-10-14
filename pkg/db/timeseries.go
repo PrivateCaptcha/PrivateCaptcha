@@ -331,7 +331,7 @@ FROM %s FINAL
 WHERE user_id = {user_id:UInt32} AND org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
 GROUP BY timestamp
 ORDER BY timestamp`
-	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, AccessLogTableName5m),
+	rows, err := ts.Clickhouse.QueryContext(ctx, fmt.Sprintf(query, AccessLogTableName5m),
 		clickhouse.Named("user_id", strconv.Itoa(int(r.UserID))),
 		clickhouse.Named("org_id", strconv.Itoa(int(r.OrgID))),
 		clickhouse.Named("property_id", strconv.Itoa(int(r.PropertyID))),

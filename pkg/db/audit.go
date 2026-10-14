@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/netip"
+	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -29,24 +30,17 @@ func NewAuditLog(querier dbgen.Querier, batchSize int) *AuditLog {
 	}
 }
 
-func (al *AuditLog) Start(ctx context.Context, interval time.Duration) {
+func (al *AuditLog) Start(ctx context.Context, interval time.Duration, workers *sync.WaitGroup) {
 	var cancelCtx context.Context
 	cancelCtx, al.persistCancel = context.WithCancel(
 		context.WithValue(ctx, common.TraceIDContextKey, "persist_auditlog"))
-	go common.ProcessBatchArray(cancelCtx, al.persistChan, interval, al.batchSize, al.batchSize*10, al.PersistAuditLog)
+	workers.Go(func() {
+		common.ProcessBatchArray(cancelCtx, al.persistChan, interval, al.batchSize, al.batchSize*10, al.PersistAuditLog)
+	})
 }
 
 func (al *AuditLog) Stop() {
 	al.persistCancel()
-}
-
-func (al *AuditLog) Shutdown() {
-	slog.Debug("Shutting down audit log persistence")
-	// background goroutines (e.g. HandleDeleteAccount) can still call RecordEvent()
-	// after Shutdown(), so we don't close the channel here: sending on a closed
-	// channel panics unconditionally in Go and would silently drop audit events
-	// via the recover() in the async-task/job wrappers.
-	// close(al.persistChan)
 }
 
 func (al *AuditLog) PersistAuditLog(ctx context.Context, batch []*common.AuditLogEvent) error {

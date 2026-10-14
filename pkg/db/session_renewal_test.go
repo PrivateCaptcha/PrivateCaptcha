@@ -171,7 +171,7 @@ func TestSessionExpirationRenewalShutdownIsSafe(t *testing.T) {
 		close(done)
 	}()
 	close(start)
-	store.Shutdown()
+	store.Stop()
 	<-done
 	store.EnqueueExpirationRenewal(t.Context(), t.Name())
 }

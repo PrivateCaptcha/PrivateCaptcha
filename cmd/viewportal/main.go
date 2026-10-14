@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/api"
@@ -331,7 +332,7 @@ func main() {
 		log.Fatalf("Failed to add template FS: %v", err)
 	}
 
-	if err := srv.Init(ctx, builder, assetVersion, 1*time.Hour); err != nil {
+	if err := srv.Init(ctx, builder, assetVersion, 1*time.Hour, &sync.WaitGroup{}); err != nil {
 		log.Fatalf("Failed to init portal server: %v", err)
 	}
 

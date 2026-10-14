@@ -40,7 +40,14 @@ var (
 	errCaptchaVerificationFailed = errors.New("captcha verification failed")
 	errFormSubmitFailed          = errors.New("form submit failed")
 	errFormDisabled              = errors.New("form is disabled")
+	// ErrFormQueueStopped means Stop has sealed the submission queue.
+	ErrFormQueueStopped = errors.New("form queue is stopped")
 )
+
+type formQueueState struct {
+	mu      sync.RWMutex
+	stopped bool
+}
 
 var formOutboundDialer = &net.Dialer{
 	Timeout:   10 * time.Second,
@@ -211,17 +218,40 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 
 	submission := s.createFormSubmission(ctx, r, payload)
 
-	timer := time.NewTimer(formQueueBackpressureTimeout)
-	defer timer.Stop()
-
-	select {
-	case s.FormSubmissionChan <- submission:
+	switch err := s.SubmitForm(ctx, submission); err {
+	case nil:
 		slog.Log(ctx, common.LevelTrace, "Accepted form submission", "submitID", submission.ID)
 		w.WriteHeader(http.StatusAccepted)
-	case <-ctx.Done():
-		http.Error(w, http.StatusText(http.StatusRequestTimeout), http.StatusRequestTimeout)
-	case <-timer.C:
+	case common.ErrBackpressure:
 		s.processInlineFormSubmission(ctx, w, submission)
+	case ErrFormQueueStopped:
+		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+	default:
+		http.Error(w, http.StatusText(http.StatusRequestTimeout), http.StatusRequestTimeout)
+	}
+}
+
+// SubmitForm queues a submission, or returns ErrFormQueueStopped after Stop has sealed the queue.
+func (s *Server) SubmitForm(ctx context.Context, submission *FormSubmission) error {
+	if s.formQueue != nil {
+		s.formQueue.mu.RLock()
+		defer s.formQueue.mu.RUnlock()
+		if s.formQueue.stopped {
+			return ErrFormQueueStopped
+		}
+	}
+	if submission == nil {
+		return errInvalidArg
+	}
+	timer := time.NewTimer(formQueueBackpressureTimeout)
+	defer timer.Stop()
+	select {
+	case s.formSubmissionChan <- submission:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return common.ErrBackpressure
 	}
 }
 

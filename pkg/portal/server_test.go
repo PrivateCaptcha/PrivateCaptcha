@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 
 	"context"
 	"database/sql"
@@ -55,6 +56,7 @@ func (s *stubLicenseService) IsRegistered() bool {
 
 func TestMain(m *testing.M) {
 	flag.Parse()
+	var workers sync.WaitGroup
 
 	planService := billing.NewPlanService(nil)
 	testPlan = planService.GetInternalTrialPlan()
@@ -106,7 +108,7 @@ func TestMain(m *testing.M) {
 		templatesBuilder := NewTemplatesBuilder()
 		templatesBuilder.AddFS(ctx, web.Templates(), "core")
 
-		if err := server.Init(ctx, templatesBuilder, "", 10*time.Second); err != nil {
+		if err := server.Init(ctx, templatesBuilder, "", 10*time.Second, &workers); err != nil {
 			panic(err)
 		}
 
@@ -138,8 +140,8 @@ func TestMain(m *testing.M) {
 	}
 
 	levels := difficulty.NewLevels(timeSeries, 100, 5*time.Minute)
-	levels.Init(2*time.Second, 5*time.Minute, 100*time.Millisecond)
-	defer levels.Shutdown()
+	levels.Init(2*time.Second, 5*time.Minute, 100*time.Millisecond, &workers)
+	defer levels.Stop()
 
 	store = db.NewBusinessEx(pool, cache)
 
@@ -185,9 +187,9 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	store.Start(ctx, 1*time.Second)
+	store.Start(ctx, 1*time.Second, &workers)
 
-	if err := server.Init(ctx, templatesBuilder, "", 1*time.Second); err != nil {
+	if err := server.Init(ctx, templatesBuilder, "", 1*time.Second, &workers); err != nil {
 		panic(err)
 	}
 
@@ -231,6 +233,7 @@ func TestPrivateRenewalFollowsAuthentication(t *testing.T) {
 	}
 
 	originalManager := server.Sessions
+	var freshWorkers sync.WaitGroup
 	freshStore := db.NewSessionStore(store, server.Metrics)
 	server.Sessions = &session.Manager{
 		CookieName:   originalManager.CookieName,
@@ -241,7 +244,11 @@ func TestPrivateRenewalFollowsAuthentication(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		freshStore.Stop()
-		freshStore.Shutdown()
+		waitCtx, cancelWait := context.WithTimeout(context.Background(), time.Second)
+		defer cancelWait()
+		if err := common.WaitWorkers(waitCtx, &freshWorkers); err != nil {
+			t.Error(err)
+		}
 		server.Sessions = originalManager
 	})
 
@@ -328,7 +335,7 @@ func TestPortalServerStoreErrors(t *testing.T) {
 	if err := templatesBuilder.AddFS(ctx, web.Templates(), "core"); err != nil {
 		t.Fatalf("AddFS failed: %v", err)
 	}
-	if err := srv.Init(ctx, templatesBuilder, "", 1*time.Second); err != nil {
+	if err := srv.Init(ctx, templatesBuilder, "", 1*time.Second, &sync.WaitGroup{}); err != nil {
 		t.Fatalf("Init failed: %v", err)
 	}
 
