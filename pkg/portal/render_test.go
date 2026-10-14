@@ -950,7 +950,7 @@ func TestRenderHTML(t *testing.T) {
 			enterprise: enterpriseOnly,
 		},
 		{
-			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint, "edge-feature-disabled"},
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint, "feature-flags-disabled-edge-settings"},
 			template: propertyDashboardSettingsTemplate,
 			model: &propertySettingsRenderContext{
 				propertyDashboardRenderContext: propertyDashboardRenderContext{
@@ -961,7 +961,8 @@ func TestRenderHTML(t *testing.T) {
 				difficultyLevelsRenderContext: createDifficultyLevelsRenderContext(),
 			},
 			features:   stubRenderFeatureFlags(false),
-			selector:   `form[data-unsaved-changes-key="property-edge-settings"]`,
+			selector:   `form[data-unsaved-changes-key="property-edge-settings"] label`,
+			matches:    []string{"Verified access duration", "Widget start mode"},
 			enterprise: enterpriseOnly,
 		},
 		{
