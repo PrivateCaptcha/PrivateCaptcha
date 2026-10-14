@@ -1,4 +1,4 @@
-.PHONY: clean build deploy run-postgres-test-db stop-postgres-test-db run-clickhouse-test-db stop-clickhouse-test-db test-local-light test-local widget-size lint-widget bench-puzzle bench-widget bench-puzzle-solver build-puzzle-compat-go build-puzzle-compat-js test-puzzle-compat
+.PHONY: clean build deploy provision-local run-local run-postgres-test-db stop-postgres-test-db run-clickhouse-test-db stop-clickhouse-test-db test-local-light test-local widget-size lint-widget bench-puzzle bench-widget bench-puzzle-solver build-puzzle-compat-go build-puzzle-compat-js test-puzzle-compat
 
 STAGE ?= dev
 GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
@@ -209,6 +209,24 @@ serve: build-js build-widget-script copy-static-js build-server
 
 run:
 	reflex -r '^(pkg|cmd|vendor|web)/' -R '^(web/static/js|web/node_modules)' -s -- sh -c 'make serve'
+
+provision-local:
+	@export PGHOST="$${PG_HOST:-localhost}" PGPORT="$(TEST_PG_PORT)"; \
+	app_password="$${PC_DB_PASSWORD:-QMS0fJmTHS8Gzq}"; \
+	printf '%s\n' \
+		"SELECT format('CREATE USER captchasrv WITH ENCRYPTED PASSWORD %L', :'app_password') WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'captchasrv')" '\gexec' \
+		"SELECT 'CREATE DATABASE privatecaptcha OWNER captchasrv' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'privatecaptcha')" '\gexec' | \
+		PGUSER="$${PG_ADMIN_USER:-postgres}" PGPASSWORD="$${PGPASSWORD:-postgres}" psql -d postgres -v ON_ERROR_STOP=1 -v app_password="$$app_password" && \
+	PGUSER=captchasrv PGPASSWORD="$$app_password" PGDATABASE=privatecaptcha PC_DB_PASSWORD="$$app_password" bash pkg/db/migrations/init/postgres.sh privatecaptcha captchasrv
+	@CH_HOST=localhost CH_PORT="$(TEST_CH_PORT)" CH_HTTP_PORT="$(TEST_CH_HTTP_PORT)" CLICKHOUSE_CLIENT_CMD="$(CLICKHOUSE_TEST_CLIENT)" bash pkg/db/migrations/init/clickhouse.sh privatecaptcha captchasrv
+	@printf '%s\n' 'GRANT ALL ON privatecaptcha.* TO captchasrv;' | CH_HOST=localhost CH_PORT="$(TEST_CH_PORT)" CH_HTTP_PORT="$(TEST_CH_HTTP_PORT)" $(CLICKHOUSE_TEST_CLIENT) -n
+
+run-local: build-server
+	@test -r docker/pc.env
+	@bash -o pipefail -c '{ \
+		sed -E "/^PC_POSTGRES=/ { s#@postgres:5432/#@localhost:$(TEST_PG_PORT)/#; s#sslmode=require#sslmode=disable#; }" docker/pc.env && \
+		printf "\nPC_CLICKHOUSE_HOST=localhost\nPC_CLICKHOUSE_PORT=%s\n" "$(TEST_CH_PORT)"; \
+	} | ./bin/server -env stdin -mode auto -migrate-hash "$(GIT_COMMIT)"'
 
 run-docker:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml up --build
