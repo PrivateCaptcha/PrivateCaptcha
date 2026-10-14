@@ -626,16 +626,7 @@ func (s *Server) addEdgeToken(r *http.Request, response *VerificationResponse, r
 		return nil
 	}
 	ctx := r.Context()
-	validity := property.EdgeTokenValidityInterval
-	if rulesPair := s.retrievePropertyRules(ctx, property); rulesPair != nil && (rulesPair.PropertyRules != nil || rulesPair.OrgRules != nil) {
-		countryCodeHeader := ""
-		if s.CountryCodeHeader != nil {
-			countryCodeHeader = s.CountryCodeHeader.Value()
-		}
-		ri := rules.NewRequestInfo(r, countryCodeHeader)
-		propertyForRequest := rulesPair.Apply(ri, difficulty.NewDBProperty(property))
-		validity = propertyForRequest.EdgeTokenValidity()
-	}
+	validity := result.EdgeTokenValidity
 	if validity == 0 {
 		return nil
 	}

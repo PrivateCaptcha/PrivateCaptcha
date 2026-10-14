@@ -817,8 +817,9 @@ func TestEdgeTokenOnlyOnSuccessfulVerification(t *testing.T) {
 		EdgeTokenValidityInterval: time.Hour,
 	}
 	result := &puzzle.VerifyResult{
-		Error:  puzzle.VerifyNoError,
-		Domain: property.Domain,
+		Error:             puzzle.VerifyNoError,
+		Domain:            property.Domain,
+		EdgeTokenValidity: time.Hour,
 	}
 	response := newVerificationResponse(result, false)
 	if err := s.addEdgeToken(req, response, result, property, now); err != nil {
@@ -833,6 +834,12 @@ func TestEdgeTokenOnlyOnSuccessfulVerification(t *testing.T) {
 		t.Fatalf("failed verification returned token: %v, %v", response.EdgeToken, err)
 	}
 	result.Error = puzzle.VerifyNoError
+	result.EdgeTokenValidity = 0
+	response = newVerificationResponse(result, false)
+	if err := s.addEdgeToken(req, response, result, property, now); err != nil || response.EdgeToken != "" {
+		t.Fatalf("missing or disabled puzzle decision returned token: %v, %v", response.EdgeToken, err)
+	}
+	result.EdgeTokenValidity = time.Hour
 	property.EdgeTokenValidityInterval = 0
 	response = newVerificationResponse(result, false)
 	if err := s.addEdgeToken(req, response, result, property, now); err != nil || response.EdgeToken != "" {

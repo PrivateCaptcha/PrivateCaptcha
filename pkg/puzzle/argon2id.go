@@ -41,7 +41,7 @@ func validateArgon2IDParameters(canonicalBody []byte, memoryKiB uint32) error {
 	return nil
 }
 
-// Argon2IDCandidateValue hashes one exact solution nonce against a canonical v2 puzzle body.
+// Argon2IDCandidateValue hashes one exact solution nonce against a canonical puzzle body.
 func Argon2IDCandidateValue(nonce, canonicalBody []byte, memoryKiB uint32) (uint32, error) {
 	if len(nonce) != SolutionLength {
 		return 0, ErrInvalidArgon2IDInput

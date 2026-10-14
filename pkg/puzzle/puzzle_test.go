@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"math/rand"
 	"testing"
@@ -18,6 +19,7 @@ type protocolFixture struct {
 	Difficulty     uint8
 	SolutionsCount uint8
 	ExpirationUnix uint32
+	EdgeTokenTTL   uint32
 	UserData       string
 	Body           string
 }
@@ -25,6 +27,7 @@ type protocolFixture struct {
 type protocolFixtures struct {
 	V1 protocolFixture
 	V2 protocolFixture
+	V3 protocolFixture
 }
 
 func loadProtocolFixtures(t *testing.T) protocolFixtures {
@@ -43,6 +46,18 @@ func loadProtocolFixtures(t *testing.T) protocolFixtures {
 			Version: 2, Challenge: 1, PropertyID: propertyID, PuzzleID: 72623859790382856,
 			Difficulty: 152, SolutionsCount: 24, ExpirationUnix: 1735689600, UserData: userData,
 			Body: "0201000102030405060708090a0b0c0d0e0f0807060504030201981880857467101112131415161718191a1b1c1d1e1f",
+		},
+		V3: protocolFixture{
+			Version:        3,
+			Challenge:      1,
+			PropertyID:     propertyID,
+			PuzzleID:       72623859790382856,
+			Difficulty:     152,
+			SolutionsCount: 24,
+			ExpirationUnix: 1735689600,
+			EdgeTokenTTL:   1800,
+			UserData:       userData,
+			Body:           "0301000102030405060708090a0b0c0d0e0f080706050403020198188085746708070000101112131415161718191a1b1c1d1e1f",
 		},
 	}
 }
@@ -69,6 +84,9 @@ func puzzleFromFixture(t *testing.T, fixture protocolFixture) *ComputePuzzle {
 	p, err := NewComputePuzzleForChallenge(fixture.PuzzleID, propertyIDArray, fixture.Difficulty, Challenge(fixture.Challenge))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if fixture.Version == 3 {
+		p.SetEdgeTokenValidity(time.Duration(fixture.EdgeTokenTTL) * time.Second)
 	}
 	if p.version != fixture.Version {
 		t.Fatalf("version = %d, want %d", p.version, fixture.Version)
@@ -143,6 +161,63 @@ func TestComputePuzzleV2GoldenBytes(t *testing.T) {
 	checkPuzzles(p, &decoded, t)
 }
 
+func TestComputePuzzleV3GoldenBytes(t *testing.T) {
+	t.Parallel()
+	fixture := loadProtocolFixtures(t).V3
+	p := puzzleFromFixture(t, fixture)
+	actual, err := p.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := fixtureBody(t, fixture)
+	if len(expected) != 52 || !bytes.Equal(actual, expected) {
+		t.Fatalf("v3 body = %x, want %x", actual, expected)
+	}
+	var decoded ComputePuzzle
+	if err := decoded.UnmarshalBinary(expected); err != nil {
+		t.Fatal(err)
+	}
+	checkPuzzles(p, &decoded, t)
+}
+
+func TestComputePuzzleEdgeTokenValidity(t *testing.T) {
+	t.Parallel()
+	for _, challenge := range []Challenge{ChallengeBlake2b, ChallengeArgon2ID} {
+		for _, validity := range []time.Duration{0, time.Second, 30 * time.Minute, 24 * time.Hour} {
+			t.Run(fmt.Sprintf("Challenge%dTTL%s", challenge, validity), func(t *testing.T) {
+				p, err := NewComputePuzzleForChallenge(123, [PropertyIDSize]byte{1}, 0, challenge)
+				if err != nil {
+					t.Fatal(err)
+				}
+				p.SetEdgeTokenValidity(validity)
+				if err := p.Init(DefaultValidityPeriod); err != nil {
+					t.Fatal(err)
+				}
+				body, err := p.MarshalBinary()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(body) != 52 || body[0] != 3 || p.EdgeTokenValidity() != validity {
+					t.Fatalf("v3 puzzle: body = %x, validity = %v", body, p.EdgeTokenValidity())
+				}
+				var parsed ComputePuzzle
+				if err := parsed.UnmarshalBinary(body); err != nil {
+					t.Fatal(err)
+				}
+				checkPuzzles(p, &parsed, t)
+				for _, fixture := range []protocolFixture{loadProtocolFixtures(t).V1, loadProtocolFixtures(t).V2} {
+					if err := parsed.UnmarshalBinary(fixtureBody(t, fixture)); err != nil {
+						t.Fatal(err)
+					}
+					if parsed.EdgeTokenValidity() != 0 {
+						t.Fatal("legacy puzzle retained edge-token validity")
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestComputePuzzleRejectsInvalidWireValues(t *testing.T) {
 	t.Parallel()
 	fixtures := loadProtocolFixtures(t)
@@ -150,7 +225,7 @@ func TestComputePuzzleRejectsInvalidWireValues(t *testing.T) {
 	v2 := fixtureBody(t, fixtures.V2)
 
 	unknownVersion := bytes.Clone(v1)
-	unknownVersion[0] = 3
+	unknownVersion[0] = 4
 	unknownChallenge := bytes.Clone(v2)
 	unknownChallenge[1] = 255
 
@@ -184,6 +259,7 @@ func TestComputePuzzleVariableUserData(t *testing.T) {
 	}{
 		{"V1", fixtures.V1},
 		{"V2", fixtures.V2},
+		{"V3", fixtures.V3},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := puzzleFromFixture(t, tc.fixture)
@@ -205,7 +281,8 @@ func TestComputePuzzleVariableUserData(t *testing.T) {
 func TestComputePuzzleBodyLimit(t *testing.T) {
 	t.Parallel()
 
-	for _, fixture := range []protocolFixture{loadProtocolFixtures(t).V1, loadProtocolFixtures(t).V2} {
+	fixtures := loadProtocolFixtures(t)
+	for _, fixture := range []protocolFixture{fixtures.V1, fixtures.V2, fixtures.V3} {
 		body := fixtureBody(t, fixture)
 		body = append(body, bytes.Repeat([]byte{0xab}, 256-len(body))...)
 		var p ComputePuzzle
@@ -222,7 +299,7 @@ func TestComputePuzzleRejectsTruncatedFields(t *testing.T) {
 	t.Parallel()
 
 	fixtures := loadProtocolFixtures(t)
-	for _, fixture := range []protocolFixture{fixtures.V1, fixtures.V2} {
+	for _, fixture := range []protocolFixture{fixtures.V1, fixtures.V2, fixtures.V3} {
 		body := fixtureBody(t, fixture)
 		for size := 0; size < len(body); size++ {
 			var parsed ComputePuzzle
@@ -312,6 +389,9 @@ func checkPuzzles(oldPuzzle, newPuzzle *ComputePuzzle, t *testing.T) {
 	}
 	if oldPuzzle.Challenge() != newPuzzle.Challenge() {
 		t.Errorf("Challenge does not match")
+	}
+	if oldPuzzle.EdgeTokenValidity() != newPuzzle.EdgeTokenValidity() {
+		t.Errorf("EdgeTokenValidity does not match")
 	}
 
 	if oldPuzzle.IsStub() != newPuzzle.IsStub() {

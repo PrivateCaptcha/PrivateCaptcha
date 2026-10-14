@@ -8,8 +8,10 @@ const MAX_PUZZLE_BODY_LENGTH = PUZZLE_BUFFER_LENGTH * 2;
 const MAX_ARGON2_ID_BODY_LENGTH = 120;
 const PUZZLE_V1_MIN_LENGTH = 47;
 const PUZZLE_V2_MIN_LENGTH = 48;
+const PUZZLE_V3_MIN_LENGTH = 52;
 const PUZZLE_VERSION_1 = 1;
 const PUZZLE_VERSION_2 = 2;
+const PUZZLE_VERSION_3 = 3;
 export const CHALLENGE_BLAKE2B = 0;
 export const CHALLENGE_ARGON2ID = 1;
 // RequestTimeout, Conflict, TooManyRequests
@@ -175,6 +177,7 @@ export class Puzzle {
         this.difficulty = null;
         this.solutionsCount = null;
         this.expirationTimestamp = null;
+        this.edgeTokenValiditySeconds = 0;
         this.userData = null;
 
         this.signature = null;
@@ -209,7 +212,8 @@ export class Puzzle {
                 this.challenge = CHALLENGE_BLAKE2B;
                 break;
             case PUZZLE_VERSION_2:
-                minimumLength = PUZZLE_V2_MIN_LENGTH;
+            case PUZZLE_VERSION_3:
+                minimumLength = this.version === PUZZLE_VERSION_3 ? PUZZLE_V3_MIN_LENGTH : PUZZLE_V2_MIN_LENGTH;
                 if (data.length < offset + 1) {
                     throw new Error(`Invalid puzzle body length: ${data.length}`);
                 }
@@ -239,6 +243,12 @@ export class Puzzle {
 
         this.expirationTimestamp = readUInt32LE(data, offset);
         offset += 4;
+
+        this.edgeTokenValiditySeconds = 0;
+        if (this.version === PUZZLE_VERSION_3) {
+            this.edgeTokenValiditySeconds = readUInt32LE(data, offset);
+            offset += 4;
+        }
 
         const userDataSize = data.length - offset;
         const userDataStart = offset;

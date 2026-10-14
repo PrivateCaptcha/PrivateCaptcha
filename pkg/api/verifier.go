@@ -342,6 +342,7 @@ func (v *Verifier) verify(
 		return result, property, nil
 	}
 
+	result.EdgeTokenValidity = puzzleObject.EdgeTokenValidity()
 	return result, property, nil
 }
 
@@ -509,6 +510,9 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 	}
 	if err := result.Init(property.ValidityInterval); err != nil {
 		slog.ErrorContext(ctx, "Failed to init puzzle", common.ErrAttr(err))
+	}
+	if property.EdgeTokenValidityInterval > 0 {
+		result.SetEdgeTokenValidity(difficultyProperty.EdgeTokenValidity())
 	}
 
 	accessRecord := v.createPuzzleAccess(difficultyProperty, fingerprint, result, tnow, ri)

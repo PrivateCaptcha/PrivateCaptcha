@@ -72,6 +72,14 @@ const protocolFixtures = {
         version: 2, challenge: 1, userData: '101112131415161718191a1b1c1d1e1f',
         body: '0201000102030405060708090a0b0c0d0e0f0807060504030201981880857467101112131415161718191a1b1c1d1e1f',
     },
+    v3: {
+        version: 3, challenge: 0, edgeTokenValiditySeconds: 1800, userData: '101112131415161718191a1b1c1d1e1f',
+        body: '0300000102030405060708090a0b0c0d0e0f080706050403020198188085746708070000101112131415161718191a1b1c1d1e1f',
+    },
+    v3Argon: {
+        version: 3, challenge: 1, edgeTokenValiditySeconds: 1800, userData: '101112131415161718191a1b1c1d1e1f',
+        body: '0301000102030405060708090a0b0c0d0e0f080706050403020198188085746708070000101112131415161718191a1b1c1d1e1f',
+    },
 };
 
 test('load mode fetches and finishes on its own, including after reset', { timeout: 4000 }, async () => {
@@ -962,11 +970,13 @@ test('captcha.js getResponse returns widget solution', async (t) => {
     console.log('✓ getResponse test passed');
 });
 
-test('Puzzle parses canonical v1 and v2 fixtures', async () => {
+test('Puzzle parses canonical v1, v2, and v3 fixtures', async () => {
     const { Puzzle, CHALLENGE_BLAKE2B, CHALLENGE_ARGON2ID } = await import('../js/puzzle.js');
     const fixtures = [
         { fixture: protocolFixtures.v1, challenge: CHALLENGE_BLAKE2B, length: 47 },
         { fixture: protocolFixtures.v2, challenge: CHALLENGE_ARGON2ID, length: 48 },
+        { fixture: protocolFixtures.v3, challenge: CHALLENGE_BLAKE2B, length: 52 },
+        { fixture: protocolFixtures.v3Argon, challenge: CHALLENGE_ARGON2ID, length: 52 },
     ];
 
     for (const { fixture, challenge, length } of fixtures) {
@@ -975,6 +985,7 @@ test('Puzzle parses canonical v1 and v2 fixtures', async () => {
 
         assert.strictEqual(puzzle.version, fixture.version);
         assert.strictEqual(puzzle.challenge, challenge);
+        assert.strictEqual(puzzle.edgeTokenValiditySeconds, fixture.edgeTokenValiditySeconds ?? 0);
         assert.strictEqual(puzzle.puzzleBytes.length, length);
         assert.deepStrictEqual(Array.from(puzzle.puzzleBytes), Array.from(body));
         assert.strictEqual(hexFromBytes(puzzle.userData), fixture.userData);
@@ -982,9 +993,9 @@ test('Puzzle parses canonical v1 and v2 fixtures', async () => {
     }
 });
 
-test('Puzzle preserves variable-length user data in v1 and v2', async () => {
+test('Puzzle preserves variable-length user data in all versions', async () => {
     const { Puzzle } = await import('../js/puzzle.js');
-    for (const fixture of [protocolFixtures.v1, protocolFixtures.v2]) {
+    for (const fixture of Object.values(protocolFixtures)) {
         const original = bytesFromHex(fixture.body);
         const extra = Uint8Array.of(0xaa, 0xbb, 0xcc);
         const body = Uint8Array.from([...original, ...extra]);
@@ -997,7 +1008,7 @@ test('Puzzle preserves variable-length user data in v1 and v2', async () => {
 
 test('Puzzle bounds Blake2b bodies to 256 bytes and Argon2id bodies to 120 bytes', async () => {
     const { Puzzle } = await import('../js/puzzle.js');
-    for (const [fixture, maximum] of [[protocolFixtures.v1, 256], [protocolFixtures.v2, 120]]) {
+    for (const [fixture, maximum] of [[protocolFixtures.v1, 256], [protocolFixtures.v2, 120], [protocolFixtures.v3, 256], [protocolFixtures.v3Argon, 120]]) {
         const original = bytesFromHex(fixture.body);
         const body = Uint8Array.from([...original, ...new Uint8Array(maximum - original.length)]);
         assert.strictEqual(new Puzzle(puzzlePayload(body)).userData.length, maximum - (original.length - 16));
@@ -1010,7 +1021,7 @@ test('Puzzle rejects unknown and non-canonical records', async () => {
     const v1 = bytesFromHex(protocolFixtures.v1.body);
     const v2 = bytesFromHex(protocolFixtures.v2.body);
     const unknownVersion = v1.slice();
-    unknownVersion[0] = 3;
+    unknownVersion[0] = 4;
     const unknownChallenge = v2.slice();
     unknownChallenge[1] = 255;
 
@@ -1019,10 +1030,34 @@ test('Puzzle rejects unknown and non-canonical records', async () => {
         unknownChallenge,
         v1.slice(0, -1),
         v2.slice(0, -1),
+        bytesFromHex(protocolFixtures.v3.body).slice(0, -1),
+        bytesFromHex(protocolFixtures.v3Argon.body).slice(0, -1),
     ];
 
     for (const body of invalidBodies) {
         assert.throws(() => new Puzzle(puzzlePayload(body)));
+    }
+});
+
+test('CaptchaWidget preserves signed v3 TTL in the submitted solution', async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { Puzzle } = await import('../js/puzzle.js');
+    document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}"></div></form>`;
+    const element = document.querySelector('.private-captcha');
+    const widget = new CaptchaWidget(element);
+    for (const fixture of [protocolFixtures.v3, protocolFixtures.v3Argon]) {
+        for (const seconds of [0, 1800, 86400]) {
+            const body = bytesFromHex(fixture.body);
+            new DataView(body.buffer).setUint32(32, seconds, true);
+            const rawData = puzzlePayload(body);
+            widget._puzzle = new Puzzle(rawData);
+            widget._workersPool = { serializeSolutions: () => 'SOLUTIONS' };
+            widget.saveSolutions();
+            assert.strictEqual(widget._puzzle.edgeTokenValiditySeconds, seconds);
+            assert.strictEqual(widget.solution(), `SOLUTIONS.${rawData}`);
+            assert.strictEqual(element.querySelector('input').value, widget.solution());
+            assert.strictEqual(new Puzzle(widget.solution().substring('SOLUTIONS.'.length)).edgeTokenValiditySeconds, seconds);
+        }
     }
 });
 

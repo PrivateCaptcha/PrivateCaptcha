@@ -6,6 +6,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"testing"
+	"time"
 )
 
 func newVerifyPayloadBytes(t *testing.T, challenge Challenge) ([]byte, *ComputePuzzle, *Salt) {
@@ -68,6 +69,70 @@ func TestSolutionsArgon2IDSignedRoundTrip(t *testing.T) {
 	parsed.solutionsCount++
 	if _, result := vp.VerifySolutions(t.Context()); result == VerifyNoError {
 		t.Fatal("wrong signed Argon solution count passed verification")
+	}
+}
+
+func TestPuzzleEdgeTokenValiditySignedRoundTrip(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		challenge Challenge
+	}{
+		{
+			name:      "Blake2b",
+			challenge: ChallengeBlake2b,
+		},
+		{
+			name:      "Argon2ID",
+			challenge: ChallengeArgon2ID,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, err := NewComputePuzzleForChallenge(123, [PropertyIDSize]byte{1}, 0, tc.challenge)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p.SetEdgeTokenValidity(30 * time.Minute)
+			solutions, err := (&ComputeSolver{}).Solve(t.Context(), p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			salt := NewSalt([]byte("test-salt"))
+			extraSalt := []byte("property-salt")
+			signed, err := p.Serialize(t.Context(), salt, extraSalt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var encoded bytes.Buffer
+			encoded.WriteString(solutions.String())
+			encoded.WriteByte('.')
+			if err := signed.Write(&encoded); err != nil {
+				t.Fatal(err)
+			}
+			parsed, err := ParseVerifyPayload[ComputePuzzle](t.Context(), encoded.Bytes())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := parsed.VerifySignature(t.Context(), salt, extraSalt); err != nil {
+				t.Fatal(err)
+			}
+			if parsed.Puzzle().EdgeTokenValidity() != 30*time.Minute {
+				t.Fatal("signed payload lost edge-token validity")
+			}
+			if _, result := parsed.VerifySolutions(t.Context()); result != VerifyNoError {
+				t.Fatalf("verification = %v, want %v", result, VerifyNoError)
+			}
+			tampered := mutateEncodedPayloadPart(t, encoded.Bytes(), 1, func(data []byte) []byte {
+				data[32] ^= 1
+				return data
+			})
+			modified, err := ParseVerifyPayload[ComputePuzzle](t.Context(), tampered)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := modified.VerifySignature(t.Context(), salt, extraSalt); err != errSignatureMismatch {
+				t.Fatalf("modified edge-token validity signature error = %v, want %v", err, errSignatureMismatch)
+			}
+		})
 	}
 }
 

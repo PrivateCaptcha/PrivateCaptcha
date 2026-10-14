@@ -7,14 +7,15 @@ import (
 )
 
 type VerifyResult struct {
-	UserID     int32
-	OrgID      int32
-	PropertyID int32
-	PuzzleID   uint64
-	Error      VerifyError
-	CreatedAt  time.Time
-	ExpiresAt  time.Time
-	Domain     string
+	UserID            int32
+	OrgID             int32
+	PropertyID        int32
+	PuzzleID          uint64
+	Error             VerifyError
+	CreatedAt         time.Time
+	ExpiresAt         time.Time
+	Domain            string
+	EdgeTokenValidity time.Duration
 }
 
 func NewVerifyResult(verr VerifyError) *VerifyResult {
@@ -67,6 +68,7 @@ type Puzzle interface {
 	PuzzleID() uint64
 	PropertyID() [PropertyIDSize]byte
 	Expiration() time.Time
+	EdgeTokenValidity() time.Duration
 	Serialize(ctx context.Context, salt *Salt, extraSalt []byte) (*PuzzlePayload, error)
 }
 

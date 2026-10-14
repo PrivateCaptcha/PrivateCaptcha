@@ -950,19 +950,39 @@ func TestVerifyEdgeTokenValidityRule(t *testing.T) {
 	}
 	sitekey := db.UUIDToSiteKey(property.ExternalID)
 	secret := db.UUIDToSecret(key.ExternalID)
-	for _, withRule := range []bool{false, true} {
-		t.Run(fmt.Sprintf("rule-%t", withRule), func(t *testing.T) {
-			validity := time.Hour
-			if withRule {
+	for _, tc := range []struct {
+		name     string
+		withRule bool
+		action   int32
+		validity time.Duration
+	}{
+		{
+			name:     "Default",
+			validity: time.Hour,
+		},
+		{
+			name:     "DomainRule",
+			withRule: true,
+			action:   3,
+			validity: 30 * time.Minute,
+		},
+		{
+			name:     "DisabledByDomainRule",
+			withRule: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.withRule {
 				_, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
 					Name:              "Change edge validity",
 					PropertyID:        db.Int(property.ID),
 					CreatorID:         db.Int(user.ID),
 					Enabled:           true,
-					ConditionProperty: dbgen.RuleConditionPropertyAlways,
+					ConditionProperty: dbgen.RuleConditionPropertyDomain,
 					ConditionOperator: dbgen.RuleConditionOperatorEquals,
+					ConditionValueStr: db.Text(property.Domain),
 					ActionProperty:    dbgen.RuleActionPropertyEdgeTokenValidityInterval,
-					ActionValue:       3,
+					ActionValue:       tc.action,
 				})
 				if err != nil {
 					t.Fatal(err)
@@ -970,13 +990,20 @@ func TestVerifyEdgeTokenValidityRule(t *testing.T) {
 				if err := server.Auth.backfillRulesImpl(ctx, map[int32]uint{property.ID: 1}); err != nil {
 					t.Fatal(err)
 				}
-				validity = 30 * time.Minute
 			}
 			puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
 			if err != nil {
 				t.Fatal(err)
 			}
-			resp, err := verifySuite(solutionsStr+"."+puzzleStr, secret, sitekey)
+			proof := solutionsStr + "." + puzzleStr
+			payload, err := server.Verifier.ParseSolutionPayload(ctx, []byte(proof))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := payload.Puzzle().EdgeTokenValidity(); got != tc.validity {
+				t.Fatalf("puzzle edge-token validity = %v, want %v", got, tc.validity)
+			}
+			resp, err := verifySuite(proof, secret, sitekey)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -987,6 +1014,12 @@ func TestVerifyEdgeTokenValidityRule(t *testing.T) {
 			var result VerificationResponse
 			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 				t.Fatal(err)
+			}
+			if tc.validity == 0 {
+				if !result.Success || result.EdgeToken != "" {
+					t.Fatalf("disabled rule must preserve verification without an edge token: %+v", result)
+				}
+				return
 			}
 			parts := strings.Split(result.EdgeToken, ".")
 			if !result.Success || len(parts) != 3 {
@@ -1003,8 +1036,8 @@ func TestVerifyEdgeTokenValidityRule(t *testing.T) {
 			if err := json.Unmarshal(data, &claims); err != nil {
 				t.Fatal(err)
 			}
-			if got := time.Duration(claims.ExpiresAt-claims.IssuedAt) * time.Second; got != validity {
-				t.Errorf("edge token validity = %v, want %v", got, validity)
+			if got := time.Duration(claims.ExpiresAt-claims.IssuedAt) * time.Second; got != tc.validity {
+				t.Errorf("edge token validity = %v, want %v", got, tc.validity)
 			}
 		})
 	}
