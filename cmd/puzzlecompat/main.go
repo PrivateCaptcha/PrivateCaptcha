@@ -24,7 +24,9 @@ func generate(ctx context.Context, out io.Writer, count int, difficulty uint8, c
 		if err := p.Init(puzzle.DefaultValidityPeriod); err != nil {
 			return err
 		}
-		p.SetEdgeTokenValidity(time.Duration(i%8) * time.Hour)
+		if i%2 == 1 {
+			p.SetEdgeTokenValidity(time.Duration((i/2)%8) * time.Hour)
+		}
 		payload, err := p.Serialize(ctx, salt, nil)
 		if err != nil {
 			return err
@@ -57,7 +59,10 @@ func verify(ctx context.Context, in io.Reader, count int) error {
 		if err := payload.VerifySignature(ctx, salt, nil); err != nil {
 			return fmt.Errorf("puzzle %d: %w", verified, err)
 		}
-		expectedValidity := time.Duration((verified-1)%8) * time.Hour
+		var expectedValidity time.Duration
+		if verified%2 == 0 {
+			expectedValidity = time.Duration(((verified-1)/2)%8) * time.Hour
+		}
 		if got := payload.Puzzle().EdgeTokenValidity(); got != expectedValidity {
 			return fmt.Errorf("puzzle %d: edge-token validity = %v, want %v", verified, got, expectedValidity)
 		}

@@ -212,7 +212,7 @@ func (p *ComputePuzzle) WriteTo(w io.Writer) (int64, error) {
 	}
 	n += 4
 
-	if p.version == puzzleVersion3 {
+	if p.version >= puzzleVersion3 {
 		if err := binary.Write(w, binary.LittleEndian, p.edgeTokenValidity); err != nil {
 			return n, err
 		}
@@ -262,7 +262,7 @@ func (p *ComputePuzzle) UnmarshalBinary(data []byte) error {
 		offset++
 	}
 	minimumSize := offset + puzzleFieldsSize + UserDataSize
-	if version == puzzleVersion3 {
+	if version >= puzzleVersion3 {
 		minimumSize += 4
 	}
 	if len(data) < minimumSize {
@@ -289,7 +289,7 @@ func (p *ComputePuzzle) UnmarshalBinary(data []byte) error {
 	offset += 4
 
 	p.edgeTokenValidity = 0
-	if version == puzzleVersion3 {
+	if version >= puzzleVersion3 {
 		p.edgeTokenValidity = binary.LittleEndian.Uint32(data[offset : offset+4])
 		offset += 4
 	}

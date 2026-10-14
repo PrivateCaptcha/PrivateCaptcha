@@ -245,7 +245,7 @@ export class Puzzle {
         offset += 4;
 
         this.edgeTokenValiditySeconds = 0;
-        if (this.version === PUZZLE_VERSION_3) {
+        if (this.version >= PUZZLE_VERSION_3) {
             this.edgeTokenValiditySeconds = readUInt32LE(data, offset);
             offset += 4;
         }
