@@ -112,7 +112,7 @@
         </div>
         {{template "settings-basic-form.html" .}}
     </div>
-    {{ if and $.Platform.Enterprise .Params.Property.HasDomain ($.Ctx.Features.Enabled $.Const.FeatureEdgeTokens $.Params.Org.ID) }}
+    {{ if and $.Platform.Enterprise .Params.Property.HasDomain }}
     <div class="grid max-w-4xl grid-cols-1 gap-x-10 gap-y-10 px-4 py-12 sm:px-6 md:grid-cols-3 lg:px-8 lg:py-10">
         <div>
             <h2 class="pc-section-heading">Edge protection</h2>

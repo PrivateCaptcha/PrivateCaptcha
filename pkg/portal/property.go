@@ -874,10 +874,6 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 			renderCtx.ErrorMessage = "Invalid edge token validity."
 			return &ViewModel{Model: renderCtx, View: propertySettingsBasicFormTemplate, IsNew: false}, nil
 		}
-		if edgeTokenValidity > 0 && !s.FeatureFlags.Enabled(ctx, common.FeatureEdgeTokens, &user.ID, &org.ID) {
-			renderCtx.ErrorMessage = common.StatusPropertyPermissionsError.String()
-			return &ViewModel{Model: renderCtx, View: propertySettingsBasicFormTemplate, IsNew: false}, nil
-		}
 		if err := s.EdgeTokens.ValidateProperty(ctx, property.Domain, edgeTokenValidity); err != nil {
 			renderCtx.ErrorMessage = "Edge token signing requires configured keys and a property domain."
 			return &ViewModel{Model: renderCtx, View: propertySettingsBasicFormTemplate, IsNew: false}, nil

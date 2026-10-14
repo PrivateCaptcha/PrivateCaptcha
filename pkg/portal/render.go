@@ -16,7 +16,6 @@ import (
 
 type RenderConstants struct {
 	FeatureArgon2ID                 string
-	FeatureEdgeTokens               string
 	LoginEndpoint                   string
 	TwoFactorEndpoint               string
 	ResendEndpoint                  string
@@ -144,7 +143,6 @@ type RenderConstants struct {
 func NewRenderConstants() *RenderConstants {
 	return &RenderConstants{
 		FeatureArgon2ID:                 common.FeatureArgon2ID,
-		FeatureEdgeTokens:               common.FeatureEdgeTokens,
 		LoginEndpoint:                   common.LoginEndpoint,
 		TwoFactorEndpoint:               common.TwoFactorEndpoint,
 		ResendEndpoint:                  common.ResendEndpoint,

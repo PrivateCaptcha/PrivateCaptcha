@@ -454,10 +454,6 @@ func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, proper
 	if err := s.EdgeTokens.ValidateLifetime(ctx, edgeTTL); err != nil {
 		return common.StatusPropertyEdgeIntervalError
 	}
-	if edgeTTL > 0 && !s.FeatureFlags.Enabled(ctx, common.FeatureEdgeTokens, &user.ID, &org.ID) {
-		tlog.WarnContext(ctx, "Edge tokens are not enabled", "userID", user.ID, "orgID", org.ID)
-		return common.StatusPropertyPermissionsError
-	}
 	if err := s.EdgeTokens.ValidateProperty(ctx, domain, edgeTTL); err != nil {
 		return common.StatusPropertyEdgeDomainError
 	}
@@ -965,14 +961,6 @@ func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, proper
 		return common.StatusPropertyEdgeIntervalError
 	}
 	if edgeTTL > 0 {
-		var orgID *int32
-		if org != nil {
-			orgID = &org.ID
-		}
-		if !s.FeatureFlags.Enabled(ctx, common.FeatureEdgeTokens, &user.ID, orgID) {
-			tlog.WarnContext(ctx, "Edge tokens are not enabled", "userID", user.ID, "orgID", orgID)
-			return common.StatusPropertyPermissionsError
-		}
 		if property, err := s.BusinessDB.Impl().GetCachedPropertyByID(ctx, int32(propertyID)); err == nil {
 			if err := s.EdgeTokens.ValidateProperty(ctx, property.Domain, edgeTTL); err != nil {
 				slog.ErrorContext(ctx, "Failed to validate property", "propID", property.ID, "domain", property.Domain, "ttl", edgeTTL, common.ErrAttr(err))

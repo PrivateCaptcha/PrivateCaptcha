@@ -66,10 +66,6 @@ func (s *Server) putPropertyEdgeSettings(w http.ResponseWriter, r *http.Request)
 		renderCtx.ErrorMessage = common.StatusPropertyEdgeIntervalError.String()
 		return view, nil
 	}
-	if validity > 0 && !s.FeatureFlags.Enabled(ctx, common.FeatureEdgeTokens, &user.ID, &org.ID) {
-		renderCtx.ErrorMessage = common.StatusPropertyPermissionsError.String()
-		return view, nil
-	}
 	startMode := dbgen.EdgeWidgetStartMode(r.FormValue(common.ParamEdgeWidgetStartMode))
 	if validity > 0 && startMode != dbgen.EdgeWidgetStartModeClick && startMode != dbgen.EdgeWidgetStartModeLoad {
 		renderCtx.ErrorMessage = "Invalid edge widget start mode."

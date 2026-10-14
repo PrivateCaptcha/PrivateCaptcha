@@ -622,7 +622,7 @@ func TestUpdatePropertyEdgeLifetimePresence(t *testing.T) {
 	}
 }
 
-func TestAPIPropertyEdgeTokenFeatureFlag(t *testing.T) {
+func TestAPIPropertyEdgeTokenSettings(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -638,26 +638,13 @@ func TestAPIPropertyEdgeTokenFeatureFlag(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				previousFlags, previousSigner := server.FeatureFlags, server.EdgeTokens
+				previousSigner := server.EdgeTokens
 				server.EdgeTokens = newTestEdgeSigner(t)
-				server.FeatureFlags = featureFlagsFunc(func(_ context.Context, feature string, userID, orgID *int32) bool {
-					if feature != common.FeatureEdgeTokens {
-						return true
-					}
-					if userID == nil || *userID != user.ID {
-						t.Error("feature check did not receive the authenticated user")
-					}
-					if (operation == "Create" || scoped) && (orgID == nil || *orgID != org.ID) {
-						t.Error("feature check did not receive the property organization")
-					}
-					return false
-				})
 				t.Cleanup(func() {
-					server.FeatureFlags = previousFlags
 					server.EdgeTokens = previousSigner
 				})
 				settings := apiPropertySettings{
-					Name:                     "Feature-gated edge property",
+					Name:                     "Edge property",
 					EdgeTokenValiditySeconds: new(3600),
 				}
 				var input any
@@ -691,15 +678,23 @@ func TestAPIPropertyEdgeTokenFeatureFlag(t *testing.T) {
 				if err := json.Unmarshal(data, &results); err != nil {
 					t.Fatal(err)
 				}
-				if len(results) != 1 || results[0].Code != common.StatusPropertyPermissionsError {
-					t.Fatalf("disabled edge feature results = %+v", results)
+				if len(results) != 1 || results[0].Code != common.StatusOK {
+					t.Fatalf("edge settings results = %+v", results)
 				}
 				properties, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if len(properties) != 1 || properties[0].Name != property.Name || properties[0].EdgeTokenValidityInterval != 0 {
-					t.Fatal("rejected edge settings request modified properties")
+				wantCount := 1
+				if operation == "Create" {
+					wantCount = 2
+				}
+				if len(properties) != wantCount {
+					t.Fatalf("property count = %d, want %d", len(properties), wantCount)
+				}
+				stored := properties[len(properties)-1]
+				if stored.Name != settings.Name || stored.EdgeTokenValidityInterval != time.Hour {
+					t.Fatalf("stored edge settings = %+v", stored)
 				}
 			})
 		}

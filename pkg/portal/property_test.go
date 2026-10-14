@@ -2406,50 +2406,6 @@ func TestPutPropertyEdgeSettings(t *testing.T) {
 	form.Set(common.ParamEdgeTokenValidityInterval, "4")
 	form.Set(common.ParamEdgeWidgetStartMode, "load")
 	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), strings.NewReader(form.Encode()))
-	for _, handler := range []string{"edge", "basic"} {
-		t.Run("FeatureDisabled/"+handler, func(t *testing.T) {
-			previousFlags := server.FeatureFlags
-			server.FeatureFlags = featureFlagsFunc(func(_ context.Context, feature string, userID, orgID *int32) bool {
-				if feature != common.FeatureEdgeTokens {
-					return true
-				}
-				if userID == nil || *userID != user.ID || orgID == nil || *orgID != org.ID {
-					t.Error("feature check did not receive the authenticated user and property organization")
-				}
-				return false
-			})
-			t.Cleanup(func() { server.FeatureFlags = previousFlags })
-			disabledReq := httptest.NewRequest(http.MethodPut, req.URL.Path, strings.NewReader(form.Encode()))
-			disabledReq.AddCookie(cookie)
-			disabledReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-			disabledReq.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
-			disabledReq.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
-			var disabledView *ViewModel
-			var err error
-			var errorMessage string
-			if handler == "edge" {
-				disabledView, err = server.putPropertyEdgeSettings(httptest.NewRecorder(), disabledReq)
-				if err == nil {
-					errorMessage = disabledView.Model.(*edgePropertySettingsRenderContext).ErrorMessage
-				}
-			} else {
-				disabledView, err = server.putProperty(httptest.NewRecorder(), disabledReq)
-				if err == nil {
-					errorMessage = disabledView.Model.(*propertySettingsRenderContext).ErrorMessage
-				}
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			if errorMessage != common.StatusPropertyPermissionsError.String() || len(disabledView.AuditEvents) != 0 {
-				t.Errorf("disabled edge feature was accepted: %+v", disabledView)
-			}
-			stored, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
-			if err != nil || stored.EdgeTokenValidityInterval != 0 {
-				t.Fatalf("disabled feature changed edge lifetime: %+v, err=%v", stored, err)
-			}
-		})
-	}
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
