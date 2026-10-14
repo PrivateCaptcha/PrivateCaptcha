@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"net"
+	"net/http"
 	"net/mail"
 	"net/url"
 	"strconv"
@@ -252,7 +253,7 @@ func validateAddress(value string) error {
 	return nil
 }
 
-func validateBaseURL(item common.ConfigItem) error {
+func validateBaseURL(item common.ConfigItem) (err error) {
 	parsed, parseErr := url.Parse("//" + strings.TrimRight(item.Value(), "/"))
 	if parseErr != nil || parsed.Hostname() == "" || parsed.User != nil ||
 		parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" ||
@@ -267,6 +268,12 @@ func validateBaseURL(item common.ConfigItem) error {
 			return err
 		}
 	}
+	defer func() {
+		if recover() != nil {
+			err = errors.New("invalid HTTP route prefix")
+		}
+	}()
+	http.NewServeMux().Handle("GET "+parsed.Hostname()+parsed.Path+"/", http.NotFoundHandler())
 	return nil
 }
 
