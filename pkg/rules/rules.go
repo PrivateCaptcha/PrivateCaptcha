@@ -304,7 +304,6 @@ type edgeTokenValidityRule struct {
 
 func (r *edgeTokenValidityRule) Apply(op *overrideProperty) bool {
 	op.edgeTokenValidity = &r.Validity
-	// NOTE: this is not used anywhere atm (we don't record verify rule usage), but just for correctness
 	op.ruleID = r.RuleID
 	return r.Terminal
 }
