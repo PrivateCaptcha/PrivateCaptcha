@@ -1,6 +1,6 @@
 name: "CLA Assistant"
 on:
-  issue_comment:
+  issue_comment: # zizmor: ignore[dangerous-triggers]
     types: [created]
   pull_request_target: # zizmor: ignore[dangerous-triggers]
     types: [opened,closed,synchronize]
