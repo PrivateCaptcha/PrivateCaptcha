@@ -1043,6 +1043,165 @@ func TestVerifyEdgeTokenValidityRule(t *testing.T) {
 	}
 }
 
+// Reproduces the regression where a successful verification of a stub puzzle
+// (served by PuzzleForRequest when the property is not yet in the request
+// context because the sitekey cache was cold) silently dropped the edge token.
+// The cold-cache path is triggered by evicting the sitekey cache entry before
+// both /puzzle and /verify, so /puzzle returns a stub (PuzzleID == 0) and
+// /verify re-fetches the property from the DB.
+func TestVerifyStubPuzzleEdgeToken(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	previous := server.EdgeTokens
+	server.EdgeTokens = newTestEdgeSigner(t)
+	t.Cleanup(func() { server.EdgeTokens = previous })
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), time.Hour, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret := db.UUIDToSecret(key.ExternalID)
+
+	for _, tc := range []struct {
+		name     string
+		withRule bool
+		action   int32
+		validity time.Duration
+	}{
+		{
+			name:     "Default",
+			validity: time.Hour,
+		},
+		{
+			name:     "DomainRule",
+			withRule: true,
+			action:   3,
+			validity: 30 * time.Minute,
+		},
+		{
+			name:     "DisabledByDomainRule",
+			withRule: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			params := db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("edge-stub-%s.example.com", tc.name))
+			params.EdgeTokenValidityInterval = time.Hour
+			property, _, err := store.Impl().CreateNewProperty(ctx, params, org)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.withRule {
+				if _, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
+					Name:              "Change edge validity for " + tc.name,
+					PropertyID:        db.Int(property.ID),
+					CreatorID:         db.Int(user.ID),
+					Enabled:           true,
+					ConditionProperty: dbgen.RuleConditionPropertyDomain,
+					ConditionOperator: dbgen.RuleConditionOperatorEquals,
+					ConditionValueStr: db.Text(property.Domain),
+					ActionProperty:    dbgen.RuleActionPropertyEdgeTokenValidityInterval,
+					ActionValue:       tc.action,
+				}); err != nil {
+					t.Fatal(err)
+				}
+				if err := server.Auth.backfillRulesImpl(ctx, map[int32]uint{property.ID: 1}); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			sitekey := db.UUIDToSiteKey(property.ExternalID)
+			cacheKey := db.PropertyBySitekeyCacheKey(sitekey)
+
+			// Force the cold-cache /puzzle flow: evict the cached property so the
+			// Sitekey middleware misses, queues an async refresh, and continues
+			// without a property in context - causing PuzzleForRequest to return
+			// a version-1 stub puzzle that never carries the edge-token validity.
+			cache.Delete(ctx, cacheKey)
+			puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			proof := solutionsStr + "." + puzzleStr
+			parsed, err := server.Verifier.ParseSolutionPayload(ctx, []byte(proof))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := parsed.Puzzle().PuzzleID(); got != 0 {
+				t.Fatalf("expected stub puzzle (PuzzleID == 0) on cold-cache /puzzle, got %d", got)
+			}
+			if got := parsed.Puzzle().EdgeTokenValidity(); got != 0 {
+				t.Fatalf("stub puzzle payload must have zero payload-sourced edge-token validity, got %v", got)
+			}
+
+			// Evict again so /verify re-fetches the property from the DB - the
+			// real branch exercised by the cold-start window - rather than the
+			// async-refreshed cache populated by the previous /puzzle.
+			cache.Delete(ctx, cacheKey)
+
+			// Build the verify request inline (rather than reusing verifySuite)
+			// so we can set the Origin header: domain-equals rules can only match
+			// at verify time when the request carries the property's origin, the
+			// same way /puzzle does. Without Origin, no domain rule would match
+			// and the recomputed validity would be the property's default.
+			srv := http.NewServeMux()
+			server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+			verifyReq, err := http.NewRequest(http.MethodPost, "/"+common.VerifyEndpoint, strings.NewReader(proof))
+			if err != nil {
+				t.Fatal(err)
+			}
+			verifyReq.Header.Set(common.HeaderAPIKey, secret)
+			verifyReq.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+			verifyReq.Header.Set(common.HeaderSitekey, sitekey)
+			verifyReq.Header.Set(common.HeaderOrigin, common_test.PrependProtocol(property.Domain))
+			verifyW := httptest.NewRecorder()
+			srv.ServeHTTP(verifyW, verifyReq)
+			resp := verifyW.Result()
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("verify status = %d", resp.StatusCode)
+			}
+			var result VerificationResponse
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				t.Fatal(err)
+			}
+			if !result.Success {
+				t.Fatalf("cold-cache stub-puzzle verification must succeed: %+v", result)
+			}
+			if tc.validity == 0 {
+				if result.EdgeToken != "" {
+					t.Fatalf("rule-disabled stub-puzzle must not return an edge token: %+v", result)
+				}
+				return
+			}
+			parts := strings.Split(result.EdgeToken, ".")
+			if len(parts) != 3 {
+				t.Fatalf("verification did not return an edge token: %+v", result)
+			}
+			data, err := base64.RawURLEncoding.DecodeString(parts[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			var claims struct {
+				IssuedAt  int64 `json:"iat"`
+				ExpiresAt int64 `json:"exp"`
+			}
+			if err := json.Unmarshal(data, &claims); err != nil {
+				t.Fatal(err)
+			}
+			if got := time.Duration(claims.ExpiresAt-claims.IssuedAt) * time.Second; got != tc.validity {
+				t.Errorf("stub-puzzle edge token validity = %v, want %v", got, tc.validity)
+			}
+		})
+	}
+}
+
 // same as successful test (TestVerifyPuzzle), but invalidates api key in cache
 func TestVerifyCachePriority(t *testing.T) {
 	if testing.Short() {

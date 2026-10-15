@@ -627,6 +627,23 @@ func (s *Server) addEdgeToken(r *http.Request, response *VerificationResponse, r
 	}
 	ctx := r.Context()
 	validity := result.EdgeTokenValidity
+	if result.PuzzleID == 0 {
+		// Stub puzzles are serialized as version-1 payloads that never carry the
+		// edge-token-validity field (it was unknown at issuance time because the
+		// property was not yet in the request context). Recompute it from the
+		// property that was just re-fetched and validated during /verify, the
+		// same way the validity was sourced before the payload-borne validity change.
+		validity = property.EdgeTokenValidityInterval
+		if rulesPair := s.retrievePropertyRules(ctx, property); rulesPair != nil && (rulesPair.PropertyRules != nil || rulesPair.OrgRules != nil) {
+			countryCodeHeader := ""
+			if s.CountryCodeHeader != nil {
+				countryCodeHeader = s.CountryCodeHeader.Value()
+			}
+			ri := rules.NewRequestInfo(r, countryCodeHeader)
+			propertyForRequest := rulesPair.Apply(ri, difficulty.NewDBProperty(property))
+			validity = propertyForRequest.EdgeTokenValidity()
+		}
+	}
 	if validity == 0 {
 		return nil
 	}
