@@ -103,7 +103,9 @@ func seedUser(
 	orgs := make([]*dbgen.Organization, 0, orgsCount)
 
 	salt := api.NewPuzzleSalt(cfg.Get(common.APISaltKey))
-	salt.Update()
+	if err := salt.Update(); err != nil {
+		return err
+	}
 
 	priceIDMonthly, _ := plan.PriceIDs()
 

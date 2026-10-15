@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	errEmptyAPISalt = errors.New("API salt is empty")
 	errUAKeyTooLong = errors.New("user fingerprint key is too long")
 )
 
@@ -24,7 +25,11 @@ func NewPuzzleSalt(configItem common.ConfigItem) *puzzleSalt {
 }
 
 func (ps *puzzleSalt) Update() error {
-	ps.value = puzzle.NewSalt([]byte(ps.configItem.Value()))
+	value := ps.configItem.Value()
+	if len(value) == 0 {
+		return errEmptyAPISalt
+	}
+	ps.value = puzzle.NewSalt([]byte(value))
 	return nil
 }
 
