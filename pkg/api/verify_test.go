@@ -1049,6 +1049,7 @@ func TestVerifyEdgeTokenValidityRule(t *testing.T) {
 // The cold-cache path is triggered by evicting the sitekey cache entry before
 // both /puzzle and /verify, so /puzzle returns a stub (PuzzleID == 0) and
 // /verify re-fetches the property from the DB.
+// Stubs use the property's default edge-token validity without applying rules.
 func TestVerifyStubPuzzleEdgeToken(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -1079,19 +1080,23 @@ func TestVerifyStubPuzzleEdgeToken(t *testing.T) {
 			validity: time.Hour,
 		},
 		{
-			name:     "DomainRule",
+			name:     "DomainRuleUsesPropertyDefault",
 			withRule: true,
 			action:   3,
-			validity: 30 * time.Minute,
+			validity: time.Hour,
 		},
 		{
-			name:     "DisabledByDomainRule",
+			name:     "DisablingDomainRuleUsesPropertyDefault",
 			withRule: true,
+			validity: time.Hour,
+		},
+		{
+			name: "DisabledByProperty",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			params := db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("edge-stub-%s.example.com", tc.name))
-			params.EdgeTokenValidityInterval = time.Hour
+			params.EdgeTokenValidityInterval = tc.validity
 			property, _, err := store.Impl().CreateNewProperty(ctx, params, org)
 			if err != nil {
 				t.Fatal(err)
@@ -1145,24 +1150,10 @@ func TestVerifyStubPuzzleEdgeToken(t *testing.T) {
 			// async-refreshed cache populated by the previous /puzzle.
 			cache.Delete(ctx, cacheKey)
 
-			// Build the verify request inline (rather than reusing verifySuite)
-			// so we can set the Origin header: domain-equals rules can only match
-			// at verify time when the request carries the property's origin, the
-			// same way /puzzle does. Without Origin, no domain rule would match
-			// and the recomputed validity would be the property's default.
-			srv := http.NewServeMux()
-			server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
-			verifyReq, err := http.NewRequest(http.MethodPost, "/"+common.VerifyEndpoint, strings.NewReader(proof))
+			resp, err := verifySuite(proof, secret, sitekey)
 			if err != nil {
 				t.Fatal(err)
 			}
-			verifyReq.Header.Set(common.HeaderAPIKey, secret)
-			verifyReq.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
-			verifyReq.Header.Set(common.HeaderSitekey, sitekey)
-			verifyReq.Header.Set(common.HeaderOrigin, common_test.PrependProtocol(property.Domain))
-			verifyW := httptest.NewRecorder()
-			srv.ServeHTTP(verifyW, verifyReq)
-			resp := verifyW.Result()
 			defer resp.Body.Close()
 			if resp.StatusCode != http.StatusOK {
 				t.Fatalf("verify status = %d", resp.StatusCode)
@@ -1176,7 +1167,7 @@ func TestVerifyStubPuzzleEdgeToken(t *testing.T) {
 			}
 			if tc.validity == 0 {
 				if result.EdgeToken != "" {
-					t.Fatalf("rule-disabled stub-puzzle must not return an edge token: %+v", result)
+					t.Fatalf("property-disabled stub-puzzle must not return an edge token: %+v", result)
 				}
 				return
 			}
