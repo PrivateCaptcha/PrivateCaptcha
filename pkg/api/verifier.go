@@ -343,6 +343,7 @@ func (v *Verifier) verify(
 	}
 
 	result.EdgeTokenValidity = puzzleObject.EdgeTokenValidity()
+
 	return result, property, nil
 }
 
