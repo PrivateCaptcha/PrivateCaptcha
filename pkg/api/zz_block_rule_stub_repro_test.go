@@ -1,8 +1,10 @@
 package api
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,23 +13,28 @@ import (
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 )
 
-// TestStubPuzzleWithholdsEdgeToken guards against the edge-protection bypass
+// TestStubPuzzleEdgeTokenWithBlockRules guards against the edge-protection bypass
 // where a client could obtain an edge token through the cold-cache stub-puzzle
-// flow.
+// flow when block rules are configured for the property.
 //
 // Block rules are enforced only in puzzleHandler, and only when the property is
 // present in the request context. When the property-by-sitekey cache is cold,
 // PuzzleForRequest returns a verifiable stub puzzle (PuzzleID == 0) and omits
 // the property, so puzzleHandler never evaluates the rules. The /verify
 // request originates from the customer's backend (or edge), not the end user,
-// so block rules cannot be reliably evaluated there either. addEdgeToken
-// therefore withholds the edge token for all stub puzzles.
+// so block rules cannot be evaluated against the actual client at verify time.
+// addEdgeToken therefore checks whether the property has any enabled block
+// rules (without evaluating them against the request): if it does, the edge
+// token is withheld for the stub because we cannot determine whether the real
+// client would have been blocked.
 //
 // This test reproduces the cold-cache stub flow end-to-end and asserts that:
 //  1. A warm-cache /puzzle request with an enabled block rule is blocked (403).
 //  2. The cold-cache stub flow still verifies successfully (the captcha was solved).
-//  3. No edge token is issued for the stub verification, with or without a block rule.
-func TestStubPuzzleWithholdsEdgeToken(t *testing.T) {
+//  3. With a block rule configured, no edge token is issued for the stub.
+//  4. Without a block rule, the stub still issues an edge token using the
+//     property's configured validity (the normal cold-cache path).
+func TestStubPuzzleEdgeTokenWithBlockRules(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -49,14 +56,17 @@ func TestStubPuzzleWithholdsEdgeToken(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		withBlock bool
+		wantToken bool
 	}{
 		{
 			name:      "BlockRuleWithholdsStubEdgeToken",
 			withBlock: true,
+			wantToken: false,
 		},
 		{
-			name:      "NoBlockRuleStillWithholdsStubEdgeToken",
+			name:      "NoBlockRuleIssuesStubEdgeToken",
 			withBlock: false,
+			wantToken: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -153,12 +163,40 @@ func TestStubPuzzleWithholdsEdgeToken(t *testing.T) {
 			if !result.Success {
 				t.Fatalf("cold-cache stub-puzzle verification must still succeed: %+v", result)
 			}
-			// No edge token may be issued for a stub puzzle, regardless of block
-			// rules, because the /verify request comes from the customer's backend
-			// (or edge), not the end user, so block rules cannot be evaluated there.
-			if result.EdgeToken != "" {
-				t.Fatalf("stub puzzle must not issue an edge token: %+v", result)
+			if tc.wantToken {
+				parts := strings.Split(result.EdgeToken, ".")
+				if len(parts) != 3 {
+					t.Fatalf("stub flow without a block rule must still issue an edge token: %+v", result)
+				}
+				if got := edgeTokenLifetimeSeconds(result.EdgeToken); got != int64(time.Hour/time.Second) {
+					t.Errorf("stub edge token validity = %ds, want %ds", got, int64(time.Hour/time.Second))
+				}
+			} else {
+				if result.EdgeToken != "" {
+					t.Fatalf("stub flow with a block rule must not issue an edge token: %+v", result)
+				}
 			}
 		})
 	}
+}
+
+// edgeTokenLifetimeSeconds decodes the JWT payload and returns exp-iat in
+// seconds. It returns -1 on malformed input.
+func edgeTokenLifetimeSeconds(token string) int64 {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return -1
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return -1
+	}
+	var claims struct {
+		IssuedAt  int64 `json:"iat"`
+		ExpiresAt int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return -1
+	}
+	return claims.ExpiresAt - claims.IssuedAt
 }

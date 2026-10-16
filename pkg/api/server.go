@@ -633,15 +633,18 @@ func (s *Server) addEdgeToken(r *http.Request, response *VerificationResponse, r
 		// where the property is absent from the request context so puzzleHandler
 		// cannot enforce block rules against the actual client. The /verify
 		// request originates from the customer's backend (or edge), not the end
-		// user, so evaluating block rules here would match the server's
-		// IP/UserAgent/headers rather than the blocked client's. Withhold the
-		// edge token for stub puzzles so a client that would have been blocked
-		// by an enabled rule cannot obtain a bearer edge credential through the
-		// cold-cache stub flow. The client will receive an edge token on the
-		// next request once the property cache is warm and puzzleHandler enforces
-		// block rules against the real client request.
-		slog.Log(ctx, common.LevelTrace, "Skipping edge token for stub puzzle: block rules cannot be enforced on cold-cache path")
-		return nil
+		// user, so evaluating block rules here against the verify request would
+		// match the server's IP/UserAgent/headers rather than the blocked
+		// client's. Instead, if the property has any enabled block rules at all,
+		// withhold the edge token for the stub: we cannot determine whether the
+		// actual client would have been blocked, so we err on the side of
+		// caution. When no block rules are configured, the edge token is issued
+		// using the property's configured validity as before.
+		if rulesPair := s.retrievePropertyRules(ctx, property); rulesPair.HasBlockRules() {
+			slog.Log(ctx, common.LevelTrace, "Skipping edge token for stub puzzle: property has block rules but they cannot be evaluated against the actual client on the cold-cache path")
+			return nil
+		}
+		validity = property.EdgeTokenValidityInterval
 	}
 	if validity == 0 {
 		return nil

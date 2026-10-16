@@ -860,14 +860,11 @@ func TestEdgeTokenOnlyOnSuccessfulVerification(t *testing.T) {
 }
 
 // Stubs returned from the cold-cache /puzzle flow are serialized as version-1
-// payloads that never carry the edge-token-validity field. Because the
-// property-by-sitekey cache is cold on this path, puzzleHandler cannot enforce
-// block rules against the actual client, and the /verify request originates
-// from the customer's backend (or edge), not the end user, so block rules
-// cannot be evaluated there either. addEdgeToken must therefore withhold the
-// edge token for stub puzzles so a blocked client cannot obtain a bearer edge
-// credential through the cold-cache stub flow.
-func TestEdgeTokenStubPuzzleWithholdsToken(t *testing.T) {
+// payloads that never carry the edge-token-validity field, so the
+// payload-sourced validity is always zero. The recomputation in addEdgeToken
+// must restore token issuance for an edge-protected property while still
+// honoring the error and property guards.
+func TestEdgeTokenStubPuzzleRecomputesValidity(t *testing.T) {
 	private, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
@@ -901,8 +898,7 @@ func TestEdgeTokenStubPuzzleWithholdsToken(t *testing.T) {
 	}
 
 	// A successful stub-puzzle verification of an edge-protected property
-	// must NOT issue an edge token: block rules cannot be enforced on the
-	// cold-cache stub path, so the token must be withheld.
+	// must recompute the validity from the re-fetched property and sign a token.
 	result := &puzzle.VerifyResult{
 		Error:             puzzle.VerifyNoError,
 		PuzzleID:          0,
@@ -913,8 +909,28 @@ func TestEdgeTokenStubPuzzleWithholdsToken(t *testing.T) {
 	if err := s.addEdgeToken(req, response, result, property, now); err != nil {
 		t.Fatal(err)
 	}
-	if response.EdgeToken != "" {
-		t.Fatalf("stub-puzzle verification must not issue an edge token: %q", response.EdgeToken)
+	if response.EdgeToken == "" || !verifyTestEdgeSignature(signer.JWKS(t.Context()).Keys[0], response.EdgeToken) {
+		t.Fatalf("stub-puzzle verification of an edge-protected property must return a signed token: %q", response.EdgeToken)
+	}
+	// The recomputed validity must propagate to the token lifetime so the edge
+	// layer sees the property's configured interval, not a zero-second token.
+	parts := strings.Split(response.EdgeToken, ".")
+	if len(parts) != 3 {
+		t.Fatalf("invalid edge token JWS: %q", response.EdgeToken)
+	}
+	claimsBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var claims struct {
+		IssuedAt  int64 `json:"iat"`
+		ExpiresAt int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(claimsBytes, &claims); err != nil {
+		t.Fatal(err)
+	}
+	if got := time.Duration(claims.ExpiresAt-claims.IssuedAt) * time.Second; got != property.EdgeTokenValidityInterval {
+		t.Fatalf("stub-puzzle edge token validity = %v, want %v", got, property.EdgeTokenValidityInterval)
 	}
 
 	// The disabled-property guard must still suppress issuance, even for stubs.
@@ -937,9 +953,8 @@ func TestEdgeTokenStubPuzzleWithholdsToken(t *testing.T) {
 		t.Fatalf("failed stub-puzzle verification issued a token: %q, err=%v", response.EdgeToken, err)
 	}
 
-	// A successful maintenance-mode stub-puzzle verification must also
-	// withhold the edge token for the same reason: block rules cannot be
-	// enforced on the cold-cache stub path.
+	// A successful maintenance-mode stub-puzzle verification is treated by
+	// addEdgeToken like a successful verify, so a token must still be issued.
 	maintenanceResult := &puzzle.VerifyResult{
 		Error:             puzzle.MaintenanceModeError,
 		PuzzleID:          0,
@@ -947,8 +962,8 @@ func TestEdgeTokenStubPuzzleWithholdsToken(t *testing.T) {
 		EdgeTokenValidity: 0,
 	}
 	response = newVerificationResponse(maintenanceResult, false)
-	if err := s.addEdgeToken(req, response, maintenanceResult, property, now); err != nil || response.EdgeToken != "" {
-		t.Fatalf("maintenance-mode stub-puzzle must not issue an edge token: response=%+v err=%v", response, err)
+	if err := s.addEdgeToken(req, response, maintenanceResult, property, now); err != nil || !response.Success || response.EdgeToken == "" {
+		t.Fatalf("maintenance-mode stub-puzzle must issue a token: response=%+v err=%v", response, err)
 	}
 
 	// A non-stub puzzle with EdgeTokenValidity = 0 must not fall back to the
