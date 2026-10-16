@@ -627,9 +627,14 @@ func (s *Server) addEdgeToken(r *http.Request, response *VerificationResponse, r
 	}
 	ctx := r.Context()
 	validity := result.EdgeTokenValidity
-	// stub puzzles don't have validy anyways (cold cache)
+	// stub puzzles don't have validity anyways (cold cache)
 	if result.PuzzleID == 0 {
-		validity = property.EdgeTokenValidityInterval
+		if rulesPair := s.retrievePropertyRules(ctx, property); rulesPair.HasBlockRules() {
+			slog.Log(ctx, common.LevelTrace, "Issuing short-lived edge token for stub puzzle")
+			validity = puzzle.ValidityDurations[0]
+		} else {
+			validity = property.EdgeTokenValidityInterval
+		}
 	}
 	if validity == 0 {
 		return nil

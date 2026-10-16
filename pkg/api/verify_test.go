@@ -1478,6 +1478,176 @@ func TestVerifyEdgeMaintenanceWithoutMetadata(t *testing.T) {
 	}
 }
 
+func TestStubPuzzleEdgeTokenWithBlockRules(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	previous := server.EdgeTokens
+	server.EdgeTokens = newTestEdgeSigner(t)
+	t.Cleanup(func() { server.EdgeTokens = previous })
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, _, err := store.Impl().CreateAPIKey(ctx, user, db_tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), time.Hour, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret := db.UUIDToSecret(key.ExternalID)
+
+	for _, tc := range []struct {
+		name          string
+		withBlock     bool
+		wantToken     bool
+		wantValidityS int64
+	}{
+		{
+			name:          "BlockRuleIssuesShortLivedStubEdgeToken",
+			withBlock:     true,
+			wantToken:     true,
+			wantValidityS: int64(puzzle.ValidityDurations[0] / time.Second),
+		},
+		{
+			name:          "NoBlockRuleIssuesStubEdgeToken",
+			withBlock:     false,
+			wantToken:     true,
+			wantValidityS: int64(time.Hour / time.Second),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			params := db_tests.CreateNewPropertyParams(user.ID, "block-stub-"+tc.name+".example.com")
+			params.EdgeTokenValidityInterval = time.Hour
+			property, _, err := store.Impl().CreateNewProperty(ctx, params, org)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.withBlock {
+				if _, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
+					Name:              "Block all requests for " + tc.name,
+					PropertyID:        db.Int(property.ID),
+					CreatorID:         db.Int(user.ID),
+					Enabled:           true,
+					ConditionProperty: dbgen.RuleConditionPropertyAlways,
+					ConditionOperator: dbgen.RuleConditionOperatorEquals,
+					ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
+				}); err != nil {
+					t.Fatal(err)
+				}
+				if err := server.Auth.backfillRulesImpl(ctx, map[int32]uint{property.ID: 1}); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			sitekey := db.UUIDToSiteKey(property.ExternalID)
+			cacheKey := db.PropertyBySitekeyCacheKey(sitekey)
+
+			// Warm the property cache so the next /puzzle request hits the warm-cache
+			// branch in puzzleHandler, where the property IS in the request context
+			// and block rules are enforced.
+			warmed, err := store.Impl().RetrievePropertyBySitekey(ctx, sitekey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if warmed == nil {
+				t.Fatal("warming cache returned nil property")
+			}
+
+			warmResp, err := puzzleSuite(ctx, sitekey, property.Domain)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer warmResp.Body.Close()
+			if tc.withBlock {
+				if warmResp.StatusCode != http.StatusForbidden {
+					t.Fatalf("warm-cache /puzzle with enabled block rule: status = %d, want %d (block rules must be enforced when property is cached)", warmResp.StatusCode, http.StatusForbidden)
+				}
+			} else {
+				if warmResp.StatusCode != http.StatusOK {
+					t.Fatalf("warm-cache /puzzle without block rule: status = %d, want %d", warmResp.StatusCode, http.StatusOK)
+				}
+			}
+
+			// Force the cold-cache /puzzle flow: evict the cached property so the
+			// Sitekey middleware misses, queues an async refresh, and continues
+			// without a property in context - causing PuzzleForRequest to return a
+			// stub puzzle (PuzzleID == 0) that bypasses the block-rule check in
+			// puzzleHandler.
+			cache.Delete(ctx, cacheKey)
+			puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			proof := solutionsStr + "." + puzzleStr
+			parsed, err := server.Verifier.ParseSolutionPayload(ctx, []byte(proof))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := parsed.Puzzle().PuzzleID(); got != 0 {
+				t.Fatalf("cold-cache /puzzle must return a stub puzzle (PuzzleID == 0), got %d", got)
+			}
+
+			// Evict again so /verify re-fetches the property from the DB - the real
+			// branch exercised by the cold-start window - rather than the
+			// async-refreshed cache populated by the previous /puzzle.
+			cache.Delete(ctx, cacheKey)
+
+			resp, err := verifySuite(proof, secret, sitekey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("verify status = %d, want %d", resp.StatusCode, http.StatusOK)
+			}
+			var result VerificationResponse
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				t.Fatal(err)
+			}
+			// Stub verification itself must still succeed: the captcha was solved.
+			if !result.Success {
+				t.Fatalf("cold-cache stub-puzzle verification must still succeed: %+v", result)
+			}
+			if tc.wantToken {
+				parts := strings.Split(result.EdgeToken, ".")
+				if len(parts) != 3 {
+					t.Fatalf("stub flow must issue an edge token: %+v", result)
+				}
+				if got := edgeTokenLifetimeSeconds(result.EdgeToken); got != tc.wantValidityS {
+					t.Errorf("stub edge token validity = %ds, want %ds", got, tc.wantValidityS)
+				}
+			} else {
+				if result.EdgeToken != "" {
+					t.Fatalf("stub flow must not issue an edge token: %+v", result)
+				}
+			}
+		})
+	}
+}
+
+// edgeTokenLifetimeSeconds decodes the JWT payload and returns exp-iat in
+// seconds. It returns -1 on malformed input.
+func edgeTokenLifetimeSeconds(token string) int64 {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return -1
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return -1
+	}
+	var claims struct {
+		IssuedAt  int64 `json:"iat"`
+		ExpiresAt int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return -1
+	}
+	return claims.ExpiresAt - claims.IssuedAt
+}
+
 func verifyTestPropertySuite(t *testing.T, verifySitekey string, expectedCode puzzle.VerifyError) {
 	t.Helper()
 
