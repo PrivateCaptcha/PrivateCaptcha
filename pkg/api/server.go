@@ -627,24 +627,21 @@ func (s *Server) addEdgeToken(r *http.Request, response *VerificationResponse, r
 	}
 	ctx := r.Context()
 	validity := result.EdgeTokenValidity
-	// stub puzzles don't have validy anyways (cold cache)
+	// stub puzzles don't have validity anyways (cold cache)
 	if result.PuzzleID == 0 {
-		// The stub puzzle path (served when the property-by-sitekey cache is cold
-		// in AuthMiddleware) skips the block-rule enforcement that puzzleHandler
-		// performs, because the property is absent from the request context there.
-		// Re-evaluate the block rules here, mirroring puzzleHandler, so that a
-		// client matched by an enabled block rule cannot obtain a bearer edge
-		// credential through the cold-cache stub flow.
-		countryCodeHeader := ""
-		if s.CountryCodeHeader != nil {
-			countryCodeHeader = s.CountryCodeHeader.Value()
-		}
-		ri := rules.NewRequestInfo(r, countryCodeHeader)
-		if rulesPair := s.retrievePropertyRules(ctx, property); rulesPair.IsRequestBlocked(ri) {
-			slog.Log(ctx, common.LevelTrace, "Skipping edge token for stub verification: request blocked by difficulty rules")
-			return nil
-		}
-		validity = property.EdgeTokenValidityInterval
+		// Stub puzzles are issued on the cold-cache path in PuzzleForRequest,
+		// where the property is absent from the request context so puzzleHandler
+		// cannot enforce block rules against the actual client. The /verify
+		// request originates from the customer's backend (or edge), not the end
+		// user, so evaluating block rules here would match the server's
+		// IP/UserAgent/headers rather than the blocked client's. Withhold the
+		// edge token for stub puzzles so a client that would have been blocked
+		// by an enabled rule cannot obtain a bearer edge credential through the
+		// cold-cache stub flow. The client will receive an edge token on the
+		// next request once the property cache is warm and puzzleHandler enforces
+		// block rules against the real client request.
+		slog.Log(ctx, common.LevelTrace, "Skipping edge token for stub puzzle: block rules cannot be enforced on cold-cache path")
+		return nil
 	}
 	if validity == 0 {
 		return nil
