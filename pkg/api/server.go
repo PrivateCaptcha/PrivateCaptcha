@@ -629,6 +629,21 @@ func (s *Server) addEdgeToken(r *http.Request, response *VerificationResponse, r
 	validity := result.EdgeTokenValidity
 	// stub puzzles don't have validy anyways (cold cache)
 	if result.PuzzleID == 0 {
+		// The stub puzzle path (served when the property-by-sitekey cache is cold
+		// in AuthMiddleware) skips the block-rule enforcement that puzzleHandler
+		// performs, because the property is absent from the request context there.
+		// Re-evaluate the block rules here, mirroring puzzleHandler, so that a
+		// client matched by an enabled block rule cannot obtain a bearer edge
+		// credential through the cold-cache stub flow.
+		countryCodeHeader := ""
+		if s.CountryCodeHeader != nil {
+			countryCodeHeader = s.CountryCodeHeader.Value()
+		}
+		ri := rules.NewRequestInfo(r, countryCodeHeader)
+		if rulesPair := s.retrievePropertyRules(ctx, property); rulesPair.IsRequestBlocked(ri) {
+			slog.Log(ctx, common.LevelTrace, "Skipping edge token for stub verification: request blocked by difficulty rules")
+			return nil
+		}
 		validity = property.EdgeTokenValidityInterval
 	}
 	if validity == 0 {
