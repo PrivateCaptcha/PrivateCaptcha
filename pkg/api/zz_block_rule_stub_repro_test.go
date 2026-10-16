@@ -11,6 +11,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
 // TestStubPuzzleEdgeTokenWithBlockRules guards against the edge-protection bypass
@@ -24,14 +25,17 @@ import (
 // request originates from the customer's backend (or edge), not the end user,
 // so block rules cannot be evaluated against the actual client at verify time.
 // addEdgeToken therefore checks whether the property has any enabled block
-// rules (without evaluating them against the request): if it does, the edge
-// token is withheld for the stub because we cannot determine whether the real
-// client would have been blocked.
+// rules (without evaluating them against the request): if it does, a
+// short-lived edge token is issued (the shortest configured validity) rather
+// than the full configured validity, so the client flow is not broken while
+// the property cache warms up and block rules get enforced on the next
+// request.
 //
 // This test reproduces the cold-cache stub flow end-to-end and asserts that:
 //  1. A warm-cache /puzzle request with an enabled block rule is blocked (403).
 //  2. The cold-cache stub flow still verifies successfully (the captcha was solved).
-//  3. With a block rule configured, no edge token is issued for the stub.
+//  3. With a block rule configured, a short-lived edge token is issued for the
+//     stub (shortest configured validity), not the full configured validity.
 //  4. Without a block rule, the stub still issues an edge token using the
 //     property's configured validity (the normal cold-cache path).
 func TestStubPuzzleEdgeTokenWithBlockRules(t *testing.T) {
@@ -54,19 +58,22 @@ func TestStubPuzzleEdgeTokenWithBlockRules(t *testing.T) {
 	secret := db.UUIDToSecret(key.ExternalID)
 
 	for _, tc := range []struct {
-		name      string
-		withBlock bool
-		wantToken bool
+		name           string
+		withBlock      bool
+		wantToken      bool
+		wantValidityS  int64
 	}{
 		{
-			name:      "BlockRuleWithholdsStubEdgeToken",
-			withBlock: true,
-			wantToken: false,
+			name:          "BlockRuleIssuesShortLivedStubEdgeToken",
+			withBlock:     true,
+			wantToken:     true,
+			wantValidityS: int64(puzzle.ValidityDurations[0] / time.Second),
 		},
 		{
-			name:      "NoBlockRuleIssuesStubEdgeToken",
-			withBlock: false,
-			wantToken: true,
+			name:          "NoBlockRuleIssuesStubEdgeToken",
+			withBlock:     false,
+			wantToken:     true,
+			wantValidityS: int64(time.Hour / time.Second),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -166,14 +173,14 @@ func TestStubPuzzleEdgeTokenWithBlockRules(t *testing.T) {
 			if tc.wantToken {
 				parts := strings.Split(result.EdgeToken, ".")
 				if len(parts) != 3 {
-					t.Fatalf("stub flow without a block rule must still issue an edge token: %+v", result)
+					t.Fatalf("stub flow must issue an edge token: %+v", result)
 				}
-				if got := edgeTokenLifetimeSeconds(result.EdgeToken); got != int64(time.Hour/time.Second) {
-					t.Errorf("stub edge token validity = %ds, want %ds", got, int64(time.Hour/time.Second))
+				if got := edgeTokenLifetimeSeconds(result.EdgeToken); got != tc.wantValidityS {
+					t.Errorf("stub edge token validity = %ds, want %ds", got, tc.wantValidityS)
 				}
 			} else {
 				if result.EdgeToken != "" {
-					t.Fatalf("stub flow with a block rule must not issue an edge token: %+v", result)
+					t.Fatalf("stub flow must not issue an edge token: %+v", result)
 				}
 			}
 		})
