@@ -83,6 +83,15 @@ func (s *Server) putPropertyEdgeSettings(w http.ResponseWriter, r *http.Request)
 		var event *common.AuditLogEvent
 		params := db.NewUpdatePropertyParams(property)
 		params.EdgeTokenValidityInterval = validity
+		// The edge settings form only owns edge_token_validity_interval; it must
+		// not rewrite the basic-settings columns (name, level, growth, challenge,
+		// validity interval, subdomain/localhost flags, replay count) from the
+		// possibly-stale cached snapshot, otherwise a concurrent basic-settings
+		// save (e.g. a rename) committed after this request read its snapshot is
+		// silently reverted. Mirror the PreserveEdgeTokenValidity guard from
+		// putProperty (see 746d2769) so UpdateProperty keeps the basic columns at
+		// their current DB values.
+		params.PreserveBasicSettings = true
 		property, event, err = s.Store.Impl().UpdateProperty(ctx, org, user, params)
 		if err != nil {
 			renderCtx.ErrorMessage = "Failed to update edge protection. Please try again."

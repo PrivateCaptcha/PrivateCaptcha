@@ -931,20 +931,20 @@ WITH old AS (
 ),
 upd AS (
     UPDATE backend.properties p
-    SET name = $2,
-        challenge = COALESCE($11::backend.challenge_type, p.challenge),
-        edge_token_validity_interval = CASE WHEN $12::boolean
-            THEN p.edge_token_validity_interval ELSE $13::interval END,
-        level = CASE WHEN $14::boolean THEN p.level ELSE $3 END,
-        growth = CASE WHEN $15::boolean THEN p.growth ELSE $4 END,
-        validity_interval = CASE WHEN $16::boolean THEN p.validity_interval ELSE $5 END,
-        allow_subdomains = CASE WHEN $17::boolean THEN p.allow_subdomains ELSE $6 END,
-        allow_localhost = CASE WHEN $18::boolean THEN p.allow_localhost ELSE $7 END,
-        max_replay_count = CASE WHEN $19::boolean THEN p.max_replay_count ELSE $8 END,
+    SET name = CASE WHEN $11::boolean THEN p.name ELSE $2 END,
+        level = CASE WHEN $11::boolean OR $12::boolean THEN p.level ELSE $3 END,
+        growth = CASE WHEN $11::boolean OR $13::boolean THEN p.growth ELSE $4 END,
+        validity_interval = CASE WHEN $11::boolean OR $14::boolean THEN p.validity_interval ELSE $5 END,
+        allow_subdomains = CASE WHEN $11::boolean OR $15::boolean THEN p.allow_subdomains ELSE $6 END,
+        allow_localhost = CASE WHEN $11::boolean OR $16::boolean THEN p.allow_localhost ELSE $7 END,
+        max_replay_count = CASE WHEN $11::boolean OR $17::boolean THEN p.max_replay_count ELSE $8 END,
+        challenge = CASE WHEN $11::boolean THEN p.challenge ELSE COALESCE($18::backend.challenge_type, p.challenge) END,
+        edge_token_validity_interval = CASE WHEN $19::boolean
+            THEN p.edge_token_validity_interval ELSE $20::interval END,
         updated_at = NOW()
     WHERE p.id = (SELECT id FROM old)
-      AND $13::interval BETWEEN INTERVAL '0 seconds' AND INTERVAL '24 hours'
-      AND (p.domain <> '' OR $13::interval = INTERVAL '0 seconds')
+      AND $20::interval BETWEEN INTERVAL '0 seconds' AND INTERVAL '24 hours'
+      AND (p.domain <> '' OR $20::interval = INTERVAL '0 seconds')
     RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, show_notice, challenge, edge_token_validity_interval -- This ensures the final SELECT only returns data if the update actually happened
 )
 SELECT
@@ -975,6 +975,7 @@ type UpdatePropertyParams struct {
 	EdgeTokenValidityInterval time.Duration     `db:"edge_token_validity_interval" json:"edge_token_validity_interval"`
 	AllowSubdomains           bool              `db:"allow_subdomains" json:"allow_subdomains"`
 	AllowLocalhost            bool              `db:"allow_localhost" json:"allow_localhost"`
+	PreserveBasicSettings     bool              `db:"preserve_basic_settings" json:"preserve_basic_settings"`
 	PreserveEdgeTokenValidity bool              `db:"preserve_edge_token_validity" json:"preserve_edge_token_validity"`
 	PreserveLevel             bool              `db:"preserve_level" json:"preserve_level"`
 	PreserveGrowth            bool              `db:"preserve_growth" json:"preserve_growth"`
@@ -1029,15 +1030,16 @@ func (q *Queries) UpdateProperty(ctx context.Context, arg *UpdatePropertyParams)
 		arg.MaxReplayCount,
 		arg.CreatorID,
 		arg.OrgID,
-		arg.Challenge,
-		arg.PreserveEdgeTokenValidity,
-		arg.EdgeTokenValidityInterval,
+		arg.PreserveBasicSettings,
 		arg.PreserveLevel,
 		arg.PreserveGrowth,
 		arg.PreserveValidityInterval,
 		arg.PreserveAllowSubdomains,
 		arg.PreserveAllowLocalhost,
 		arg.PreserveMaxReplayCount,
+		arg.Challenge,
+		arg.PreserveEdgeTokenValidity,
+		arg.EdgeTokenValidityInterval,
 	)
 	var i UpdatePropertyRow
 	err := row.Scan(
