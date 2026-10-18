@@ -139,7 +139,7 @@ func (s *Server) expired(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	common.WriteHeaders(w, common.CachedHeaders)
+	common.WriteHeaders(w, common.NoCacheHeaders)
 
 	s.render(w, r, errorTemplate, data, true /*is new*/)
 }

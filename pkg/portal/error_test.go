@@ -184,6 +184,66 @@ func TestExpiredHandler(t *testing.T) {
 	}
 }
 
+func assertNotPubliclyCached(t *testing.T, h http.Header) {
+	t.Helper()
+	cc := h.Get(common.HeaderCacheControl)
+	if cc == "" {
+		t.Fatal("Cache-Control header is missing from /expired response")
+	}
+	if strings.Contains(cc, "public") {
+		t.Errorf("Cache-Control = %q; /expired renders per-user session data and must not be publicly cacheable", cc)
+	}
+	if !strings.Contains(cc, "private") {
+		t.Errorf("Cache-Control = %q; /expired must be marked private", cc)
+	}
+	if !strings.Contains(cc, "no-store") {
+		t.Errorf("Cache-Control = %q; /expired must include no-store", cc)
+	}
+}
+
+func TestExpiredHandlerNotPubliclyCached(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/expired", nil)
+	w := httptest.NewRecorder()
+
+	server.expired(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	assertNotPubliclyCached(t, w.Result().Header)
+}
+
+func TestExpiredPageNotPubliclyCachedForAuthenticatedUser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/expired", nil)
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	server.expired(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %v, want %v", w.Code, http.StatusOK)
+	}
+
+	assertLogoutCSRF(t, w.Body, user.ID)
+	assertNotPubliclyCached(t, w.Result().Header)
+}
+
 func TestPostClientSideError(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
