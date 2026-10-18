@@ -1784,6 +1784,282 @@ test('getPuzzle 5xx-after-abort race with single attempt classifies abort as glo
     console.log('✓ getPuzzle classifies abort as Global time out on single-attempt 5xx race');
 });
 
+// Shared fetch override backed by node:http that mirrors the Fetch spec:
+// the outer promise resolves as soon as response HEADERS arrive, and the body
+// is consumed lazily by a streaming text() that subscribes to the AbortSignal.
+// aborting the signal (via per-call or global timeout) destroys the underlying
+// socket and rejects the in-flight body read, which is exactly what the
+// response.ok body-stall bug hinges on. makeNodeHttpFetch above cannot expose
+// the bug because it buffers the whole body before resolving the outer fetch
+// promise, so body-read time is invisible to the timers.
+function makeStreamingFetch(http) {
+    return (url, options = {}) => new Promise((resolve, reject) => {
+        const parsedUrl = new URL(url);
+        const req = http.request({
+            hostname: parsedUrl.hostname,
+            port: parsedUrl.port,
+            path: parsedUrl.pathname + parsedUrl.search,
+            method: options.method || 'GET',
+            headers: options.headers ? Object.fromEntries(options.headers) : {}
+        }, (res) => {
+            resolve({
+                ok: res.statusCode >= 200 && res.statusCode < 300,
+                status: res.statusCode,
+                headers: {
+                    get: (name) => (name ? res.headers[name.toLowerCase()] ?? null : null)
+                },
+                text: () => new Promise((resolveText, rejectText) => {
+                    if (options.signal?.aborted) {
+                        rejectText(options.signal.reason || new Error('Aborted'));
+                        return;
+                    }
+                    let data = '';
+                    res.setEncoding('utf8');
+                    res.on('data', (chunk) => { data += chunk; });
+                    res.on('end', () => resolveText(data));
+                    res.on('error', rejectText);
+                    if (options.signal) {
+                        options.signal.addEventListener('abort', () => {
+                            res.destroy();
+                            rejectText(options.signal.reason || new Error('Aborted'));
+                        }, { once: true });
+                    }
+                })
+            });
+        });
+
+        if (options.signal) {
+            options.signal.addEventListener('abort', () => { req.destroy(); }, { once: true });
+        }
+        req.on('error', reject);
+        req.end();
+    });
+}
+
+// Returns a server that sends OK response headers and then never sends the
+// body, modeling a stalled/black-holed connection after a successful header
+// transfer. Optionally emits a notice header to verify it propagates.
+function setupStalledBodyHarness(http, { notice = null } = {}) {
+    return new Promise((resolve) => {
+        const server = http.createServer((req, res) => {
+            const headers = { 'Content-Type': 'text/plain' };
+            if (notice !== null) { headers['X-PC-Widget-Notice'] = notice; }
+            res.writeHead(200, headers);
+            res.flushHeaders();
+            // intentionally never call res.end(): body transfer stalls forever
+        });
+        server.listen(0, '127.0.0.1', () => {
+            resolve({ port: server.address().port, server });
+        });
+    });
+}
+
+test('getPuzzle bounds body read by per-call timeout when response.ok body stalls', async (t) => {
+    const http = await import('node:http');
+    const { getPuzzle } = await import('../js/puzzle.js');
+
+    const { port, server } = await setupStalledBodyHarness(http);
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = makeStreamingFetch(http);
+
+    try {
+        const startTime = Date.now();
+        await assert.rejects(
+            async () => {
+                // Per-call (100ms) < global (2000ms), single attempt: the body
+                // read is bounded by the per-call timeout. Pre-fix the global
+                // timer was cleared on response.ok and the per-call timer was
+                // cleared before getPuzzle's response.text(), so the body read
+                // hung indefinitely (the body-stall bug).
+                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
+                    attempts: 1,
+                    timeout: 100,
+                    globalTimeout: 2000
+                });
+            },
+            (err) => {
+                assert.ok(
+                    err.message.includes('maximum retry attempts') || err.message.includes('timed out'),
+                    `Expected retry/timeout error, got: ${err.message}`
+                );
+                assert.strictEqual(err.internalError, 'Fetch timed out',
+                    `Expected internalError='Fetch timed out', got: ${err.internalError}`);
+                return true;
+            }
+        );
+        const elapsed = Date.now() - startTime;
+        // The per-call timeout fires ~100ms after the attempt begins; allow
+        // generous slack for slow CI but assert it's bounded (pre-fix the test
+        // would hang past the 2000ms global timeout, and on a real black-hole,
+        // indefinitely).
+        assert.ok(elapsed < 1000,
+            `Body-stall should be bounded by per-call timeout (~100ms, took ${elapsed}ms)`);
+    } finally {
+        globalThis.fetch = originalFetch;
+        server.closeAllConnections();
+        server.close();
+    }
+
+    console.log('✓ getPuzzle body-stall bounded by per-call timeout test passed');
+});
+
+test('getPuzzle bounds body read by globalTimeout when response.ok body stalls', async (t) => {
+    const http = await import('node:http');
+    const { getPuzzle } = await import('../js/puzzle.js');
+
+    const { port, server } = await setupStalledBodyHarness(http);
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = makeStreamingFetch(http);
+
+    try {
+        const startTime = Date.now();
+        await assert.rejects(
+            async () => {
+                // Per-call (2000ms) > global (200ms), multiple attempts: the
+                // global timeout fires during the body read of the first
+                // attempt, aborts fetchController (via globalAbortHandler still
+                // attached because the success path no longer disarms early),
+                // and rejects await response.text() as a Global time out.
+                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
+                    attempts: 5,
+                    timeout: 2000,
+                    globalTimeout: 200
+                });
+            },
+            (err) => {
+                assert.strictEqual(err.message, 'Fetch timed out',
+                    `Expected 'Fetch timed out', got: ${err.message}`);
+                assert.strictEqual(err.internalError, 'Global time out',
+                    `Expected internalError='Global time out', got: ${err.internalError}`);
+                return true;
+            }
+        );
+        const elapsed = Date.now() - startTime;
+        assert.ok(elapsed < 1000,
+            `Body-stall should be bounded by globalTimeout (~200ms, took ${elapsed}ms)`);
+    } finally {
+        globalThis.fetch = originalFetch;
+        server.closeAllConnections();
+        server.close();
+    }
+
+    console.log('✓ getPuzzle body-stall bounded by globalTimeout test passed');
+});
+
+test('getPuzzle fetch signal is aborted when response.ok body stalls past the deadline', async (t) => {
+    const http = await import('node:http');
+    const { getPuzzle } = await import('../js/puzzle.js');
+
+    const { port, server } = await setupStalledBodyHarness(http);
+    const originalFetch = globalThis.fetch;
+    let fetchSignalSeen = null;
+    let fetchAborted = false;
+
+    // Wrap makeStreamingFetch to capture the per-call AbortSignal so we can
+    // assert the bug-report invariant: with the fix, the signal IS aborted
+    // (pre-fix it was never aborted because the timers were cleared early).
+    const streamingFetch = makeStreamingFetch(http);
+    globalThis.fetch = (url, options = {}) => {
+        fetchSignalSeen = options.signal || null;
+        if (fetchSignalSeen) {
+            fetchSignalSeen.addEventListener('abort', () => { fetchAborted = true; }, { once: true });
+        }
+        return streamingFetch(url, options);
+    };
+
+    try {
+        await assert.rejects(
+            async () => {
+                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
+                    attempts: 1,
+                    timeout: 100,
+                    globalTimeout: 300
+                });
+            },
+            () => true
+        );
+        assert.ok(fetchSignalSeen, 'fetch() must have been called with a signal');
+        assert.strictEqual(fetchAborted, true,
+            'Per-call AbortSignal must fire after the body-stall deadline (pre-fix it never fired)');
+    } finally {
+        globalThis.fetch = originalFetch;
+        server.closeAllConnections();
+        server.close();
+    }
+
+    console.log('✓ getPuzzle fetch signal aborts on body-stall test passed');
+});
+
+test('getPuzzle returns {data, notice} when response.ok body resolves (regression)', async (t) => {
+    const http = await import('node:http');
+    const { getPuzzle } = await import('../js/puzzle.js');
+
+    const server = http.createServer((req, res) => {
+        res.writeHead(200, {
+            'Content-Type': 'text/plain',
+            'X-PC-Widget-Notice': 'maintenance'
+        });
+        res.end('value.signature');
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = makeStreamingFetch(http);
+
+    try {
+        const result = await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
+            attempts: 1,
+            timeout: 5000,
+            globalTimeout: 30000
+        });
+        assert.strictEqual(result.data, 'value.signature',
+            `Expected data='value.signature', got: ${result.data}`);
+        assert.strictEqual(result.notice, 'maintenance',
+            `Expected notice='maintenance', got: ${result.notice}`);
+    } finally {
+        globalThis.fetch = originalFetch;
+        server.close();
+    }
+
+    console.log('✓ getPuzzle happy-path body-read regression test passed');
+});
+
+test('getPuzzle tolerates slow-but-completing body read within the timeouts', async (t) => {
+    const http = await import('node:http');
+    const { getPuzzle } = await import('../js/puzzle.js');
+
+    const server = http.createServer((req, res) => {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.flushHeaders();
+        // Send the body in a single delayed chunk that arrives ~80ms later,
+        // well within the per-call (500ms) and global (3000ms) deadlines, to
+        // confirm the new armed-during-body-read timers do not false-positive
+        // on legitimately slow bodies.
+        setTimeout(() => res.end('chunked.signature'), 80);
+    });
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = makeStreamingFetch(http);
+
+    try {
+        const startTime = Date.now();
+        const result = await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
+            attempts: 1,
+            timeout: 500,
+            globalTimeout: 3000
+        });
+        const elapsed = Date.now() - startTime;
+        assert.strictEqual(result.data, 'chunked.signature');
+        assert.ok(elapsed < 1000, `Slow body should resolve within timeouts (took ${elapsed}ms)`);
+    } finally {
+        globalThis.fetch = originalFetch;
+        server.close();
+    }
+
+    console.log('✓ getPuzzle slow-but-completing body read regression test passed');
+});
+
 test('JS fallback finds a verifiable solution', async () => {
     const { findBlake2bSolution, thresholdFromDifficulty, readUInt32LE } = await import('../js/puzzle.utils.js');
     const puzzleBuffer = new Uint8Array(128);

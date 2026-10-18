@@ -20,9 +20,9 @@ const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_GLOBAL_TIMEOUT_MS = 30000;
 
 export async function getPuzzle(endpoint, sitekey, options = {}) {
+    const separator = endpoint.includes('?') ? '&' : '?';
     try {
-        const separator = endpoint.includes('?') ? '&' : '?';
-        const response = await fetchWithBackoff(`${endpoint}${separator}sitekey=${encodeURIComponent(sitekey)}`, {
+        return await fetchWithBackoff(`${endpoint}${separator}sitekey=${encodeURIComponent(sitekey)}`, {
             fetchOptions: { headers: [["x-pc-captcha-version", globalThis.__privateCaptchaExtended === true ? "2" : "1"]], mode: "cors" },
             maxAttempts: options.attempts ?? 5,
             initialDelay: 800,
@@ -30,23 +30,10 @@ export async function getPuzzle(endpoint, sitekey, options = {}) {
             timeoutMs: options.timeout ?? DEFAULT_TIMEOUT_MS,
             globalTimeoutMs: options.globalTimeout ?? DEFAULT_GLOBAL_TIMEOUT_MS
         });
-
-        if (response.ok) {
-            const data = await response.text();
-            const notice = response.headers.get('X-PC-Widget-Notice');
-            return { data, notice };
-        } else {
-            let json = await response.json();
-            if (json && json.error) {
-                throw new Error(json.error);
-            }
-        }
     } catch (err) {
         console.error('[privatecaptcha]', err);
         throw err;
     }
-
-    throw new Error('Internal error');
 };
 
 function wait(delay, signal) {
@@ -106,32 +93,9 @@ async function fetchWithBackoff(url, options = {}) {
         const globalAbortHandler = () => fetchController.abort(new Error('Fetch timed out'));
         globalSignal.addEventListener('abort', globalAbortHandler, { once: true });
 
+        let response;
         try {
-            const response = await fetch(url, { ...fetchOptions, signal: fetchSignal });
-            clearTimeout(fetchTimeoutId);
-            globalSignal.removeEventListener('abort', globalAbortHandler);
-            if (response.ok) {
-                clearTimeout(globalTimeoutId);
-                return response;
-            } else {
-                lastError = `HTTP ${response.status}`;
-                console.warn('[privatecaptcha]', `HTTP request failed. url=${url} status=${response.status}`);
-            }
-
-            if ((response.status >= 400) && (response.status < 500) &&
-                !ACCEPTABLE_CLIENT_ERRORS.includes(response.status)) {
-                // we don't retry on most client errors
-                break;
-            }
-
-            if (globalSignal.aborted) {
-                clearTimeout(globalTimeoutId);
-                lastError = 'Global time out';
-                const error = new Error('Fetch timed out');
-                error.internalError = lastError;
-                throw error;
-            }
-            continue;
+            response = await fetch(url, { ...fetchOptions, signal: fetchSignal });
         } catch (err) {
             clearTimeout(fetchTimeoutId);
             globalSignal.removeEventListener('abort', globalAbortHandler);
@@ -143,14 +107,74 @@ async function fetchWithBackoff(url, options = {}) {
                 throw error;
             }
             if (fetchSignal.aborted) {
-                // Per-call timeout - continue to next attempt
                 lastError = 'Fetch timed out';
                 console.warn('[privatecaptcha]', `Fetch attempt ${attempt + 1} timed out`);
                 continue;
             }
             lastError = err.message || String(err);
             console.error('[privatecaptcha]', err);
+            continue;
         }
+
+        if (response.ok) {
+            // Read the body before disarming the timeouts: aborting fetchSignal
+            // rejects in-flight body reads, so a stalled/black-holed body
+            // transfer is bounded by the per-call and global timeouts instead
+            // of hanging indefinitely after the headers arrive.
+            const notice = response.headers.get('X-PC-Widget-Notice');
+            let data;
+            try {
+                data = await response.text();
+            } catch (bodyErr) {
+                clearTimeout(fetchTimeoutId);
+                globalSignal.removeEventListener('abort', globalAbortHandler);
+                if (globalSignal.aborted) {
+                    clearTimeout(globalTimeoutId);
+                    lastError = 'Global time out';
+                    const error = new Error('Fetch timed out');
+                    error.internalError = lastError;
+                    throw error;
+                }
+                if (fetchSignal.aborted) {
+                    // Per-call timeout fired during the body read - retry next attempt.
+                    lastError = 'Fetch timed out';
+                    console.warn('[privatecaptcha]', `Fetch attempt ${attempt + 1} timed out`);
+                    continue;
+                }
+                // Non-timeout body read error: surface to the caller to preserve
+                // historical getPuzzle behavior (response.text() was awaited
+                // outside the retry loop and its errors were not retried).
+                // getPuzzle()'s catch will log the surfaced error.
+                clearTimeout(globalTimeoutId);
+                const error = new Error(bodyErr.message || 'Response body read failed');
+                error.internalError = bodyErr.message || String(bodyErr);
+                throw error;
+            }
+            clearTimeout(fetchTimeoutId);
+            globalSignal.removeEventListener('abort', globalAbortHandler);
+            clearTimeout(globalTimeoutId);
+            return { data, notice };
+        }
+
+        clearTimeout(fetchTimeoutId);
+        globalSignal.removeEventListener('abort', globalAbortHandler);
+        lastError = `HTTP ${response.status}`;
+        console.warn('[privatecaptcha]', `HTTP request failed. url=${url} status=${response.status}`);
+
+        if ((response.status >= 400) && (response.status < 500) &&
+            !ACCEPTABLE_CLIENT_ERRORS.includes(response.status)) {
+            // we don't retry on most client errors
+            break;
+        }
+
+        if (globalSignal.aborted) {
+            clearTimeout(globalTimeoutId);
+            lastError = 'Global time out';
+            const error = new Error('Fetch timed out');
+            error.internalError = lastError;
+            throw error;
+        }
+        continue;
     }
 
     clearTimeout(globalTimeoutId);
