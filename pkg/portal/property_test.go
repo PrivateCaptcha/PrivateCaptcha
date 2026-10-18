@@ -607,6 +607,30 @@ func TestGetPropertyStats(t *testing.T) {
 					t.Errorf("Expected 1 verified in verify-only bucket, got %d (present: %v)", verified, ok)
 				}
 			}
+
+			if p.period == common.TimePeriodWeek {
+				// Week reads request_logs_1d / verify_logs_1d whose MVs bucket with toStartOfDay,
+				// so every returned point must align to UTC midnight and the chart must yield
+				// daily buckets (today + up to 7 prior days, 7-8 points) rather than the
+				// 6-hour fabricated buckets that the previous query produced (~29 points).
+				const secondsPerDay int64 = 24 * 60 * 60
+				for _, pt := range stats.Requested {
+					if pt.Date%secondsPerDay != 0 {
+						t.Errorf("Week requested bucket %d not aligned to UTC midnight (6-hour bucket bug)", pt.Date)
+					}
+				}
+				for _, pt := range stats.Verified {
+					if pt.Date%secondsPerDay != 0 {
+						t.Errorf("Week verified bucket %d not aligned to UTC midnight (6-hour bucket bug)", pt.Date)
+					}
+				}
+				if len(stats.Requested) < 7 || len(stats.Requested) > 8 {
+					t.Errorf("Week requested bucket count = %d, want 7-8 daily buckets (buggy code yields ~29 6-hour buckets)", len(stats.Requested))
+				}
+				if len(stats.Verified) < 7 || len(stats.Verified) > 8 {
+					t.Errorf("Week verified bucket count = %d, want 7-8 daily buckets (buggy code yields ~29 6-hour buckets)", len(stats.Verified))
+				}
+			}
 		})
 	}
 }

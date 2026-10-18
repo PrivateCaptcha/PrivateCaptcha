@@ -976,10 +976,10 @@ func (ts *TimeSeriesDB) RetrieveOrgStatsByPeriod(ctx context.Context, orgID int3
 		cacheKey = new(CacheKey)
 		*cacheKey = orgStatsCacheKey(orgID, fmt.Sprintf("%s/%d", timeFrom.Format(time.DateTime), topPropertiesLimit))
 	case common.TimePeriodWeek:
-		timeFrom = tnow.AddDate(0, 0, -7).Truncate(6 * time.Hour)
+		timeFrom = tnow.AddDate(0, 0, -7).Truncate(24 * time.Hour)
 		requestsTable = AccessLogTableName1d
 		verificationsTable = VerifyLogTable1d
-		timeFunction = "toStartOfInterval(%s, INTERVAL 6 HOUR)"
+		timeFunction = "toStartOfDay(%s)"
 	case common.TimePeriodMonth:
 		timeFrom = tnow.AddDate(0, -1, 0).Truncate(24 * time.Hour)
 		requestsTable = AccessLogTableName1d
@@ -1158,11 +1158,11 @@ func (ts *TimeSeriesDB) RetrievePropertyStatsByPeriod(ctx context.Context, orgID
 		cacheKey = new(CacheKey)
 		*cacheKey = propertyStatsCacheKey(propertyID, timeFrom.Format(time.DateTime))
 	case common.TimePeriodWeek:
-		timeFrom = tnow.AddDate(0, 0, -7).Truncate(6 * time.Hour)
+		timeFrom = tnow.AddDate(0, 0, -7).Truncate(24 * time.Hour)
 		requestsTable = "request_logs_1d"
 		verificationsTable = "verify_logs_1d"
-		timeFunction = "toStartOfInterval(%s, INTERVAL 6 HOUR)"
-		interval = "INTERVAL 6 HOUR"
+		timeFunction = "toStartOfDay(%s)"
+		interval = "INTERVAL 1 DAY"
 	case common.TimePeriodMonth:
 		timeFrom = tnow.AddDate(0, -1, 0).Truncate(24 * time.Hour)
 		requestsTable = "request_logs_1d"
