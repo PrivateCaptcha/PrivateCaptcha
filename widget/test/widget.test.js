@@ -1854,15 +1854,45 @@ function setupStalledBodyHarness(http, { notice = null } = {}) {
     });
 }
 
+// Run fn against a stalled-body server with the streaming fetch override
+// installed, restoring globalThis.fetch and closing the server on completion.
+// Each body-stall test shares this scaffolding to keep the suite focused on
+// the behavior under test.
+async function withStalledBodyHarness(http, fn) {
+    const { port, server } = await setupStalledBodyHarness(http);
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = makeStreamingFetch(http);
+    try {
+        return await fn({ port, server });
+    } finally {
+        globalThis.fetch = originalFetch;
+        server.closeAllConnections();
+        server.close();
+    }
+}
+
+// Run fn against a custom server with the streaming fetch override installed,
+// restoring globalThis.fetch and closing the server on completion. createServer
+// returns the configured http server (not yet listening).
+async function withStreamingFetchServer(http, createServer, fn) {
+    const server = createServer();
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = makeStreamingFetch(http);
+    try {
+        return await fn({ port, server });
+    } finally {
+        globalThis.fetch = originalFetch;
+        server.close();
+    }
+}
+
 test('getPuzzle bounds body read by per-call timeout when response.ok body stalls', async (t) => {
     const http = await import('node:http');
     const { getPuzzle } = await import('../js/puzzle.js');
 
-    const { port, server } = await setupStalledBodyHarness(http);
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = makeStreamingFetch(http);
-
-    try {
+    await withStalledBodyHarness(http, async ({ port }) => {
         const startTime = Date.now();
         await assert.rejects(
             async () => {
@@ -1894,11 +1924,7 @@ test('getPuzzle bounds body read by per-call timeout when response.ok body stall
         // indefinitely).
         assert.ok(elapsed < 1000,
             `Body-stall should be bounded by per-call timeout (~100ms, took ${elapsed}ms)`);
-    } finally {
-        globalThis.fetch = originalFetch;
-        server.closeAllConnections();
-        server.close();
-    }
+    });
 
     console.log('✓ getPuzzle body-stall bounded by per-call timeout test passed');
 });
@@ -1907,11 +1933,7 @@ test('getPuzzle bounds body read by globalTimeout when response.ok body stalls',
     const http = await import('node:http');
     const { getPuzzle } = await import('../js/puzzle.js');
 
-    const { port, server } = await setupStalledBodyHarness(http);
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = makeStreamingFetch(http);
-
-    try {
+    await withStalledBodyHarness(http, async ({ port }) => {
         const startTime = Date.now();
         await assert.rejects(
             async () => {
@@ -1937,11 +1959,7 @@ test('getPuzzle bounds body read by globalTimeout when response.ok body stalls',
         const elapsed = Date.now() - startTime;
         assert.ok(elapsed < 1000,
             `Body-stall should be bounded by globalTimeout (~200ms, took ${elapsed}ms)`);
-    } finally {
-        globalThis.fetch = originalFetch;
-        server.closeAllConnections();
-        server.close();
-    }
+    });
 
     console.log('✓ getPuzzle body-stall bounded by globalTimeout test passed');
 });
@@ -1950,24 +1968,22 @@ test('getPuzzle fetch signal is aborted when response.ok body stalls past the de
     const http = await import('node:http');
     const { getPuzzle } = await import('../js/puzzle.js');
 
-    const { port, server } = await setupStalledBodyHarness(http);
-    const originalFetch = globalThis.fetch;
-    let fetchSignalSeen = null;
-    let fetchAborted = false;
+    await withStalledBodyHarness(http, async ({ port }) => {
+        let fetchSignalSeen = null;
+        let fetchAborted = false;
 
-    // Wrap makeStreamingFetch to capture the per-call AbortSignal so we can
-    // assert the bug-report invariant: with the fix, the signal IS aborted
-    // (pre-fix it was never aborted because the timers were cleared early).
-    const streamingFetch = makeStreamingFetch(http);
-    globalThis.fetch = (url, options = {}) => {
-        fetchSignalSeen = options.signal || null;
-        if (fetchSignalSeen) {
-            fetchSignalSeen.addEventListener('abort', () => { fetchAborted = true; }, { once: true });
-        }
-        return streamingFetch(url, options);
-    };
+        // Wrap makeStreamingFetch to capture the per-call AbortSignal so we can
+        // assert the bug-report invariant: with the fix, the signal IS aborted
+        // (pre-fix it was never aborted because the timers were cleared early).
+        const innerFetch = globalThis.fetch;
+        globalThis.fetch = (url, options = {}) => {
+            fetchSignalSeen = options.signal || null;
+            if (fetchSignalSeen) {
+                fetchSignalSeen.addEventListener('abort', () => { fetchAborted = true; }, { once: true });
+            }
+            return innerFetch(url, options);
+        };
 
-    try {
         await assert.rejects(
             async () => {
                 await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
@@ -1981,11 +1997,7 @@ test('getPuzzle fetch signal is aborted when response.ok body stalls past the de
         assert.ok(fetchSignalSeen, 'fetch() must have been called with a signal');
         assert.strictEqual(fetchAborted, true,
             'Per-call AbortSignal must fire after the body-stall deadline (pre-fix it never fired)');
-    } finally {
-        globalThis.fetch = originalFetch;
-        server.closeAllConnections();
-        server.close();
-    }
+    });
 
     console.log('✓ getPuzzle fetch signal aborts on body-stall test passed');
 });
@@ -1994,19 +2006,13 @@ test('getPuzzle returns {data, notice} when response.ok body resolves (regressio
     const http = await import('node:http');
     const { getPuzzle } = await import('../js/puzzle.js');
 
-    const server = http.createServer((req, res) => {
+    await withStreamingFetchServer(http, () => http.createServer((req, res) => {
         res.writeHead(200, {
             'Content-Type': 'text/plain',
             'X-PC-Widget-Notice': 'maintenance'
         });
         res.end('value.signature');
-    });
-    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    const port = server.address().port;
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = makeStreamingFetch(http);
-
-    try {
+    }), async ({ port }) => {
         const result = await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
             attempts: 1,
             timeout: 5000,
@@ -2016,10 +2022,7 @@ test('getPuzzle returns {data, notice} when response.ok body resolves (regressio
             `Expected data='value.signature', got: ${result.data}`);
         assert.strictEqual(result.notice, 'maintenance',
             `Expected notice='maintenance', got: ${result.notice}`);
-    } finally {
-        globalThis.fetch = originalFetch;
-        server.close();
-    }
+    });
 
     console.log('✓ getPuzzle happy-path body-read regression test passed');
 });
@@ -2028,7 +2031,7 @@ test('getPuzzle tolerates slow-but-completing body read within the timeouts', as
     const http = await import('node:http');
     const { getPuzzle } = await import('../js/puzzle.js');
 
-    const server = http.createServer((req, res) => {
+    await withStreamingFetchServer(http, () => http.createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.flushHeaders();
         // Send the body in a single delayed chunk that arrives ~80ms later,
@@ -2036,13 +2039,7 @@ test('getPuzzle tolerates slow-but-completing body read within the timeouts', as
         // confirm the new armed-during-body-read timers do not false-positive
         // on legitimately slow bodies.
         setTimeout(() => res.end('chunked.signature'), 80);
-    });
-    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    const port = server.address().port;
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = makeStreamingFetch(http);
-
-    try {
+    }), async ({ port }) => {
         const startTime = Date.now();
         const result = await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
             attempts: 1,
@@ -2052,10 +2049,7 @@ test('getPuzzle tolerates slow-but-completing body read within the timeouts', as
         const elapsed = Date.now() - startTime;
         assert.strictEqual(result.data, 'chunked.signature');
         assert.ok(elapsed < 1000, `Slow body should resolve within timeouts (took ${elapsed}ms)`);
-    } finally {
-        globalThis.fetch = originalFetch;
-        server.close();
-    }
+    });
 
     console.log('✓ getPuzzle slow-but-completing body read regression test passed');
 });
