@@ -1888,42 +1888,50 @@ async function withStreamingFetchServer(http, createServer, fn) {
     }
 }
 
-test('getPuzzle bounds body read by per-call timeout when response.ok body stalls', async (t) => {
-    const http = await import('node:http');
-    const { getPuzzle } = await import('../js/puzzle.js');
-
-    await withStalledBodyHarness(http, async ({ port }) => {
-        const startTime = Date.now();
-        await assert.rejects(
-            async () => {
-                // Per-call (100ms) < global (2000ms), single attempt: the body
-                // read is bounded by the per-call timeout. Pre-fix the global
-                // timer was cleared on response.ok and the per-call timer was
-                // cleared before getPuzzle's response.text(), so the body read
-                // hung indefinitely (the body-stall bug).
-                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
-                    attempts: 1,
-                    timeout: 100,
-                    globalTimeout: 2000
-                });
-            },
-            (err) => {
+// Shared assertion for the bounded body-stall tests: the per-call and
+// globalTimeout cases both drive getPuzzle against a stalled-body server,
+// assert the request fails with the expected timeout classification, and
+// assert the elapsed time stays under the budget. retryOrTimeout=true accepts
+// either a "maximum retry attempts" or "timed out" message (per-call case,
+// which exhausts its single attempt); retryOrTimeout=false asserts the exact
+// 'Fetch timed out' message (global case, which aborts mid-attempt).
+async function assertBodyStallBounded(getPuzzle, port, options, { expectedInternalError, retryOrTimeout, boundedBy }) {
+    const startTime = Date.now();
+    await assert.rejects(
+        async () => {
+            await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, options);
+        },
+        (err) => {
+            if (retryOrTimeout) {
                 assert.ok(
                     err.message.includes('maximum retry attempts') || err.message.includes('timed out'),
                     `Expected retry/timeout error, got: ${err.message}`
                 );
-                assert.strictEqual(err.internalError, 'Fetch timed out',
-                    `Expected internalError='Fetch timed out', got: ${err.internalError}`);
-                return true;
+            } else {
+                assert.strictEqual(err.message, 'Fetch timed out',
+                    `Expected 'Fetch timed out', got: ${err.message}`);
             }
-        );
-        const elapsed = Date.now() - startTime;
-        // The per-call timeout fires ~100ms after the attempt begins; allow
-        // generous slack for slow CI but assert it's bounded (pre-fix the test
-        // would hang past the 2000ms global timeout, and on a real black-hole,
-        // indefinitely).
-        assert.ok(elapsed < 1000,
-            `Body-stall should be bounded by per-call timeout (~100ms, took ${elapsed}ms)`);
+            assert.strictEqual(err.internalError, expectedInternalError,
+                `Expected internalError='${expectedInternalError}', got: ${err.internalError}`);
+            return true;
+        }
+    );
+    const elapsed = Date.now() - startTime;
+    assert.ok(elapsed < 1000, `Body-stall should be bounded by ${boundedBy} (took ${elapsed}ms)`);
+}
+
+test('getPuzzle bounds body read by per-call timeout when response.ok body stalls', async (t) => {
+    const http = await import('node:http');
+    const { getPuzzle } = await import('../js/puzzle.js');
+
+    // Per-call (100ms) < global (2000ms), single attempt: the body read is
+    // bounded by the per-call timeout. Pre-fix the global timer was cleared on
+    // response.ok and the per-call timer was cleared before getPuzzle's
+    // response.text(), so the body read hung indefinitely (the body-stall bug).
+    await withStalledBodyHarness(http, async ({ port }) => {
+        await assertBodyStallBounded(getPuzzle, port,
+            { attempts: 1, timeout: 100, globalTimeout: 2000 },
+            { expectedInternalError: 'Fetch timed out', retryOrTimeout: true, boundedBy: 'per-call timeout (~100ms)' });
     });
 
     console.log('✓ getPuzzle body-stall bounded by per-call timeout test passed');
@@ -1933,32 +1941,14 @@ test('getPuzzle bounds body read by globalTimeout when response.ok body stalls',
     const http = await import('node:http');
     const { getPuzzle } = await import('../js/puzzle.js');
 
+    // Per-call (2000ms) > global (200ms), multiple attempts: the global timeout
+    // fires during the body read of the first attempt, aborts fetchController
+    // (via globalAbortHandler still attached because the success path no longer
+    // disarms early), and rejects await response.text() as a Global time out.
     await withStalledBodyHarness(http, async ({ port }) => {
-        const startTime = Date.now();
-        await assert.rejects(
-            async () => {
-                // Per-call (2000ms) > global (200ms), multiple attempts: the
-                // global timeout fires during the body read of the first
-                // attempt, aborts fetchController (via globalAbortHandler still
-                // attached because the success path no longer disarms early),
-                // and rejects await response.text() as a Global time out.
-                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
-                    attempts: 5,
-                    timeout: 2000,
-                    globalTimeout: 200
-                });
-            },
-            (err) => {
-                assert.strictEqual(err.message, 'Fetch timed out',
-                    `Expected 'Fetch timed out', got: ${err.message}`);
-                assert.strictEqual(err.internalError, 'Global time out',
-                    `Expected internalError='Global time out', got: ${err.internalError}`);
-                return true;
-            }
-        );
-        const elapsed = Date.now() - startTime;
-        assert.ok(elapsed < 1000,
-            `Body-stall should be bounded by globalTimeout (~200ms, took ${elapsed}ms)`);
+        await assertBodyStallBounded(getPuzzle, port,
+            { attempts: 5, timeout: 2000, globalTimeout: 200 },
+            { expectedInternalError: 'Global time out', retryOrTimeout: false, boundedBy: 'globalTimeout (~200ms)' });
     });
 
     console.log('✓ getPuzzle body-stall bounded by globalTimeout test passed');
