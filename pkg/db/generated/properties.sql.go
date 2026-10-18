@@ -932,14 +932,15 @@ WITH old AS (
 upd AS (
     UPDATE backend.properties p
     SET name = $2,
-        level = $3,
-        growth = $4,
-        validity_interval = $5,
-        allow_subdomains = $6,
-        allow_localhost = $7,
-        max_replay_count = $8,
         challenge = COALESCE($11::backend.challenge_type, p.challenge),
-        edge_token_validity_interval = CASE WHEN $12::boolean THEN p.edge_token_validity_interval ELSE $13::interval END,
+        edge_token_validity_interval = CASE WHEN $12::boolean
+            THEN p.edge_token_validity_interval ELSE $13::interval END,
+        level = CASE WHEN $14::boolean THEN p.level ELSE $3 END,
+        growth = CASE WHEN $15::boolean THEN p.growth ELSE $4 END,
+        validity_interval = CASE WHEN $16::boolean THEN p.validity_interval ELSE $5 END,
+        allow_subdomains = CASE WHEN $17::boolean THEN p.allow_subdomains ELSE $6 END,
+        allow_localhost = CASE WHEN $18::boolean THEN p.allow_localhost ELSE $7 END,
+        max_replay_count = CASE WHEN $19::boolean THEN p.max_replay_count ELSE $8 END,
         updated_at = NOW()
     WHERE p.id = (SELECT id FROM old)
       AND $13::interval BETWEEN INTERVAL '0 seconds' AND INTERVAL '24 hours'
@@ -975,6 +976,12 @@ type UpdatePropertyParams struct {
 	AllowSubdomains           bool              `db:"allow_subdomains" json:"allow_subdomains"`
 	AllowLocalhost            bool              `db:"allow_localhost" json:"allow_localhost"`
 	PreserveEdgeTokenValidity bool              `db:"preserve_edge_token_validity" json:"preserve_edge_token_validity"`
+	PreserveLevel             bool              `db:"preserve_level" json:"preserve_level"`
+	PreserveGrowth            bool              `db:"preserve_growth" json:"preserve_growth"`
+	PreserveValidityInterval  bool              `db:"preserve_validity_interval" json:"preserve_validity_interval"`
+	PreserveAllowSubdomains   bool              `db:"preserve_allow_subdomains" json:"preserve_allow_subdomains"`
+	PreserveAllowLocalhost    bool              `db:"preserve_allow_localhost" json:"preserve_allow_localhost"`
+	PreserveMaxReplayCount    bool              `db:"preserve_max_replay_count" json:"preserve_max_replay_count"`
 }
 
 type UpdatePropertyRow struct {
@@ -1025,6 +1032,12 @@ func (q *Queries) UpdateProperty(ctx context.Context, arg *UpdatePropertyParams)
 		arg.Challenge,
 		arg.PreserveEdgeTokenValidity,
 		arg.EdgeTokenValidityInterval,
+		arg.PreserveLevel,
+		arg.PreserveGrowth,
+		arg.PreserveValidityInterval,
+		arg.PreserveAllowSubdomains,
+		arg.PreserveAllowLocalhost,
+		arg.PreserveMaxReplayCount,
 	)
 	var i UpdatePropertyRow
 	err := row.Scan(

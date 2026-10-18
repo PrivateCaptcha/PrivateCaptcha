@@ -21,14 +21,15 @@ WITH old AS (
 upd AS (
     UPDATE backend.properties p
     SET name = $2,
-        level = $3,
-        growth = $4,
-        validity_interval = $5,
-        allow_subdomains = $6,
-        allow_localhost = $7,
-        max_replay_count = $8,
         challenge = COALESCE(sqlc.narg(challenge)::backend.challenge_type, p.challenge),
-        edge_token_validity_interval = CASE WHEN sqlc.arg(preserve_edge_token_validity)::boolean THEN p.edge_token_validity_interval ELSE sqlc.arg(edge_token_validity_interval)::interval END,
+        edge_token_validity_interval = CASE WHEN sqlc.arg(preserve_edge_token_validity)::boolean
+            THEN p.edge_token_validity_interval ELSE sqlc.arg(edge_token_validity_interval)::interval END,
+        level = CASE WHEN sqlc.arg(preserve_level)::boolean THEN p.level ELSE $3 END,
+        growth = CASE WHEN sqlc.arg(preserve_growth)::boolean THEN p.growth ELSE $4 END,
+        validity_interval = CASE WHEN sqlc.arg(preserve_validity_interval)::boolean THEN p.validity_interval ELSE $5 END,
+        allow_subdomains = CASE WHEN sqlc.arg(preserve_allow_subdomains)::boolean THEN p.allow_subdomains ELSE $6 END,
+        allow_localhost = CASE WHEN sqlc.arg(preserve_allow_localhost)::boolean THEN p.allow_localhost ELSE $7 END,
+        max_replay_count = CASE WHEN sqlc.arg(preserve_max_replay_count)::boolean THEN p.max_replay_count ELSE $8 END,
         updated_at = NOW()
     WHERE p.id = (SELECT id FROM old)
       AND sqlc.arg(edge_token_validity_interval)::interval BETWEEN INTERVAL '0 seconds' AND INTERVAL '24 hours'
