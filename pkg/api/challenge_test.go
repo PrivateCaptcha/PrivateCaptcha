@@ -130,3 +130,145 @@ func TestPuzzleForRequestChallenge(t *testing.T) {
 		t.Fatalf("stub puzzle = %v, selected = %v, error = %v", stub, selected, err)
 	}
 }
+
+// TestPuzzleForRequestEdgeTokenGating asserts that attaching edge-token validity
+// (which upgrades the wire format to v3) is gated on the client's declared captcha
+// version. Clients announcing "1" (the legacy/standard-widget wire version, which
+// pre-v3 widget bundles also send) must receive a payload they can parse, so the
+// server must NOT bump the wire format to v3 just because the property has edge
+// tokens enabled. Clients announcing anything else (or omitting the header) are
+// treated as v3-capable and receive a v3 payload carrying the validity field.
+func TestPuzzleForRequestEdgeTokenGating(t *testing.T) {
+	property := &dbgen.Property{
+		ID:                        1,
+		ExternalID:                pgtype.UUID{Valid: true, Bytes: [16]byte{1}},
+		OrgID:                     pgtype.Int4{Valid: true, Int32: 2},
+		OrgOwnerID:                pgtype.Int4{Valid: true, Int32: 3},
+		Level:                     pgtype.Int2{Valid: true, Int16: int16(common.DifficultyLevelMedium)},
+		Growth:                    dbgen.DifficultyGrowthMedium,
+		ValidityInterval:          time.Hour,
+		Challenge:                 dbgen.ChallengeTypeArgon2ID,
+		EdgeTokenValidityInterval: time.Hour,
+	}
+	cfg := config.NewBaseConfig(testsConfigStore())
+	budget := &budgetConfigItem{value: "256"}
+	cfg.Add(budget)
+	verifier := NewVerifier(cfg, nil, config.NewStaticValue(common.FingerprintHeaderKey, ""), nil)
+	if err := verifier.Update(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name          string
+		version       string // "" means the header is omitted entirely
+		challenge     dbgen.ChallengeType
+		wantChallenge puzzle.Challenge
+		wantWire      uint8
+		wantValidity  time.Duration
+	}{
+		{
+			name:          "Legacy",
+			version:       "1",
+			challenge:     dbgen.ChallengeTypeArgon2ID,
+			wantChallenge: puzzle.ChallengeBlake2b, // downgraded for legacy clients
+			wantWire:      1,                       // must stay on v1 (pre-v3 widgets cannot parse v3)
+			wantValidity:  0,                       // v1 never carries the edge-token validity field
+		},
+		{
+			name:          "Unspecified",
+			version:       "",
+			challenge:     dbgen.ChallengeTypeArgon2ID,
+			wantChallenge: puzzle.ChallengeArgon2ID,
+			wantWire:      3,         // v3-capable: edge-token validity bumps v2 -> v3
+			wantValidity:  time.Hour, // validity is carried in the v3 payload
+		},
+		{
+			name:          "Extended",
+			version:       "2",
+			challenge:     dbgen.ChallengeTypeArgon2ID,
+			wantChallenge: puzzle.ChallengeArgon2ID,
+			wantWire:      3,
+			wantValidity:  time.Hour,
+		},
+		{
+			name:          "Future",
+			version:       "3",
+			challenge:     dbgen.ChallengeTypeArgon2ID,
+			wantChallenge: puzzle.ChallengeArgon2ID,
+			wantWire:      3,
+			wantValidity:  time.Hour,
+		},
+		{
+			name:          "LegacyBlakeProperty",
+			version:       "1",
+			challenge:     dbgen.ChallengeTypeBlake2b,
+			wantChallenge: puzzle.ChallengeBlake2b,
+			wantWire:      1,
+			wantValidity:  0,
+		},
+		{
+			name:          "BlakePropertyExtended",
+			version:       "2",
+			challenge:     dbgen.ChallengeTypeBlake2b,
+			wantChallenge: puzzle.ChallengeBlake2b,
+			wantWire:      3, // v3 bump applies to blake2b properties too for v3-capable clients
+			wantValidity:  time.Hour,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			property.Challenge = tc.challenge
+			levels := difficulty.NewLevelsEx(db.NewMemoryTimeSeries(), fixedPuzzleDifficulty(152), 1, time.Minute)
+			ctx := context.WithValue(t.Context(), common.PropertyContextKey, property)
+			ctx = context.WithValue(ctx, common.RateLimitKeyContextKey, netip.MustParseAddr("192.0.2.1"))
+			req := httptest.NewRequest("GET", "/puzzle", nil).WithContext(ctx)
+			if tc.version != "" {
+				req.Header.Set(common.HeaderCaptchaVersion, tc.version)
+			}
+			issued, _, err := verifier.PuzzleForRequest(req, levels, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if issued.Challenge() != tc.wantChallenge {
+				t.Fatalf("challenge = %d, want %d", issued.Challenge(), tc.wantChallenge)
+			}
+			if got := issued.WireVersion(); got != tc.wantWire {
+				t.Fatalf("wire version = %d, want %d (legacy clients must not receive a v3 payload)", got, tc.wantWire)
+			}
+			if got := issued.EdgeTokenValidity(); got != tc.wantValidity {
+				t.Fatalf("edge-token validity = %v, want %v", got, tc.wantValidity)
+			}
+			body, err := issued.MarshalBinary()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(body) < 1 || body[0] != tc.wantWire {
+				t.Fatalf("on-wire version byte = %d (body=%x), want %d", func() byte {
+					if len(body) > 0 {
+						return body[0]
+					}
+					return 0
+				}(), body, tc.wantWire)
+			}
+		})
+	}
+
+	// When edge tokens are disabled, no client receives a v3 bump regardless of
+	// the announced captcha version: this guards against regressing the gate's
+	// EdgeTokenValidityInterval > 0 precondition.
+	property.Challenge = dbgen.ChallengeTypeArgon2ID
+	property.EdgeTokenValidityInterval = 0
+	levels := difficulty.NewLevelsEx(db.NewMemoryTimeSeries(), fixedPuzzleDifficulty(152), 1, time.Minute)
+	ctx := context.WithValue(t.Context(), common.PropertyContextKey, property)
+	ctx = context.WithValue(ctx, common.RateLimitKeyContextKey, netip.MustParseAddr("192.0.2.1"))
+	req := httptest.NewRequest("GET", "/puzzle", nil).WithContext(ctx)
+	req.Header.Set(common.HeaderCaptchaVersion, "2")
+	issued, _, err := verifier.PuzzleForRequest(req, levels, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := issued.WireVersion(); got == puzzle.PuzzleVersion3 {
+		t.Fatalf("edge-token-disabled property bumped wire format to v3: %d", got)
+	}
+	if got := issued.EdgeTokenValidity(); got != 0 {
+		t.Fatalf("edge-token-disabled property carried edge-token validity: %v", got)
+	}
+}

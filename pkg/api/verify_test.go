@@ -108,7 +108,14 @@ func siteVerifySuite(response, secret, sitekey string, headers ...map[string][]s
 }
 
 func solutionsSuite(ctx context.Context, sitekey, domain string) (string, string, error) {
-	resp, err := puzzleSuite(ctx, sitekey, domain)
+	return solutionsSuiteEx(ctx, sitekey, domain, "")
+}
+
+// solutionsSuiteEx is the version-aware variant of solutionsSuite: when version
+// is non-empty it advertises the given x-pc-captcha-version header on the puzzle
+// fetch, mirroring what the standard ("1") and extended ("2") widget bundles do.
+func solutionsSuiteEx(ctx context.Context, sitekey, domain, version string) (string, string, error) {
+	resp, err := puzzleSuiteEx(ctx, http.MethodGet, sitekey, domain, version)
 	if err != nil {
 		return "", "", err
 	}
@@ -1038,6 +1045,133 @@ func TestVerifyEdgeTokenValidityRule(t *testing.T) {
 			}
 			if got := time.Duration(claims.ExpiresAt-claims.IssuedAt) * time.Second; got != tc.validity {
 				t.Errorf("edge token validity = %v, want %v", got, tc.validity)
+			}
+		})
+	}
+}
+
+// TestVerifyEdgeTokenLegacyClient end-to-end asserts the bug fix: a client that
+// advertises x-pc-captcha-version: "1" (the standard/legacy widget wire version,
+// which pre-v3 widget bundles also send) on an edge-token-enabled property
+// receives a puzzle payload it can parse (wire version 1, NOT 3) and still
+// receives an edge token at verify time. The v1 payload does not carry the
+// edge-token-validity field, so addEdgeToken recomputes the validity from the
+// property's configured interval. A v3-capable client (no version header) on
+// the same property receives a v3 payload and a token carrying the wire-sourced
+// validity. This test requires PostgreSQL (the global store/server).
+func TestVerifyEdgeTokenLegacyClient(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	previous := server.EdgeTokens
+	server.EdgeTokens = newTestEdgeSigner(t)
+	t.Cleanup(func() { server.EdgeTokens = previous })
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), time.Hour, 10))
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret := db.UUIDToSecret(key.ExternalID)
+
+	for _, tc := range []struct {
+		name         string
+		version      string // "" omits the header (v3-capable default)
+		wantWireByte byte
+		wantCarried  time.Duration
+		wantTokenS   int64
+	}{
+		{
+			name:         "LegacyClient",
+			version:      "1",
+			wantWireByte: 1,    // must stay on v1 - pre-v3 widgets cannot parse v3
+			wantCarried:  0,    // v1 never carries the edge-token validity field
+			wantTokenS:   3600, // recomputed from property interval by addEdgeToken fallback
+		},
+		{
+			name:         "V3CapableClient",
+			version:      "",
+			wantWireByte: 3, // v3 payload carries the validity
+			wantCarried:  time.Hour,
+			wantTokenS:   3600, // carried in the v3 payload
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			params := db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("edge-legacy-%s.example.com", tc.name))
+			params.EdgeTokenValidityInterval = time.Hour
+			property, _, err := store.Impl().CreateNewProperty(ctx, params, org)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sitekey := db.UUIDToSiteKey(property.ExternalID)
+
+			puzzleStr, solutionsStr, err := solutionsSuiteEx(ctx, sitekey, property.Domain, tc.version)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// The puzzle payload's first byte (wire version) must match what the
+			// client can parse - in particular, legacy ("1") clients must NOT get v3.
+			puzzleBase64, _, _ := strings.Cut(puzzleStr, ".")
+			puzzleBytes, err := base64.StdEncoding.DecodeString(puzzleBase64)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(puzzleBytes) < 1 {
+				t.Fatal("empty puzzle payload")
+			}
+			if puzzleBytes[0] != tc.wantWireByte {
+				t.Fatalf("puzzle wire version byte = %d, want %d (legacy clients must not receive a v3 payload)", puzzleBytes[0], tc.wantWireByte)
+			}
+
+			proof := solutionsStr + "." + puzzleStr
+			parsed, err := server.Verifier.ParseSolutionPayload(ctx, []byte(proof))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := parsed.Puzzle().WireVersion(); got != tc.wantWireByte {
+				t.Fatalf("parsed puzzle wire version = %d, want %d", got, tc.wantWireByte)
+			}
+			if got := parsed.Puzzle().EdgeTokenValidity(); got != tc.wantCarried {
+				t.Fatalf("parsed puzzle edge-token validity = %v, want %v", got, tc.wantCarried)
+			}
+
+			resp, err := verifySuite(proof, secret, sitekey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("verify status = %d", resp.StatusCode)
+			}
+			var result VerificationResponse
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				t.Fatal(err)
+			}
+			if !result.Success {
+				t.Fatalf("verification must succeed: %+v", result)
+			}
+			parts := strings.Split(result.EdgeToken, ".")
+			if !result.Success || len(parts) != 3 {
+				t.Fatalf("verification did not return an edge token: %+v", result)
+			}
+			data, err := base64.RawURLEncoding.DecodeString(parts[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			var claims struct {
+				IssuedAt  int64 `json:"iat"`
+				ExpiresAt int64 `json:"exp"`
+			}
+			if err := json.Unmarshal(data, &claims); err != nil {
+				t.Fatal(err)
+			}
+			if got := claims.ExpiresAt - claims.IssuedAt; got != tc.wantTokenS {
+				t.Errorf("edge token validity = %ds, want %ds", got, tc.wantTokenS)
 			}
 		})
 	}

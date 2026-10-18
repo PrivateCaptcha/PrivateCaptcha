@@ -343,6 +343,7 @@ func (v *Verifier) verify(
 	}
 
 	result.EdgeTokenValidity = puzzleObject.EdgeTokenValidity()
+	result.PuzzleWireVersion = puzzleObject.WireVersion()
 
 	return result, property, nil
 }
@@ -498,7 +499,13 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 
 	verificationRate := v.PropertyStats.VerificationRate(property.ID, tnow)
 	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, difficultyProperty, tnow, verificationRate)
-	challenge, wireDifficulty, fallback, challengeErr := selectPropertyChallenge(property.Challenge, puzzleDifficulty, r.Header.Get(common.HeaderCaptchaVersion), v.argon2IDEnabled())
+	// The captcha-version header is the same legacy/v3-capability signal used by
+	// selectPropertyChallenge: "1" means the client must stay on a pre-v3 wire format
+	// (the current standard widget also sends "1" while parsing v3, so the header is
+	// a conservative rather than precise v3 indicator). See PuzzleForRequest docs and
+	// the widget's x-pc-captcha-version advertisement in widget/js/puzzle.js.
+	captchaVersion := r.Header.Get(common.HeaderCaptchaVersion)
+	challenge, wireDifficulty, fallback, challengeErr := selectPropertyChallenge(property.Challenge, puzzleDifficulty, captchaVersion, v.argon2IDEnabled())
 	if challengeErr != nil {
 		slog.ErrorContext(ctx, "Invalid property challenge", "propID", property.ID, "challenge", property.Challenge, common.ErrAttr(challengeErr))
 		return nil, property, challengeErr
@@ -512,7 +519,12 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 	if err := result.Init(property.ValidityInterval); err != nil {
 		slog.ErrorContext(ctx, "Failed to init puzzle", common.ErrAttr(err))
 	}
-	if property.EdgeTokenValidityInterval > 0 {
+	// Only attach edge-token validity to the payload when the client advertises a
+	// captcha version other than "1". SetEdgeTokenValidity upgrades the wire format
+	// to version 3, which pre-v3 widget bundles cannot parse. Legacy (< v3) clients
+	// still receive edge tokens: addEdgeToken falls back to property.EdgeTokenValidityInterval
+	// when the puzzle's wire version did not carry the validity field.
+	if property.EdgeTokenValidityInterval > 0 && captchaVersion != "1" {
 		result.SetEdgeTokenValidity(difficultyProperty.EdgeTokenValidity())
 	}
 

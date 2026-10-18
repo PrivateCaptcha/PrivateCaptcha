@@ -26,7 +26,8 @@ const (
 	MaxValidityPeriod     = 24 * time.Hour
 	puzzleVersion1        = 1
 	puzzleVersion2        = 2
-	puzzleVersion3        = 3 // Adds edge-token validity seconds after expiration.
+	puzzleVersion3        = 3              // Adds edge-token validity seconds after expiration.
+	PuzzleVersion3        = puzzleVersion3 // Exported for cross-package wire-format comparisons (e.g. edge-token-validity presence).
 	puzzleFieldsSize      = PropertyIDSize + 8 + 1 + 1 + 4
 	puzzleV2MinSize       = 1 + 1 + puzzleFieldsSize + UserDataSize
 	maxPuzzleBodySize     = 2 * PuzzleBytesLength
@@ -126,6 +127,13 @@ func (p *ComputePuzzle) PropertyID() [PropertyIDSize]byte { return p.propertyID 
 
 func (p *ComputePuzzle) EdgeTokenValidity() time.Duration {
 	return time.Duration(p.edgeTokenValidity) * time.Second
+}
+
+// WireVersion returns the puzzle payload's wire-format version byte (1, 2, or 3).
+// It is used to decide whether fields such as edge-token validity are carried in
+// the payload (version >= PuzzleVersion3) or must be recomputed from the property.
+func (p *ComputePuzzle) WireVersion() uint8 {
+	return p.version
 }
 
 func (p *ComputePuzzle) SetEdgeTokenValidity(validity time.Duration) {
