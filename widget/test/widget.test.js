@@ -1613,6 +1613,70 @@ function makeNodeHttpFetch(http, { withSignal = false } = {}) {
     };
 }
 
+for (const { name, timeout, globalTimeout, message, internalError } of [
+    { name: 'per-call', timeout: 200, globalTimeout: 500, message: 'Captcha puzzle load failed after maximum retry attempts', internalError: 'Fetch timed out' },
+    { name: 'global', timeout: 1000, globalTimeout: 500, message: 'Fetch timed out', internalError: 'Global time out' },
+]) {
+    test(`getPuzzle ${name} timeout aborts a stalled response body`, async (t) => {
+        const { getPuzzle } = await import('../js/puzzle.js');
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        let signal;
+        let startBody;
+        const bodyStarted = new Promise((resolve) => { startBody = resolve; });
+        t.mock.method(globalThis, 'fetch', async (_url, options) => {
+            signal = options.signal;
+            return {
+                ok: true,
+                headers: { get: () => null },
+                text: () => new Promise((_resolve, reject) => {
+                    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+                    startBody();
+                }),
+            };
+        });
+
+        const rejected = assert.rejects(getPuzzle('/puzzle', testSitekey, {
+            attempts: 1, timeout, globalTimeout,
+        }), { message, internalError });
+        await bodyStarted;
+        t.mock.timers.tick(Math.min(timeout, globalTimeout) - 1);
+        assert.strictEqual(signal.aborted, false);
+        t.mock.timers.tick(1);
+        assert.strictEqual(signal.aborted, true, 'The deadline must abort the body read');
+        await rejected;
+    });
+}
+
+test('getPuzzle retries a stalled body and clears deadlines after a successful body read', async (t) => {
+    const { getPuzzle } = await import('../js/puzzle.js');
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const signals = [];
+    let startBody;
+    const bodyStarted = new Promise((resolve) => { startBody = resolve; });
+    t.mock.method(globalThis, 'fetch', async (_url, { signal }) => {
+        signals.push(signal);
+        return {
+            ok: true,
+            headers: { get: (name) => name === 'X-PC-Widget-Notice' ? 'test notice' : null },
+            text: () => signals.length === 1 ? new Promise((_resolve, reject) => {
+                signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+                startBody();
+            }) : Promise.resolve('puzzle.signature'),
+        };
+    });
+
+    const result = getPuzzle('/puzzle', testSitekey, { attempts: 2, timeout: 200, globalTimeout: 5000 });
+    await bodyStarted;
+    t.mock.timers.tick(200);
+    assert.strictEqual(signals[0].aborted, true, 'The first body read must time out');
+    await Promise.resolve();
+    t.mock.timers.tick(1600);
+    assert.deepStrictEqual(await result, { data: 'puzzle.signature', notice: 'test notice' });
+    assert.strictEqual(signals.length, 2);
+    t.mock.timers.tick(5000);
+    assert.strictEqual(signals[1].aborted, false, 'Completed requests must have no active deadlines');
+});
+
 test('getPuzzle per-call timeout triggers with 1 attempt', async (t) => {
     const http = await import('node:http');
     const { getPuzzle } = await import('../js/puzzle.js');
