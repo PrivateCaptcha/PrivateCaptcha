@@ -435,7 +435,6 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 		return nil
 	}
 
-	s.addFormSubmitRecord(ctx, f, formSubmitStatusFailure)
 	return errFormSubmitFailed
 }
 
