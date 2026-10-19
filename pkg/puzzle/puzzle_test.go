@@ -218,6 +218,79 @@ func TestComputePuzzleEdgeTokenValidity(t *testing.T) {
 	}
 }
 
+// TestComputePuzzleWireVersion locks in the WireVersion() accessor contract:
+// it returns the on-wire version byte for each fabricated puzzle version and
+// reflects the v3 upgrade caused by SetEdgeTokenValidity, which downstream
+// code (addEdgeToken) relies on to decide whether edge-token validity was
+// carried in the payload.
+func TestComputePuzzleWireVersion(t *testing.T) {
+	t.Parallel()
+	fixtures := loadProtocolFixtures(t)
+
+	for _, tc := range []struct {
+		name    string
+		fixture protocolFixture
+		want    uint8
+	}{
+		{name: "V1", fixture: fixtures.V1, want: 1},
+		{name: "V2", fixture: fixtures.V2, want: 2},
+		{name: "V3", fixture: fixtures.V3, want: 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := puzzleFromFixture(t, tc.fixture)
+			if got := p.WireVersion(); got != tc.want {
+				t.Fatalf("WireVersion = %d, want %d", got, tc.want)
+			}
+			body, err := p.MarshalBinary()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if body[0] != p.WireVersion() {
+				t.Fatalf("on-wire version byte = %d, WireVersion() = %d", body[0], p.WireVersion())
+			}
+
+			// Round-tripping through UnmarshalBinary must preserve the version.
+			var decoded ComputePuzzle
+			if err := decoded.UnmarshalBinary(body); err != nil {
+				t.Fatal(err)
+			}
+			if got := decoded.WireVersion(); got != tc.want {
+				t.Fatalf("decoded WireVersion = %d, want %d", got, tc.want)
+			}
+		})
+	}
+
+	// SetEdgeTokenValidity upgrades v1/v2 puzzles to v3 (the wire-format bump
+	// that legacy clients cannot parse, which is why PuzzleForRequest gates it).
+	blake, err := NewComputePuzzleForChallenge(NextPuzzleID(), [PropertyIDSize]byte{1}, 0, ChallengeBlake2b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := blake.WireVersion(); got != 1 {
+		t.Fatalf("blake2b puzzle WireVersion = %d, want 1", got)
+	}
+	blake.SetEdgeTokenValidity(time.Hour)
+	if got := blake.WireVersion(); got != PuzzleVersion3 {
+		t.Fatalf("after SetEdgeTokenValidity WireVersion = %d, want %d", got, PuzzleVersion3)
+	}
+	if got := blake.EdgeTokenValidity(); got != time.Hour {
+		t.Fatalf("after SetEdgeTokenValidity EdgeTokenValidity = %v, want 1h", got)
+	}
+
+	// A v1 puzzle that never has SetEdgeTokenValidity called keeps reporting v1:
+	// this is the property PuzzleForRequest relies on for legacy ("1") clients.
+	legacy, err := NewComputePuzzleForChallenge(NextPuzzleID(), [PropertyIDSize]byte{1}, 0, ChallengeBlake2b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := legacy.WireVersion(); got != 1 {
+		t.Fatalf("legacy puzzle WireVersion = %d, want 1", got)
+	}
+	if got := legacy.EdgeTokenValidity(); got != 0 {
+		t.Fatalf("legacy puzzle EdgeTokenValidity = %v, want 0", got)
+	}
+}
+
 func TestComputePuzzleRejectsInvalidWireValues(t *testing.T) {
 	t.Parallel()
 	fixtures := loadProtocolFixtures(t)

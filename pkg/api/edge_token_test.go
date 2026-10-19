@@ -819,6 +819,7 @@ func TestEdgeTokenOnlyOnSuccessfulVerification(t *testing.T) {
 	result := &puzzle.VerifyResult{
 		Error:             puzzle.VerifyNoError,
 		PuzzleID:          1,
+		PuzzleWireVersion: puzzle.PuzzleVersion3,
 		Domain:            property.Domain,
 		EdgeTokenValidity: time.Hour,
 	}
@@ -966,18 +967,201 @@ func TestEdgeTokenStubPuzzleRecomputesValidity(t *testing.T) {
 		t.Fatalf("maintenance-mode stub-puzzle must issue a token: response=%+v err=%v", response, err)
 	}
 
-	// A non-stub puzzle with EdgeTokenValidity = 0 must not fall back to the
+	// A non-stub v3 puzzle with EdgeTokenValidity = 0 must not fall back to the
 	// property's interval: the payload-borne decision is authoritative for
-	// non-stub puzzles (e.g. a rule explicitly disabled the token at issuance).
+	// non-stub v3 puzzles (e.g. a rule explicitly disabled the token at issuance).
 	nonStubDisabled := &puzzle.VerifyResult{
 		Error:             puzzle.VerifyNoError,
 		PuzzleID:          1,
+		PuzzleWireVersion: puzzle.PuzzleVersion3,
 		Domain:            property.Domain,
 		EdgeTokenValidity: 0,
 	}
 	response = newVerificationResponse(nonStubDisabled, false)
 	if err := s.addEdgeToken(req, response, nonStubDisabled, property, now); err != nil || response.EdgeToken != "" {
 		t.Fatalf("non-stub puzzle with payload-borne zero validity issued a token: %q, err=%v", response.EdgeToken, err)
+	}
+}
+
+// TestEdgeTokenLegacyPuzzleRecomputesValidity covers the regression where a
+// non-stub puzzle issued to a legacy (pre-v3) client carries no edge-token
+// validity in the wire payload (the v1/v2 format has no such field), so the
+// server-side EdgeTokenValidity is zero. addEdgeToken must recompute the
+// validity from the property (mirroring the stub-puzzle path) so legacy users
+// still receive an edge token. A v3 puzzle with zero validity (a rule disabling
+// the token at issuance) must keep the existing authoritative behaviour and
+// NOT issue a token.
+func TestEdgeTokenLegacyPuzzleRecomputesValidity(t *testing.T) {
+	private, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateDER, _ := x509.MarshalPKCS8PrivateKey(private)
+	publicDER, _ := x509.MarshalPKIXPublicKey(&private.PublicKey)
+	signer, err := newEdgeTokenSignerFromStrings(
+		t.Context(),
+		"",
+		string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privateDER})),
+		string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: publicDER})),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rulesCache := db.NewStaticCache[db.CacheKey, any](10, &db.CacheMissingValue{})
+	if err := rulesCache.SetMissing(t.Context(), db.CompiledPropertyRulesCacheKey(1)); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{
+		EdgeTokens: signer,
+		BusinessDB: db.NewBusinessEx(nil, rulesCache),
+	}
+	now := time.Unix(1700000000, 0)
+	property := &dbgen.Property{
+		ID:                        1,
+		ExternalID:                db.UUIDFromSiteKey("11111111222233334444555555555555"),
+		Domain:                    "example.com",
+		EdgeTokenValidityInterval: time.Hour,
+	}
+
+	// A legacy (v1) non-stub puzzle: the wire payload never carries edge-token
+	// validity, so EdgeTokenValidity is zero. addEdgeToken must recompute the
+	// validity from the property's configured interval and sign a token.
+	legacy := &puzzle.VerifyResult{
+		Error:             puzzle.VerifyNoError,
+		PuzzleID:          1,
+		PuzzleWireVersion: 1,
+		Domain:            property.Domain,
+		EdgeTokenValidity: 0,
+	}
+	response := newVerificationResponse(legacy, false)
+	if err := s.addEdgeToken(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/verify", nil), response, legacy, property, now); err != nil {
+		t.Fatal(err)
+	}
+	if response.EdgeToken == "" || !verifyTestEdgeSignature(signer.JWKS(t.Context()).Keys[0], response.EdgeToken) {
+		t.Fatalf("legacy non-stub puzzle of an edge-protected property must return a signed token: %q", response.EdgeToken)
+	}
+	parts := strings.Split(response.EdgeToken, ".")
+	if len(parts) != 3 {
+		t.Fatalf("invalid edge token JWS: %q", response.EdgeToken)
+	}
+	claimsBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var claims struct {
+		IssuedAt  int64 `json:"iat"`
+		ExpiresAt int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(claimsBytes, &claims); err != nil {
+		t.Fatal(err)
+	}
+	if got := time.Duration(claims.ExpiresAt-claims.IssuedAt) * time.Second; got != property.EdgeTokenValidityInterval {
+		t.Fatalf("legacy edge token validity = %v, want %v (property interval)", got, property.EdgeTokenValidityInterval)
+	}
+
+	// A v2 (extended/legacy-argon) non-stub puzzle is also a pre-v3 wire format
+	// and must recompute validity the same way.
+	legacyV2 := &puzzle.VerifyResult{
+		Error:             puzzle.VerifyNoError,
+		PuzzleID:          1,
+		PuzzleWireVersion: 2,
+		Domain:            property.Domain,
+		EdgeTokenValidity: 0,
+	}
+	response = newVerificationResponse(legacyV2, false)
+	if err := s.addEdgeToken(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/verify", nil), response, legacyV2, property, now); err != nil {
+		t.Fatal(err)
+	}
+	if response.EdgeToken == "" {
+		t.Fatal("legacy v2 non-stub puzzle must recompute validity and issue a token")
+	}
+
+	// A v3 non-stub puzzle with EdgeTokenValidity = 0 must NOT fall back: the v3
+	// payload carried the validity authoritatively and zero means a rule disabled
+	// the token at issuance.
+	v3Disabled := &puzzle.VerifyResult{
+		Error:             puzzle.VerifyNoError,
+		PuzzleID:          1,
+		PuzzleWireVersion: puzzle.PuzzleVersion3,
+		Domain:            property.Domain,
+		EdgeTokenValidity: 0,
+	}
+	response = newVerificationResponse(v3Disabled, false)
+	if err := s.addEdgeToken(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/verify", nil), response, v3Disabled, property, now); err != nil || response.EdgeToken != "" {
+		t.Fatalf("v3 puzzle with rule-disabled (zero) validity must not issue a token: %q, err=%v", response.EdgeToken, err)
+	}
+
+	// A v3 non-stub puzzle with a positive carried validity must use it as-is
+	// (rules can shorten the validity below the property default).
+	v3Short := &puzzle.VerifyResult{
+		Error:             puzzle.VerifyNoError,
+		PuzzleID:          1,
+		PuzzleWireVersion: puzzle.PuzzleVersion3,
+		Domain:            property.Domain,
+		EdgeTokenValidity: 30 * time.Minute,
+	}
+	response = newVerificationResponse(v3Short, false)
+	if err := s.addEdgeToken(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/verify", nil), response, v3Short, property, now); err != nil {
+		t.Fatal(err)
+	}
+	if response.EdgeToken == "" {
+		t.Fatal("v3 puzzle with carried validity must issue a token")
+	}
+	parts = strings.Split(response.EdgeToken, ".")
+	if len(parts) != 3 {
+		t.Fatalf("invalid edge token JWS: %q", response.EdgeToken)
+	}
+	claimsBytes, err = base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(claimsBytes, &claims); err != nil {
+		t.Fatal(err)
+	}
+	if got := time.Duration(claims.ExpiresAt-claims.IssuedAt) * time.Second; got != 30*time.Minute {
+		t.Fatalf("v3 edge token validity = %v, want 30m (carried validity)", got)
+	}
+
+	// The disabled-property guard must still suppress issuance for legacy puzzles.
+	property.EdgeTokenValidityInterval = 0
+	response = newVerificationResponse(legacy, false)
+	if err := s.addEdgeToken(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/verify", nil), response, legacy, property, now); err != nil || response.EdgeToken != "" {
+		t.Fatalf("legacy puzzle with disabled edge property issued a token: %q, err=%v", response.EdgeToken, err)
+	}
+
+	// The error guard must still suppress issuance for failed legacy verifications.
+	property.EdgeTokenValidityInterval = time.Hour
+	failedLegacy := &puzzle.VerifyResult{
+		Error:             puzzle.VerifiedBeforeError,
+		PuzzleID:          1,
+		PuzzleWireVersion: 1,
+		Domain:            property.Domain,
+		EdgeTokenValidity: 0,
+	}
+	response = newVerificationResponse(failedLegacy, false)
+	if err := s.addEdgeToken(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/verify", nil), response, failedLegacy, property, now); err != nil || response.EdgeToken != "" {
+		t.Fatalf("failed legacy verification issued a token: %q, err=%v", response.EdgeToken, err)
+	}
+
+	// A maintenance-mode legacy verification must still issue a token (mirroring
+	// the stub-puzzle maintenance behaviour).
+	maintenanceLegacy := &puzzle.VerifyResult{
+		Error:             puzzle.MaintenanceModeError,
+		PuzzleID:          1,
+		PuzzleWireVersion: 1,
+		Domain:            property.Domain,
+		EdgeTokenValidity: 0,
+	}
+	response = newVerificationResponse(maintenanceLegacy, false)
+	if err := s.addEdgeToken(
+		httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/verify", nil),
+		response,
+		maintenanceLegacy,
+		property,
+		now,
+	); err != nil || !response.Success ||
+		response.EdgeToken == "" {
+		t.Fatalf("maintenance-mode legacy puzzle must issue a token: response=%+v err=%v", response, err)
 	}
 }
 

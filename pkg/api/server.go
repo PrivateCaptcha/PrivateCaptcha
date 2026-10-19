@@ -627,10 +627,14 @@ func (s *Server) addEdgeToken(r *http.Request, response *VerificationResponse, r
 	}
 	ctx := r.Context()
 	validity := result.EdgeTokenValidity
-	// stub puzzles don't have validity anyways (cold cache)
-	if result.PuzzleID == 0 {
+	// Stub puzzles (cold cache) and puzzles issued to legacy (< v3) clients never
+	// carry the edge-token-validity field in the wire payload, so the server-side
+	// value is zero. Recompute it from the property so those users still receive an
+	// edge token (mirroring the stub-puzzle path). v3 payloads carry validity
+	// authoritatively, so a zero there means a rule explicitly disabled the token.
+	if result.PuzzleID == 0 || result.PuzzleWireVersion < puzzle.PuzzleVersion3 {
 		if rulesPair := s.retrievePropertyRules(ctx, property); rulesPair.HasBlockRules() {
-			slog.Log(ctx, common.LevelTrace, "Issuing short-lived edge token for stub puzzle")
+			slog.Log(ctx, common.LevelTrace, "Issuing short-lived edge token for stub/legacy puzzle")
 			validity = puzzle.ValidityDurations[0]
 		} else {
 			validity = property.EdgeTokenValidityInterval

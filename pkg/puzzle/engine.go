@@ -11,6 +11,7 @@ type VerifyResult struct {
 	OrgID             int32
 	PropertyID        int32
 	PuzzleID          uint64
+	PuzzleWireVersion uint8
 	Error             VerifyError
 	CreatedAt         time.Time
 	ExpiresAt         time.Time
@@ -69,6 +70,7 @@ type Puzzle interface {
 	PropertyID() [PropertyIDSize]byte
 	Expiration() time.Time
 	EdgeTokenValidity() time.Duration
+	WireVersion() uint8
 	Serialize(ctx context.Context, salt *Salt, extraSalt []byte) (*PuzzlePayload, error)
 }
 
