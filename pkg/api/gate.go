@@ -69,6 +69,7 @@ var gatePageCachedHeaders = map[string][]string{
 var GatePageTemplate = template.Must(template.New("gate").Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="data:,"><title>Verify your request</title>
 <style>
+  :root { color-scheme: light dark; }
   body { display: flex; flex-direction: column; min-height: 100vh; margin: 0; background: #faf8f5; color: #303030; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
   main { flex: 1; width: 100%; max-width: 38rem; box-sizing: border-box; margin: 0 auto; padding: clamp(5rem, 17vh, 9rem) 1.5rem 3rem; }
   h1 { margin: 0; font-size: clamp(1.75rem, 5vw, 2rem); font-weight: 600; line-height: 1.25; letter-spacing: -0.02em; }
@@ -88,7 +89,7 @@ var GatePageTemplate = template.Must(template.New("gate").Parse(`<!doctype html>
     footer a:last-child { display: block; }
   }
   @media (prefers-color-scheme: dark) {
-    body { background: #1f1f1f; color: #f2f2f2; }
+    body { background: #2a2d2a; color: #f2f2f2; }
     p { color: #c4c4c4; }
   }
   .widget-wrapper {
@@ -100,10 +101,10 @@ var GatePageTemplate = template.Must(template.New("gate").Parse(`<!doctype html>
     min-width: 368px;
     height: 106px;
     border: 0;
-    background: url("data:image/svg+xml,%3Csvg width='365' height='113' viewBox='0 0 365 113' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M357.102 0.675781C357.869 0.581559 358.636 0.847062 359.181 1.39551L363.194 5.43945C364.031 6.28233 364.5 7.4219 364.5 8.60938V109C364.5 110.933 362.933 112.5 361 112.5H10.3828C9.87691 112.5 9.38265 112.346 8.96582 112.06L1.61816 107.006C0.924082 106.528 0.516754 105.734 0.535156 104.892L2.4375 18.1211C2.46684 16.7927 3.5303 15.7195 4.8584 15.6777L313.484 6.03125L313.507 6.03027L313.529 6.02734L357.102 0.675781Z' fill='%23709ECC'/%3E%3Cpath d='M357.102 0.675781C357.869 0.581559 358.636 0.847062 359.181 1.39551L363.194 5.43945C364.031 6.28233 364.5 7.4219 364.5 8.60938V109C364.5 110.933 362.933 112.5 361 112.5H10.3828C9.87691 112.5 9.38265 112.346 8.96582 112.06L1.61816 107.006C0.924082 106.528 0.516754 105.734 0.535156 104.892L2.4375 18.1211C2.46684 16.7927 3.5303 15.7195 4.8584 15.6777L313.484 6.03125L313.507 6.03027L313.529 6.02734L357.102 0.675781Z' fill='black' fill-opacity='0.2'/%3E%3Cpath d='M357.102 0.675781C357.869 0.581559 358.636 0.847062 359.181 1.39551L363.194 5.43945C364.031 6.28233 364.5 7.4219 364.5 8.60938V109C364.5 110.933 362.933 112.5 361 112.5H10.3828C9.87691 112.5 9.38265 112.346 8.96582 112.06L1.61816 107.006C0.924082 106.528 0.516754 105.734 0.535156 104.892L2.4375 18.1211C2.46684 16.7927 3.5303 15.7195 4.8584 15.6777L313.484 6.03125L313.507 6.03027L313.529 6.02734L357.102 0.675781Z' stroke='black'/%3E%3Crect x='0.5' y='0.5' width='359' height='107' rx='2.5' fill='white'/%3E%3Crect x='0.5' y='0.5' width='359' height='107' rx='2.5' stroke='black'/%3E%3C/svg%3E") center / contain no-repeat;
+    background: url("data:image/svg+xml,%3Csvg width='365' height='113' viewBox='0 0 365 113' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cstyle%3E@media(prefers-color-scheme:dark){rect[fill]{fill:%23041616}}%3C/style%3E%3Cpath d='M357.102 0.675781C357.869 0.581559 358.636 0.847062 359.181 1.39551L363.194 5.43945C364.031 6.28233 364.5 7.4219 364.5 8.60938V109C364.5 110.933 362.933 112.5 361 112.5H10.3828C9.87691 112.5 9.38265 112.346 8.96582 112.06L1.61816 107.006C0.924082 106.528 0.516754 105.734 0.535156 104.892L2.4375 18.1211C2.46684 16.7927 3.5303 15.7195 4.8584 15.6777L313.484 6.03125L313.507 6.03027L313.529 6.02734L357.102 0.675781Z' fill='%23709ECC'/%3E%3Cpath d='M357.102 0.675781C357.869 0.581559 358.636 0.847062 359.181 1.39551L363.194 5.43945C364.031 6.28233 364.5 7.4219 364.5 8.60938V109C364.5 110.933 362.933 112.5 361 112.5H10.3828C9.87691 112.5 9.38265 112.346 8.96582 112.06L1.61816 107.006C0.924082 106.528 0.516754 105.734 0.535156 104.892L2.4375 18.1211C2.46684 16.7927 3.5303 15.7195 4.8584 15.6777L313.484 6.03125L313.507 6.03027L313.529 6.02734L357.102 0.675781Z' fill='black' fill-opacity='0.2'/%3E%3Cpath d='M357.102 0.675781C357.869 0.581559 358.636 0.847062 359.181 1.39551L363.194 5.43945C364.031 6.28233 364.5 7.4219 364.5 8.60938V109C364.5 110.933 362.933 112.5 361 112.5H10.3828C9.87691 112.5 9.38265 112.346 8.96582 112.06L1.61816 107.006C0.924082 106.528 0.516754 105.734 0.535156 104.892L2.4375 18.1211C2.46684 16.7927 3.5303 15.7195 4.8584 15.6777L313.484 6.03125L313.507 6.03027L313.529 6.02734L357.102 0.675781Z' stroke='black'/%3E%3Crect x='0.5' y='0.5' width='359' height='107' rx='2.5' fill='white'/%3E%3Crect x='0.5' y='0.5' width='359' height='107' rx='2.5' stroke='black'/%3E%3C/svg%3E") center / contain no-repeat;
     color: #000;
     border-radius: 3px;
-    box-shadow: 12px 18px 10px rgba(172, 171, 169, 0.4);
+    box-shadow: 12px 18px 10px light-dark(rgba(172, 171, 169, 0.4), rgba(172, 171, 169, 0.25));
   }
   .widget-wrapper > * {
     position: relative;
@@ -119,7 +120,7 @@ var GatePageTemplate = template.Must(template.New("gate").Parse(`<!doctype html>
         height: 72px;
         min-height: 72px;
         padding: 1px 4px 4px 1px;
-        box-shadow: 9px 14px 7.5px rgba(172, 171, 169, 0.4);
+        box-shadow: 9px 14px 7.5px light-dark(rgba(172, 171, 169, 0.4), rgba(172, 171, 169, 0.25));
     }
     .widget-wrapper .private-captcha {
         height: 100%;
