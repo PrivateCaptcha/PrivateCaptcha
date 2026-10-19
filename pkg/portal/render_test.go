@@ -972,7 +972,8 @@ func TestRenderHTML(t *testing.T) {
 				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: edgeProperty, Org: stubOrg("123"), CanEdit: true},
 				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
 			},
-			selector:   `form[data-unsaved-changes-key="property-edge-settings"]`,
+			selector:   `form[data-unsaved-changes-key="property-edge-settings"] label`,
+			matches:    []string{"Verified access duration", "Widget start mode"},
 			enterprise: new(bool),
 		},
 		{

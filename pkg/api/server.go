@@ -368,6 +368,9 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, apiCorsHandler, form
 	rg.Handle(rg.Post(common.FormEndpoint, arg(common.ParamForm)), formChain, http.MaxBytesHandler(http.HandlerFunc(s.formProxyHandler), maxFormBodySize))
 	rg.Handle(rg.Options(common.FormEndpoint, arg(common.ParamForm)), publicChain.Append(s.Metrics.APIHandler, common.Cached, formCorsHandler), http.HandlerFunc(s.formPreFlight))
 
+	rg.Handle(rg.Get(common.WellKnownEndpoint, common.JWKSFileEndpoint), publicChain.Append(s.Metrics.APIHandler, s.RateLimiter.RateLimit), http.HandlerFunc(s.edgeJWKSHandler))
+	rg.Handle(rg.Get(common.GateEndpoint, common.PageEndpoint), publicChain.Append(s.Metrics.APIHandler, s.RateLimiter.RateLimit, s.Auth.GateSitekey), http.HandlerFunc(s.gatePageHandler))
+
 	s.setupEnterprise(rg, publicChain, apiRateLimiter)
 
 	// "root" access
