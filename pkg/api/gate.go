@@ -89,7 +89,7 @@ var GatePageTemplate = template.Must(template.New("gate").Parse(`<!doctype html>
     footer a:last-child { display: block; }
   }
   @media (prefers-color-scheme: dark) {
-    body { background: #2a2d2a; color: #f2f2f2; }
+    body { background: #2a2c2a; color: #f2f2f2; }
     p { color: #c4c4c4; }
   }
   .widget-wrapper {
