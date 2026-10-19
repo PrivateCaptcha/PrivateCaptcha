@@ -859,6 +859,23 @@ func TestMemoryTimeSeriesRetrievePropertyStatsByPeriodAllPeriods(t *testing.T) {
 			if len(stats) < tt.expectedMinStats {
 				t.Errorf("RetrievePropertyStatsByPeriod(%v) got %d stats, want at least %d", tt.period, len(stats), tt.expectedMinStats)
 			}
+
+			if tt.period == common.TimePeriodWeek {
+				// Week reads request_logs_1d / verify_logs_1d, whose MVs bucket with
+				// toStartOfDay, so the property stats chart must use daily resolution.
+				// Real-DB and in-memory implementations must agree (see pkg/db/timeseries.go
+				// RetrievePropertyStatsByPeriod and MemoryTimeSeries.RetrievePropertyStatsByPeriod).
+				const secondsPerDay int64 = 24 * 60 * 60
+				for _, s := range stats {
+					if s.Timestamp.Unix()%secondsPerDay != 0 {
+						t.Errorf("RetrievePropertyStatsByPeriod(Week) bucket %v not aligned to UTC midnight", s.Timestamp)
+					}
+				}
+				// -30m and -2h collapse to today's daily bucket; -3d is a second daily bucket; -15d is outside the 7-day window.
+				if len(stats) != 2 {
+					t.Errorf("RetrievePropertyStatsByPeriod(Week) got %d buckets, want 2 daily buckets (today and 3-days-ago)", len(stats))
+				}
+			}
 		})
 	}
 }
