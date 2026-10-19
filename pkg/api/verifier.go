@@ -308,7 +308,13 @@ func (v *Verifier) verify(
 			}
 		} else {
 			slog.ErrorContext(ctx, "Failed to fetch valid owner ID", "puzzleID", puzzleObject.PuzzleID(), common.ErrAttr(err))
-			return nil, property, errPuzzleOwner
+			// Only genuine auth failures collapse to errPuzzleOwner (-> 403). Infrastructure
+			// errors propagate as-is so the verify handlers' default branch returns 5xx,
+			// matching how the AuthMiddleware classifies the same lookup.
+			if errors.Is(err, errInvalidAPIKey) || errors.Is(err, errAPIKeyScope) || errors.Is(err, errAPIKeyNotSet) {
+				return nil, property, errPuzzleOwner
+			}
+			return nil, property, err
 		}
 	}
 
