@@ -22,7 +22,7 @@ const DEFAULT_GLOBAL_TIMEOUT_MS = 30000;
 export async function getPuzzle(endpoint, sitekey, options = {}) {
     try {
         const separator = endpoint.includes('?') ? '&' : '?';
-        const response = await fetchWithBackoff(`${endpoint}${separator}sitekey=${encodeURIComponent(sitekey)}`, {
+        return await fetchWithBackoff(`${endpoint}${separator}sitekey=${encodeURIComponent(sitekey)}`, {
             fetchOptions: { headers: [["x-pc-captcha-version", globalThis.__privateCaptchaExtended === true ? "2" : "1"]], mode: "cors" },
             maxAttempts: options.attempts ?? 5,
             initialDelay: 800,
@@ -30,23 +30,10 @@ export async function getPuzzle(endpoint, sitekey, options = {}) {
             timeoutMs: options.timeout ?? DEFAULT_TIMEOUT_MS,
             globalTimeoutMs: options.globalTimeout ?? DEFAULT_GLOBAL_TIMEOUT_MS
         });
-
-        if (response.ok) {
-            const data = await response.text();
-            const notice = response.headers.get('X-PC-Widget-Notice');
-            return { data, notice };
-        } else {
-            let json = await response.json();
-            if (json && json.error) {
-                throw new Error(json.error);
-            }
-        }
     } catch (err) {
         console.error('[privatecaptcha]', err);
         throw err;
     }
-
-    throw new Error('Internal error');
 };
 
 function wait(delay, signal) {
@@ -106,13 +93,14 @@ async function fetchWithBackoff(url, options = {}) {
         const globalAbortHandler = () => fetchController.abort(new Error('Fetch timed out'));
         globalSignal.addEventListener('abort', globalAbortHandler, { once: true });
 
+        let response;
         try {
-            const response = await fetch(url, { ...fetchOptions, signal: fetchSignal });
-            clearTimeout(fetchTimeoutId);
-            globalSignal.removeEventListener('abort', globalAbortHandler);
+            response = await fetch(url, { ...fetchOptions, signal: fetchSignal });
             if (response.ok) {
+                const data = await response.text();
+                const notice = response.headers.get('X-PC-Widget-Notice');
                 clearTimeout(globalTimeoutId);
-                return response;
+                return { data, notice };
             } else {
                 lastError = `HTTP ${response.status}`;
                 console.warn('[privatecaptcha]', `HTTP request failed. url=${url} status=${response.status}`);
@@ -133,8 +121,6 @@ async function fetchWithBackoff(url, options = {}) {
             }
             continue;
         } catch (err) {
-            clearTimeout(fetchTimeoutId);
-            globalSignal.removeEventListener('abort', globalAbortHandler);
             if (globalSignal.aborted) {
                 clearTimeout(globalTimeoutId);
                 lastError = 'Global time out';
@@ -148,8 +134,15 @@ async function fetchWithBackoff(url, options = {}) {
                 console.warn('[privatecaptcha]', `Fetch attempt ${attempt + 1} timed out`);
                 continue;
             }
+            if (response?.ok) {
+                clearTimeout(globalTimeoutId);
+                throw err;
+            }
             lastError = err.message || String(err);
             console.error('[privatecaptcha]', err);
+        } finally {
+            clearTimeout(fetchTimeoutId);
+            globalSignal.removeEventListener('abort', globalAbortHandler);
         }
     }
 
