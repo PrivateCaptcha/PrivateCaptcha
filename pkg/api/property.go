@@ -96,13 +96,19 @@ func (p *apiPropertySettings) Normalize() {
 		minDifficultyLevel = int(common.DifficultyLevelSmall - common.DifficultyDelta)
 		maxDifficultyLevel = int(common.MaxDifficultyLevel)
 	)
-	p.Level = max(minDifficultyLevel, min(maxDifficultyLevel, p.Level))
+	if p.Level != nil {
+		v := max(minDifficultyLevel, min(maxDifficultyLevel, *p.Level))
+		p.Level = &v
+	}
 
 	const (
 		maxMaxReplayValue = 1_000_000
 		minMaxReplayValue = 1
 	)
-	p.MaxReplayCount = max(minMaxReplayValue, min(p.MaxReplayCount, maxMaxReplayValue))
+	if p.MaxReplayCount != nil {
+		v := max(minMaxReplayValue, min(*p.MaxReplayCount, maxMaxReplayValue))
+		p.MaxReplayCount = &v
+	}
 	if p.EdgeTokenValiditySeconds != nil {
 		seconds := max(0, min(*p.EdgeTokenValiditySeconds, int(maxEdgeTokenTTL/time.Second)))
 		if index := db.EdgeTokenValidityIndex(time.Duration(seconds) * time.Second); index > 0 {
@@ -111,25 +117,85 @@ func (p *apiPropertySettings) Normalize() {
 		p.EdgeTokenValiditySeconds = &seconds
 	}
 
-	switch p.Growth {
-	case string(dbgen.DifficultyGrowthConstant),
-		string(dbgen.DifficultyGrowthFast),
-		string(dbgen.DifficultyGrowthMedium),
-		string(dbgen.DifficultyGrowthSlow):
-	default:
-		p.Growth = string(dbgen.DifficultyGrowthMedium)
+	if p.Growth != nil {
+		switch *p.Growth {
+		case string(dbgen.DifficultyGrowthConstant),
+			string(dbgen.DifficultyGrowthFast),
+			string(dbgen.DifficultyGrowthMedium),
+			string(dbgen.DifficultyGrowthSlow):
+		default:
+			v := string(dbgen.DifficultyGrowthMedium)
+			p.Growth = &v
+		}
 	}
 
-	if p.ValiditySeconds > 0 {
-		validitySeconds := min(p.ValiditySeconds, int(puzzle.MaxValidityPeriod/time.Second))
-		validity := time.Duration(validitySeconds) * time.Second
-		if index := db.EdgeTokenValidityIndex(validity); index > 0 {
-			p.ValiditySeconds = int(puzzle.ValidityDurations[index-1].Seconds())
+	if p.ValiditySeconds != nil {
+		if *p.ValiditySeconds > 0 {
+			validitySeconds := min(*p.ValiditySeconds, int(puzzle.MaxValidityPeriod/time.Second))
+			validity := time.Duration(validitySeconds) * time.Second
+			if index := db.EdgeTokenValidityIndex(validity); index > 0 {
+				v := int(puzzle.ValidityDurations[index-1].Seconds())
+				p.ValiditySeconds = &v
+			}
+		} else {
+			const defaultValidityPeriod = 6 * time.Hour
+			v := int(defaultValidityPeriod.Seconds())
+			p.ValiditySeconds = &v
 		}
-	} else {
-		const defaultValidityPeriod = 6 * time.Hour
-		p.ValiditySeconds = int(defaultValidityPeriod.Seconds())
 	}
+}
+
+// applyCreateDefaults fills omitted (nil) settings with the values used when
+// creating a new property. It is a no-op for fields the caller supplied so
+// that explicit values keep their normalized form. This must be called after
+// Normalize so that the update path can reuse Normalize without forcing
+// defaults onto omitted fields.
+func (p *apiPropertySettings) applyCreateDefaults() {
+	if p.Level == nil {
+		v := int(common.DifficultyLevelSmall - common.DifficultyDelta)
+		p.Level = &v
+	}
+	if p.Growth == nil {
+		v := string(dbgen.DifficultyGrowthMedium)
+		p.Growth = &v
+	}
+	if p.ValiditySeconds == nil {
+		v := int((6 * time.Hour).Seconds())
+		p.ValiditySeconds = &v
+	}
+	if p.MaxReplayCount == nil {
+		v := 1
+		p.MaxReplayCount = &v
+	}
+	if p.AllowSubdomains == nil {
+		v := false
+		p.AllowSubdomains = &v
+	}
+	if p.AllowLocalhost == nil {
+		v := false
+		p.AllowLocalhost = &v
+	}
+}
+
+func ptrIntOr(p *int, def int) int {
+	if p != nil {
+		return *p
+	}
+	return def
+}
+
+func ptrStringOr(p *string, def string) string {
+	if p != nil {
+		return *p
+	}
+	return def
+}
+
+func ptrBoolOr(p *bool, def bool) bool {
+	if p != nil {
+		return *p
+	}
+	return def
 }
 
 func (s *Server) canUseArgon2ID(ctx context.Context, userID, orgID *int32) bool {
@@ -447,6 +513,7 @@ func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, proper
 	// instead of StatusPropertyNameDuplicateError
 
 	property.Normalize()
+	property.applyCreateDefaults()
 	var edgeTTL time.Duration
 	if property.EdgeTokenValiditySeconds != nil {
 		edgeTTL = time.Duration(*property.EdgeTokenValiditySeconds) * time.Second
@@ -462,13 +529,13 @@ func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, proper
 		Name:                      property.Name,
 		CreatorID:                 db.Int(user.ID),
 		Domain:                    domain,
-		Level:                     db.Int2(int16(property.Level)),
-		Growth:                    dbgen.DifficultyGrowth(property.Growth),
-		ValidityInterval:          time.Duration(property.ValiditySeconds) * time.Second,
+		Level:                     db.Int2(int16(*property.Level)),
+		Growth:                    dbgen.DifficultyGrowth(*property.Growth),
+		ValidityInterval:          time.Duration(*property.ValiditySeconds) * time.Second,
 		EdgeTokenValidityInterval: edgeTTL,
-		AllowSubdomains:           property.AllowSubdomains,
-		AllowLocalhost:            property.AllowLocalhost,
-		MaxReplayCount:            int32(property.MaxReplayCount),
+		AllowSubdomains:           *property.AllowSubdomains,
+		AllowLocalhost:            *property.AllowLocalhost,
+		MaxReplayCount:            int32(*property.MaxReplayCount),
 		Challenge:                 dbgen.NullChallengeType{ChallengeType: dbgen.ChallengeType(property.Challenge), Valid: property.Challenge != ""},
 	}, org)
 	if err != nil {
@@ -973,14 +1040,20 @@ func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, proper
 	params := &dbgen.UpdatePropertyParams{
 		ID:                        int32(propertyID),
 		Name:                      propertyInput.Name,
-		Level:                     db.Int2(int16(propertyInput.Level)),
-		Growth:                    dbgen.DifficultyGrowth(propertyInput.Growth),
-		ValidityInterval:          time.Duration(propertyInput.ValiditySeconds) * time.Second,
+		Level:                     db.Int2(int16(ptrIntOr(propertyInput.Level, int(common.DifficultyLevelSmall-common.DifficultyDelta)))),
+		PreserveLevel:             propertyInput.Level == nil,
+		Growth:                    dbgen.DifficultyGrowth(ptrStringOr(propertyInput.Growth, string(dbgen.DifficultyGrowthMedium))),
+		PreserveGrowth:            propertyInput.Growth == nil,
+		ValidityInterval:          time.Duration(ptrIntOr(propertyInput.ValiditySeconds, int((6*time.Hour).Seconds()))) * time.Second,
+		PreserveValidityInterval:  propertyInput.ValiditySeconds == nil,
 		EdgeTokenValidityInterval: edgeTTL,
 		PreserveEdgeTokenValidity: propertyInput.EdgeTokenValiditySeconds == nil,
-		AllowSubdomains:           propertyInput.AllowSubdomains,
-		AllowLocalhost:            propertyInput.AllowLocalhost,
-		MaxReplayCount:            int32(propertyInput.MaxReplayCount),
+		AllowSubdomains:           ptrBoolOr(propertyInput.AllowSubdomains, false),
+		PreserveAllowSubdomains:   propertyInput.AllowSubdomains == nil,
+		AllowLocalhost:            ptrBoolOr(propertyInput.AllowLocalhost, false),
+		PreserveAllowLocalhost:    propertyInput.AllowLocalhost == nil,
+		MaxReplayCount:            int32(ptrIntOr(propertyInput.MaxReplayCount, 1)),
+		PreserveMaxReplayCount:    propertyInput.MaxReplayCount == nil,
 		Challenge:                 dbgen.NullChallengeType{ChallengeType: dbgen.ChallengeType(propertyInput.Challenge), Valid: propertyInput.Challenge != ""},
 	}
 

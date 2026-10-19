@@ -83,16 +83,23 @@ type apiOrgPropertyOutput struct {
 	Sitekey string `json:"sitekey"`
 }
 
+// apiPropertySettings is shared between create and update inputs. The
+// presence-tracking pointer fields (Level, Growth, ValiditySeconds,
+// MaxReplayCount, AllowSubdomains, AllowLocalhost, EdgeTokenValiditySeconds)
+// distinguish "omitted" (nil) from an explicit zero/false/empty value so that
+// the update path can preserve stored values for omitted fields instead of
+// silently resetting them. The create path fills nil pointers with the
+// create-time defaults via applyCreateDefaults before building DB params.
 type apiPropertySettings struct {
-	Name                     string `json:"name"`
-	Challenge                string `json:"challenge,omitempty"`
-	Level                    int    `json:"level,omitempty"`
-	Growth                   string `json:"growth,omitempty"`
-	ValiditySeconds          int    `json:"validity_seconds,omitempty"`
-	EdgeTokenValiditySeconds *int   `json:"edge_token_validity_seconds,omitempty"`
-	MaxReplayCount           int    `json:"max_replay_count,omitempty"`
-	AllowSubdomains          bool   `json:"allow_subdomains,omitempty"`
-	AllowLocalhost           bool   `json:"allow_localhost,omitempty"`
+	Name                     string  `json:"name"`
+	Challenge                string  `json:"challenge,omitempty"`
+	Level                    *int    `json:"level,omitempty"`
+	Growth                   *string `json:"growth,omitempty"`
+	ValiditySeconds          *int    `json:"validity_seconds,omitempty"`
+	EdgeTokenValiditySeconds *int    `json:"edge_token_validity_seconds,omitempty"`
+	MaxReplayCount           *int    `json:"max_replay_count,omitempty"`
+	AllowSubdomains          *bool   `json:"allow_subdomains,omitempty"`
+	AllowLocalhost           *bool   `json:"allow_localhost,omitempty"`
 }
 
 type apiCreatePropertyInput struct {
