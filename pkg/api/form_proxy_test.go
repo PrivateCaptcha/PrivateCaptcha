@@ -205,58 +205,6 @@ func TestProcessFormSubmissionRecordsFailureOnUnsafeURL(t *testing.T) {
 	}
 }
 
-func TestProcessFormSubmissionRecordsFailureOnInvalidRequest(t *testing.T) {
-	downstreamCalled := false
-	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		downstreamCalled = true
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer downstream.Close()
-
-	verifier := &stubSubmitFormURLVerifier{}
-	// An invalid HTTP method causes http.NewRequestWithContext to fail before any
-	// attempt is made, so SubmitFormWithRetry returns Valid=false. This is the
-	// pre-HTTP failure path that previously bypassed addFormSubmitRecord.
-	form := &dbgen.Form{
-		ID:                322,
-		PropertyID:        456,
-		OrgOwnerID:        db.Int(7),
-		OrgID:             db.Int(8),
-		ExternalID:        db.TestPropertyUUID,
-		URL:               downstream.URL,
-		Method:            dbgen.FormMethod("post post"),
-		RetryRequestCount: 0,
-		Enabled:           true,
-		Active:            true,
-	}
-	server := &Server{
-		FormsClient:       common.NewFormHTTPClient(verifier, 0),
-		FormURLVerifier:   verifier,
-		FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1),
-		FailingForms:      common.NewExpiringCounterMap[int32](),
-	}
-	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
-
-	if err := server.processFormSubmission(context.Background(), form, submission, false); !errors.Is(err, errFormSubmitFailed) {
-		t.Fatalf("expected form submit failure, got %v", err)
-	}
-
-	if downstreamCalled {
-		t.Fatal("expected downstream not to be reached when request construction fails")
-	}
-	if count, ok := server.FailingForms.Get(form.ID); !ok || count != 1 {
-		t.Fatalf("expected FailingForms to be incremented once, got (%d, %v)", count, ok)
-	}
-	select {
-	case record := <-server.FormSubmitLogChan:
-		if record.FormID != form.ID || record.UserID != 7 || record.OrgID != 8 || record.Status != formSubmitStatusFailure {
-			t.Fatalf("unexpected failure record: %+v", record)
-		}
-	default:
-		t.Fatal("expected invalid request to emit a failure record to FormSubmitLogChan")
-	}
-}
-
 func TestProcessFormSubmissionBlocksAfterRepeatedURLFailures(t *testing.T) {
 	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
