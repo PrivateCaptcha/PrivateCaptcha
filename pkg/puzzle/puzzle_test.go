@@ -218,7 +218,7 @@ func TestComputePuzzleEdgeTokenValidity(t *testing.T) {
 	}
 }
 
-// TestComputePuzzleWireVersion locks in the WireVersion() accessor contract:
+// TestComputePuzzleWireVersion locks in the Version() accessor contract:
 // it returns the on-wire version byte for each fabricated puzzle version and
 // reflects the v3 upgrade caused by SetEdgeTokenValidity, which downstream
 // code (addEdgeToken) relies on to decide whether edge-token validity was
@@ -238,15 +238,15 @@ func TestComputePuzzleWireVersion(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := puzzleFromFixture(t, tc.fixture)
-			if got := p.WireVersion(); got != tc.want {
-				t.Fatalf("WireVersion = %d, want %d", got, tc.want)
+			if got := p.Version(); got != tc.want {
+				t.Fatalf("Version = %d, want %d", got, tc.want)
 			}
 			body, err := p.MarshalBinary()
 			if err != nil {
 				t.Fatal(err)
 			}
-			if body[0] != p.WireVersion() {
-				t.Fatalf("on-wire version byte = %d, WireVersion() = %d", body[0], p.WireVersion())
+			if body[0] != p.Version() {
+				t.Fatalf("on-wire version byte = %d, Version() = %d", body[0], p.Version())
 			}
 
 			// Round-tripping through UnmarshalBinary must preserve the version.
@@ -254,8 +254,8 @@ func TestComputePuzzleWireVersion(t *testing.T) {
 			if err := decoded.UnmarshalBinary(body); err != nil {
 				t.Fatal(err)
 			}
-			if got := decoded.WireVersion(); got != tc.want {
-				t.Fatalf("decoded WireVersion = %d, want %d", got, tc.want)
+			if got := decoded.Version(); got != tc.want {
+				t.Fatalf("decoded Version = %d, want %d", got, tc.want)
 			}
 		})
 	}
@@ -266,12 +266,12 @@ func TestComputePuzzleWireVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := blake.WireVersion(); got != 1 {
-		t.Fatalf("blake2b puzzle WireVersion = %d, want 1", got)
+	if got := blake.Version(); got != 1 {
+		t.Fatalf("blake2b puzzle Version = %d, want 1", got)
 	}
 	blake.SetEdgeTokenValidity(time.Hour)
-	if got := blake.WireVersion(); got != PuzzleVersion3 {
-		t.Fatalf("after SetEdgeTokenValidity WireVersion = %d, want %d", got, PuzzleVersion3)
+	if got := blake.Version(); got != PuzzleVersion3 {
+		t.Fatalf("after SetEdgeTokenValidity Version = %d, want %d", got, PuzzleVersion3)
 	}
 	if got := blake.EdgeTokenValidity(); got != time.Hour {
 		t.Fatalf("after SetEdgeTokenValidity EdgeTokenValidity = %v, want 1h", got)
@@ -283,8 +283,8 @@ func TestComputePuzzleWireVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := legacy.WireVersion(); got != 1 {
-		t.Fatalf("legacy puzzle WireVersion = %d, want 1", got)
+	if got := legacy.Version(); got != 1 {
+		t.Fatalf("legacy puzzle Version = %d, want 1", got)
 	}
 	if got := legacy.EdgeTokenValidity(); got != 0 {
 		t.Fatalf("legacy puzzle EdgeTokenValidity = %v, want 0", got)

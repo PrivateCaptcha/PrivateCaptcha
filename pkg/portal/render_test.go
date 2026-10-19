@@ -973,7 +973,7 @@ func TestRenderHTML(t *testing.T) {
 				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
 			},
 			selector:   `form[data-unsaved-changes-key="property-edge-settings"]`,
-			enterprise: new(false),
+			enterprise: new(bool),
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},

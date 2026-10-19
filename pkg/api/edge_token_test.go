@@ -819,7 +819,7 @@ func TestEdgeTokenOnlyOnSuccessfulVerification(t *testing.T) {
 	result := &puzzle.VerifyResult{
 		Error:             puzzle.VerifyNoError,
 		PuzzleID:          1,
-		PuzzleWireVersion: puzzle.PuzzleVersion3,
+		PuzzleVersion:     puzzle.PuzzleVersion3,
 		Domain:            property.Domain,
 		EdgeTokenValidity: time.Hour,
 	}
@@ -973,7 +973,7 @@ func TestEdgeTokenStubPuzzleRecomputesValidity(t *testing.T) {
 	nonStubDisabled := &puzzle.VerifyResult{
 		Error:             puzzle.VerifyNoError,
 		PuzzleID:          1,
-		PuzzleWireVersion: puzzle.PuzzleVersion3,
+		PuzzleVersion:     puzzle.PuzzleVersion3,
 		Domain:            property.Domain,
 		EdgeTokenValidity: 0,
 	}
@@ -1029,7 +1029,7 @@ func TestEdgeTokenLegacyPuzzleRecomputesValidity(t *testing.T) {
 	legacy := &puzzle.VerifyResult{
 		Error:             puzzle.VerifyNoError,
 		PuzzleID:          1,
-		PuzzleWireVersion: 1,
+		PuzzleVersion:     1,
 		Domain:            property.Domain,
 		EdgeTokenValidity: 0,
 	}
@@ -1064,7 +1064,7 @@ func TestEdgeTokenLegacyPuzzleRecomputesValidity(t *testing.T) {
 	legacyV2 := &puzzle.VerifyResult{
 		Error:             puzzle.VerifyNoError,
 		PuzzleID:          1,
-		PuzzleWireVersion: 2,
+		PuzzleVersion:     2,
 		Domain:            property.Domain,
 		EdgeTokenValidity: 0,
 	}
@@ -1082,7 +1082,7 @@ func TestEdgeTokenLegacyPuzzleRecomputesValidity(t *testing.T) {
 	v3Disabled := &puzzle.VerifyResult{
 		Error:             puzzle.VerifyNoError,
 		PuzzleID:          1,
-		PuzzleWireVersion: puzzle.PuzzleVersion3,
+		PuzzleVersion:     puzzle.PuzzleVersion3,
 		Domain:            property.Domain,
 		EdgeTokenValidity: 0,
 	}
@@ -1096,7 +1096,7 @@ func TestEdgeTokenLegacyPuzzleRecomputesValidity(t *testing.T) {
 	v3Short := &puzzle.VerifyResult{
 		Error:             puzzle.VerifyNoError,
 		PuzzleID:          1,
-		PuzzleWireVersion: puzzle.PuzzleVersion3,
+		PuzzleVersion:     puzzle.PuzzleVersion3,
 		Domain:            property.Domain,
 		EdgeTokenValidity: 30 * time.Minute,
 	}
@@ -1134,7 +1134,7 @@ func TestEdgeTokenLegacyPuzzleRecomputesValidity(t *testing.T) {
 	failedLegacy := &puzzle.VerifyResult{
 		Error:             puzzle.VerifiedBeforeError,
 		PuzzleID:          1,
-		PuzzleWireVersion: 1,
+		PuzzleVersion:     1,
 		Domain:            property.Domain,
 		EdgeTokenValidity: 0,
 	}
@@ -1148,7 +1148,7 @@ func TestEdgeTokenLegacyPuzzleRecomputesValidity(t *testing.T) {
 	maintenanceLegacy := &puzzle.VerifyResult{
 		Error:             puzzle.MaintenanceModeError,
 		PuzzleID:          1,
-		PuzzleWireVersion: 1,
+		PuzzleVersion:     1,
 		Domain:            property.Domain,
 		EdgeTokenValidity: 0,
 	}

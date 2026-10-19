@@ -129,10 +129,7 @@ func (p *ComputePuzzle) EdgeTokenValidity() time.Duration {
 	return time.Duration(p.edgeTokenValidity) * time.Second
 }
 
-// WireVersion returns the puzzle payload's wire-format version byte (1, 2, or 3).
-// It is used to decide whether fields such as edge-token validity are carried in
-// the payload (version >= PuzzleVersion3) or must be recomputed from the property.
-func (p *ComputePuzzle) WireVersion() uint8 {
+func (p *ComputePuzzle) Version() uint8 {
 	return p.version
 }
 

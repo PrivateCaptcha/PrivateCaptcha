@@ -632,7 +632,7 @@ func (s *Server) addEdgeToken(r *http.Request, response *VerificationResponse, r
 	// value is zero. Recompute it from the property so those users still receive an
 	// edge token (mirroring the stub-puzzle path). v3 payloads carry validity
 	// authoritatively, so a zero there means a rule explicitly disabled the token.
-	if result.PuzzleID == 0 || result.PuzzleWireVersion < puzzle.PuzzleVersion3 {
+	if result.PuzzleID == 0 || (result.PuzzleVersion < puzzle.PuzzleVersion3) {
 		if rulesPair := s.retrievePropertyRules(ctx, property); rulesPair.HasBlockRules() {
 			slog.Log(ctx, common.LevelTrace, "Issuing short-lived edge token for stub/legacy puzzle")
 			validity = puzzle.ValidityDurations[0]

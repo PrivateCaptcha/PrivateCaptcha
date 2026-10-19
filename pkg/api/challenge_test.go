@@ -230,7 +230,7 @@ func TestPuzzleForRequestEdgeTokenGating(t *testing.T) {
 			if issued.Challenge() != tc.wantChallenge {
 				t.Fatalf("challenge = %d, want %d", issued.Challenge(), tc.wantChallenge)
 			}
-			if got := issued.WireVersion(); got != tc.wantWire {
+			if got := issued.Version(); got != tc.wantWire {
 				t.Fatalf("wire version = %d, want %d (legacy clients must not receive a v3 payload)", got, tc.wantWire)
 			}
 			if got := issued.EdgeTokenValidity(); got != tc.wantValidity {
@@ -265,7 +265,7 @@ func TestPuzzleForRequestEdgeTokenGating(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := issued.WireVersion(); got == puzzle.PuzzleVersion3 {
+	if got := issued.Version(); got == puzzle.PuzzleVersion3 {
 		t.Fatalf("edge-token-disabled property bumped wire format to v3: %d", got)
 	}
 	if got := issued.EdgeTokenValidity(); got != 0 {

@@ -349,7 +349,7 @@ func (v *Verifier) verify(
 	}
 
 	result.EdgeTokenValidity = puzzleObject.EdgeTokenValidity()
-	result.PuzzleWireVersion = puzzleObject.WireVersion()
+	result.PuzzleVersion = puzzleObject.Version()
 
 	return result, property, nil
 }

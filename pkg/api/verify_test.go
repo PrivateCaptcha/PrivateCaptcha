@@ -1133,7 +1133,7 @@ func TestVerifyEdgeTokenLegacyClient(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := parsed.Puzzle().WireVersion(); got != tc.wantWireByte {
+			if got := parsed.Puzzle().Version(); got != tc.wantWireByte {
 				t.Fatalf("parsed puzzle wire version = %d, want %d", got, tc.wantWireByte)
 			}
 			if got := parsed.Puzzle().EdgeTokenValidity(); got != tc.wantCarried {
