@@ -49,6 +49,7 @@ const (
 func testsConfigStore() common.ConfigStore {
 	baseCfg := config.NewBaseConfig(config.NewEnvConfig(os.Getenv))
 	baseCfg.Add(config.NewStaticValue(common.APISaltKey, "test-api-salt"))
+	baseCfg.Add(config.NewStaticValue(common.UserFingerprintIVKey, strings.Repeat("ab", 64)))
 	baseCfg.Add(config.NewStaticValue(common.RateLimitBurstKey, "20"))
 	baseCfg.Add(config.NewStaticValue(common.RateLimitRateKey, "10"))
 	baseCfg.Add(config.NewStaticValue(common.ClickHouseOptionalKey, "true"))
@@ -154,6 +155,25 @@ func TestAPIServerInitRejectsEmptyPuzzleSalt(t *testing.T) {
 	}
 	if err := srv.Init(t.Context(), ServerConfig{}, &sync.WaitGroup{}); err == nil {
 		t.Fatal("Server.Init accepted an empty API salt")
+	}
+}
+
+func TestAPIServerInitRejectsEmptyUserFingerprintKey(t *testing.T) {
+	cfg := config.NewBaseConfig(testsConfigStore())
+	cfg.Add(config.NewStaticValue(common.UserFingerprintIVKey, ""))
+	verifier := NewVerifier(cfg, nil, cfg.Get(common.FingerprintHeaderKey), nil)
+	if err := verifier.Update(t.Context()); err == nil {
+		t.Fatal("Verifier.Update accepted an empty user fingerprint key")
+	}
+	if len(verifier.UserFingerprintKey.Value()) == 0 {
+		t.Fatal("verifier installed an empty user fingerprint key")
+	}
+
+	srv := &Server{
+		Verifier: verifier,
+	}
+	if err := srv.Init(t.Context(), ServerConfig{}, &sync.WaitGroup{}); err == nil {
+		t.Fatal("Server.Init accepted an empty user fingerprint key")
 	}
 }
 

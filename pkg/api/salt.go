@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	errEmptyAPISalt = errors.New("API salt is empty")
-	errUAKeyTooLong = errors.New("user fingerprint key is too long")
+	errEmptyAPISalt            = errors.New("API salt is empty")
+	errEmptyUserFingerprintKey = errors.New("user fingerprint key is empty")
+	errUAKeyTooLong            = errors.New("user fingerprint key is too long")
 )
 
 type puzzleSalt struct {
@@ -50,7 +51,12 @@ func NewUserFingerprintKey(configItem common.ConfigItem) *userFingerprintKey {
 }
 
 func (k *userFingerprintKey) Update() error {
-	byteArray, err := hex.DecodeString(k.configItem.Value())
+	value := k.configItem.Value()
+	if len(value) == 0 {
+		return errEmptyUserFingerprintKey
+	}
+
+	byteArray, err := hex.DecodeString(value)
 	if err != nil {
 		return err
 	}
