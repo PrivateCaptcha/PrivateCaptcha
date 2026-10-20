@@ -418,6 +418,10 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 	}
 
 	if err := s.FormURLVerifier.VerifyURL(ctx, f.URL); err != nil {
+		if errors.Is(err, errTransientFormURL) {
+			slog.WarnContext(ctx, "Skipping form submission due to transient URL verification error", "formID", f.ID, common.ErrAttr(err))
+			return err
+		}
 		slog.WarnContext(ctx, "Skipping unsafe form submission URL", "formID", f.ID, common.ErrAttr(err))
 		s.addFormSubmitRecord(ctx, f, formSubmitStatusFailure)
 		return err

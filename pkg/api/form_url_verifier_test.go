@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/netip"
 	"testing"
@@ -395,6 +396,124 @@ func TestFormURLDialContextRejectsUnsafeIPv6TransitionAddresses(t *testing.T) {
 			_, err := verifier.DialContext(ctx, "tcp", "example.com:443")
 			if !errors.Is(err, errUnsafeFormURL) {
 				t.Fatalf("expected IPv6 transition address %s to be rejected as unsafe, got %v", ip, err)
+			}
+		})
+	}
+}
+
+func TestFormURLVerifierClassifiesTransientDNSErrors(t *testing.T) {
+	ctx := context.Background()
+	transientErr := &net.DNSError{Name: "flaky.example", Err: "connection timed out", IsTimeout: true, IsTemporary: true}
+	resolver := &stubFormURLResolver{
+		errors: map[string]error{"flaky.example": transientErr},
+		calls:  map[string]int{},
+	}
+	verifier := newTestFormURLVerifierEx(t, &stubFormURLSafetyChecker{}, resolver)
+
+	err := verifier.VerifyURL(ctx, "https://flaky.example/form")
+	if !errors.Is(err, errTransientFormURL) {
+		t.Fatalf("expected transient DNS error to wrap errTransientFormURL, got %v", err)
+	}
+	if errors.Is(err, errUnsafeFormURL) {
+		t.Fatalf("expected transient DNS error NOT to be classified as errUnsafeFormURL, got %v", err)
+	}
+}
+
+func TestFormURLVerifierClassifiesNXDOMAINAsUnsafe(t *testing.T) {
+	ctx := context.Background()
+	nxdomainErr := &net.DNSError{Name: "missing.example", Err: "no such host", IsNotFound: true}
+	resolver := &stubFormURLResolver{
+		errors: map[string]error{"missing.example": nxdomainErr},
+		calls:  map[string]int{},
+	}
+	verifier := newTestFormURLVerifierEx(t, &stubFormURLSafetyChecker{}, resolver)
+
+	err := verifier.VerifyURL(ctx, "https://missing.example/form")
+	if !errors.Is(err, errUnsafeFormURL) {
+		t.Fatalf("expected NXDOMAIN to be classified as errUnsafeFormURL, got %v", err)
+	}
+	if errors.Is(err, errTransientFormURL) {
+		t.Fatalf("expected NXDOMAIN NOT to be classified as errTransientFormURL, got %v", err)
+	}
+}
+
+func TestFormURLVerifierClassifiesContextCancellationAsTransient(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	resolver := &stubFormURLResolver{
+		errors: map[string]error{"flaky.example": context.Canceled},
+		calls:  map[string]int{},
+	}
+	verifier := newTestFormURLVerifierEx(t, &stubFormURLSafetyChecker{}, resolver)
+
+	err := verifier.VerifyURL(ctx, "https://flaky.example/form")
+	if !errors.Is(err, errTransientFormURL) {
+		t.Fatalf("expected context cancellation to be classified as errTransientFormURL, got %v", err)
+	}
+	if errors.Is(err, errUnsafeFormURL) {
+		t.Fatalf("expected context cancellation NOT to be classified as errUnsafeFormURL, got %v", err)
+	}
+}
+
+func TestFormURLVerifierDoesNotCacheTransientDNSErrors(t *testing.T) {
+	ctx := context.Background()
+	transientErr := &net.DNSError{Name: "flaky.example", Err: "connection timed out", IsTimeout: true, IsTemporary: true}
+	resolver := &stubFormURLResolver{
+		errors: map[string]error{"flaky.example": transientErr},
+		calls:  map[string]int{},
+	}
+	verifier := newTestFormURLVerifierEx(t, &stubFormURLSafetyChecker{}, resolver)
+
+	for i := 0; i < 3; i++ {
+		if err := verifier.VerifyURL(ctx, "https://flaky.example/form"); !errors.Is(err, errTransientFormURL) {
+			t.Fatalf("attempt %d: expected errTransientFormURL, got %v", i, err)
+		}
+	}
+	if got := resolver.calls["flaky.example"]; got != 3 {
+		t.Fatalf("expected transient errors to not be cached and re-resolve every call, got %d resolver calls", got)
+	}
+}
+
+func TestFormURLVerifierCachesNXDOMAINAsUnsafe(t *testing.T) {
+	ctx := context.Background()
+	nxdomainErr := &net.DNSError{Name: "missing.example", Err: "no such host", IsNotFound: true}
+	resolver := &stubFormURLResolver{
+		errors: map[string]error{"missing.example": nxdomainErr},
+		calls:  map[string]int{},
+	}
+	verifier := newTestFormURLVerifierEx(t, &stubFormURLSafetyChecker{}, resolver)
+
+	for i := 0; i < 3; i++ {
+		if err := verifier.VerifyURL(ctx, "https://missing.example/form"); !errors.Is(err, errUnsafeFormURL) {
+			t.Fatalf("attempt %d: expected errUnsafeFormURL, got %v", i, err)
+		}
+	}
+	// The deterministic NXDOMAIN result is negative-cached, so the resolver
+	// is consulted at most once.
+	if got := resolver.calls["missing.example"]; got != 1 {
+		t.Fatalf("expected NXDOMAIN to be cached and resolved at most once, got %d resolver calls", got)
+	}
+}
+
+func TestIsTransientLookupErrorClassification(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		err       error
+		transient bool
+	}{
+		{name: "nil", err: nil, transient: false},
+		{name: "timeout", err: &net.DNSError{IsTimeout: true}, transient: true},
+		{name: "temporary", err: &net.DNSError{IsTemporary: true}, transient: true},
+		{name: "notFound", err: &net.DNSError{IsNotFound: true}, transient: false},
+		{name: "plainDNSError", err: &net.DNSError{}, transient: false},
+		{name: "contextCanceled", err: context.Canceled, transient: true},
+		{name: "contextDeadlineExceeded", err: context.DeadlineExceeded, transient: true},
+		{name: "wrappedContextCanceled", err: fmt.Errorf("lookup: %w", context.Canceled), transient: true},
+		{name: "genericError", err: errors.New("generic"), transient: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isTransientLookupError(tc.err); got != tc.transient {
+				t.Fatalf("isTransientLookupError(%v) = %v, want %v", tc.err, got, tc.transient)
 			}
 		})
 	}

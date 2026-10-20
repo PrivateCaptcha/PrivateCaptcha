@@ -18,6 +18,7 @@ import (
 
 var (
 	errUnsafeFormURL         = errors.New("unsafe form URL")
+	errTransientFormURL      = errors.New("transient form URL verification error")
 	formNAT64Prefix          = netip.MustParsePrefix("64:ff9b::/96")
 	formNAT64LocalUsePrefix  = netip.MustParsePrefix("64:ff9b:1::/48")
 	form6To4Prefix           = netip.MustParsePrefix("2002::/16")
@@ -27,6 +28,27 @@ var (
 const (
 	maxFormURLCacheSize = 10_000
 )
+
+// isTransientLookupError reports whether err represents a transient
+// resolver/environmental failure (DNS timeout, SERVFAIL, other temporary
+// resolver error, or request-context cancellation) rather than a
+// deterministic statement about the hostname (e.g. NXDOMAIN). Transient
+// errors say nothing about the safety or health of the form's endpoint and
+// must not be treated as URL-safety violations, because counting them as
+// failures can wrongfully block and deactivate healthy forms.
+func isTransientLookupError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return dnsErr.IsTemporary || dnsErr.IsTimeout
+	}
+	return false
+}
 
 type FormURLResolver interface {
 	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
@@ -248,9 +270,14 @@ func (v *FormURLVerifierImpl) VerifyURL(ctx context.Context, rawURL string) erro
 
 	addresses, err := resolver.LookupIPAddr(ctx, host)
 	if err != nil {
+		if isTransientLookupError(err) {
+			return fmt.Errorf("%w: DNS lookup failed: %v", errTransientFormURL, err)
+		}
+		_ = v.Cache.Set(ctx, host, safe)
 		return fmt.Errorf("%w: DNS lookup failed: %v", errUnsafeFormURL, err)
 	}
 	if len(addresses) == 0 {
+		_ = v.Cache.Set(ctx, host, safe)
 		return fmt.Errorf("%w: DNS lookup returned no addresses", errUnsafeFormURL)
 	}
 

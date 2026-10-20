@@ -263,6 +263,147 @@ func TestProcessFormSubmissionBlocksAfterRepeatedURLFailures(t *testing.T) {
 	}
 }
 
+// newTransientFormURLVerifier builds a live FormURLVerifierImpl whose resolver
+// returns a transient DNS error (timeout/temporary) for the given host, so
+// processFormSubmission exercises the real transient-error branch of
+// VerifyURL rather than a stubbed verifier.
+func newTransientFormURLVerifier(t *testing.T, host string, dnsErr error) *FormURLVerifierImpl {
+	t.Helper()
+	resolver := &stubFormURLResolver{
+		errors: map[string]error{host: dnsErr},
+		calls:  map[string]int{},
+	}
+	return newTestFormURLVerifierEx(t, &stubFormURLSafetyChecker{}, resolver)
+}
+
+func TestProcessFormSubmissionDoesNotRecordTransientDNSError(t *testing.T) {
+	downstreamCalled := false
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		downstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	form := &dbgen.Form{
+		ID:                331,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               downstream.URL,
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 0,
+		Enabled:           true,
+		Active:            true,
+	}
+	transientErr := &net.DNSError{Name: "downstream.invalid", Err: "connection timed out", IsTimeout: true, IsTemporary: true}
+	verifier := newTransientFormURLVerifier(t, "downstream.invalid", transientErr)
+	form.URL = "https://downstream.invalid/submit"
+	server := &Server{
+		FormURLVerifier:   verifier,
+		FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1),
+		FailingForms:      common.NewExpiringCounterMap[int32](),
+	}
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	err := server.processFormSubmission(context.Background(), form, submission, false)
+	if !errors.Is(err, errTransientFormURL) {
+		t.Fatalf("expected transient DNS error to propagate errTransientFormURL, got %v", err)
+	}
+
+	if downstreamCalled {
+		t.Fatal("expected downstream endpoint never to be contacted during a transient DNS failure")
+	}
+	if count, ok := server.FailingForms.Get(form.ID); ok && count > 0 {
+		t.Fatalf("expected FailingForms to remain 0 for transient DNS error, got (%d, %v)", count, ok)
+	}
+	select {
+	case record := <-server.FormSubmitLogChan:
+		t.Fatalf("expected no failure record for transient DNS error, got %+v", record)
+	default:
+	}
+}
+
+func TestProcessFormSubmissionDoesNotBlockAfterRepeatedTransientDNSErrors(t *testing.T) {
+	form := &dbgen.Form{
+		ID:                332,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               "https://flaky.invalid/submit",
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 0,
+		Enabled:           true,
+		Active:            true,
+	}
+	transientErr := &net.DNSError{Name: "flaky.invalid", Err: "connection timed out", IsTimeout: true, IsTemporary: true}
+	verifier := newTransientFormURLVerifier(t, "flaky.invalid", transientErr)
+	server := &Server{
+		FormURLVerifier:   verifier,
+		FormSubmitLogChan: make(chan *common.FormSubmitRecord, maxFormFailures+2),
+		FailingForms:      common.NewExpiringCounterMap[int32](),
+	}
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	// Drive the form far past the online block threshold. None of these
+	// transient failures may be recorded or increment FailingForms, so the
+	// block check must never trip and the form must never be silently dropped.
+	for i := 0; i < maxFormFailures+5; i++ {
+		err := server.processFormSubmission(context.Background(), form, submission, false)
+		if !errors.Is(err, errTransientFormURL) {
+			t.Fatalf("attempt %d: expected transient error to propagate (not silent drop), got %v", i, err)
+		}
+		if count, ok := server.FailingForms.Get(form.ID); ok && count > 0 {
+			t.Fatalf("attempt %d: expected FailingForms to stay 0 for transient errors, got (%d, %v)", i, count, ok)
+		}
+		select {
+		case record := <-server.FormSubmitLogChan:
+			t.Fatalf("attempt %d: expected no failure record for transient DNS error, got %+v", i, record)
+		default:
+		}
+	}
+}
+
+func TestProcessFormSubmissionRecordsFailureOnNXDOMAIN(t *testing.T) {
+	form := &dbgen.Form{
+		ID:                333,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               "https://missing.invalid/submit",
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 0,
+		Enabled:           true,
+		Active:            true,
+	}
+	nxdomainErr := &net.DNSError{Name: "missing.invalid", Err: "no such host", IsNotFound: true}
+	verifier := newTransientFormURLVerifier(t, "missing.invalid", nxdomainErr)
+	server := &Server{
+		FormURLVerifier:   verifier,
+		FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1),
+		FailingForms:      common.NewExpiringCounterMap[int32](),
+	}
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	err := server.processFormSubmission(context.Background(), form, submission, false)
+	if !errors.Is(err, errUnsafeFormURL) {
+		t.Fatalf("expected NXDOMAIN to be classified as errUnsafeFormURL, got %v", err)
+	}
+	if count, ok := server.FailingForms.Get(form.ID); !ok || count != 1 {
+		t.Fatalf("expected FailingForms to be incremented once for NXDOMAIN, got (%d, %v)", count, ok)
+	}
+	select {
+	case record := <-server.FormSubmitLogChan:
+		if record.FormID != form.ID || record.Status != formSubmitStatusFailure {
+			t.Fatalf("unexpected failure record for NXDOMAIN: %+v", record)
+		}
+	default:
+		t.Fatal("expected NXDOMAIN to emit a failure record to FormSubmitLogChan")
+	}
+}
+
 func TestSubmitFormBatchRecordsFinalSuccess(t *testing.T) {
 	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -1673,5 +1814,176 @@ drained:
 		if !found {
 			t.Fatalf("form %d was not visible to RetrieveFailingForms in ClickHouse after URL-verification failure", form.ID)
 		}
+	}
+}
+
+func TestFormProxyDoesNotRecordTransientDNSEndToEnd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL and ClickHouse")
+	}
+
+	downstreamCalled := false
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		downstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// An HTTPS endpoint whose hostname the stub resolver below will fail to
+	// resolve with a TRANSIENT DNS error (timeout/temporary). This is the
+	// bug report's scenario: the PrivateCaptcha server's resolver blips while
+	// the form's endpoint is healthy. The live FormURLVerifierImpl.VerifyURL
+	// must classify this as errTransientFormURL, and processFormSubmission
+	// must NOT record a failure (no FailingForms increment, no ClickHouse row).
+	form, property, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "transient-dns-endpoint.example.com"),
+		&dbgen.CreateFormParams{
+			Name:              t.Name(),
+			URL:               "https://transient-dns-endpoint.example.com/submit",
+			Fields:            []byte(`{}`),
+			Enabled:           true,
+			RequestsPerMinute: 60,
+			RetryRequestCount: 0,
+			Method:            dbgen.FormMethodPost,
+		}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+	tnow := time.Now()
+	server.Verifier.PropertyStats.RecordPuzzles(property.ID, 10, tnow)
+	server.Verifier.PropertyStats.RecordVerifications(property.ID, 10, tnow)
+
+	// Wire a live FormURLVerifierImpl backed by a stub resolver that returns a
+	// transient DNS error for this form's hostname.
+	transientErr := &net.DNSError{Name: "transient-dns-endpoint.example.com", Err: "connection timed out", IsTimeout: true, IsTemporary: true}
+	resolver := &stubFormURLResolver{
+		errors: map[string]error{"transient-dns-endpoint.example.com": transientErr},
+		calls:  map[string]int{},
+	}
+	transientVerifier := newTestFormURLVerifierEx(t, &FormURLSafetyCheckerImpl{}, resolver)
+	oldVerifier := server.FormURLVerifier
+	server.FormURLVerifier = transientVerifier
+	t.Cleanup(func() { server.FormURLVerifier = oldVerifier })
+
+	// Drain any stale records from the global channel before the run.
+	for {
+		select {
+		case <-server.FormSubmitLogChan:
+		default:
+			goto transientDrained
+		}
+	}
+transientDrained:
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Submit once. The "repeated transient failures never accumulate into a
+	// block" guarantee is covered by the unit test
+	// TestProcessFormSubmissionDoesNotBlockAfterRepeatedTransientDNSErrors
+	// (which calls processFormSubmission directly with a stub verifier, so the
+	// captcha gate does not interfere). This integration test proves the
+	// end-to-end path: queued submission accepted, no FailingForms increment,
+	// no ClickHouse failure row, form stays active.
+	body := url.Values{}
+	body.Set("email", "lost@example.com")
+	body.Set(common.ParamPrivateCaptchaSolution, fmt.Sprintf("%s.%s", solutionsStr, puzzleStr))
+
+	srv := http.NewServeMux()
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+	req := httptest.NewRequest(http.MethodPost, "/"+common.FormEndpoint+"/"+db.UUIDToString(form.ExternalID), strings.NewReader(body.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	// The visitor still receives 202 Accepted for the queued submission.
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted for queued submission, got %d", w.Code)
+	}
+
+	// Give the batch consumer time to process the queued submission. The
+	// in-memory FailingForms counter is incremented synchronously inside
+	// addFormSubmitRecord, so if a failure were recorded it would appear here.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if count, ok := server.FailingForms.Get(form.ID); ok && count > 0 {
+			t.Fatalf("transient DNS error incremented FailingForms to %d; expected no accounting", count)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if count, ok := server.FailingForms.Get(form.ID); ok && count > 0 {
+		t.Fatalf("transient DNS error incremented FailingForms to %d; expected no accounting", count)
+	}
+	if downstreamCalled {
+		t.Fatal("expected downstream endpoint never to be contacted during a transient DNS failure")
+	}
+
+	// The transient failure must NOT reach ClickHouse, so it must never become
+	// visible to RetrieveFailingForms (the deactivation pipeline's input).
+	if timeSeries != nil {
+		chDeadline := time.Now().Add(8 * time.Second)
+		var found bool
+		for time.Now().Before(chDeadline) {
+			candidates, err := timeSeries.RetrieveFailingForms(ctx, 1, 10)
+			if err != nil {
+				t.Fatalf("RetrieveFailingForms failed: %v", err)
+			}
+			for _, c := range candidates {
+				if c != nil && c.FormID == form.ID {
+					found = true
+					break
+				}
+			}
+			if found {
+				t.Fatalf("transient DNS failure for form %d became visible to RetrieveFailingForms; expected no ClickHouse record", form.ID)
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+
+	// Guarantee K: the form must remain active in Postgres (no deactivation).
+	querier := dbgen.New(store.Pool)
+	if activeForm, err := querier.GetFormByID(ctx, form.ID); err != nil {
+		t.Fatalf("failed to re-fetch form: %v", err)
+	} else if !activeForm.Active {
+		t.Fatalf("form %d was deactivated by transient DNS failures; expected to remain active", form.ID)
+	}
+}
+
+func TestInlineFormProxyReturns406OnTransientDNSWithoutAccounting(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+
+	s, form, values, _ := busyInlineFormProxyForTest(t, "inline-transient-dns.example.com", func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header)}, nil
+	})
+
+	// Replace the allow-all stub verifier with one that reports a transient
+	// DNS error, simulating a resolver blip on the inline backpressure path.
+	s.FormURLVerifier = &stubSubmitFormURLVerifier{err: fmt.Errorf("%w: DNS lookup failed: %v", errTransientFormURL, &net.DNSError{Err: "connection timed out", IsTimeout: true, IsTemporary: true})}
+
+	status := submitBusyInlineFormProxy(s, form, values)
+	if status != http.StatusNotAcceptable {
+		t.Fatalf("inline transient DNS response = %d, want 406", status)
+	}
+
+	if count, ok := s.FailingForms.Get(form.ID); ok && count > 0 {
+		t.Fatalf("expected FailingForms to stay 0 on inline transient DNS, got (%d, %v)", count, ok)
+	}
+	select {
+	case record := <-s.FormSubmitLogChan:
+		t.Fatalf("expected no failure record for inline transient DNS, got %+v", record)
+	default:
 	}
 }
