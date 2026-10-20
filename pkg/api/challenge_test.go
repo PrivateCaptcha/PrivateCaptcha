@@ -133,11 +133,14 @@ func TestPuzzleForRequestChallenge(t *testing.T) {
 
 // TestPuzzleForRequestEdgeTokenGating asserts that attaching edge-token validity
 // (which upgrades the wire format to v3) is gated on the client's declared captcha
-// version. Clients announcing "1" (the legacy/standard-widget wire version, which
-// pre-v3 widget bundles also send) must receive a payload they can parse, so the
-// server must NOT bump the wire format to v3 just because the property has edge
-// tokens enabled. Clients announcing anything else (or omitting the header) are
-// treated as v3-capable and receive a v3 payload carrying the validity field.
+// version. Clients announcing "1" (the standard-widget wire version) or "2" (the
+// extended/Argon2id-capable signal introduced in v1.45.0 / npm core-lib 0.0.28,
+// which predates the v3 parser shipped in npm 0.0.32) must receive a payload they
+// can parse, so the server must NOT bump the wire format to v3 just because the
+// property has edge tokens enabled. Clients announcing anything else (or omitting
+// the header) are treated as v3-capable and receive a v3 payload carrying the
+// validity field. Legacy (< v3) clients still receive edge tokens at verify time
+// via addEdgeToken recomputing the validity from the property's interval.
 func TestPuzzleForRequestEdgeTokenGating(t *testing.T) {
 	property := &dbgen.Property{
 		ID:                        1,
@@ -186,8 +189,8 @@ func TestPuzzleForRequestEdgeTokenGating(t *testing.T) {
 			version:       "2",
 			challenge:     dbgen.ChallengeTypeArgon2ID,
 			wantChallenge: puzzle.ChallengeArgon2ID,
-			wantWire:      3,
-			wantValidity:  time.Hour,
+			wantWire:      2, // pre-v3 extended senders ("2") keep the Argon2id default v2 wire format
+			wantValidity:  0, // no v3 bump, so the validity field is not carried on the wire
 		},
 		{
 			name:          "Future",
@@ -210,8 +213,8 @@ func TestPuzzleForRequestEdgeTokenGating(t *testing.T) {
 			version:       "2",
 			challenge:     dbgen.ChallengeTypeBlake2b,
 			wantChallenge: puzzle.ChallengeBlake2b,
-			wantWire:      3, // v3 bump applies to blake2b properties too for v3-capable clients
-			wantValidity:  time.Hour,
+			wantWire:      1, // pre-v3 extended senders ("2") keep the blake2b default v1 wire format
+			wantValidity:  0, // no v3 bump, so the validity field is not carried on the wire
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

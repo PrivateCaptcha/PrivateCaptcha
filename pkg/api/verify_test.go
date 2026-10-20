@@ -1093,6 +1093,16 @@ func TestVerifyEdgeTokenLegacyClient(t *testing.T) {
 			wantTokenS:   3600, // recomputed from property interval by addEdgeToken fallback
 		},
 		{
+			// Pre-v3 extended clients (v1.45.0 / npm core-lib 0.0.28-0.0.31) advertise
+			// "2" (the Argon2id-capable signal) but cannot parse v3, so they must keep
+			// receiving a pre-v3 payload and have addEdgeToken recompute the validity.
+			name:         "PreV3ExtendedClient",
+			version:      "2",
+			wantWireByte: 1,    // must stay pre-v3 - extended "2" senders predate the v3 parser
+			wantCarried:  0,    // pre-v3 wire format never carries the edge-token validity field
+			wantTokenS:   3600, // recomputed from property interval by addEdgeToken fallback
+		},
+		{
 			name:         "V3CapableClient",
 			version:      "",
 			wantWireByte: 3, // v3 payload carries the validity
