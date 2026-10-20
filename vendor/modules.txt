@@ -41,9 +41,6 @@ github.com/boyter/go-string
 # github.com/cespare/xxhash/v2 v2.3.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
-# github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
-## explicit
-github.com/davecgh/go-spew/spew
 # github.com/denisbrodbeck/machineid v1.0.1
 ## explicit
 github.com/denisbrodbeck/machineid
@@ -131,7 +128,7 @@ github.com/mailru/easyjson
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
-# github.com/maypok86/otter/v2 v2.3.0
+# github.com/maypok86/otter/v2 v2.4.0
 ## explicit; go 1.24.0
 github.com/maypok86/otter/v2
 github.com/maypok86/otter/v2/internal/deque
@@ -163,9 +160,6 @@ github.com/pierrec/lz4/v4/internal/lz4block
 github.com/pierrec/lz4/v4/internal/lz4errors
 github.com/pierrec/lz4/v4/internal/lz4stream
 github.com/pierrec/lz4/v4/internal/xxh32
-# github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
-## explicit
-github.com/pmezard/go-difflib/difflib
 # github.com/prometheus/client_golang v1.24.1
 ## explicit; go 1.25.0
 github.com/prometheus/client_golang/internal/github.com/golang/gddo/httputil
@@ -193,8 +187,6 @@ github.com/puzpuzpuz/xsync/v4
 # github.com/realclientip/realclientip-go v1.0.0
 ## explicit; go 1.13
 github.com/realclientip/realclientip-go
-# github.com/rogpeppe/go-internal v1.16.0
-## explicit; go 1.25
 # github.com/rs/cors v1.11.1
 ## explicit; go 1.13
 github.com/rs/cors
@@ -225,11 +217,8 @@ github.com/slok/go-http-metrics/middleware/std
 # github.com/speps/go-hashids/v2 v2.0.1
 ## explicit; go 1.14
 github.com/speps/go-hashids/v2
-# github.com/stretchr/testify v1.11.1
-## explicit; go 1.17
-github.com/stretchr/testify/assert
-github.com/stretchr/testify/assert/yaml
-github.com/stretchr/testify/require
+# github.com/stretchr/objx v0.5.3
+## explicit; go 1.20
 # github.com/tsenart/vegeta/v12 v12.13.0
 ## explicit; go 1.22
 github.com/tsenart/vegeta/v12/lib
@@ -322,6 +311,3 @@ google.golang.org/protobuf/types/known/timestamppb
 gopkg.in/alexcesaro/quotedprintable.v3
 # gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 ## explicit
-# gopkg.in/yaml.v3 v3.0.1
-## explicit
-gopkg.in/yaml.v3
