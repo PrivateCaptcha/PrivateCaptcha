@@ -70,6 +70,11 @@ type FormSubmitResult struct {
 	StatusCode int
 	Success    bool
 	Valid      bool
+	// Transient reports whether the most recent attempt failed due to a
+	// transient resolver/environmental error (e.g. a DNS timeout during the
+	// HTTP dial path). Such failures say nothing about the form's health and
+	// must not be counted toward form failure accounting.
+	Transient bool
 }
 
 func (fsr *FormSubmitResult) ResultCode() int8 {
@@ -435,6 +440,10 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 	}
 
 	if result := SubmitFormWithRetry(ctx, client, f, sub); result.Valid {
+		if result.Transient {
+			slog.WarnContext(ctx, "Skipping form failure accounting due to transient transport error", "formID", f.ID, common.ErrAttr(errFormSubmitFailed))
+			return nil
+		}
 		s.addFormSubmitRecord(ctx, f, result.ResultCode())
 		return nil
 	}
@@ -554,6 +563,11 @@ func submitFormOnce(ctx context.Context, client *http.Client, form *dbgen.Form, 
 	result.Valid = true
 	resp, err := client.Do(req)
 	if err != nil {
+		// The HTTP transport re-resolves the hostname via DialContext even
+		// when VerifyURL has already cached the host as safe. A transient
+		// resolver failure here must not be counted as a form failure, so
+		// flag it for the accounting path to skip.
+		result.Transient = isTransientLookupError(err)
 		return result, common.NewRetriableError(err)
 	}
 	defer resp.Body.Close()

@@ -45,7 +45,12 @@ func isTransientLookupError(err error) bool {
 	}
 	var dnsErr *net.DNSError
 	if errors.As(err, &dnsErr) {
-		return dnsErr.IsTemporary || dnsErr.IsTimeout
+		// IsTemporary/IsTimeout are documented as best-effort and may be
+		// unset for transient conditions such as SERVFAIL or malformed DNS
+		// responses. Only IsNotFound is a deterministic statement about the
+		// hostname; treat any other resolver failure as transient so healthy
+		// hosts are not negative-cached as unsafe.
+		return !dnsErr.IsNotFound
 	}
 	return false
 }

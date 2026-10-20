@@ -404,6 +404,79 @@ func TestProcessFormSubmissionRecordsFailureOnNXDOMAIN(t *testing.T) {
 	}
 }
 
+func TestSubmitFormOnceFlagsTransientDNSErrorFromDialPath(t *testing.T) {
+	transientErr := &net.DNSError{Name: "flaky.example", Err: "connection timed out", IsTimeout: true, IsTemporary: true}
+	client := &http.Client{Transport: submitFormRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return nil, transientErr
+	})}
+	form := &dbgen.Form{
+		ID:                123,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               "https://flaky.example/submit",
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 0,
+		Enabled:           true,
+		Active:            true,
+	}
+	submission := &FormSubmission{ID: "sub-1", FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	result, err := submitFormOnce(context.Background(), client, form, submission)
+	if err == nil {
+		t.Fatal("expected retriable error from dial failure")
+	}
+	if result == nil || !result.Valid {
+		t.Fatal("expected valid result after dial failure")
+	}
+	if !result.Transient {
+		t.Fatalf("expected Transient flag set for DNS timeout, got %+v", result)
+	}
+}
+
+func TestProcessFormSubmissionSkipsAccountingOnTransientDialError(t *testing.T) {
+	// VerifyURL succeeds (nil error) so the submission reaches the HTTP dial
+	// path; the HTTP transport then fails with a transient DNS error, which
+	// must not be counted toward form failure accounting.
+	verifier := &stubSubmitFormURLVerifier{}
+	transientErr := &net.DNSError{Name: "flaky.example", Err: "connection timed out", IsTimeout: true, IsTemporary: true}
+	client := &http.Client{Transport: submitFormRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return nil, transientErr
+	})}
+	form := &dbgen.Form{
+		ID:                334,
+		PropertyID:        456,
+		OrgOwnerID:        db.Int(7),
+		OrgID:             db.Int(8),
+		ExternalID:        db.TestPropertyUUID,
+		URL:               "https://flaky.example/submit",
+		Method:            dbgen.FormMethodPost,
+		RetryRequestCount: 0,
+		Enabled:           true,
+		Active:            true,
+	}
+	server := &Server{
+		FormsClient:       client,
+		FormURLVerifier:   verifier,
+		FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1),
+		FailingForms:      common.NewExpiringCounterMap[int32](),
+	}
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	if err := server.processFormSubmission(context.Background(), form, submission, false); err != nil {
+		t.Fatalf("expected nil error on transient dial failure, got %v", err)
+	}
+	if count, ok := server.FailingForms.Get(form.ID); ok && count > 0 {
+		t.Fatalf("expected FailingForms to remain 0 for transient dial error, got (%d, %v)", count, ok)
+	}
+	select {
+	case record := <-server.FormSubmitLogChan:
+		t.Fatalf("expected no failure record for transient dial error, got %+v", record)
+	default:
+	}
+}
+
 func TestSubmitFormBatchRecordsFinalSuccess(t *testing.T) {
 	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
