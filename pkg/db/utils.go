@@ -668,7 +668,7 @@ func NewDefaultPropertyParams(name, domain string, userID int32) *dbgen.CreatePr
 		Name:             name,
 		CreatorID:        Int(userID),
 		Domain:           domain,
-		Level:            Int2(int16(common.DifficultyLevelSmall)),
+		Level:            Int2(int16(common.DifficultyLevelMedium)),
 		Growth:           dbgen.DifficultyGrowthMedium,
 		ValidityInterval: 6 * time.Hour,
 		AllowSubdomains:  false,
