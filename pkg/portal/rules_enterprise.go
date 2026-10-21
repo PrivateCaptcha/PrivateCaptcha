@@ -505,8 +505,20 @@ func (s *Server) getPropertyNewRule(w http.ResponseWriter, r *http.Request) (*Vi
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, property)
+	if r.PathValue(common.ParamRule) != "" {
+		rule, err := s.RuleForProperty(r, property.ID)
+		if err != nil {
+			return nil, err
+		}
+		renderCtx.RuleFormData = ruleToFormData(rule)
+		renderCtx.Name = "Copy of " + rule.Name
+	}
 
-	return &ViewModel{Model: renderCtx, View: ruleTemplate, IsNew: true}, nil
+	return &ViewModel{
+		Model: renderCtx,
+		View:  ruleTemplate,
+		IsNew: true,
+	}, nil
 }
 
 func (s *Server) getOrgNewRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -530,8 +542,20 @@ func (s *Server) getOrgNewRule(w http.ResponseWriter, r *http.Request) (*ViewMod
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, nil /*property*/)
+	if r.PathValue(common.ParamRule) != "" {
+		rule, err := s.RuleForOrg(r, org.ID)
+		if err != nil {
+			return nil, err
+		}
+		renderCtx.RuleFormData = ruleToFormData(rule)
+		renderCtx.Name = "Copy of " + rule.Name
+	}
 
-	return &ViewModel{Model: renderCtx, View: ruleTemplate, IsNew: true}, nil
+	return &ViewModel{
+		Model: renderCtx,
+		View:  ruleTemplate,
+		IsNew: true,
+	}, nil
 }
 
 func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {

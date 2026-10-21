@@ -81,6 +81,13 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, public, openRead, pr
 		http.HandlerFunc(s.postPropertyNewRule),
 	)
 
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, arg(common.ParamRule), common.CopyEndpoint), privateReadWithTip, s.Handler(s.getOrgNewRule))
+	rg.Handle(
+		rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, arg(common.ParamRule), common.CopyEndpoint),
+		privateReadWithTip,
+		s.Handler(s.getPropertyNewRule),
+	)
+
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint), privateReadWithTip, s.Handler(s.getOrgEditRule))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint), privateWrite, http.HandlerFunc(s.postOrgEditRule))
 	rg.Handle(

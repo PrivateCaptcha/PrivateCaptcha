@@ -33,6 +33,7 @@ const (
 	ReportsEndpoint       = "reports"
 	IntegrationsEndpoint  = "integrations"
 	EditEndpoint          = "edit"
+	CopyEndpoint          = "copy"
 	DeleteEndpoint        = "delete"
 	MembersEndpoint       = "members"
 	GeneralEndpoint       = "general"

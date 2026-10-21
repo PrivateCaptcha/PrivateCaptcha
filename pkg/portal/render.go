@@ -32,6 +32,7 @@ type RenderConstants struct {
 	ReportsEndpoint                 string
 	IntegrationsEndpoint            string
 	EditEndpoint                    string
+	CopyEndpoint                    string
 	EdgeEndpoint                    string
 	Token                           string
 	Email                           string
@@ -174,6 +175,7 @@ func NewRenderConstants() *RenderConstants {
 		ReportsEndpoint:                 common.ReportsEndpoint,
 		IntegrationsEndpoint:            common.IntegrationsEndpoint,
 		EditEndpoint:                    common.EditEndpoint,
+		CopyEndpoint:                    common.CopyEndpoint,
 		EdgeEndpoint:                    common.EdgeEndpoint,
 		DeleteEndpoint:                  common.DeleteEndpoint,
 		MembersEndpoint:                 common.MembersEndpoint,

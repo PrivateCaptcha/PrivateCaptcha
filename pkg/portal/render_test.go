@@ -222,6 +222,13 @@ func TestRenderHTML(t *testing.T) {
 	previewOrg := stubOrg("123")
 	invitedOrg := stubOrgEx("123", dbgen.AccessLevelInvited)
 	memberOrg := stubOrgEx("456", dbgen.AccessLevelMember)
+	copyRules := []*DifficultyRuleModel{
+		{
+			ID:      "789",
+			Name:    "Original Rule",
+			CanEdit: true,
+		},
+	}
 	blakeProperty := stubProperty("Foo", "123")
 	blakeProperty.Challenge = string(dbgen.ChallengeTypeBlake2b)
 	argonProperty := stubProperty("Foo", "123")
@@ -1359,6 +1366,37 @@ func TestRenderHTML(t *testing.T) {
 			},
 			selector:   "p.rule-name",
 			matches:    ruleNames(stubDifficultyRules()),
+			enterprise: enterpriseOnly,
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.RulesEndpoint, "789", common.CopyEndpoint},
+			template: orgRulesTemplate,
+			model: &OrgRulesRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					CurrentOrg: stubOrg("123"),
+				},
+				rulesRenderContext: rulesRenderContext{
+					Rules: copyRules,
+				},
+			},
+			selector:   `a[href="/org/123/rules/789/copy"]`,
+			matches:    []string{"Copy, difficulty rule"},
+			enterprise: enterpriseOnly,
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "1", common.RulesEndpoint, "789", common.CopyEndpoint},
+			template: propertyDashboardRulesTemplate,
+			model: &PropertyRulesRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{
+					Property: stubProperty("Foo", "123"),
+					Org:      stubOrg("123"),
+				},
+				rulesRenderContext: rulesRenderContext{
+					Rules: copyRules,
+				},
+			},
+			selector:   `a[href="/org/123/property/1/rules/789/copy"]`,
+			matches:    []string{"Copy, difficulty rule"},
 			enterprise: enterpriseOnly,
 		},
 		// same as above but empty rules to check for placeholder (also doubles for enterprise and non-enterprise)

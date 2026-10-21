@@ -37,6 +37,12 @@
                             <a href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint $rule.ID $.Const.EditEndpoint }}"
                             {{ end }}
                                 class="hidden pc-setup-button px-2.5 py-1.5 sm:block">Edit<span class="sr-only">, difficulty rule</span></a>
+                            {{ if $.Params.Property }}
+                            <a href="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.RulesEndpoint $rule.ID $.Const.CopyEndpoint }}"
+                            {{ else }}
+                            <a href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint $rule.ID $.Const.CopyEndpoint }}"
+                            {{ end }}
+                                class="hidden pc-setup-button px-2.5 py-1.5 sm:block">Copy<span class="sr-only">, difficulty rule</span></a>
                             {{ end }}
                         </div>
                     </li>

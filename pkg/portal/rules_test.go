@@ -3436,6 +3436,115 @@ func TestGetOrgNewRule(t *testing.T) {
 	}
 }
 
+func TestGetCopyRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	for _, scope := range []string{"Org", "Property"} {
+		t.Run(scope, func(t *testing.T) {
+			ctx := t.Context()
+			user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+			if err != nil {
+				t.Fatalf("Failed to create account: %v", err)
+			}
+
+			orgID := server.IDHasher.Encrypt(int(org.ID))
+			path := []string{common.OrgEndpoint, orgID}
+			handler := server.getOrgNewRule
+			params := &dbgen.CreateDifficultyRuleParams{
+				Name:                     "Original Rule",
+				OrgID:                    db.Int(org.ID),
+				CreatorID:                db.Int(user.ID),
+				Enabled:                  false,
+				ConditionProperty:        dbgen.RuleConditionPropertyCountryCode,
+				ConditionOperator:        dbgen.RuleConditionOperatorIn,
+				ConditionOperatorNegated: true,
+				ConditionValueStr:        db.Text("US,CA"),
+				ConditionValueSeparator:  db.Text(","),
+				ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
+				ActionValue:              -25,
+				Terminal:                 false,
+			}
+			var prop *dbgen.Property
+			if scope == "Property" {
+				prop, _, err = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "copy.example.com"), org)
+				if err != nil {
+					t.Fatalf("Failed to create property: %v", err)
+				}
+				params.OrgID = pgtype.Int4{}
+				params.PropertyID = db.Int(prop.ID)
+				path = append(path, common.PropertyEndpoint, server.IDHasher.Encrypt(int(prop.ID)))
+				handler = server.getPropertyNewRule
+			}
+
+			rule, _, err := store.Impl().CreateDifficultyRule(ctx, user, params)
+			if err != nil {
+				t.Fatalf("Failed to create rule: %v", err)
+			}
+			ruleID := server.IDHasher.Encrypt(int(rule.ID))
+			path = append(path, common.RulesEndpoint, ruleID, common.CopyEndpoint)
+
+			srv := http.NewServeMux()
+			server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+			cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			req := httptest.NewRequest(http.MethodGet, server.PartsURL(path...), nil)
+			req.AddCookie(cookie)
+			req.SetPathValue(common.ParamOrg, orgID)
+			req.SetPathValue(common.ParamRule, ruleID)
+			if prop != nil {
+				req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(prop.ID)))
+			}
+
+			viewModel, err := handler(httptest.NewRecorder(), req)
+			if err != nil {
+				t.Fatalf("Failed to get rule copy: %v", err)
+			}
+			if viewModel == nil || viewModel.View != ruleTemplate || !viewModel.IsNew {
+				t.Fatalf("Expected a new rule view, got %+v", viewModel)
+			}
+			renderCtx, ok := viewModel.Model.(*RuleWizardRenderContext)
+			if !ok {
+				t.Fatalf("Expected *RuleWizardRenderContext, got %T", viewModel.Model)
+			}
+			want := RuleFormData{
+				Name:              "Copy of Original Rule",
+				ConditionProperty: string(dbgen.RuleConditionPropertyCountryCode),
+				ConditionOperator: string(dbgen.RuleConditionOperatorIn),
+				ConditionValue:    "US,CA",
+				ActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+				ActionValue:       "-25",
+				Enabled:           false,
+				ConditionNegated:  true,
+				Terminal:          false,
+			}
+			if renderCtx.RuleFormData != want {
+				t.Errorf("RuleFormData = %+v, want %+v", renderCtx.RuleFormData, want)
+			}
+			if renderCtx.IsEdit || renderCtx.RuleID != "" {
+				t.Errorf("Expected create mode, got IsEdit=%v, RuleID=%q", renderCtx.IsEdit, renderCtx.RuleID)
+			}
+			if renderCtx.CurrentOrg == nil || renderCtx.CurrentOrg.ID != orgID {
+				t.Errorf("Expected organization %s, got %+v", orgID, renderCtx.CurrentOrg)
+			}
+			if prop == nil {
+				if renderCtx.Property != nil {
+					t.Errorf("Expected no property, got %+v", renderCtx.Property)
+				}
+			} else if renderCtx.Property == nil || renderCtx.Property.ID != server.IDHasher.Encrypt(int(prop.ID)) {
+				t.Errorf("Expected property %d, got %+v", prop.ID, renderCtx.Property)
+			}
+			if renderCtx.Token == "" || len(renderCtx.Countries) == 0 {
+				t.Error("Expected CSRF token and country options")
+			}
+		})
+	}
+}
+
 func TestGetPropertyEditRule(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
