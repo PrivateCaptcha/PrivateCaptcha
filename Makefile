@@ -228,6 +228,9 @@ run-local: build-server
 		printf "\nPC_CLICKHOUSE_HOST=localhost\nPC_CLICKHOUSE_PORT=%s\n" "$(TEST_CH_PORT)"; \
 	} | ./bin/server -env stdin -mode auto -migrate-hash "$(GIT_COMMIT)"'
 
+run-local-ee: EXTRA_BUILD_FLAGS = -tags enterprise
+run-local-ee: run-local
+
 run-docker:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml up --build
 	@$(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix 2>/dev/null | ./scripts/error-logs-summary.sh || true
