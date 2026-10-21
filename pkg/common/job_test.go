@@ -5,8 +5,69 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
+
+type oneOffJobStub struct {
+	StubOneOffJob
+	pause time.Duration
+	ran   bool
+}
+
+func (j *oneOffJobStub) InitialPause() time.Duration { return j.pause }
+
+func (j *oneOffJobStub) RunOnce(context.Context, any) error {
+	j.ran = true
+	return nil
+}
+
+func TestRunOneOffJobCancelsInitialPause(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		job := &oneOffJobStub{
+			pause: 20 * time.Second,
+		}
+		done := make(chan struct{})
+		go func() {
+			RunOneOffJob(ctx, job, job.NewParams())
+			close(done)
+		}()
+		defer func() { <-done }()
+		synctest.Wait()
+
+		cancel()
+		synctest.Wait()
+
+		select {
+		case <-done:
+		default:
+			t.Fatal("one-off job did not exit when its initial pause was canceled")
+		}
+		if job.ran {
+			t.Fatal("one-off job ran after cancellation during its initial pause")
+		}
+	})
+}
+
+func TestRunOneOffJobWaitsInitialPause(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		job := &oneOffJobStub{
+			pause: 20 * time.Second,
+		}
+		started := time.Now()
+
+		RunOneOffJob(t.Context(), job, job.NewParams())
+
+		if elapsed := time.Since(started); elapsed != job.pause {
+			t.Fatalf("initial pause = %v, want %v", elapsed, job.pause)
+		}
+		if !job.ran {
+			t.Fatal("one-off job did not run after its initial pause")
+		}
+	})
+}
 
 type mockPeriodicJob struct {
 	// We use this channel to signal the test that RunOnce was actually called

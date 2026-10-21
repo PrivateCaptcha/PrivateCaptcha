@@ -71,7 +71,14 @@ func RunOneOffJob(ctx context.Context, j OneOffJob, params any) {
 		}
 	}()
 
-	time.Sleep(j.InitialPause())
+	timer := time.NewTimer(j.InitialPause())
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		slog.DebugContext(ctx, "One-off job canceled before start")
+		return
+	case <-timer.C:
+	}
 
 	slog.DebugContext(ctx, "Running one-off job")
 
