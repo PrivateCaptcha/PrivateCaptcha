@@ -1098,6 +1098,11 @@ func clickHouseAdmin(t *testing.T, ctx context.Context) *sql.DB {
 
 func insertPuzzleOutcome(t *testing.T, ctx context.Context, ts *db.TimeSeriesDB, row puzzleOutcomeRow) {
 	t.Helper()
+	// []uint8 is []byte, which the driver binds as a String rather than an Array.
+	statusCodes := make(clickhouse.ArraySet, len(row.statusCodes))
+	for i, status := range row.statusCodes {
+		statusCodes[i] = status
+	}
 	_, err := ts.Clickhouse.ExecContext(ctx, `
 INSERT INTO privatecaptcha.puzzle_outcomes_recent
 SELECT
@@ -1125,7 +1130,7 @@ SELECT
 		clickhouse.Named("ip_prefix", row.ipPrefix),
 		clickhouse.Named("browser", row.browser),
 		clickhouse.Named("browser_major", row.browserMajor),
-		clickhouse.Named("status_codes", row.statusCodes),
+		clickhouse.Named("status_codes", statusCodes),
 		clickhouse.Named("status_counts", row.statusCounts),
 	)
 	if err != nil {
