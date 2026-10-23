@@ -54,8 +54,8 @@ export class ProgressRing extends SafeHTMLElement {
 
           <style>
             svg {
-                width: 2.25em;
-                height: 2.25em;
+                width: calc(var(--control-size, 2em) * 1.125);
+                height: calc(var(--control-size, 2em) * 1.125);
             }
             #pie {
                 stroke: var(--pie-color);

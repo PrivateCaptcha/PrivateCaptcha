@@ -14,6 +14,11 @@
     :host {
         --extra-spacing: 0px;
         --label-spacing: 0.625rem;
+        --control-size: 2em;
+        --widget-padding: 0.75em 1em;
+        --logo-direction: column;
+        --logo-height: 3.125em;
+        --logo-margin: 5px;
         --border-radius: 0.125rem;
         --warn-color: #A70B0B;
         --accent-color: #009400;
@@ -83,7 +88,7 @@
     display: flex;
     align-items: center;
     flex-direction: row;
-    padding: 0.75em 1em;
+    padding: var(--widget-padding);
     border: var(--border);
     border-radius: var(--border-radius);
     background-color: var(--background-color);
@@ -111,21 +116,20 @@
 
 .pc-interactive-area input[type="checkbox"] {
     font-size: 1em;
-    width: 2em;
-    height: 2em;
-    /* 2px (RING_SIZE - checkbox.dimension)/2 */
-    margin: 0 0 0 calc(0.125em + var(--extra-spacing));
+    width: var(--control-size);
+    height: var(--control-size);
+    /* (progress ring size - checkbox size) / 2 */
+    margin: 0 0 0 calc(var(--control-size) / 16 + var(--extra-spacing));
     appearance: none;
     background-color: var(--checkbox-background-color);
-    border: 0.125em solid var(--dark-color);
-    border-radius: 0.25em;
+    border: calc(var(--control-size) / 16) solid var(--dark-color);
+    border-radius: calc(var(--control-size) / 8);
     cursor: pointer;
     flex-shrink: 0;
 }
 
 .pc-interactive-area input[type="checkbox"]+label {
-    /* 2px (RING_SIZE - checkbox.dimension)/2 */
-    padding: 0 0 0 calc(0.125em + var(--extra-spacing) + var(--label-spacing));
+    padding: 0 0 0 calc(var(--control-size) / 16 + var(--extra-spacing) + var(--label-spacing));
 }
 
 @keyframes colorChange {
@@ -225,9 +229,10 @@
 .pc-info {
     display: flex;
     flex: 0 0 auto;
-    flex-direction: column;
+    flex-direction: var(--logo-direction);
     align-items: center;
     justify-content: center;
+    gap: var(--logo-margin);
     /*2px here is just for "backward consistency"*/
     margin-right: calc(0.125em + var(--extra-spacing));
     color: var(--dark-color);
@@ -235,13 +240,12 @@
 
 .pc-info svg {
     width: auto;
-    height: 3.125em;
+    height: var(--logo-height);
     max-width: 100%;
     max-height: 100%;
 }
 
 a.pc-link {
-    margin-top: 5px;
     text-decoration: none;
     color: currentcolor;
     text-align: center;
@@ -267,8 +271,8 @@ a.pc-link:hover {
 svg.verified {
     margin: 0 0 0 var(--extra-spacing);
     flex-shrink: 0;
-    width: 2.25em;
-    height: 2.25em;
+    width: calc(var(--control-size) * 1.125);
+    height: calc(var(--control-size) * 1.125);
 }
 
 svg.verified+label {
@@ -290,7 +294,7 @@ svg.verified circle {
     color: var(--gray-color);
     position: absolute;
     top: 100%;
-    left: calc(2em + 1em + 2*0.125em + 2*var(--extra-spacing) + var(--label-spacing));
+    left: calc(var(--control-size) * 1.125 + 1em + 2*var(--extra-spacing) + var(--label-spacing));
     cursor: default;
 }
 
