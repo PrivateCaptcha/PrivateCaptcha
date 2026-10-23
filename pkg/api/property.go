@@ -229,6 +229,7 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 	}
 
 	canUseArgon2ID := s.canUseArgon2ID(ctx, &userID, &orgID)
+	canUseEmptyDomains := s.FeatureFlags.Enabled(ctx, common.FeatureEmptyDomains, &userID, &orgID)
 	for decoder.More() {
 		if len(inputs) >= maxPropertiesBatchSize {
 			slog.WarnContext(ctx, "Too many properties in a batch", "count", len(inputs), "max", maxPropertiesBatchSize)
@@ -283,6 +284,9 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 				ilog.WarnContext(ctx, "Failed to convert domain name to ASCII", common.ErrAttr(err))
 				return nil, common.StatusPropertyDomainNameInvalidError, nil
 			}
+		} else if !canUseEmptyDomains {
+			ilog.WarnContext(ctx, "Property domain is empty")
+			return nil, common.StatusPropertyDomainEmptyError, nil
 		}
 
 		inputs = append(inputs, &input)
@@ -457,6 +461,7 @@ func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user
 	results := make([]*operationResult, 0, len(params.Properties))
 	limitCheckIndex := 1
 	canUseArgon2ID := s.canUseArgon2ID(ctx, &user.ID, &org.ID)
+	canUseEmptyDomains := s.FeatureFlags.Enabled(ctx, common.FeatureEmptyDomains, &user.ID, &org.ID)
 
 	for i, property := range params.Properties {
 		if i > 0 {
@@ -474,6 +479,9 @@ func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user
 		if !canUseArgon2ID && property.Challenge == string(dbgen.ChallengeTypeArgon2ID) {
 			tlog.WarnContext(ctx, "Property challenge is not supported", "index", i, "challenge", property.Challenge)
 			status = common.StatusPropertyChallengeUnsupportedError
+		} else if !canUseEmptyDomains && len(property.Domain) == 0 {
+			tlog.WarnContext(ctx, "Property domain is empty", "index", i)
+			status = common.StatusPropertyDomainEmptyError
 		} else {
 			status = s.doCreateProperty(ctx, tlog.With("index", i), property, user, org)
 		}

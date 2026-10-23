@@ -1118,16 +1118,30 @@ func TestApiPostPropertiesEmptyDomain(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
+	t.Run("FeatureEnabled", func(t *testing.T) {
+		apiPostPropertiesEmptyDomainSuite(t, true)
+	})
+	t.Run("FeatureDisabled", func(t *testing.T) {
+		apiPostPropertiesEmptyDomainSuite(t, false)
+	})
+}
+
+func apiPostPropertiesEmptyDomainSuite(t *testing.T, enabled bool) {
+	t.Helper()
 	ctx := common.TraceContext(t.Context(), t.Name())
 
-	_, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	user, org, apiKey, err := setupAPISuite(ctx, t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	previousFlags := server.FeatureFlags
+	t.Cleanup(func() { server.FeatureFlags = previousFlags })
+	server.FeatureFlags = stubFeatureFlags(enabled)
+
 	inputs := []*apiCreatePropertyInput{{
 		apiPropertySettings: apiPropertySettings{
-			Name:            t.Name() + " Property",
+			Name:            "Empty domain property",
 			AllowSubdomains: new(true),
 			AllowLocalhost:  new(true),
 		},
@@ -1140,6 +1154,46 @@ func TestApiPostPropertiesEmptyDomain(t *testing.T) {
 		apiKey)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if !enabled {
+		if meta.Code != common.StatusPropertyDomainEmptyError {
+			t.Fatalf("status = %s, want empty domain error", meta.Code)
+		}
+
+		input, err := json.Marshal(&asyncTaskCreateProperties{
+			Properties: inputs,
+			OrgID:      org.ID,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := server.handleCreateProperties(ctx, &dbgen.AsyncTask{
+			UserID: db.Int(user.ID),
+			Input:  input,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var results []*operationResult
+		if err := json.Unmarshal(data, &results); err != nil {
+			t.Fatal(err)
+		}
+		if len(results) != 1 {
+			t.Fatalf("result count = %d, want 1", len(results))
+		}
+		if results[0].Code != common.StatusPropertyDomainEmptyError {
+			t.Fatalf("async task status = %s, want empty domain error", results[0].Code)
+		}
+
+		properties, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(properties) != 0 {
+			t.Fatalf("rejected empty domain created %d properties", len(properties))
+		}
+		return
 	}
 
 	if !meta.Code.Success() {

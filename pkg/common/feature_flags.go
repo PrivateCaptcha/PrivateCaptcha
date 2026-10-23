@@ -3,8 +3,9 @@ package common
 import "context"
 
 const (
-	FeatureArgon2ID   = "argon2id"
-	FeatureEdgeTokens = "edge_tokens"
+	FeatureArgon2ID     = "argon2id"
+	FeatureEdgeTokens   = "edge_tokens"
+	FeatureEmptyDomains = "empty_domains"
 )
 
 // Nil IDs mean that the user or organization is absent.

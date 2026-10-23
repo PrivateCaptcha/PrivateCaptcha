@@ -74,7 +74,9 @@ func TestReadPropertiesRequestChallengeSupport(t *testing.T) {
 			t.Run(operation+"/"+tt.name, func(t *testing.T) {
 				budget := &propertyBudgetConfigItem{value: tt.budget}
 				srv := &Server{
-					FeatureFlags: stubFeatureFlags(!tt.disableFeature),
+					FeatureFlags: featureFlagsFunc(func(_ context.Context, feature string, _, _ *int32) bool {
+						return !tt.disableFeature || feature != common.FeatureArgon2ID
+					}),
 					BusinessDB: db.NewBusinessWithQuerier(nil, &db.QuerierStub{},
 						db.NewStaticCache[db.CacheKey, any](100, &db.CacheMissingValue{})),
 					IDHasher: common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt")),
@@ -196,7 +198,9 @@ func TestHandlePropertiesRechecksChallengeSupport(t *testing.T) {
 				if disabledBy == "MemoryBudget" {
 					budget.value = "0"
 				} else {
-					srv.FeatureFlags = stubFeatureFlags(false)
+					srv.FeatureFlags = featureFlagsFunc(func(_ context.Context, feature string, _, _ *int32) bool {
+						return feature != common.FeatureArgon2ID
+					})
 				}
 				budget.reads = 0
 				var data []byte
