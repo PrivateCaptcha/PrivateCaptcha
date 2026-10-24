@@ -1,6 +1,7 @@
 package common
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 )
@@ -68,22 +69,45 @@ func TestMaskEmail(t *testing.T) {
 
 func TestCleanupDomain(t *testing.T) {
 	testCases := []struct {
-		domain   string
-		expected string
+		domain      string
+		expected    string
+		expectError bool
 	}{
-		{"bar.com", "bar.com"},
-		{"bar.com/", "bar.com"},
-		{"bar.com/api", "bar.com"},
-		{"bar.com/index.html", "bar.com"},
-		{"http://bar.com", "bar.com"},
-		{"http://bar.com/index.html", "bar.com"},
-		{"https://bar.com", "bar.com"},
-		{"https://bar.com/api", "bar.com"},
+		{"bar.com", "bar.com", false},
+		{"bar.com/", "bar.com", false},
+		{"bar.com/api", "bar.com", false},
+		{"bar.com/index.html", "bar.com", false},
+		{"http://bar.com", "bar.com", false},
+		{"http://bar.com/index.html", "bar.com", false},
+		{"https://bar.com", "bar.com", false},
+		{"https://bar.com/api", "bar.com", false},
+		// An empty raw input is rejected.
+		{"", "", true},
+		// A non-empty raw input that parses to an empty domain must also be
+		// rejected, otherwise callers that gate an any-domain capability on
+		// the parsed result could be bypassed with inputs like "/".
+		{"/", "", true},
+		{"http://:8080", "", true},
+		// "//" does not parse to empty (it yields "/"), so it is not an error
+		// here; downstream validators (IDNA/origin checks) reject it instead.
+		{"//", "/", false},
 	}
 
 	for i, tc := range testCases {
 		t.Run(fmt.Sprintf("cleanupDomain_%v", i), func(t *testing.T) {
 			actual, err := ParseDomainName(tc.domain)
+			if tc.expectError {
+				if err == nil {
+					t.Fatalf("ParseDomainName(%q) expected an error, got %q", tc.domain, actual)
+				}
+				if !errors.Is(err, ErrEmptyDomain) {
+					t.Fatalf("ParseDomainName(%q) expected ErrEmptyDomain, got %v", tc.domain, err)
+				}
+				if actual != "" {
+					t.Fatalf("ParseDomainName(%q) expected empty domain on error, got %q", tc.domain, actual)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"math"
@@ -263,28 +264,38 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 
 		namesMap[name] = struct{}{}
 
+		// Parse the domain once and gate on the parsed value. A non-empty raw
+		// input that parses to an empty domain (e.g. "/" or "http://:8080") is
+		// governed by the same FeatureEmptyDomains gate as an explicit empty
+		// domain, so the gate cannot be bypassed by inputs that merely look
+		// non-empty before parsing.
+		domain := ""
 		if len(input.Domain) > 0 {
-			domain, err := common.ParseDomainName(input.Domain)
-			if err != nil {
+			parsed, err := common.ParseDomainName(input.Domain)
+			if err != nil && !errors.Is(err, common.ErrEmptyDomain) {
 				ilog.WarnContext(ctx, "Failed to parse domain name", common.ErrAttr(err))
 				return nil, common.StatusPropertyDomainFormatError, nil
 			}
-
-			if common.IsLocalhost(domain) {
-				ilog.WarnContext(ctx, "Property domain name is localhost")
-				return nil, common.StatusPropertyDomainLocalhostError, nil
+			if err == nil {
+				domain = parsed
+				if common.IsLocalhost(domain) {
+					ilog.WarnContext(ctx, "Property domain name is localhost")
+					return nil, common.StatusPropertyDomainLocalhostError, nil
+				}
+				if common.IsIPAddress(domain) {
+					ilog.WarnContext(ctx, "Property domain name is IP")
+					return nil, common.StatusPropertyDomainIPAddrError, nil
+				}
+				if _, err := idna.Lookup.ToASCII(domain); err != nil {
+					ilog.WarnContext(ctx, "Failed to convert domain name to ASCII", common.ErrAttr(err))
+					return nil, common.StatusPropertyDomainNameInvalidError, nil
+				}
 			}
+			// err == ErrEmptyDomain: a non-empty raw input parsed to empty;
+			// leave domain == "" so the feature-flag gate below decides it.
+		}
 
-			if common.IsIPAddress(domain) {
-				ilog.WarnContext(ctx, "Property domain name is IP")
-				return nil, common.StatusPropertyDomainIPAddrError, nil
-			}
-
-			if _, err := idna.Lookup.ToASCII(domain); err != nil {
-				ilog.WarnContext(ctx, "Failed to convert domain name to ASCII", common.ErrAttr(err))
-				return nil, common.StatusPropertyDomainNameInvalidError, nil
-			}
-		} else if !canUseEmptyDomains {
+		if domain == "" && !canUseEmptyDomains {
 			ilog.WarnContext(ctx, "Property domain is empty")
 			return nil, common.StatusPropertyDomainEmptyError, nil
 		}
@@ -461,7 +472,6 @@ func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user
 	results := make([]*operationResult, 0, len(params.Properties))
 	limitCheckIndex := 1
 	canUseArgon2ID := s.canUseArgon2ID(ctx, &user.ID, &org.ID)
-	canUseEmptyDomains := s.FeatureFlags.Enabled(ctx, common.FeatureEmptyDomains, &user.ID, &org.ID)
 
 	for i, property := range params.Properties {
 		if i > 0 {
@@ -475,13 +485,14 @@ func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user
 		// TODO: Create properties in batches instead of one by one
 		// the only reason why it's not done is that it's not clear if this is a bottleneck right now AND
 		// maybe it will not be the most popular API
+		//
+		// The empty-domain FeatureEmptyDomains gate is enforced inside
+		// doCreateProperty on the parsed domain, so raw inputs that parse to
+		// empty (e.g. "/") cannot bypass it here.
 		var status common.StatusCode
 		if !canUseArgon2ID && property.Challenge == string(dbgen.ChallengeTypeArgon2ID) {
 			tlog.WarnContext(ctx, "Property challenge is not supported", "index", i, "challenge", property.Challenge)
 			status = common.StatusPropertyChallengeUnsupportedError
-		} else if !canUseEmptyDomains && len(property.Domain) == 0 {
-			tlog.WarnContext(ctx, "Property domain is empty", "index", i)
-			status = common.StatusPropertyDomainEmptyError
 		} else {
 			status = s.doCreateProperty(ctx, tlog.With("index", i), property, user, org)
 		}
@@ -510,10 +521,22 @@ func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, proper
 	if len(property.Domain) > 0 {
 		var err error
 		domain, err = common.ParseDomainName(property.Domain)
-		if err != nil {
+		if err != nil && !errors.Is(err, common.ErrEmptyDomain) {
 			tlog.WarnContext(ctx, "Failed to parse domain name", "domain", property.Domain, common.ErrAttr(err))
 			return common.StatusPropertyDomainFormatError
 		}
+		// err == ErrEmptyDomain: a non-empty raw input parsed to empty (e.g.
+		// "/" or "http://:8080"). domain stays "" and is governed by the
+		// FeatureEmptyDomains gate below, so it cannot sneak through as an
+		// any-domain property when the flag is disabled.
+	}
+
+	// Defense in depth: gate the parsed domain (not the raw user input) with
+	// the feature flag. This is the worker's second chance to reject an
+	// empty-domain property after the synchronous request parser.
+	if domain == "" && !s.FeatureFlags.Enabled(ctx, common.FeatureEmptyDomains, &user.ID, &org.ID) {
+		tlog.WarnContext(ctx, "Property domain is empty")
+		return common.StatusPropertyDomainEmptyError
 	}
 
 	// NOTE: we do NOT validate property name "for real" (against other org properties) due to too many DB roundtrips.

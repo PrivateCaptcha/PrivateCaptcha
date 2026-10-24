@@ -20,7 +20,7 @@ import (
 var (
 	ErrBackpressure            = errors.New("backpressure error")
 	HeaderValueContentTypeJSON = []string{ContentTypeJSON}
-	errEmptyDomain             = errors.New("domain name is empty")
+	ErrEmptyDomain             = errors.New("domain name is empty")
 )
 
 func RelURL(prefix, url string) string {
@@ -254,7 +254,7 @@ func GuessFirstName(username string, email string) string {
 
 func ParseDomainName(input string) (string, error) {
 	if len(input) == 0 {
-		return "", errEmptyDomain
+		return "", ErrEmptyDomain
 	}
 	parsedURL, err := url.Parse(input)
 	if err != nil {
@@ -272,10 +272,18 @@ func ParseDomainName(input string) (string, error) {
 		if colonIndex := strings.LastIndex(domain, ":"); colonIndex != -1 {
 			domain = domain[:colonIndex]
 		}
-		return domain, nil
+	} else {
+		// Hostname() correctly strips both ":port" and IPv6 "[...]" brackets
+		domain = parsedURL.Hostname()
 	}
-	// Hostname() correctly strips both ":port" and IPv6 "[...]" brackets
-	return parsedURL.Hostname(), nil
+	// A non-empty input must not parse to an empty domain. Otherwise callers
+	// that gate an "empty/any domain" capability on the parsed result (such as
+	// the FeatureEmptyDomains API gate) could be bypassed with raw inputs that
+	// merely look non-empty before parsing, e.g. "/" or "http://:8080".
+	if domain == "" {
+		return "", ErrEmptyDomain
+	}
+	return domain, nil
 }
 
 func IsLocalhost(address string) bool {
