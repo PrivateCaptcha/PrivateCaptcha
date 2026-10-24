@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"math"
@@ -263,28 +264,33 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 
 		namesMap[name] = struct{}{}
 
+		domain := ""
 		if len(input.Domain) > 0 {
-			domain, err := common.ParseDomainName(input.Domain)
-			if err != nil {
+			parsed, err := common.ParseDomainName(input.Domain)
+			if err != nil && !errors.Is(err, common.ErrEmptyDomain) {
 				ilog.WarnContext(ctx, "Failed to parse domain name", common.ErrAttr(err))
 				return nil, common.StatusPropertyDomainFormatError, nil
 			}
-
-			if common.IsLocalhost(domain) {
-				ilog.WarnContext(ctx, "Property domain name is localhost")
-				return nil, common.StatusPropertyDomainLocalhostError, nil
+			if err == nil {
+				domain = parsed
+				if common.IsLocalhost(domain) {
+					ilog.WarnContext(ctx, "Property domain name is localhost")
+					return nil, common.StatusPropertyDomainLocalhostError, nil
+				}
+				if common.IsIPAddress(domain) {
+					ilog.WarnContext(ctx, "Property domain name is IP")
+					return nil, common.StatusPropertyDomainIPAddrError, nil
+				}
+				if _, err := idna.Lookup.ToASCII(domain); err != nil {
+					ilog.WarnContext(ctx, "Failed to convert domain name to ASCII", common.ErrAttr(err))
+					return nil, common.StatusPropertyDomainNameInvalidError, nil
+				}
 			}
+			// err == ErrEmptyDomain: a non-empty raw input parsed to empty;
+			// leave domain == "" so the feature-flag gate below decides it.
+		}
 
-			if common.IsIPAddress(domain) {
-				ilog.WarnContext(ctx, "Property domain name is IP")
-				return nil, common.StatusPropertyDomainIPAddrError, nil
-			}
-
-			if _, err := idna.Lookup.ToASCII(domain); err != nil {
-				ilog.WarnContext(ctx, "Failed to convert domain name to ASCII", common.ErrAttr(err))
-				return nil, common.StatusPropertyDomainNameInvalidError, nil
-			}
-		} else if !canUseEmptyDomains {
+		if (len(domain) == 0) && !canUseEmptyDomains {
 			ilog.WarnContext(ctx, "Property domain is empty")
 			return nil, common.StatusPropertyDomainEmptyError, nil
 		}
@@ -479,11 +485,11 @@ func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user
 		if !canUseArgon2ID && property.Challenge == string(dbgen.ChallengeTypeArgon2ID) {
 			tlog.WarnContext(ctx, "Property challenge is not supported", "index", i, "challenge", property.Challenge)
 			status = common.StatusPropertyChallengeUnsupportedError
-		} else if !canUseEmptyDomains && len(property.Domain) == 0 {
+		} else if !canUseEmptyDomains && (len(property.Domain) == 0) {
 			tlog.WarnContext(ctx, "Property domain is empty", "index", i)
 			status = common.StatusPropertyDomainEmptyError
 		} else {
-			status = s.doCreateProperty(ctx, tlog.With("index", i), property, user, org)
+			status = s.doCreateProperty(ctx, tlog.With("index", i), property, user, org, canUseEmptyDomains)
 		}
 		results = append(results, &operationResult{Code: status})
 
@@ -503,17 +509,22 @@ func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user
 	return results, nil
 }
 
-func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, property *apiCreatePropertyInput, user *dbgen.User, org *dbgen.Organization) common.StatusCode {
+func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, property *apiCreatePropertyInput, user *dbgen.User, org *dbgen.Organization, canUseEmptyDomain bool) common.StatusCode {
 	// this should have been filtered out when we validated user request
 	// but we repeat this here because we save to DB _exact_ user request
 	domain := ""
 	if len(property.Domain) > 0 {
 		var err error
 		domain, err = common.ParseDomainName(property.Domain)
-		if err != nil {
+		if err != nil && !errors.Is(err, common.ErrEmptyDomain) {
 			tlog.WarnContext(ctx, "Failed to parse domain name", "domain", property.Domain, common.ErrAttr(err))
 			return common.StatusPropertyDomainFormatError
 		}
+	}
+
+	if (len(domain) == 0) && !canUseEmptyDomain {
+		tlog.WarnContext(ctx, "Property domain is empty")
+		return common.StatusPropertyDomainEmptyError
 	}
 
 	// NOTE: we do NOT validate property name "for real" (against other org properties) due to too many DB roundtrips.

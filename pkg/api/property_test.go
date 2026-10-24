@@ -466,12 +466,37 @@ func TestPropertyAPIDoesNotExposeWidgetStartMode(t *testing.T) {
 func TestEdgeTokenSettingRequiresSigner(t *testing.T) {
 	s := &Server{IDHasher: common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "test"))}
 	create := &apiCreatePropertyInput{Domain: "example.com", apiPropertySettings: apiPropertySettings{Name: "Test", EdgeTokenValiditySeconds: new(3600)}}
-	if code := s.doCreateProperty(t.Context(), slog.Default(), create, &dbgen.User{}, &dbgen.Organization{}); code.Success() {
+	if code := s.doCreateProperty(t.Context(), slog.Default(), create, &dbgen.User{}, &dbgen.Organization{}, false); code.Success() {
 		t.Fatal("create accepted edge lifetime without signing key")
 	}
 	update := &apiUpdatePropertyInput{ID: s.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Test", EdgeTokenValiditySeconds: new(3600)}}
 	if code := s.doUpdateProperty(t.Context(), slog.Default(), update, &dbgen.User{}, &dbgen.Organization{}); code.Success() {
 		t.Fatal("update accepted edge lifetime without signing key")
+	}
+}
+
+func TestDoCreatePropertyRejectsParsedEmptyDomain(t *testing.T) {
+	// The worker's per-property creator must reject parsed-empty domains when
+	// FeatureEmptyDomains is disabled, even if the raw input is non-empty (e.g.
+	// "/" or "http://:8080"). This returns at the feature-flag gate, so it does
+	// not require a database or edge-token signer and runs under -short.
+	s := &Server{FeatureFlags: stubFeatureFlags(false)}
+	cases := []struct {
+		name   string
+		domain string
+	}{
+		{"EmptyString", ""},
+		{"Slash", "/"},
+		{"HostOnlyPort", "http://:8080"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			property := &apiCreatePropertyInput{Domain: tc.domain, apiPropertySettings: apiPropertySettings{Name: "Test"}}
+			code := s.doCreateProperty(t.Context(), slog.Default(), property, &dbgen.User{}, &dbgen.Organization{}, false)
+			if code != common.StatusPropertyDomainEmptyError {
+				t.Fatalf("doCreateProperty(Domain=%q) = %s, want %s", tc.domain, code, common.StatusPropertyDomainEmptyError)
+			}
+		})
 	}
 }
 
@@ -1118,15 +1143,28 @@ func TestApiPostPropertiesEmptyDomain(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	t.Run("FeatureEnabled", func(t *testing.T) {
-		apiPostPropertiesEmptyDomainSuite(t, true)
-	})
-	t.Run("FeatureDisabled", func(t *testing.T) {
-		apiPostPropertiesEmptyDomainSuite(t, false)
-	})
+	// Each of these raw inputs parses to an empty domain and must be governed
+	// by the same FeatureEmptyDomains gate as an explicit empty string, so the
+	// gate cannot be bypassed by an input that merely looks non-empty.
+	cases := []struct {
+		name   string
+		domain string
+	}{
+		{"EmptyString", ""},
+		{"Slash", "/"},
+		{"HostOnlyPort", "http://:8080"},
+	}
+	for _, tc := range cases {
+		t.Run("FeatureEnabled"+tc.name, func(t *testing.T) {
+			apiPostPropertiesEmptyDomainSuite(t, true, tc.domain)
+		})
+		t.Run("FeatureDisabled"+tc.name, func(t *testing.T) {
+			apiPostPropertiesEmptyDomainSuite(t, false, tc.domain)
+		})
+	}
 }
 
-func apiPostPropertiesEmptyDomainSuite(t *testing.T, enabled bool) {
+func apiPostPropertiesEmptyDomainSuite(t *testing.T, enabled bool, rawDomain string) {
 	t.Helper()
 	ctx := common.TraceContext(t.Context(), t.Name())
 
@@ -1145,7 +1183,7 @@ func apiPostPropertiesEmptyDomainSuite(t *testing.T, enabled bool) {
 			AllowSubdomains: new(true),
 			AllowLocalhost:  new(true),
 		},
-		Domain: "",
+		Domain: rawDomain,
 	}}
 
 	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, inputs,
