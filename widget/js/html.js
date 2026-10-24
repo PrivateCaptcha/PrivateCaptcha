@@ -212,6 +212,7 @@ export class CaptchaElement extends SafeHTMLElement {
 
         this.render(state, canShow);
         this._state = state;
+        this.setAttribute('data-state', state);
 
         return true;
     }

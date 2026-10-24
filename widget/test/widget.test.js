@@ -133,6 +133,7 @@ test('load mode fetches and finishes on its own, including after reset', { timeo
         }, false, SolvingWorker);
         assert.strictEqual(fetches, 1, 'load mode fetches before focus or click');
         assert.strictEqual(widget._state, STATE_LOADING);
+        assert.strictEqual(element.querySelector('private-captcha').getAttribute('data-state'), 'loading');
         assert.strictEqual(widget.solution(), null, 'nothing solved before puzzle arrives');
         let starts = 0;
         element.addEventListener('privatecaptcha:start', () => { starts++; });
@@ -145,6 +146,7 @@ test('load mode fetches and finishes on its own, including after reset', { timeo
         await finished;
         assert.strictEqual(starts, 1);
         assert.strictEqual(widget._state, STATE_VERIFIED);
+        assert.strictEqual(element.querySelector('private-captcha').getAttribute('data-state'), 'verified');
         assert.strictEqual(widget._userStarted, false);
         assert.strictEqual(widget._apiTriggered, false);
         assert.ok(widget.solution(), 'load mode exposes the solution without user action');
@@ -153,6 +155,7 @@ test('load mode fetches and finishes on its own, including after reset', { timeo
         const finishedAgain = waitForFinish();
         widget.reset();
         assert.strictEqual(fetches, 2, 'reset starts a new load');
+        assert.strictEqual(element.querySelector('private-captcha').getAttribute('data-state'), 'loading');
         releasePuzzle();
         await finishedAgain;
         assert.strictEqual(starts, 2);
@@ -174,6 +177,7 @@ test('auto and click modes do not fetch on construction', async () => {
         for (const mode of ['auto', 'click']) {
             document.body.innerHTML = `<form><div class="private-captcha" data-sitekey="${testSitekey}" data-start-mode="${mode}"></div></form>`;
             new CaptchaWidget(document.querySelector('.private-captcha'));
+            assert.strictEqual(document.querySelector('private-captcha').getAttribute('data-state'), 'empty');
         }
         assert.strictEqual(fetches, 0);
     } finally {
@@ -379,6 +383,7 @@ test('CaptchaWidget execute() in click popup mode keeps checkbox unchecked until
 
     const pcElement = element.querySelector('private-captcha');
     assert.ok(pcElement, 'Should find private-captcha element');
+    assert.strictEqual(pcElement.getAttribute('data-state'), 'empty', 'Published state follows the UI during background solving');
     const checkboxEl = pcElement.shadowRoot.querySelector('input[type="checkbox"]');
     assert.ok(checkboxEl, 'Should still show an unchecked checkbox');
     assert.strictEqual(checkboxEl.checked, false, 'Checkbox should remain unchecked');
@@ -404,6 +409,7 @@ test('CaptchaWidget execute() in click popup mode keeps checkbox unchecked until
 
     assert.strictEqual(finishEventFired, true, 'Finish event should fire after user clicks');
     assert.strictEqual(callbackCalled, true, 'Finished callback should run after user clicks');
+    assert.strictEqual(pcElement.getAttribute('data-state'), 'verified');
     assert.ok(widget.solution(), 'Solution should be exposed after user clicks');
 
     console.log('✓ Widget click popup execute test passed');
@@ -557,6 +563,7 @@ test('CaptchaWidget execute() fires started event and callback', async (t) => {
 
     assert.strictEqual(eventFired, true, 'privatecaptcha:start event should be fired');
     assert.strictEqual(callbackCalled, true, 'Started callback should be called');
+    assert.strictEqual(element.querySelector('private-captcha').getAttribute('data-state'), 'inprogress');
 
     console.log('✓ Widget started test passed');
 });
@@ -634,6 +641,7 @@ test('CaptchaWidget checkConfigured() shows invalid state without sitekey', asyn
     assert.ok(shadowRoot, 'Should have shadow root');
     const checkboxEl = shadowRoot.querySelector('input[type="checkbox"].invalid');
     assert.ok(checkboxEl, 'Should have invalid checkbox in invalid state');
+    assert.strictEqual(pcElement.getAttribute('data-state'), 'invalid');
 
     console.log('✓ Widget checkConfigured test passed');
 });
@@ -730,6 +738,7 @@ test('CaptchaWidget reset() clears internal state', async (t) => {
     });
 
     // Manually set internal state to simulate a finished widget
+    widget.setProgressState('verified');
     widget._solution = 'test-solution';
     assert.strictEqual(widget.solution(), 'test-solution', 'Solution should be set');
 
@@ -753,6 +762,7 @@ test('CaptchaWidget reset() clears internal state', async (t) => {
     assert.ok(pcElement, 'Should find private-captcha element');
     assert.strictEqual(pcElement.getAttribute('theme'), 'dark', 'Theme should be updated to dark');
     assert.strictEqual(pcElement.getAttribute('lang'), 'fr', 'Lang should be updated to fr');
+    assert.strictEqual(pcElement.getAttribute('data-state'), 'empty');
 
     console.log('✓ Widget reset test passed');
 });
@@ -1319,6 +1329,7 @@ test('CaptchaWidget reports Argon2id provider initialization errors', async () =
     widget.onWorkerError(new Error('late worker failure'));
     assert.strictEqual(widget._state, STATE_ERROR);
     assert.strictEqual(element.querySelector('private-captcha')._state, STATE_ERROR);
+    assert.strictEqual(element.querySelector('private-captcha').getAttribute('data-state'), 'error');
     assert.strictEqual(errored, 1);
     assert.strictEqual(finished, 0);
     assert.strictEqual(widget.solution(), null);
