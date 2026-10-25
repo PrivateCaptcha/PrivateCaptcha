@@ -217,6 +217,7 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 		renderCtx.DomainError = domainStatus.String()
 		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate, IsNew: false}, nil
 	}
+	domain = strings.ToLower(domain)
 
 	renderCtx.URL = strings.TrimSpace(r.FormValue(common.ParamURL))
 	if len(renderCtx.URL) == 0 {

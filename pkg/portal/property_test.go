@@ -366,7 +366,7 @@ func TestPostNewOrgProperty(t *testing.T) {
 	}
 }
 
-func TestPostNewOrgPropertyAcceptsMixedCaseDomain(t *testing.T) {
+func TestPostNewOrgPropertyNormalizesDomainCase(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -413,8 +413,8 @@ func TestPostNewOrgPropertyAcceptsMixedCaseDomain(t *testing.T) {
 	if count := len(pp); count != 1 {
 		t.Fatalf("Unexpected number of properties in org: %v", count)
 	}
-	if pp[0].Domain != "Example.com" {
-		t.Errorf("Expected domain %q, got %q (raw input was %q)", "Example.com", pp[0].Domain, "Example.com")
+	if pp[0].Domain != "example.com" {
+		t.Errorf("Expected normalized domain %q, got %q (raw input was %q)", "example.com", pp[0].Domain, "Example.com")
 	}
 }
 

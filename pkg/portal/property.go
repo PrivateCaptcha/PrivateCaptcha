@@ -503,6 +503,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vi
 		renderCtx.DomainError = domainStatus.String()
 		return &ViewModel{Model: renderCtx, View: createPropertyTemplate, IsNew: false}, nil
 	}
+	domain = strings.ToLower(domain)
 
 	if limitError := s.validatePropertiesLimit(ctx, org, user); len(limitError) > 0 {
 		renderCtx.ErrorMessage = limitError

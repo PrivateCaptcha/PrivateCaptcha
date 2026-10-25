@@ -281,12 +281,11 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 					ilog.WarnContext(ctx, "Property domain name is IP")
 					return nil, common.StatusPropertyDomainIPAddrError, nil
 				}
-				ascii, err := idna.Lookup.ToASCII(domain)
-				if err != nil {
+				if _, err := idna.Lookup.ToASCII(domain); err != nil {
 					ilog.WarnContext(ctx, "Failed to convert domain name to ASCII", common.ErrAttr(err))
 					return nil, common.StatusPropertyDomainNameInvalidError, nil
 				}
-				domain = ascii
+				domain = strings.ToLower(domain)
 			}
 			// err == ErrEmptyDomain: a non-empty raw input parsed to empty;
 			// leave domain == "" so the feature-flag gate below decides it.
