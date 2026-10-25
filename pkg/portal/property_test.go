@@ -102,6 +102,31 @@ func TestValidateDomainNameRejectsEmptyNormalization(t *testing.T) {
 	}
 }
 
+func TestValidateDomainNameResolveBranch(t *testing.T) {
+	srv := &Server{}
+	ctx := t.Context()
+
+	t.Run("ResolveError", func(t *testing.T) {
+		got, status := srv.validateDomainName(ctx, "nonexistent-domain.invalid", false)
+		if status != common.StatusPropertyDomainResolveError {
+			t.Errorf("status = %v; want %v", status, common.StatusPropertyDomainResolveError)
+		}
+		if got != "" {
+			t.Errorf("domain = %q; want empty", got)
+		}
+	})
+
+	t.Run("ResolveSuccess", func(t *testing.T) {
+		got, status := srv.validateDomainName(ctx, "example.com", false)
+		if status != common.StatusOK {
+			t.Errorf("status = %v; want %v", status, common.StatusOK)
+		}
+		if got != "example.com" {
+			t.Errorf("domain = %q; want %q", got, "example.com")
+		}
+	})
+}
+
 func TestPropertyToUserPropertyEdgeValidity(t *testing.T) {
 	property := &dbgen.Property{ID: 1, OrgID: db.Int(2)}
 	for i, duration := range puzzle.ValidityDurations {
