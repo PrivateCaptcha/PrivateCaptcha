@@ -269,6 +269,7 @@ export class CaptchaElement extends SafeHTMLElement {
                 bindCheckEvent = true;
                 activeArea.appendChild(checkbox('error'));
                 activeArea.appendChild(label(strings[i18n.ERROR], CHECKBOX_ID));
+                showPopupIfNeeded = canShow;
                 break;
             default:
                 console.error(`[privatecaptcha][progress] unknown state: ${state}`);

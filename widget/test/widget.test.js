@@ -1467,6 +1467,100 @@ for (const mode of ['wasm', 'noble', 'blake']) {
     });
 }
 
+test('popup host stays floating in error state when canShow is true (regression for c2075296)', async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { STATE_ERROR, STATE_LOADING, DISPLAY_POPUP } = await import('../js/html.js');
+    document.body.innerHTML = `<form><div class="private-captcha-anchor"><div class="private-captcha"
+        data-display-mode="popup" data-start-mode="click"></div></div></form>`;
+    const element = document.querySelector('.private-captcha');
+
+    const widget = new CaptchaWidget(element, { sitekey: testSitekey });
+    const pcElement = element.querySelector('private-captcha');
+    assert.ok(pcElement, 'Should find private-captcha element');
+    assert.strictEqual(pcElement.getAttribute('display-mode'), DISPLAY_POPUP);
+
+    // Simulate an API-triggered (execute()) popup session: canShow evaluates true.
+    widget._apiTriggered = true;
+    widget.setState(STATE_LOADING);
+
+    widget.onWorkerError(new Error('solve failed'));
+
+    assert.strictEqual(widget._state, STATE_ERROR);
+    assert.strictEqual(pcElement._state, STATE_ERROR);
+    assert.strictEqual(pcElement.getAttribute('data-state'), 'error');
+    assert.ok(pcElement.classList.contains('floating'),
+        'popup host must be floating (visible) in error state when canShow is true');
+    assert.ok(!pcElement.classList.contains('hidden'),
+        'popup host must not be hidden in error state when canShow is true');
+
+    // The errored checkbox (retry affordance) must be rendered and reachable.
+    const checkboxEl = pcElement.shadowRoot.querySelector('input[type="checkbox"].error');
+    assert.ok(checkboxEl, 'errored retry checkbox should be rendered in error state');
+
+    // The same-state path in setState() must agree with the transition path.
+    widget.onWorkerError(new Error('late'));
+    assert.ok(pcElement.classList.contains('floating'),
+        'popup host must remain floating when setState(state, canShow) is re-applied for the same error state');
+    assert.strictEqual(pcElement._state, STATE_ERROR);
+
+    // Honoring canShow=false must hide the popup (e.g. background error with no user/api session).
+    pcElement.setState(STATE_ERROR, false);
+    assert.ok(pcElement.classList.contains('hidden'),
+        'popup host must become hidden when canShow is false in error state');
+    assert.ok(!pcElement.classList.contains('floating'));
+    // And re-applying canShow=true must restore visibility.
+    pcElement.setState(STATE_ERROR, true);
+    assert.ok(pcElement.classList.contains('floating'));
+    assert.ok(!pcElement.classList.contains('hidden'));
+});
+
+test('popup host stays floating in error state when user started solving (regression for c2075296)', async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { STATE_ERROR, STATE_IN_PROGRESS, DISPLAY_POPUP } = await import('../js/html.js');
+    document.body.innerHTML = `<form><div class="private-captcha-anchor"><div class="private-captcha"
+        data-display-mode="popup" data-start-mode="click"></div></div></form>`;
+    const element = document.querySelector('.private-captcha');
+
+    const widget = new CaptchaWidget(element, { sitekey: testSitekey });
+    const pcElement = element.querySelector('private-captcha');
+    assert.ok(pcElement, 'Should find private-captcha element');
+
+    // User clicked the checkbox, then a solve failure occurs.
+    widget._userStarted = true;
+    widget.setState(STATE_IN_PROGRESS);
+    widget.onWorkerError(new Error('user-precipitated solve failure'));
+
+    assert.strictEqual(widget._state, STATE_ERROR);
+    assert.strictEqual(pcElement._state, STATE_ERROR);
+    assert.ok(pcElement.classList.contains('floating'),
+        'popup host must remain floating after user-started solve failure');
+    assert.ok(!pcElement.classList.contains('hidden'));
+    const checkboxEl = pcElement.shadowRoot.querySelector('input[type="checkbox"].error');
+    assert.ok(checkboxEl, 'errored retry checkbox should be rendered and reachable');
+});
+
+test('popup host hides on error when no user/api session started (canShow false)', async () => {
+    const { CaptchaWidget } = await import('../js/widget.js');
+    const { STATE_ERROR, STATE_IN_PROGRESS, DISPLAY_POPUP } = await import('../js/html.js');
+    document.body.innerHTML = `<form><div class="private-captcha-anchor"><div class="private-captcha"
+        data-display-mode="popup" data-start-mode="auto"></div></div></form>`;
+    const element = document.querySelector('.private-captcha');
+
+    const widget = new CaptchaWidget(element, { sitekey: testSitekey });
+    const pcElement = element.querySelector('private-captcha');
+    assert.ok(pcElement, 'Should find private-captcha element');
+
+    // Background auto-start with no user click and no execute(): canShow is false.
+    widget.setState(STATE_IN_PROGRESS);
+    widget.onWorkerError(new Error('background solve failure'));
+
+    assert.strictEqual(widget._state, STATE_ERROR);
+    assert.strictEqual(pcElement._state, STATE_ERROR);
+    assert.ok(pcElement.classList.contains('hidden'),
+        'popup host must remain hidden when error occurs without a user/api session');
+    assert.ok(!pcElement.classList.contains('floating'));
+});
+
 test('CaptchaWidget handles synchronous solve dispatch failures without leaving a spinner', async () => {
     const { CaptchaWidget } = await import('../js/widget.js');
     const { WorkersPool } = await import('../js/workerspool.js');
