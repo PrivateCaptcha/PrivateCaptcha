@@ -83,6 +83,7 @@ func TestValidateDomainNameRejectsEmptyNormalization(t *testing.T) {
 		{name: "Localhost", domain: "localhost", ignoreResolve: true, wantStatus: common.StatusPropertyDomainLocalhostError, wantDomain: ""},
 		{name: "IPv4", domain: "8.8.8.8", ignoreResolve: true, wantStatus: common.StatusPropertyDomainIPAddrError, wantDomain: ""},
 		{name: "Empty", domain: "", ignoreResolve: true, wantStatus: common.StatusPropertyDomainEmptyError, wantDomain: ""},
+		{name: "InvalidIDNA", domain: "_.example.com", ignoreResolve: true, wantStatus: common.StatusPropertyDomainNameInvalidError, wantDomain: ""},
 		{name: "ValidMixedCaseIgnoredResolve", domain: "Example.com", ignoreResolve: true, wantStatus: common.StatusOK, wantDomain: "example.com", wantNonEmptyOK: true},
 	}
 
@@ -125,6 +126,34 @@ func TestValidateDomainNameResolveBranch(t *testing.T) {
 			t.Errorf("domain = %q; want %q", got, "example.com")
 		}
 	})
+}
+
+func TestRecheckNormalizedDomain(t *testing.T) {
+	ctx := t.Context()
+
+	tests := []struct {
+		name       string
+		domain     string
+		wantStatus common.StatusCode
+		wantOK     bool
+	}{
+		{name: "Empty", domain: "", wantStatus: common.StatusPropertyDomainEmptyError, wantOK: false},
+		{name: "Localhost", domain: "localhost", wantStatus: common.StatusPropertyDomainLocalhostError, wantOK: false},
+		{name: "IPv4", domain: "8.8.8.8", wantStatus: common.StatusPropertyDomainIPAddrError, wantOK: false},
+		{name: "Valid", domain: "example.com", wantStatus: common.StatusOK, wantOK: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status, ok := recheckNormalizedDomain(ctx, tt.domain)
+			if status != tt.wantStatus {
+				t.Errorf("status = %v; want %v", status, tt.wantStatus)
+			}
+			if ok != tt.wantOK {
+				t.Errorf("ok = %v; want %v", ok, tt.wantOK)
+			}
+		})
+	}
 }
 
 func TestPropertyToUserPropertyEdgeValidity(t *testing.T) {
