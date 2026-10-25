@@ -340,8 +340,12 @@ func (s *Server) validateDomainName(ctx context.Context, domain string, ignoreRe
 		return "", common.StatusPropertyDomainNameInvalidError
 	}
 
+	if status, ok := recheckNormalizedDomain(ctx, ascii); !ok {
+		return "", status
+	}
+
 	if ignoreResolveError {
-		slog.WarnContext(ctx, "Skipping resolving domain name", "domain", domain)
+		slog.WarnContext(ctx, "Skipping resolving domain name", "domain", ascii)
 		return ascii, common.StatusOK
 	}
 
@@ -373,6 +377,25 @@ func (s *Server) validateDomainName(ctx context.Context, domain string, ignoreRe
 	}
 
 	return "", common.StatusPropertyDomainResolveError
+}
+
+func recheckNormalizedDomain(ctx context.Context, domain string) (common.StatusCode, bool) {
+	if len(domain) == 0 {
+		slog.WarnContext(ctx, "Normalized domain name is empty")
+		return common.StatusPropertyDomainEmptyError, false
+	}
+
+	if common.IsLocalhost(domain) {
+		slog.WarnContext(ctx, "Normalized domain name is localhost", "domain", domain)
+		return common.StatusPropertyDomainLocalhostError, false
+	}
+
+	if common.IsIPAddress(domain) {
+		slog.WarnContext(ctx, "Normalized domain name is IP address", "domain", domain)
+		return common.StatusPropertyDomainIPAddrError, false
+	}
+
+	return common.StatusOK, true
 }
 
 func (s *Server) validatePropertiesLimit(ctx context.Context, org *dbgen.Organization, sessUser *dbgen.User) string {

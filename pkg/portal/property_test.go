@@ -66,6 +66,42 @@ func TestPropertyToUserPropertyDisplayDomain(t *testing.T) {
 	}
 }
 
+func TestValidateDomainNameRejectsEmptyNormalization(t *testing.T) {
+	srv := &Server{}
+	ctx := t.Context()
+
+	tests := []struct {
+		name            string
+		domain          string
+		ignoreResolve   bool
+		wantStatus      common.StatusCode
+		wantDomain      string
+		wantNonEmptyOK  bool
+	}{
+		{name: "SoftHyphenIgnoredResolve", domain: "\u00ad", ignoreResolve: true, wantStatus: common.StatusPropertyDomainEmptyError, wantDomain: ""},
+		{name: "SoftHyphenRepeated", domain: "\u00ad\u00ad\u00ad", ignoreResolve: true, wantStatus: common.StatusPropertyDomainEmptyError, wantDomain: ""},
+		{name: "Localhost", domain: "localhost", ignoreResolve: true, wantStatus: common.StatusPropertyDomainLocalhostError, wantDomain: ""},
+		{name: "IPv4", domain: "8.8.8.8", ignoreResolve: true, wantStatus: common.StatusPropertyDomainIPAddrError, wantDomain: ""},
+		{name: "Empty", domain: "", ignoreResolve: true, wantStatus: common.StatusPropertyDomainEmptyError, wantDomain: ""},
+		{name: "ValidMixedCaseIgnoredResolve", domain: "Example.com", ignoreResolve: true, wantStatus: common.StatusOK, wantDomain: "example.com", wantNonEmptyOK: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, status := srv.validateDomainName(ctx, tt.domain, tt.ignoreResolve)
+			if status != tt.wantStatus {
+				t.Errorf("status = %v; want %v", status, tt.wantStatus)
+			}
+			if got != tt.wantDomain {
+				t.Errorf("domain = %q; want %q", got, tt.wantDomain)
+			}
+			if tt.wantNonEmptyOK && got == "" {
+				t.Errorf("expected non-empty normalized domain for %q", tt.domain)
+			}
+		})
+	}
+}
+
 func TestPropertyToUserPropertyEdgeValidity(t *testing.T) {
 	property := &dbgen.Property{ID: 1, OrgID: db.Int(2)}
 	for i, duration := range puzzle.ValidityDurations {
