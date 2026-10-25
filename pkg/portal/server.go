@@ -177,6 +177,7 @@ type Server struct {
 	canRegister          atomic.Bool
 	SettingsTabs         []*SettingsTab
 	RateLimiter          ratelimit.HTTPRateLimiter
+	TestFormRateLimiter  ratelimit.HTTPRateLimiter
 	RenderConstants      interface{}
 	Jobs                 db.UserJobs
 	AsyncTasks           db.AsyncTasks
@@ -351,6 +352,45 @@ func (s *Server) MiddlewarePrivateWrite(public alice.Chain, timeout alice.Constr
 	return public.Append(s.Maintenance, defaultMaxBytesHandler, timeout, s.csrf(s.csrfAuthenticatedUserAuthorityKeyFunc), s.private)
 }
 
+const (
+	// testFormLeakyBucketCap/testFormLeakInterval encode the intended throttling
+	// for the POST .../form/{form}/test endpoint: a burst of 2 requests that
+	// replenishes 1 request every 5 seconds (i.e. 2 per 5 seconds sustained).
+	testFormLeakyBucketCap = 2
+	testFormLeakInterval   = 5 * time.Second
+	// maxTestFormBuckets bounds the number of distinct client IPs tracked by the
+	// dedicated test-form limiter before forcing eviction, matching the catch-all
+	// limiter's sizing policy in cmd/server/main.go.
+	maxTestFormBuckets = 1_000
+)
+
+// NewTestFormRateLimiter creates a dedicated rate limiter for the portal
+// test-form endpoint. A separate leakybucket.Manager is used on purpose: the
+// public/portal middleware chain already creates a per-IP bucket (via the
+// public-chain limiter) and later raises it to the authenticated (20, 1s)
+// defaults via UpdateRequestLimits. A limiter that shares that manager would
+// have its own (2, 5s) init parameters silently ignored for every existing
+// bucket (existing buckets keep their capacity/leak), so requests would be
+// charged against the permissive authenticated bucket instead. A dedicated
+// manager guarantees the configured (2, 5s) parameters actually apply to the
+// buckets this limiter creates and owns.
+func NewTestFormRateLimiter(header string) ratelimit.HTTPRateLimiter {
+	return ratelimit.NewIPAddrRateLimiter(header, ratelimit.NewIPAddrBuckets(maxTestFormBuckets, testFormLeakyBucketCap, testFormLeakInterval))
+}
+
+// testFormRateLimitView returns the rate-limiting view for the test-form
+// endpoint. It uses the explicitly configured TestFormRateLimiter when set
+// (production wiring in cmd/server/main.go, which knows the client-IP header),
+// and otherwise falls back to a dedicated limiter with the default per-IP
+// resolution. In both cases the underlying manager is distinct from the shared
+// per-IP limiter so the (2, 5s) parameters are honored.
+func (s *Server) testFormRateLimitView() func(http.Handler) http.Handler {
+	if s.TestFormRateLimiter != nil {
+		return s.TestFormRateLimiter.RateLimit
+	}
+	return NewTestFormRateLimiter("").RateLimit
+}
+
 func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Constructor) {
 	arg := func(s string) string {
 		return fmt.Sprintf("{%s}", s)
@@ -410,7 +450,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	)
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.SettingsEndpoint), privateRead, s.Handler(s.getFormSettingsTab))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getFormAuditLogsTab))
-	testFormRateLimiter := s.RateLimiter.RateLimitExFunc(2, 5*time.Second)
+	testFormRateLimiter := s.testFormRateLimitView()
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TestEndpoint), privateWrite.Append(testFormRateLimiter), s.Handler(s.postTestForm))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertiesEndpoint), privateRead, s.Handler(s.getOrgProperties))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.StatsEndpoint, arg(common.ParamPeriod)), privateRead, http.HandlerFunc(s.getOrgStats))

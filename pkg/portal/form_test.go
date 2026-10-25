@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -1459,5 +1460,98 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 				t.Fatalf("expected %d forms, got %d", tc.expectedCount, len(forms))
 			}
 		})
+	}
+}
+
+// TestPostTestFormRateLimitEnforcedThroughRouter is the end-to-end regression
+// test for the portal test-form rate limiter. It exercises the real middleware
+// chain (public shared limiter -> s.private -> dedicated test-form limiter ->
+// postTestForm) via the router registered by Server.Setup and fires rapid
+// test-form POSTs from a single client IP. The dedicated test-form limiter
+// must enforce the intended 2-per-5s burst: only 2 requests reach the handler
+// (and thus the downstream victim endpoint), the remaining 8 are rejected with
+// 429, and X-RateLimit-Limit reports 2 (not the permissive authenticated 20).
+//
+// Pre-fix, the limiter was appended to the SAME shared per-IP limiter whose
+// bucket s.private had just raised to (20, 1s); the (2, 5s) init parameters were
+// silently ignored and 10/10 requests were admitted with X-RateLimit-Limit=20.
+func TestPostTestFormRateLimitEnforcedThroughRouter(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var downstreamHits atomic.Int32
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		downstreamHits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "ratelimit-test.example.com"),
+		db_tests.CreateNewFormParams(user.ID, downstream.URL),
+		org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	const total = 10
+	admitted := 0
+	rejected := 0
+	lastLimitHeader := ""
+	for i := 0; i < total; i++ {
+		values := url.Values{}
+		values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+		values.Set(common.ParamBody, "email=test@example.com")
+
+		req := httptest.NewRequest(http.MethodPost,
+			fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint),
+			strings.NewReader(values.Encode()))
+		req.AddCookie(cookie)
+		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+		// Fixed client IP so all iterations hit the same per-IP bucket. The
+		// shared stub limiter (no header set on the request) and the dedicated
+		// fallback limiter both resolve this from RemoteAddr.
+		req.RemoteAddr = "198.51.100.77:7000"
+
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+		switch w.Code {
+		case http.StatusOK:
+			admitted++
+		case http.StatusTooManyRequests:
+			rejected++
+		default:
+			t.Errorf("unexpected status %d on test-form request %d", w.Code, i)
+		}
+		if h := w.Header().Get("X-RateLimit-Limit"); h != "" {
+			lastLimitHeader = h
+		}
+	}
+
+	if admitted != 2 {
+		t.Errorf("expected exactly 2 admitted test-form POSTs through the router (2-per-5s burst), got %d", admitted)
+	}
+	if rejected != total-2 {
+		t.Errorf("expected %d rejected test-form POSTs, got %d", total-2, rejected)
+	}
+	if got := downstreamHits.Load(); got != 2 {
+		t.Errorf("expected downstream endpoint to receive exactly 2 outbound POSTs (one per admitted request), got %d", got)
+	}
+	if lastLimitHeader != "2" {
+		t.Errorf("expected X-RateLimit-Limit=2 from the dedicated test-form limiter (set last), got %q", lastLimitHeader)
 	}
 }

@@ -286,6 +286,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Metrics:              metrics,
 		Mailer:               mailer,
 		RateLimiter:          ipRateLimiter,
+		TestFormRateLimiter:  portal.NewTestFormRateLimiter(rateLimitHeader),
 		DataCtx:              dataCtx,
 		Tips:                 tips,
 		IDHasher:             idHasher,
