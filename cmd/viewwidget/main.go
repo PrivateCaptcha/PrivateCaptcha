@@ -42,16 +42,22 @@ func main() {
 
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "0"
 	}
 
-	slog.Info("Starting", "address", fmt.Sprintf("http://%v:%v", host, port))
+	listener, err := net.Listen("tcp", net.JoinHostPort(host, port))
+	if err != nil {
+		slog.Error("Failed to listen", "error", err)
+		return
+	}
+
+	slog.Info("Starting", "address", fmt.Sprintf("http://%v", listener.Addr()))
 
 	s := &http.Server{
-		Addr:    net.JoinHostPort(host, port),
+		Addr:    listener.Addr().String(),
 		Handler: router,
 	}
-	err := s.ListenAndServe()
+	err = s.Serve(listener)
 	if err != nil && err != http.ErrServerClosed {
 		slog.Error("Server failed", "error", err)
 	}

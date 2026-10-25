@@ -7,6 +7,7 @@ import (
 	"log"
 	"log/slog"
 	randv2 "math/rand/v2"
+	"net"
 	"net/http"
 	"slices"
 	"sort"
@@ -397,7 +398,13 @@ func main() {
 	// page list available at /list
 	router.HandleFunc("/list", listPages)
 
-	log.Println("Listening at http://localhost:8083/")
-	log.Println("Page list at http://localhost:8083/list")
-	log.Fatal(http.ListenAndServe(":8083", router))
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		log.Fatalf("Failed to listen: %v", err)
+	}
+
+	port := listener.Addr().(*net.TCPAddr).Port
+	log.Printf("Listening at http://localhost:%d/", port)
+	log.Printf("Page list at http://localhost:%d/list", port)
+	log.Fatal(http.Serve(listener, router))
 }
