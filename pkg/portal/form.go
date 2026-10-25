@@ -813,6 +813,11 @@ func (s *Server) submitFormDirectly(ctx context.Context, form *dbgen.Form, submi
 
 func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
+
+	// always update rate limits here so next request consumes them next time in public/private
+	// RateLimitExFunc bucket will already be initialized and not updated (see AddEx in leakybucket/manager.go)
+	s.RateLimiter.UpdateRequestLimits(r, 2, 5*time.Second)
+
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, err
