@@ -353,6 +353,46 @@ func TestIsOriginAllowed(t *testing.T) {
 			allowSubdoms: true,
 			expected:     false,
 		},
+		{
+			name:         "MixedCaseDomainExactMatch",
+			origin:       "example.com",
+			domain:       "Example.com",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     true,
+		},
+		{
+			name:         "MixedCaseOriginExactMatch",
+			origin:       "Example.com",
+			domain:       "example.com",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     true,
+		},
+		{
+			name:         "AllCapsDomainExactMatch",
+			origin:       "example.com",
+			domain:       "EXAMPLE.COM",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     true,
+		},
+		{
+			name:         "MixedCaseDomainSubdomainAllowed",
+			origin:       "sub.example.com",
+			domain:       "Example.com",
+			allowLocal:   false,
+			allowSubdoms: true,
+			expected:     true,
+		},
+		{
+			name:         "MixedCaseDomainSubdomainMismatch",
+			origin:       "sub.other.com",
+			domain:       "Example.com",
+			allowLocal:   false,
+			allowSubdoms: true,
+			expected:     false,
+		},
 	}
 
 	for _, tt := range tests {

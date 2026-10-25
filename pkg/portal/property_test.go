@@ -66,6 +66,86 @@ func TestPropertyToUserPropertyDisplayDomain(t *testing.T) {
 	}
 }
 
+func TestValidateDomainNameRejectsEmptyNormalization(t *testing.T) {
+	srv := &Server{}
+	ctx := t.Context()
+
+	tests := []struct {
+		name          string
+		domain        string
+		ignoreResolve bool
+		wantStatus    common.StatusCode
+	}{
+		{name: "SoftHyphenIgnoredResolve", domain: "\u00ad", ignoreResolve: true, wantStatus: common.StatusPropertyDomainEmptyError},
+		{name: "SoftHyphenRepeated", domain: "\u00ad\u00ad\u00ad", ignoreResolve: true, wantStatus: common.StatusPropertyDomainEmptyError},
+		{name: "Localhost", domain: "localhost", ignoreResolve: true, wantStatus: common.StatusPropertyDomainLocalhostError},
+		{name: "IPv4", domain: "8.8.8.8", ignoreResolve: true, wantStatus: common.StatusPropertyDomainIPAddrError},
+		{name: "Empty", domain: "", ignoreResolve: true, wantStatus: common.StatusPropertyDomainEmptyError},
+		{name: "InvalidIDNA", domain: "_.example.com", ignoreResolve: true, wantStatus: common.StatusPropertyDomainNameInvalidError},
+		{name: "ValidMixedCaseIgnoredResolve", domain: "Example.com", ignoreResolve: true, wantStatus: common.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := srv.validateDomainName(ctx, tt.domain, tt.ignoreResolve)
+			if status != tt.wantStatus {
+				t.Errorf("status = %v; want %v", status, tt.wantStatus)
+			}
+		})
+	}
+}
+
+func TestValidateDomainNameResolveBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test that performs external DNS resolution")
+	}
+
+	srv := &Server{}
+	ctx := t.Context()
+
+	t.Run("ResolveError", func(t *testing.T) {
+		status := srv.validateDomainName(ctx, "nonexistent-domain.invalid", false)
+		if status != common.StatusPropertyDomainResolveError {
+			t.Errorf("status = %v; want %v", status, common.StatusPropertyDomainResolveError)
+		}
+	})
+
+	t.Run("ResolveSuccess", func(t *testing.T) {
+		status := srv.validateDomainName(ctx, "example.com", false)
+		if status != common.StatusOK {
+			t.Errorf("status = %v; want %v", status, common.StatusOK)
+		}
+	})
+}
+
+func TestValidateDomainBasics(t *testing.T) {
+	ctx := t.Context()
+
+	tests := []struct {
+		name       string
+		domain     string
+		wantStatus common.StatusCode
+		wantOK     bool
+	}{
+		{name: "Empty", domain: "", wantStatus: common.StatusPropertyDomainEmptyError, wantOK: false},
+		{name: "Localhost", domain: "localhost", wantStatus: common.StatusPropertyDomainLocalhostError, wantOK: false},
+		{name: "IPv4", domain: "8.8.8.8", wantStatus: common.StatusPropertyDomainIPAddrError, wantOK: false},
+		{name: "Valid", domain: "example.com", wantStatus: common.StatusOK, wantOK: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status, ok := validateDomainBasics(ctx, tt.domain)
+			if status != tt.wantStatus {
+				t.Errorf("status = %v; want %v", status, tt.wantStatus)
+			}
+			if ok != tt.wantOK {
+				t.Errorf("ok = %v; want %v", ok, tt.wantOK)
+			}
+		})
+	}
+}
+
 func TestPropertyToUserPropertyEdgeValidity(t *testing.T) {
 	property := &dbgen.Property{ID: 1, OrgID: db.Int(2)}
 	for i, duration := range puzzle.ValidityDurations {
@@ -287,6 +367,58 @@ func TestPostNewOrgProperty(t *testing.T) {
 		if pp[0].Name != propertyName {
 			t.Errorf("Unexpected property in org: %v", pp[0].Name)
 		}
+	}
+}
+
+func TestPostNewOrgPropertyNormalizesDomainCase(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	propertyName := t.Name() + "Property"
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, propertyName)
+	form.Set(common.ParamDomain, "Example.com")
+	form.Set(common.ParamIgnoreError, "true")
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", server.IDHasher.Encrypt(int(org.ID))),
+		strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	pp, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := len(pp); count != 1 {
+		t.Fatalf("Unexpected number of properties in org: %v", count)
+	}
+	if pp[0].Domain != "example.com" {
+		t.Errorf("Expected normalized domain %q, got %q (raw input was %q)", "example.com", pp[0].Domain, "Example.com")
 	}
 }
 

@@ -285,6 +285,7 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 					ilog.WarnContext(ctx, "Failed to convert domain name to ASCII", common.ErrAttr(err))
 					return nil, common.StatusPropertyDomainNameInvalidError, nil
 				}
+				domain = strings.ToLower(domain)
 			}
 			// err == ErrEmptyDomain: a non-empty raw input parsed to empty;
 			// leave domain == "" so the feature-flag gate below decides it.
@@ -295,6 +296,7 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 			return nil, common.StatusPropertyDomainEmptyError, nil
 		}
 
+		input.Domain = domain
 		inputs = append(inputs, &input)
 	}
 

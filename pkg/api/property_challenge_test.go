@@ -329,3 +329,49 @@ func TestAPIPropertiesFeatureFlag(t *testing.T) {
 		}
 	}
 }
+
+func TestReadCreatePropertiesRequestNormalizesDomainCase(t *testing.T) {
+	budget := &propertyBudgetConfigItem{value: "0"}
+	srv := &Server{
+		FeatureFlags: stubFeatureFlags(true),
+		BusinessDB: db.NewBusinessWithQuerier(nil, &db.QuerierStub{},
+			db.NewStaticCache[db.CacheKey, any](100, &db.CacheMissingValue{})),
+		IDHasher: common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt")),
+		Verifier: &Verifier{Argon2IDMemoryBudgetKey: budget},
+	}
+
+	cases := []struct {
+		name   string
+		input  string
+		want   string
+		status common.StatusCode
+	}{
+		{name: "MixedCaseASCII", input: "Example.com", want: "example.com", status: common.StatusOK},
+		{name: "AllCapsASCII", input: "EXAMPLE.COM", want: "example.com", status: common.StatusOK},
+		{name: "MixedCaseSubdomain", input: "sub.Example.com", want: "sub.example.com", status: common.StatusOK},
+		{name: "LowercaseUnchanged", input: "example.com", want: "example.com", status: common.StatusOK},
+		{name: "SchemeMixedCase", input: "https://Example.com", want: "example.com", status: common.StatusOK},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := fmt.Sprintf(`[{"name":"Test Property","domain":%q}]`, tc.input)
+			request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+			request.Header.Set(common.HeaderContentType, common.ContentTypeJSON)
+
+			inputs, status, err := srv.readCreatePropertiesRequest(t.Context(), request, 1, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if status != tc.status {
+				t.Fatalf("status = %s, want %s", status, tc.status)
+			}
+			if len(inputs) != 1 {
+				t.Fatalf("input count = %d, want 1", len(inputs))
+			}
+			if inputs[0].Domain != tc.want {
+				t.Errorf("normalized domain = %q, want %q (raw input was %q)", inputs[0].Domain, tc.want, tc.input)
+			}
+		})
+	}
+}
