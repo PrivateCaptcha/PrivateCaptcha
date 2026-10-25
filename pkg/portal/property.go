@@ -321,32 +321,24 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vie
 	return &ViewModel{Model: data, View: propertyWizardTemplate, IsNew: true}, nil
 }
 
-func (s *Server) validateDomainName(ctx context.Context, domain string, ignoreResolveError bool) (string, common.StatusCode) {
-	if len(domain) == 0 {
-		return "", common.StatusPropertyDomainEmptyError
-	}
-
-	if common.IsLocalhost(domain) {
-		return "", common.StatusPropertyDomainLocalhostError
-	}
-
-	if common.IsIPAddress(domain) {
-		return "", common.StatusPropertyDomainIPAddrError
+func (s *Server) validateDomainName(ctx context.Context, domain string, ignoreResolveError bool) common.StatusCode {
+	if status, ok := validateDomainBasics(ctx, domain); !ok {
+		return status
 	}
 
 	ascii, err := idna.Lookup.ToASCII(domain)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to convert domain name to ASCII", "domain", domain, common.ErrAttr(err))
-		return "", common.StatusPropertyDomainNameInvalidError
+		return common.StatusPropertyDomainNameInvalidError
 	}
 
-	if status, ok := recheckNormalizedDomain(ctx, ascii); !ok {
-		return "", status
+	if status, ok := validateDomainBasics(ctx, ascii); !ok {
+		return status
 	}
 
 	if ignoreResolveError {
 		slog.WarnContext(ctx, "Skipping resolving domain name", "domain", ascii)
-		return ascii, common.StatusOK
+		return common.StatusOK
 	}
 
 	const timeout = 3 * time.Second
@@ -365,33 +357,36 @@ func (s *Server) validateDomainName(ctx context.Context, domain string, ignoreRe
 
 		if !anyNonLocal {
 			slog.WarnContext(ctx, "Only loopback IPs are resolved", "domain", ascii, "first", names[0])
-			return "", common.StatusPropertyDomainLocalhostError
+			return common.StatusPropertyDomainLocalhostError
 		}
 
 		slog.DebugContext(ctx, "Resolved domain name", "domain", ascii, "ips", len(names), "first", names[0])
-		return ascii, common.StatusOK
+		return common.StatusOK
 	}
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to resolve domain name", "domain", ascii, common.ErrAttr(err))
 	}
 
-	return "", common.StatusPropertyDomainResolveError
+	return common.StatusPropertyDomainResolveError
 }
 
-func recheckNormalizedDomain(ctx context.Context, domain string) (common.StatusCode, bool) {
+// validateDomainBasics performs the basic domain validation checks (non-empty,
+// not localhost, not an IP address) shared between the raw and IDNA-normalized
+// inputs. It returns the failing status and false when the domain is invalid.
+func validateDomainBasics(ctx context.Context, domain string) (common.StatusCode, bool) {
 	if len(domain) == 0 {
-		slog.WarnContext(ctx, "Normalized domain name is empty")
+		slog.WarnContext(ctx, "Domain name is empty")
 		return common.StatusPropertyDomainEmptyError, false
 	}
 
 	if common.IsLocalhost(domain) {
-		slog.WarnContext(ctx, "Normalized domain name is localhost", "domain", domain)
+		slog.WarnContext(ctx, "Domain name is localhost", "domain", domain)
 		return common.StatusPropertyDomainLocalhostError, false
 	}
 
 	if common.IsIPAddress(domain) {
-		slog.WarnContext(ctx, "Normalized domain name is IP address", "domain", domain)
+		slog.WarnContext(ctx, "Domain name is IP address", "domain", domain)
 		return common.StatusPropertyDomainIPAddrError, false
 	}
 
@@ -504,12 +499,10 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vi
 	}
 
 	_, ignoreError := r.Form[common.ParamIgnoreError]
-	normalizedDomain, domainStatus := s.validateDomainName(ctx, domain, ignoreError)
-	if !domainStatus.Success() {
+	if domainStatus := s.validateDomainName(ctx, domain, ignoreError); !domainStatus.Success() {
 		renderCtx.DomainError = domainStatus.String()
 		return &ViewModel{Model: renderCtx, View: createPropertyTemplate, IsNew: false}, nil
 	}
-	domain = normalizedDomain
 
 	if limitError := s.validatePropertiesLimit(ctx, org, user); len(limitError) > 0 {
 		renderCtx.ErrorMessage = limitError

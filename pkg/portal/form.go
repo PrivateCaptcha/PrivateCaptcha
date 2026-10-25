@@ -213,12 +213,10 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 	}
 
 	_, ignoreError := r.Form[common.ParamIgnoreError]
-	normalizedDomain, domainStatus := s.validateDomainName(ctx, domain, ignoreError)
-	if !domainStatus.Success() {
+	if domainStatus := s.validateDomainName(ctx, domain, ignoreError); !domainStatus.Success() {
 		renderCtx.DomainError = domainStatus.String()
 		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate, IsNew: false}, nil
 	}
-	domain = normalizedDomain
 
 	renderCtx.URL = strings.TrimSpace(r.FormValue(common.ParamURL))
 	if len(renderCtx.URL) == 0 {

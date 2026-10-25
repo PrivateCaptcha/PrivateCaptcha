@@ -223,7 +223,7 @@ func TestPostNewOrgForm(t *testing.T) {
 	}
 }
 
-func TestPostNewOrgFormNormalizesDomainCase(t *testing.T) {
+func TestPostNewOrgFormAcceptsMixedCaseDomain(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -282,8 +282,8 @@ func TestPostNewOrgFormNormalizesDomainCase(t *testing.T) {
 	if createdProperty == nil {
 		t.Fatal("expected backing property to exist")
 	}
-	if createdProperty.Domain != "example.com" {
-		t.Errorf("expected normalized backing property domain %q, got %q (raw input was %q)", "example.com", createdProperty.Domain, "Example.com")
+	if createdProperty.Domain != "Example.com" {
+		t.Errorf("expected backing property domain %q, got %q (raw input was %q)", "Example.com", createdProperty.Domain, "Example.com")
 	}
 }
 

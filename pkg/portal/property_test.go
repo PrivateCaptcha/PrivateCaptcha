@@ -71,33 +71,25 @@ func TestValidateDomainNameRejectsEmptyNormalization(t *testing.T) {
 	ctx := t.Context()
 
 	tests := []struct {
-		name            string
-		domain          string
-		ignoreResolve   bool
-		wantStatus      common.StatusCode
-		wantDomain      string
-		wantNonEmptyOK  bool
+		name          string
+		domain        string
+		ignoreResolve bool
+		wantStatus    common.StatusCode
 	}{
-		{name: "SoftHyphenIgnoredResolve", domain: "\u00ad", ignoreResolve: true, wantStatus: common.StatusPropertyDomainEmptyError, wantDomain: ""},
-		{name: "SoftHyphenRepeated", domain: "\u00ad\u00ad\u00ad", ignoreResolve: true, wantStatus: common.StatusPropertyDomainEmptyError, wantDomain: ""},
-		{name: "Localhost", domain: "localhost", ignoreResolve: true, wantStatus: common.StatusPropertyDomainLocalhostError, wantDomain: ""},
-		{name: "IPv4", domain: "8.8.8.8", ignoreResolve: true, wantStatus: common.StatusPropertyDomainIPAddrError, wantDomain: ""},
-		{name: "Empty", domain: "", ignoreResolve: true, wantStatus: common.StatusPropertyDomainEmptyError, wantDomain: ""},
-		{name: "InvalidIDNA", domain: "_.example.com", ignoreResolve: true, wantStatus: common.StatusPropertyDomainNameInvalidError, wantDomain: ""},
-		{name: "ValidMixedCaseIgnoredResolve", domain: "Example.com", ignoreResolve: true, wantStatus: common.StatusOK, wantDomain: "example.com", wantNonEmptyOK: true},
+		{name: "SoftHyphenIgnoredResolve", domain: "\u00ad", ignoreResolve: true, wantStatus: common.StatusPropertyDomainEmptyError},
+		{name: "SoftHyphenRepeated", domain: "\u00ad\u00ad\u00ad", ignoreResolve: true, wantStatus: common.StatusPropertyDomainEmptyError},
+		{name: "Localhost", domain: "localhost", ignoreResolve: true, wantStatus: common.StatusPropertyDomainLocalhostError},
+		{name: "IPv4", domain: "8.8.8.8", ignoreResolve: true, wantStatus: common.StatusPropertyDomainIPAddrError},
+		{name: "Empty", domain: "", ignoreResolve: true, wantStatus: common.StatusPropertyDomainEmptyError},
+		{name: "InvalidIDNA", domain: "_.example.com", ignoreResolve: true, wantStatus: common.StatusPropertyDomainNameInvalidError},
+		{name: "ValidMixedCaseIgnoredResolve", domain: "Example.com", ignoreResolve: true, wantStatus: common.StatusOK},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, status := srv.validateDomainName(ctx, tt.domain, tt.ignoreResolve)
+			status := srv.validateDomainName(ctx, tt.domain, tt.ignoreResolve)
 			if status != tt.wantStatus {
 				t.Errorf("status = %v; want %v", status, tt.wantStatus)
-			}
-			if got != tt.wantDomain {
-				t.Errorf("domain = %q; want %q", got, tt.wantDomain)
-			}
-			if tt.wantNonEmptyOK && got == "" {
-				t.Errorf("expected non-empty normalized domain for %q", tt.domain)
 			}
 		})
 	}
@@ -108,27 +100,21 @@ func TestValidateDomainNameResolveBranch(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("ResolveError", func(t *testing.T) {
-		got, status := srv.validateDomainName(ctx, "nonexistent-domain.invalid", false)
+		status := srv.validateDomainName(ctx, "nonexistent-domain.invalid", false)
 		if status != common.StatusPropertyDomainResolveError {
 			t.Errorf("status = %v; want %v", status, common.StatusPropertyDomainResolveError)
-		}
-		if got != "" {
-			t.Errorf("domain = %q; want empty", got)
 		}
 	})
 
 	t.Run("ResolveSuccess", func(t *testing.T) {
-		got, status := srv.validateDomainName(ctx, "example.com", false)
+		status := srv.validateDomainName(ctx, "example.com", false)
 		if status != common.StatusOK {
 			t.Errorf("status = %v; want %v", status, common.StatusOK)
-		}
-		if got != "example.com" {
-			t.Errorf("domain = %q; want %q", got, "example.com")
 		}
 	})
 }
 
-func TestRecheckNormalizedDomain(t *testing.T) {
+func TestValidateDomainBasics(t *testing.T) {
 	ctx := t.Context()
 
 	tests := []struct {
@@ -145,7 +131,7 @@ func TestRecheckNormalizedDomain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			status, ok := recheckNormalizedDomain(ctx, tt.domain)
+			status, ok := validateDomainBasics(ctx, tt.domain)
 			if status != tt.wantStatus {
 				t.Errorf("status = %v; want %v", status, tt.wantStatus)
 			}
@@ -380,7 +366,7 @@ func TestPostNewOrgProperty(t *testing.T) {
 	}
 }
 
-func TestPostNewOrgPropertyNormalizesDomainCase(t *testing.T) {
+func TestPostNewOrgPropertyAcceptsMixedCaseDomain(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -427,8 +413,8 @@ func TestPostNewOrgPropertyNormalizesDomainCase(t *testing.T) {
 	if count := len(pp); count != 1 {
 		t.Fatalf("Unexpected number of properties in org: %v", count)
 	}
-	if pp[0].Domain != "example.com" {
-		t.Errorf("Expected normalized domain %q, got %q (raw input was %q)", "example.com", pp[0].Domain, "Example.com")
+	if pp[0].Domain != "Example.com" {
+		t.Errorf("Expected domain %q, got %q (raw input was %q)", "Example.com", pp[0].Domain, "Example.com")
 	}
 }
 
