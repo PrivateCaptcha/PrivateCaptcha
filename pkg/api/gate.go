@@ -126,7 +126,7 @@ var GatePageTemplate = template.Must(template.New("gate").Parse(`<!doctype html>
         height: 100%;
     }
   }
-</style><noscript><style>#gate-form, #gate-status { display: none; }</style></noscript></head>
+</style><noscript><style>#gate-form, #gate-status { display: none; }</style></noscript>{{block "extra_script" .}}{{end}}</head>
 <body><main>{{if .Domain}}<p class="site-domain"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="2 2 20 20" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" /></svg>{{.Domain}}</p>{{end}}<h1 id="gate-title">Verify your request</h1><p id="gate-status" role="status">Complete the challenge to continue to the website.</p>
 <noscript><p>JavaScript is required to continue. Enable JavaScript and reload this page.</p></noscript>
 <form id="gate-form" method="POST" action="{{.CompletePath}}" class="widget-wrapper"><div class="private-captcha" data-sitekey="{{.Sitekey}}" data-puzzle-endpoint="{{.PuzzleURL}}" data-start-mode="{{.StartMode}}" data-finished-callback="onCaptchaSolved" data-errored-callback="onCaptchaError" data-started-callback="onCaptchaStarted" data-theme="auto" data-styles="display: block; min-width: 0; height: 100%; font-size: clamp(12px, 1vw + 4px, 18px); --border: 0"></div></form>

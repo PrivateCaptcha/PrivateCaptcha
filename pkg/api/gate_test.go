@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"html/template"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -39,6 +41,42 @@ func TestGatePageTemplateRenders(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestGatePageTemplateRendersExtraScript(t *testing.T) {
+	tmpl, err := template.New("gate").AddParseTree("gate", GatePageTemplate.Tree.Copy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl, err = tmpl.Parse(`{{define "extra_script"}}{{.ExtraScript}}{{end}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const script = `<script>window.gateExtra = "stub";</script>`
+	var out bytes.Buffer
+	if err := tmpl.Execute(&out, struct {
+		Sitekey      string
+		ScriptURL    string
+		PuzzleURL    string
+		StartMode    string
+		Domain       string
+		CompletePath string
+		ExtraScript  template.HTML
+	}{
+		Sitekey:      "11111111222233334444555555555555",
+		ScriptURL:    "//cdn.privatecaptcha.com/widget/js/privatecaptcha.js",
+		PuzzleURL:    "//api.privatecaptcha.com/puzzle",
+		StartMode:    "click",
+		Domain:       "example.com",
+		CompletePath: GateCompletePath,
+		ExtraScript:  script,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), script+"</head>") {
+		t.Fatal("gate page did not render the extra script before the closing head tag")
 	}
 }
 
