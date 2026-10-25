@@ -96,6 +96,10 @@ func TestValidateDomainNameRejectsEmptyNormalization(t *testing.T) {
 }
 
 func TestValidateDomainNameResolveBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test that performs external DNS resolution")
+	}
+
 	srv := &Server{}
 	ctx := t.Context()
 
