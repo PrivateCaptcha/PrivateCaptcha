@@ -3754,3 +3754,79 @@ func TestApiUpdatePropertiesInvalidPropertyID(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 }
+
+func TestApiPostPropertiesNormalizesDomainCase(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"MixedCase", "Example.com", "example.com"},
+		{"AllCaps", "Example.COM", "example.com"},
+		{"MixedCaseSubdomain", "sub.Example.com", "sub.example.com"},
+		{"SchemeMixedCase", "https://Example.com", "example.com"},
+	}
+
+	inputs := make([]*apiCreatePropertyInput, 0, len(cases))
+	for _, tc := range cases {
+		inputs = append(inputs, &apiCreatePropertyInput{
+			apiPropertySettings: apiPropertySettings{Name: t.Name() + " " + tc.name},
+			Domain:              tc.input,
+		})
+	}
+
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, inputs,
+		http.MethodPost,
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !meta.Code.Success() {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+
+	finished := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+		if result.Finished {
+			finished = true
+			break
+		}
+	}
+	if !finished {
+		t.Fatal("Async task did not complete within timeout")
+	}
+
+	properties, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(properties) != len(cases) {
+		t.Fatalf("Unexpected number of properties: %v, want %d", len(properties), len(cases))
+	}
+	for i, tc := range cases {
+		if properties[i].Domain != tc.want {
+			t.Errorf("case %d (%s): stored domain = %q, want %q (raw input was %q)",
+				i, tc.name, properties[i].Domain, tc.want, tc.input)
+		}
+	}
+}

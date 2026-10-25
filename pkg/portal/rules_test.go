@@ -3210,6 +3210,41 @@ func TestParseDomainCondition(t *testing.T) {
 			value:    "example.com",
 			expected: common.StatusOK,
 		},
+		{
+			name:     "equals with mixed-case property domain is valid",
+			domain:   "Example.com",
+			operator: string(dbgen.RuleConditionOperatorEquals),
+			value:    "example.com",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "equals with mixed-case condition value is valid",
+			domain:   "example.com",
+			operator: string(dbgen.RuleConditionOperatorEquals),
+			value:    "Example.com",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "equals with all-caps condition value is valid",
+			domain:   "example.com",
+			operator: string(dbgen.RuleConditionOperatorEquals),
+			value:    "EXAMPLE.COM",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "contains with mixed-case property domain is valid",
+			domain:   "Example.com",
+			operator: string(dbgen.RuleConditionOperatorContains),
+			value:    "example.com",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "subdomain of mixed-case property domain is valid",
+			domain:   "Example.com",
+			operator: string(dbgen.RuleConditionOperatorEquals),
+			value:    "sub.example.com",
+			expected: common.StatusOK,
+		},
 	}
 
 	for _, tt := range tests {
@@ -3217,6 +3252,32 @@ func TestParseDomainCondition(t *testing.T) {
 			_, _, got := domainConditionParser(tt.operator, tt.value, tt.domain)
 			if got != tt.expected {
 				t.Errorf("domainConditionParser() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseDomainConditionNormalizesCaseInsensitiveValue(t *testing.T) {
+	cases := []struct {
+		name     string
+		domain   string
+		operator string
+		value    string
+		want     string
+	}{
+		{name: "mixed-case condition value", domain: "example.com", operator: string(dbgen.RuleConditionOperatorEquals), value: "Example.com", want: "Example.com"},
+		{name: "all-caps condition value", domain: "example.com", operator: string(dbgen.RuleConditionOperatorEquals), value: "EXAMPLE.COM", want: "EXAMPLE.COM"},
+		{name: "mixed-case subdomain condition value", domain: "Example.com", operator: string(dbgen.RuleConditionOperatorEquals), value: "sub.Example.com", want: "sub.Example.com"},
+		{name: "lowercase condition value unchanged", domain: "example.com", operator: string(dbgen.RuleConditionOperatorEquals), value: "sub.example.com", want: "sub.example.com"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotValue, _, status := domainConditionParser(tc.operator, tc.value, tc.domain)
+			if status != common.StatusOK {
+				t.Fatalf("domainConditionParser(%q, %q, %q) status = %v, want %v", tc.operator, tc.value, tc.domain, status, common.StatusOK)
+			}
+			if gotValue != tc.want {
+				t.Errorf("domainConditionParser(%q, %q, %q) returned value = %q, want %q", tc.operator, tc.value, tc.domain, gotValue, tc.want)
 			}
 		})
 	}

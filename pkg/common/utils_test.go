@@ -132,6 +132,17 @@ func TestSubDomain(t *testing.T) {
 		// NOTE: despite incorrect, this function is not used in such context
 		// {"...domain.com", "domain.com", false},
 		{"a.domain.com", "domain.com", true},
+		// Domains are case-insensitive: a mixed-case stored domain must still
+		// match a lowercase browser origin host (and vice-versa).
+		{"Example.com", "example.com", true},
+		{"example.com", "Example.com", true},
+		{"EXAMPLE.COM", "example.com", true},
+		{"app.Example.com", "example.com", true},
+		{"app.example.com", "Example.com", true},
+		{"App.Example.COM", "example.com", true},
+		{"notexample.com", "Example.com", false},
+		{"evilexample.com", "Example.com", false},
+		{"a.domain.com", "DOMAIN.com", true},
 	}
 
 	for i, tc := range testCases {

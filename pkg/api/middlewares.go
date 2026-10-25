@@ -513,7 +513,7 @@ func isOriginAllowed(origin string, property *dbgen.Property) bool {
 		return true
 	}
 
-	if origin == property.Domain {
+	if strings.EqualFold(origin, property.Domain) {
 		return true
 	}
 

@@ -290,6 +290,58 @@ func TestPostNewOrgProperty(t *testing.T) {
 	}
 }
 
+func TestPostNewOrgPropertyNormalizesDomainCase(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	propertyName := t.Name() + "Property"
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, propertyName)
+	form.Set(common.ParamDomain, "Example.com")
+	form.Set(common.ParamIgnoreError, "true")
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", server.IDHasher.Encrypt(int(org.ID))),
+		strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	pp, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := len(pp); count != 1 {
+		t.Fatalf("Unexpected number of properties in org: %v", count)
+	}
+	if pp[0].Domain != "example.com" {
+		t.Errorf("Expected normalized domain %q, got %q (raw input was %q)", "example.com", pp[0].Domain, "Example.com")
+	}
+}
+
 func TestMoveProperty(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

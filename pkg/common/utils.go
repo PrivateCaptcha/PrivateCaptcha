@@ -303,6 +303,9 @@ func IsSubDomainOrDomain(subDomain, domain string) bool {
 		return false
 	}
 
+	subDomain = strings.ToLower(subDomain)
+	domain = strings.ToLower(domain)
+
 	if len(subDomain) < len(domain) {
 		return false
 	}
