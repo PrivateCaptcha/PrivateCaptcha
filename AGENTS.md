@@ -9,7 +9,7 @@
 ## Code
 
 - Prefer the simplest minimal working solution. Do not over-engineer.
-- Add comments only when necessary. Prefer useful logging over explanatory comments where appropriate.
+- Add comments only when necessary (keep them concise and to the point). Prefer logging over explanatory comments where appropriate.
 - Fix failures before continuing. Do not ignore or skip errors.
 - In Go initialize structs one field per line
 
