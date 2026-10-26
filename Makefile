@@ -188,7 +188,7 @@ build-view-portal:
 	env GOFLAGS="-mod=vendor" go build -tags "enterprise viewportal" -o bin/viewportal cmd/viewportal/*.go
 
 build-view-widget:
-	env GOFLAGS="-mod=vendor" go build -o bin/viewwidget cmd/viewwidget/*.go
+	env GOFLAGS="-mod=vendor" go build -tags enterprise -o bin/viewwidget cmd/viewwidget/*.go
 
 generate-easyjson:
 	# NOTE: api package has to be first because portal imports it

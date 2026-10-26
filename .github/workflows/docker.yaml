@@ -123,6 +123,7 @@ jobs:
             GIT_COMMIT=${{ github.sha }}
             STAGE=prod
             EXTRA_BUILD_FLAGS=-tags enterprise
+            WIDGET_WHITELABEL=true
           tags: |
             ghcr.io/${{ env.REPO_LOWER_EE }}:latest
             ghcr.io/${{ env.REPO_LOWER_EE }}:${{ github.sha }}

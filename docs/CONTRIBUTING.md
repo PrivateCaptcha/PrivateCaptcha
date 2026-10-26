@@ -22,16 +22,9 @@ OpenAPI spec is [available](./openapi.yaml).
 
 ### Widget builds
 
-`make build-widget-script` builds branded assets under `widget/static/js/` and
-whitelabel assets under `widget/whitelabel/js/`. Both roots contain
-`privatecaptcha.js` (Blake2b) and `privatecaptcha-ext.js` (extended), with source
-maps. Whitelabel builds omit branding and size naturally to their content.
-`make build-widget-library` always produces a branded library.
+`make build-widget-script` builds branded assets under `widget/static/js/` and whitelabel assets under `widget/whitelabel/js/`. Both roots contain `privatecaptcha.js` (Blake2b) and `privatecaptcha-ext.js` (extended), with source maps. Whitelabel builds omit branding and size naturally to their content. `make build-widget-library` always produces a branded library.
 
-Both asset roots are embedded in the server. `widget.Static` serves only the
-`static` root. SaaS consumers can select the other root using
-`fs.Sub(widget.StaticFiles(), "whitelabel")` after checking customer eligibility.
-The default/extended filenames are identical in both roots.
+Community builds embed and serve only the `static` root. Enterprise builds embed both roots and accept `?branding=none` on widget requests, including alongside `v=ext`. The default/extended filenames are identical in both roots. Docker builds omit whitelabel assets by default. Enterprise images set `WIDGET_WHITELABEL=true` and `EXTRA_BUILD_FLAGS=-tags enterprise` as build arguments.
 
 ### Project structure
 

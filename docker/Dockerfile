@@ -51,11 +51,14 @@ COPY ./vendor /app/vendor
 COPY ./cmd/server /app/cmd/server
 COPY ./pkg /app/pkg
 COPY ./web /app/web
-COPY ./widget /app/widget
+COPY ./widget/*.go /app/widget/
 
 COPY --from=frontend-builder /app/web/static /app/web/static
 COPY --from=frontend-builder /app/widget/static /app/widget/static
-COPY --from=frontend-builder /app/widget/whitelabel /app/widget/whitelabel
+
+ARG WIDGET_WHITELABEL=false
+RUN --mount=type=bind,from=frontend-builder,source=/app/widget/whitelabel,target=/tmp/widget-whitelabel \
+    if [ "${WIDGET_WHITELABEL}" = "true" ]; then cp -r /tmp/widget-whitelabel /app/widget/whitelabel; fi
 
 # "Build" JS (will possibly be replaced by esbuild/webpack in future)
 COPY --from=frontend-builder /app/web/js/index.js /app/web/static/js/bundle.js
