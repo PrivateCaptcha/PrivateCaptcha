@@ -80,6 +80,7 @@ const (
 	ParamOnboarding                = "onboarding"
 	ParamBody                      = "body"
 	ParamQuery                     = "query"
+	ParamBranding                  = "branding"
 	All                            = "all"
 )
 

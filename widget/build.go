@@ -41,7 +41,7 @@ func Static(gitHash string) http.HandlerFunc {
 		common.WriteHeaders(w, common.CorsAllowAllHeaders)
 		common.WriteHeaders(w, etagHeaders)
 		handler := srv
-		if enterpriseBuild && r.URL.Query().Get("branding") == "none" {
+		if enterpriseBuild && r.URL.Query().Get(common.ParamBranding) == "none" {
 			handler = whitelabelSrv
 			w.Header().Set(common.HeaderCacheControl, "private, no-cache, must-revalidate")
 		}

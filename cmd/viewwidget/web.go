@@ -57,7 +57,7 @@ func staticHandler() http.Handler {
 			}{
 				Echo:       r.URL.Query().Get("echo") == "true",
 				Debug:      r.URL.Query().Get("debug") == "true",
-				Whitelabel: r.URL.Query().Get("branding") == "none",
+				Whitelabel: r.URL.Query().Get(common.ParamBranding) == "none",
 				Mode:       r.URL.Query().Get("mode"),
 				Compat:     r.URL.Query().Get("compat"),
 				Level:      r.URL.Query().Get("level"),
