@@ -1,5 +1,7 @@
 @layer base {
     :host {
+        --control-size: 2em;
+        --widget-padding: 0.75em 1em;
         --logo-direction: column;
         --logo-height: 3.125em;
         --logo-margin: 5px;
