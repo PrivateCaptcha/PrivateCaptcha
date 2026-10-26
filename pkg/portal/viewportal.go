@@ -21,8 +21,8 @@ func viewStubOrg(id string) *UserOrg {
 	return &UserOrg{Name: "Acme Corp", ID: id, Level: string(dbgen.AccessLevelOwner)}
 }
 
-func viewStubProperty(name, orgID string) *userProperty {
-	return &userProperty{
+func viewStubProperty(name, orgID string) *UserProperty {
+	return &UserProperty{
 		ID: "prop1", OrgID: orgID, Name: name, Domain: "example.com",
 		Sitekey: db.TestPropertySitekey, Level: int(common.DifficultyLevelMedium),
 		HasDomain: true,
@@ -355,7 +355,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 				return &orgDashboardRenderContext{
 					portalBaseRenderContext: base,
 					PaginationRenderContext: pagination,
-					Properties:              []*userProperty{prop, viewStubProperty("Blog", "org1")},
+					Properties:              []*UserProperty{prop, viewStubProperty("Blog", "org1")},
 					Sort:                    db.OrgPropertiesSortDateAscending,
 				}
 			},
@@ -366,7 +366,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			ModelFunc: func(_ AlertRenderContext) interface{} {
 				return &orgPropertiesRenderContext{
 					CsrfRenderContext: token, PaginationRenderContext: pagination,
-					Properties: []*userProperty{prop, viewStubProperty("Blog", "org1")},
+					Properties: []*UserProperty{prop, viewStubProperty("Blog", "org1")},
 					CurrentOrg: org,
 					Sort:       db.OrgPropertiesSortDateAscending,
 				}
@@ -448,7 +448,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			ModelFunc: func(_ AlertRenderContext) interface{} {
 				return &orgDashboardRenderContext{
 					portalBaseRenderContext: baseCtx(portalPropertiesTabIndex), PaginationRenderContext: pagination,
-					Properties: []*userProperty{prop, viewStubProperty("Blog", "org1")},
+					Properties: []*UserProperty{prop, viewStubProperty("Blog", "org1")},
 				}
 			},
 		},
@@ -499,7 +499,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return struct {
 					propertyWizardRenderContext
-					Property *userProperty
+					Property *UserProperty
 					Sitekey  string
 				}{
 					propertyWizardRenderContext: propertyWizardRenderContext{
@@ -749,7 +749,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 				return &orgDashboardRenderContext{
 					portalBaseRenderContext: bctx,
 					PaginationRenderContext: pagination,
-					Properties:              []*userProperty{prop, viewStubProperty("Blog", "org1")},
+					Properties:              []*UserProperty{prop, viewStubProperty("Blog", "org1")},
 					Sort:                    db.OrgPropertiesSortDateAscending,
 				}
 			},

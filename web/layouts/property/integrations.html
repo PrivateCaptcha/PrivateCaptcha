@@ -42,13 +42,7 @@
                 </div>
                 <div class="bg-pc-pastel-50 px-6 py-5 sm:p-6 flex items-center sm:justify-between md:gap-6">
                     <div class="grow">
-                        <code class="pc-code-block">
-                            <textarea id="snippet" readonly x-init="$el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'">{{ `<!-- Add this inside the <head> of your website -->` }}
-{{ `<script defer src="https:` }}{{$.Ctx.CDN}}{{ `/widget/js/privatecaptcha.js` }}{{ if eq .Params.Property.Challenge .Const.ChallengeTypeArgon2ID }}?v=ext{{ end }}{{ `"></script>` }}
-
-{{ `<!-- Add this inside your form -->` }}
-{{ `<div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>` }}</textarea>
-                        </code>
+                        {{ template "integrations-snippet.html" . }}
                     </div>
                     <div class="mt-4 sm:ml-6 sm:mt-0 sm:flex-shrink-0">
                         <button type="button" class="pc-setup-button"

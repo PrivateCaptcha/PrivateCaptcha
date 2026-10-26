@@ -64,9 +64,10 @@ type propertyWizardRenderContext struct {
 	Step        int
 }
 
-type userProperty struct {
+type UserProperty struct {
 	ID                        string
 	OrgID                     string
+	OrgOwnerID                string
 	Name                      string
 	Domain                    string
 	Sitekey                   string
@@ -87,7 +88,7 @@ type userProperty struct {
 type orgPropertiesRenderContext struct {
 	CsrfRenderContext
 	PaginationRenderContext
-	Properties  []*userProperty
+	Properties  []*UserProperty
 	CurrentOrg  *UserOrg
 	Sort        db.OrgPropertiesSort
 	SortOptions []orgPropertiesSortOption
@@ -98,7 +99,7 @@ type propertyDashboardRenderContext struct {
 	CsrfRenderContext
 	// scripts.html is shared so captcha context has to be shared too
 	CaptchaRenderContext
-	Property     *userProperty
+	Property     *UserProperty
 	Org          *UserOrg
 	NameError    string
 	Tab          int
@@ -167,10 +168,11 @@ func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 	}
 }
 
-func propertyToUserProperty(p *dbgen.Property, hasher common.IdentifierHasher) *userProperty {
-	up := &userProperty{
+func propertyToUserProperty(p *dbgen.Property, hasher common.IdentifierHasher) *UserProperty {
+	up := &UserProperty{
 		ID:                        hasher.Encrypt(int(p.ID)),
 		OrgID:                     hasher.Encrypt(int(p.OrgID.Int32)),
+		OrgOwnerID:                hasher.Encrypt(int(p.OrgOwnerID.Int32)),
 		Name:                      p.Name,
 		Domain:                    common.DisplayPropertyDomain(p.Domain, p.AllowSubdomains),
 		HasDomain:                 len(p.Domain) > 0,
@@ -202,8 +204,8 @@ func edgeTokenValidityFromIndex(value string) (time.Duration, error) {
 	return puzzle.ValidityDurations[index-1], nil
 }
 
-func propertiesToUserProperties(ctx context.Context, properties []*dbgen.Property, hasher common.IdentifierHasher) []*userProperty {
-	result := make([]*userProperty, 0, len(properties))
+func propertiesToUserProperties(ctx context.Context, properties []*dbgen.Property, hasher common.IdentifierHasher) []*UserProperty {
+	result := make([]*UserProperty, 0, len(properties))
 
 	for _, p := range properties {
 		if p == nil {

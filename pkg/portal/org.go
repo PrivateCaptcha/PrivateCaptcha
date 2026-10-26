@@ -126,7 +126,7 @@ type orgDashboardRenderContext struct {
 	portalBaseRenderContext
 	PaginationRenderContext
 	// shortened from CurrentOrgProperties for simplicity
-	Properties []*userProperty
+	Properties []*UserProperty
 	Sort       db.OrgPropertiesSort
 }
 
@@ -361,7 +361,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, baseCtx *portalB
 
 	renderCtx := &orgDashboardRenderContext{
 		portalBaseRenderContext: *baseCtx,
-		Properties:              []*userProperty{},
+		Properties:              []*UserProperty{},
 		Sort:                    sort,
 	}
 
@@ -489,7 +489,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		if baseCtx.CurrentOrg.Level == string(dbgen.AccessLevelInvited) {
 			s.render(w, r, portalTemplate, &orgDashboardRenderContext{
 				portalBaseRenderContext: *baseCtx,
-				Properties:              []*userProperty{},
+				Properties:              []*UserProperty{},
 				Sort:                    propertySort,
 			}, true /*new*/)
 			return

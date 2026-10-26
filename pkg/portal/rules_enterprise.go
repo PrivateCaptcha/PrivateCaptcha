@@ -120,7 +120,7 @@ type RuleWizardRenderContext struct {
 	RuleFormData
 	Countries  []CountryOption
 	CurrentOrg *UserOrg
-	Property   *userProperty
+	Property   *UserProperty
 	RuleID     string
 	IsEdit     bool
 }

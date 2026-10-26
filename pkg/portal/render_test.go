@@ -95,8 +95,8 @@ func TestRenderFeatures(t *testing.T) {
 	}
 }
 
-func stubProperty(name, orgID string) *userProperty {
-	return &userProperty{
+func stubProperty(name, orgID string) *UserProperty {
+	return &UserProperty{
 		ID:      "1",
 		OrgID:   orgID,
 		Name:    name,
@@ -317,7 +317,7 @@ func TestRenderHTML(t *testing.T) {
 			Orgs:       []*UserOrg{invitedOrg, memberOrg},
 			CurrentOrg: invitedOrg,
 		},
-		Properties: []*userProperty{stubProperty("1", "123"), stubProperty("2", "123")},
+		Properties: []*UserProperty{stubProperty("1", "123"), stubProperty("2", "123")},
 	}
 
 	testCases := []struct {
@@ -384,7 +384,7 @@ func TestRenderHTML(t *testing.T) {
 					Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
 					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
 				},
-				Properties: []*userProperty{stubProperty("1", "123"), stubProperty("2", "123")},
+				Properties: []*UserProperty{stubProperty("1", "123"), stubProperty("2", "123")},
 				PaginationRenderContext: PaginationRenderContext{
 					From:    1,
 					To:      10,
@@ -403,7 +403,7 @@ func TestRenderHTML(t *testing.T) {
 				portalBaseRenderContext: portalBaseRenderContext{
 					CurrentOrg: stubOrg("123"),
 				},
-				Properties: []*userProperty{
+				Properties: []*UserProperty{
 					stubProperty("Zulu", "123"),
 					stubProperty("Middle", "123"),
 					stubProperty("Alpha", "123"),
@@ -514,7 +514,7 @@ func TestRenderHTML(t *testing.T) {
 			model: &orgPropertiesRenderContext{
 				PaginationRenderContext: PaginationRenderContext{From: 1, To: 1, Count: 2, Page: 0, PerPage: 30},
 				CurrentOrg:              stubOrg("123"),
-				Properties:              []*userProperty{stubProperty("Property", "123")},
+				Properties:              []*UserProperty{stubProperty("Property", "123")},
 				Sort:                    db.OrgPropertiesSortNameDescending,
 			},
 			selector: "button[hx-vals*=\"name_desc\"]",
@@ -1009,7 +1009,7 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.TabEndpoint, common.SettingsEndpoint},
 			template: propertyDashboardSettingsTemplate,
 			model: &propertySettingsRenderContext{
-				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: &userProperty{Domain: "any domain (*)", HasDomain: false}, Org: stubOrg("123"), CanEdit: true},
+				propertyDashboardRenderContext: propertyDashboardRenderContext{Property: &UserProperty{Domain: "any domain (*)", HasDomain: false}, Org: stubOrg("123"), CanEdit: true},
 				difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
 			},
 			selector: `div.pc-advanced-settings > h4 > button > span:first-child`,
@@ -1261,7 +1261,7 @@ func TestRenderHTML(t *testing.T) {
 					Enabled:           true,
 				},
 				CurrentOrg: stubOrg("123"),
-				Property: &userProperty{
+				Property: &UserProperty{
 					ID:        "456",
 					OrgID:     "123",
 					Name:      "No Domain",
