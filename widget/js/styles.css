@@ -72,6 +72,7 @@
 
     :host {
         --border: 1px solid var(--gray-color);
+        --checkbox-border-color: var(--dark-color);
     }
 }
 
@@ -117,7 +118,7 @@
     margin: 0 0 0 calc(var(--control-size) / 16 + var(--extra-spacing));
     appearance: none;
     background-color: var(--checkbox-background-color);
-    border: calc(var(--control-size) / 16) solid var(--dark-color);
+    border: calc(var(--control-size) / 16) solid var(--checkbox-border-color);
     border-radius: calc(var(--control-size) / 8);
     cursor: pointer;
     flex-shrink: 0;
@@ -128,7 +129,7 @@
 }
 
 @keyframes colorChange {
-    0%, 100% { border-color: var(--dark-color); }
+    0%, 100% { border-color: var(--checkbox-border-color); }
     50% { border-color: var(--gray-color); }
 }
 
@@ -141,7 +142,7 @@
 
 .pc-interactive-area input[type="checkbox"].ready {
     background-color: var(--checkbox-background-color);
-    border-color: var(--dark-color);
+    border-color: var(--checkbox-border-color);
     cursor: pointer;
 }
 
