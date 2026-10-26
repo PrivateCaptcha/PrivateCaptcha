@@ -14,6 +14,8 @@ type IdentifierHasher interface {
 	Encrypt64(id int64) string
 	Decrypt(id string) (int, error)
 	Decrypt64(id string) (int64, error)
+	EncryptArray(ids []int) string
+	DecryptArray(hash string) ([]int, error)
 }
 
 // this is an exact copy of otter's Loader
