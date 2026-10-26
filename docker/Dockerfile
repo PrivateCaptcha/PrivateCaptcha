@@ -55,6 +55,7 @@ COPY ./widget /app/widget
 
 COPY --from=frontend-builder /app/web/static /app/web/static
 COPY --from=frontend-builder /app/widget/static /app/widget/static
+COPY --from=frontend-builder /app/widget/whitelabel /app/widget/whitelabel
 
 # "Build" JS (will possibly be replaced by esbuild/webpack in future)
 COPY --from=frontend-builder /app/web/js/index.js /app/web/static/js/bundle.js

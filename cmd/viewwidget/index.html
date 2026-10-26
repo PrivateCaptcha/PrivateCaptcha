@@ -22,7 +22,7 @@
         .pc-form-input-base::placeholder { color: light-dark(#6b7280, #9ca3af); }
     </style>
     <link rel="shortcut icon" type="image/png" href="/assets/img/favicon.png">
-    <script src="/widget/js/privatecaptcha-ext.js{{if .Compat }}?compat={{.Compat}}{{end}}"></script>
+    <script src="/{{if .Whitelabel}}whitelabel/{{end}}widget/js/privatecaptcha-ext.js{{if .Compat }}?compat={{.Compat}}{{end}}"></script>
     <script type="text/javascript">
         function onCaptchaSolved() {
             var submitButton = document.querySelector('#formSubmit');
@@ -73,7 +73,7 @@
                                 data-started-callback="onCaptchaStarted" 
                                 data-finished-callback="onCaptchaSolved"
                                 data-errored-callback="onCaptchaErrored"
-                                data-styles="--border-radius: .75rem; --border: 1px dashed #f00; font-size: 16px; --extra-spacing: 8px; display: block; height: 100%;"
+                                data-styles="--border-radius: .75rem; --border: 1px dashed #f00; font-size: 16px; --extra-spacing: 8px;{{if not .Whitelabel}} display: block; height: 100%;{{end}}"
                                 data-display-mode="widget"
                                 {{ if .Debug }}data-debug="{{.Debug}}"{{end}}
                                 {{ if .Mode }}data-start-mode="{{.Mode}}"{{end}}>

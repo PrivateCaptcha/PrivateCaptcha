@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -32,6 +33,8 @@ func main() {
 
 	router.Handle("/", monitoring.Logged(corsDefault.Handler(staticHandler())))
 	router.Handle("GET "+"/widget/", http.StripPrefix("/widget/", widget.Static("")))
+	whitelabelFiles, _ := fs.Sub(widget.StaticFiles(), "whitelabel")
+	router.Handle("GET /whitelabel/widget/", http.StripPrefix("/whitelabel/widget/", http.FileServer(http.FS(whitelabelFiles))))
 	router.Handle("GET "+"/assets/", http.StripPrefix("/assets/", web.Static("")))
 	srv.Setup(router)
 

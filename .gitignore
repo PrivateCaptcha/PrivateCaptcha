@@ -28,6 +28,7 @@ web/static/*
 !web/static/fonts
 !web/static/fonts/**
 widget/static/
+widget/whitelabel/
 widget/lib/*.js
 widget/lib/*.js.map
 widget/test/bundle.test.js

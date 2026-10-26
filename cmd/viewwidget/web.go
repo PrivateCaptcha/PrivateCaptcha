@@ -48,6 +48,7 @@ func staticHandler() http.Handler {
 			data := struct {
 				Echo       bool
 				Debug      bool
+				Whitelabel bool
 				Level      string
 				Mode       string
 				Compat     string
@@ -56,6 +57,7 @@ func staticHandler() http.Handler {
 			}{
 				Echo:       r.URL.Query().Get("echo") == "true",
 				Debug:      r.URL.Query().Get("debug") == "true",
+				Whitelabel: r.URL.Query().Get("whitelabel") == "true",
 				Mode:       r.URL.Query().Get("mode"),
 				Compat:     r.URL.Query().Get("compat"),
 				Level:      r.URL.Query().Get("level"),

@@ -9,8 +9,13 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
-//go:embed static
+//go:embed static whitelabel
 var staticFiles embed.FS
+
+// StaticFiles returns the embedded assets, including the separate whitelabel root.
+func StaticFiles() *embed.FS {
+	return &staticFiles
+}
 
 var (
 	widgetCachedHeaders = map[string][]string{

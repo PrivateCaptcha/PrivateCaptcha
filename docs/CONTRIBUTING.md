@@ -20,6 +20,19 @@ make run-local
 
 OpenAPI spec is [available](./openapi.yaml).
 
+### Widget builds
+
+`make build-widget-script` builds branded assets under `widget/static/js/` and
+whitelabel assets under `widget/whitelabel/js/`. Both roots contain
+`privatecaptcha.js` (Blake2b) and `privatecaptcha-ext.js` (extended), with source
+maps. Whitelabel builds omit branding and size naturally to their content.
+`make build-widget-library` always produces a branded library.
+
+Both asset roots are embedded in the server. `widget.Static` serves only the
+`static` root. SaaS consumers can select the other root using
+`fs.Sub(widget.StaticFiles(), "whitelabel")` after checking customer eligibility.
+The default/extended filenames are identical in both roots.
+
 ### Project structure
 
 ```

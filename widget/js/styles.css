@@ -16,9 +16,6 @@
         --label-spacing: 0.625rem;
         --control-size: 2em;
         --widget-padding: 0.75em 1em;
-        --logo-direction: column;
-        --logo-height: 3.125em;
-        --logo-margin: 5px;
         --border-radius: 0.125rem;
         --warn-color: #A70B0B;
         --accent-color: #009400;
@@ -41,12 +38,6 @@
         top: 0;
         transform: translate(0, -100%);
         z-index: 1000;
-    }
-
-    @media (min-width: 30em) {
-        :host {
-            min-width: min(20em, 100%);
-        }
     }
 }
 
@@ -104,6 +95,10 @@
     position: relative;
     min-width: 0;
     /*font-size: 1em;*/
+}
+
+.pc-interactive-area:last-child {
+    margin-right: var(--extra-spacing);
 }
 
 .pc-interactive-area label {
@@ -216,47 +211,6 @@
 
 #pc-progress+label {
     padding: 0 0 0 calc(var(--extra-spacing) + var(--label-spacing));
-}
-
-.pc-spacer {
-    flex-basis: 0;
-    flex-shrink: 1;
-    flex-grow: 1;
-    width: 4em;
-    min-width: 0;
-}
-
-.pc-info {
-    display: flex;
-    flex: 0 0 auto;
-    flex-direction: var(--logo-direction);
-    align-items: center;
-    justify-content: center;
-    gap: var(--logo-margin);
-    /*2px here is just for "backward consistency"*/
-    margin-right: calc(0.125em + var(--extra-spacing));
-    color: var(--dark-color);
-}
-
-.pc-info svg {
-    width: auto;
-    height: var(--logo-height);
-    max-width: 100%;
-    max-height: 100%;
-}
-
-a.pc-link {
-    text-decoration: none;
-    color: currentcolor;
-    text-align: center;
-    font-size: 0.55em;
-    text-transform: uppercase;
-    font-weight: 700;
-    line-height: 1.1em;
-}
-
-a.pc-link:hover {
-    text-decoration: underline;
 }
 
 @keyframes checkmark {

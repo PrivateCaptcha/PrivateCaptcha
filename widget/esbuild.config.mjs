@@ -37,7 +37,16 @@ const blake2bWorkerSolverPlugin = {
     },
 };
 
-async function buildBundle(entryPoint, outfile, format, blake2bOnly = false) {
+const whitelabelBrandingPlugin = {
+    name: 'whitelabel-branding',
+    setup(build) {
+        build.onResolve({ filter: /^\.\/branding\.js$/ }, () => ({
+            path: resolve('./js/branding-whitelabel.js'),
+        }));
+    },
+};
+
+async function buildBundle(entryPoint, outfile, format, { blake2bOnly = false, whitelabel = false } = {}) {
     await build({
         entryPoints: [entryPoint],
         bundle: true,
@@ -47,6 +56,7 @@ async function buildBundle(entryPoint, outfile, format, blake2bOnly = false) {
         loader: { '.css': 'text', '.wasm': 'base64' },
         plugins: [
             CSSMinifyPlugin,
+            ...(whitelabel ? [whitelabelBrandingPlugin] : []),
             inlineWorkerPlugin({
                 minify: config[stage].minify,
                 loader: { '.wasm': 'base64' },
@@ -61,8 +71,10 @@ async function main() {
     if (buildTarget === 'library') {
         await buildBundle('./js/widget.js', './lib/index.js', 'esm');
     } else {
-        await buildBundle('./js/captcha.js', './static/js/privatecaptcha.js', 'iife', true);
+        await buildBundle('./js/captcha.js', './static/js/privatecaptcha.js', 'iife', { blake2bOnly: true });
         await buildBundle('./js/captcha.js', './static/js/privatecaptcha-ext.js', 'iife');
+        await buildBundle('./js/captcha.js', './whitelabel/js/privatecaptcha.js', 'iife', { blake2bOnly: true, whitelabel: true });
+        await buildBundle('./js/captcha.js', './whitelabel/js/privatecaptcha-ext.js', 'iife', { whitelabel: true });
     }
 }
 

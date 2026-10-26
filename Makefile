@@ -164,6 +164,7 @@ build-js:
 
 build-widget-script:
 	rm -fv widget/static/js/* || echo 'Nothing to remove'
+	rm -fv widget/whitelabel/js/* || echo 'Nothing to remove'
 	cd widget && env STAGE="$(STAGE)" npm run build
 
 widget-size:
@@ -303,5 +304,5 @@ view-widget: build-js build-widget-script build-view-widget
 
 run-view-widget:
 	reflex -r '^(widget|web|cmd\/viewwidget)/' \
-		-R '^(web/static/js|widget/static/js|widget/node_modules|web/node_modules)' \
+		-R '^(web/static/js|widget/static/js|widget/whitelabel/js|widget/node_modules|web/node_modules)' \
 		-s -- sh -c 'make view-widget'
