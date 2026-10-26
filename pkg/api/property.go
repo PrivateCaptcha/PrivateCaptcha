@@ -281,11 +281,15 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 					ilog.WarnContext(ctx, "Property domain name is IP")
 					return nil, common.StatusPropertyDomainIPAddrError, nil
 				}
-				if _, err := idna.Lookup.ToASCII(domain); err != nil {
+				ascii, err := idna.Lookup.ToASCII(domain)
+				if err != nil {
 					ilog.WarnContext(ctx, "Failed to convert domain name to ASCII", common.ErrAttr(err))
 					return nil, common.StatusPropertyDomainNameInvalidError, nil
 				}
-				domain = strings.ToLower(domain)
+				// Persist the IDNA ASCII (punycode) form so it matches the
+				// punycode host browsers send in Origin/Referer (see
+				// isOriginAllowed).
+				domain = strings.ToLower(ascii)
 			}
 			// err == ErrEmptyDomain: a non-empty raw input parsed to empty;
 			// leave domain == "" so the feature-flag gate below decides it.
@@ -512,8 +516,9 @@ func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user
 }
 
 func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, property *apiCreatePropertyInput, user *dbgen.User, org *dbgen.Organization, canUseEmptyDomain bool) common.StatusCode {
-	// this should have been filtered out when we validated user request
-	// but we repeat this here because we save to DB _exact_ user request
+	// Repeats the parsing from readCreatePropertiesRequest because the async
+	// task input is treated as opaque JSON: the worker cannot assume the
+	// caller normalized the domain.
 	domain := ""
 	if len(property.Domain) > 0 {
 		var err error
@@ -521,6 +526,14 @@ func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, proper
 		if err != nil && !errors.Is(err, common.ErrEmptyDomain) {
 			tlog.WarnContext(ctx, "Failed to parse domain name", "domain", property.Domain, common.ErrAttr(err))
 			return common.StatusPropertyDomainFormatError
+		}
+		if domain != "" {
+			ascii, idnaErr := idna.Lookup.ToASCII(domain)
+			if idnaErr != nil {
+				tlog.WarnContext(ctx, "Failed to convert domain name to ASCII", "domain", domain, common.ErrAttr(idnaErr))
+				return common.StatusPropertyDomainNameInvalidError
+			}
+			domain = strings.ToLower(ascii)
 		}
 	}
 

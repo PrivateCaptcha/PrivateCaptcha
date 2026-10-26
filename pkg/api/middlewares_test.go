@@ -393,6 +393,126 @@ func TestIsOriginAllowed(t *testing.T) {
 			allowSubdoms: true,
 			expected:     false,
 		},
+		// IDN (internationalized domain name) cases: browsers serialize the
+		// host of an IDN URL as punycode (IDNA ASCII) in the Origin/Referer
+		// header. The write path now stores the punycode form, but legacy
+		// rows may still hold the raw Unicode form, so isOriginAllowed
+		// IDNA-normalizes both sides before comparison as defense-in depth.
+		{
+			name:         "IDNStoredPunycodeOriginPunycode",
+			origin:       "xn--cher-zra930c.example.com",
+			domain:       "xn--cher-zra930c.example.com",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     true,
+		},
+		{
+			name:         "IDNStoredUnicodeOriginPunycode",
+			origin:       "xn--cher-zra930c.example.com",
+			domain:       "б\u00fccher.example.com",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     true,
+		},
+		{
+			name:         "IDNStoredPunycodeOriginUnicode",
+			origin:       "б\u00fccher.example.com",
+			domain:       "xn--cher-zra930c.example.com",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     true,
+		},
+		{
+			name:         "IDNStoredUnicodeOriginUnicode",
+			origin:       "б\u00fccher.example.com",
+			domain:       "б\u00fccher.example.com",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     true,
+		},
+		{
+			name:         "IDNMixedCaseUnicodeExactMatch",
+			origin:       "Б\u00fccher.example.com",
+			domain:       "б\u00fccher.example.com",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     true,
+		},
+		{
+			name:         "IDNSubdomainNotAllowed",
+			origin:       "sub.xn--cher-zra930c.example.com",
+			domain:       "xn--cher-zra930c.example.com",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     false,
+		},
+		{
+			name:         "IDNSubdomainAllowedPunycodeStored",
+			origin:       "sub.xn--cher-zra930c.example.com",
+			domain:       "xn--cher-zra930c.example.com",
+			allowLocal:   false,
+			allowSubdoms: true,
+			expected:     true,
+		},
+		{
+			name:         "IDNSubdomainAllowedUnicodeStored",
+			origin:       "deep.xn--cher-zra930c.example.com",
+			domain:       "б\u00fccher.example.com",
+			allowLocal:   false,
+			allowSubdoms: true,
+			expected:     true,
+		},
+		{
+			name:         "IDNOriginUnicodeSubdomainAllowedPunycodeStored",
+			origin:       "sub.б\u00fccher.example.com",
+			domain:       "xn--cher-zra930c.example.com",
+			allowLocal:   false,
+			allowSubdoms: true,
+			expected:     true,
+		},
+		{
+			name:         "IDNSubdomainMismatch",
+			origin:       "sub.xn--bcher-kva.example.com",
+			domain:       "xn--cher-zra930c.example.com",
+			allowLocal:   false,
+			allowSubdoms: true,
+			expected:     false,
+		},
+		{
+			name:         "IDNDomainMismatch",
+			origin:       "xn--bcher-kva.example.com",
+			domain:       "xn--cher-zra930c.example.com",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     false,
+		},
+		// Hosts with disallowed characters that idna rejects (e.g.,
+		// underscores) must fall back to the original raw-value comparison
+		// so the prior case-insensitive behavior is preserved.
+		{
+			name:         "UnderscoreHostExactMatch",
+			origin:       "_foo.example.com",
+			domain:       "_foo.example.com",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     true,
+		},
+		{
+			name:         "UnderscoreHostSubdomainAllowedFallback",
+			origin:       "_foo.example.com",
+			domain:       "example.com",
+			allowLocal:   false,
+			allowSubdoms: true,
+			expected:     true,
+		},
+		{
+			name:         "UnderscoreHostSubdomainNotAllowedFallback",
+			origin:       "_foo.example.com",
+			domain:       "example.com",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -533,4 +653,170 @@ func TestAuthMiddlewareFormNormalizesExternalIDToLowerCase(t *testing.T) {
 			t.Fatal("expected refreshForm to be queued on cache miss")
 		}
 	})
+}
+
+// TestSitekeyMiddlewareIDNOriginAllowed exercises the actual am.Sitekey
+// middleware stack used by GET /puzzle against a cached property, asserting
+// the inner handler runs (HTTP 200) or is short-circuited (HTTP 403/400)
+// based on the browser-sent Origin header. Runs under -short because it
+// uses only the in-memory cache (no DB / no DNS).
+func TestSitekeyMiddlewareIDNOriginAllowed(t *testing.T) {
+	sitekey := "11111111222233334444555555555555"
+
+	cases := []struct {
+		name            string
+		property        *dbgen.Property
+		origin          string
+		referer         string
+		wantStatus      int
+		wantInnerCalled bool
+	}{
+		// Stored punycode matches browser-sent punycode origin (post-fix rows).
+		{
+			name:            "PostFixPunycodeStoredPunycodeOrigin",
+			property:        &dbgen.Property{Enabled: true, Domain: "xn--cher-zra930c.example.com", OrgOwnerID: db.Int(1)},
+			origin:          "https://xn--cher-zra930c.example.com",
+			wantStatus:      http.StatusOK,
+			wantInnerCalled: true,
+		},
+		// Stored Unicode matches browser-sent punycode origin via defense-in-depth
+		// (pre-fix rows that migration 000145 only lowercased).
+		{
+			name:            "PreFixUnicodeStoredPunycodeOriginDefenseInDepth",
+			property:        &dbgen.Property{Enabled: true, Domain: "б\u00fccher.example.com", OrgOwnerID: db.Int(1)},
+			origin:          "https://xn--cher-zra930c.example.com",
+			wantStatus:      http.StatusOK,
+			wantInnerCalled: true,
+		},
+		// Unicode origin matches stored Unicode domain.
+		{
+			name:            "UnicodeOriginUnicodeStored",
+			property:        &dbgen.Property{Enabled: true, Domain: "б\u00fccher.example.com", OrgOwnerID: db.Int(1)},
+			origin:          "https://б\u00fccher.example.com",
+			wantStatus:      http.StatusOK,
+			wantInnerCalled: true,
+		},
+		// ASCII exact match regression.
+		{
+			name:            "ASCIIExactMatch",
+			property:        &dbgen.Property{Enabled: true, Domain: "example.com", OrgOwnerID: db.Int(1)},
+			origin:          "https://example.com",
+			wantStatus:      http.StatusOK,
+			wantInnerCalled: true,
+		},
+		// ASCII subdomain NOT allowed when AllowSubdomains=false.
+		{
+			name:            "ASCIISubdomainNotAllowed",
+			property:        &dbgen.Property{Enabled: true, Domain: "example.com", OrgOwnerID: db.Int(1)},
+			origin:          "https://sub.example.com",
+			wantStatus:      http.StatusForbidden,
+			wantInnerCalled: false,
+		},
+		// ASCII subdomain allowed when AllowSubdomains=true.
+		{
+			name:            "ASCIISubdomainAllowed",
+			property:        &dbgen.Property{Enabled: true, Domain: "example.com", AllowSubdomains: true, OrgOwnerID: db.Int(1)},
+			origin:          "https://sub.example.com",
+			wantStatus:      http.StatusOK,
+			wantInnerCalled: true,
+		},
+		// localhost gated by AllowLocalhost.
+		{
+			name:            "LocalhostAllowed",
+			property:        &dbgen.Property{Enabled: true, Domain: "example.com", AllowLocalhost: true, OrgOwnerID: db.Int(1)},
+			origin:          "http://captcha.localhost",
+			wantStatus:      http.StatusOK,
+			wantInnerCalled: true,
+		},
+		{
+			name:            "LocalhostNotAllowed",
+			property:        &dbgen.Property{Enabled: true, Domain: "example.com", AllowLocalhost: false, OrgOwnerID: db.Int(1)},
+			origin:          "http://captcha.localhost",
+			wantStatus:      http.StatusForbidden,
+			wantInnerCalled: false,
+		},
+		// IDN subdomain with AllowSubdomains=true.
+		{
+			name:            "IDNSubdomainAllowed",
+			property:        &dbgen.Property{Enabled: true, Domain: "xn--cher-zra930c.example.com", AllowSubdomains: true, OrgOwnerID: db.Int(1)},
+			origin:          "https://sub.xn--cher-zra930c.example.com",
+			wantStatus:      http.StatusOK,
+			wantInnerCalled: true,
+		},
+		// Different IDN does not match.
+		{
+			name:            "IDNDomainMismatch403",
+			property:        &dbgen.Property{Enabled: true, Domain: "xn--cher-zra930c.example.com", OrgOwnerID: db.Int(1)},
+			origin:          "https://xn--bcher-kva.example.com",
+			wantStatus:      http.StatusForbidden,
+			wantInnerCalled: false,
+		},
+		// Empty domain allows any origin.
+		{
+			name:            "EmptyDomainAllowsAnyOrigin",
+			property:        &dbgen.Property{Enabled: true, Domain: "", OrgOwnerID: db.Int(1)},
+			origin:          "https://anything.example.com",
+			wantStatus:      http.StatusOK,
+			wantInnerCalled: true,
+		},
+		// No Origin / No Referer -> 400 (pre-existing behavior, unchanged).
+		{
+			name:            "NoOriginNoReferer400",
+			property:        &dbgen.Property{Enabled: true, Domain: "example.com", OrgOwnerID: db.Int(1)},
+			wantStatus:      http.StatusBadRequest,
+			wantInnerCalled: false,
+		},
+		// Referer fallback used when Origin header missing.
+		{
+			name:            "RefererFallbackMatchesStoredDomain",
+			property:        &dbgen.Property{Enabled: true, Domain: "xn--cher-zra930c.example.com", OrgOwnerID: db.Int(1)},
+			referer:         "https://xn--cher-zra930c.example.com/some/page",
+			wantStatus:      http.StatusOK,
+			wantInnerCalled: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cache := db.NewStaticCache[db.CacheKey, any](10, &db.CacheMissingValue{})
+			store := db.NewBusinessEx(nil, cache)
+			if tc.property != nil {
+				if err := cache.Set(t.Context(), db.PropertyBySitekeyCacheKey(sitekey), tc.property); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// errUserLimiter returns an error from EvaluatePropertyAccess so
+			// the middleware skips the subscription gate and reaches the
+			// origin check (which is what this test exercises).
+			auth := &AuthMiddleware{
+				Store:               store,
+				SitekeyChan:         make(chan string, 1),
+				EdgeChan:            make(chan string, 1),
+				Metrics:             monitoring.NewStub(),
+				Limiter:             errUserLimiter{},
+				backpressureTimeout: time.Second,
+			}
+
+			req := httptest.NewRequest(http.MethodGet, "/puzzle?sitekey="+sitekey, nil)
+			if tc.origin != "" {
+				req.Header.Set(common.HeaderOrigin, tc.origin)
+			} else if tc.referer != "" {
+				req.Header.Set(common.HeaderReferer, tc.referer)
+			}
+
+			innerCalled := false
+			w := httptest.NewRecorder()
+			auth.Sitekey(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				innerCalled = true
+				w.WriteHeader(http.StatusOK)
+			})).ServeHTTP(w, req)
+
+			if w.Code != tc.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tc.wantStatus)
+			}
+			if innerCalled != tc.wantInnerCalled {
+				t.Errorf("inner handler called = %v, want %v", innerCalled, tc.wantInnerCalled)
+			}
+		})
+	}
 }

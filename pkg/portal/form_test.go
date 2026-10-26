@@ -287,6 +287,98 @@ func TestPostNewOrgFormNormalizesDomainCase(t *testing.T) {
 	}
 }
 
+// TestPostNewOrgFormNormalizesIDNDomain asserts that the portal form wizard
+// stores the IDNA ASCII (punycode) form of internationalized domain names on
+// the backing property so visitors' browsers (which always serialize IDN
+// hosts as punycode in Origin/Referer) match isOriginAllowed and the widget
+// actually loads.
+func TestPostNewOrgFormNormalizesIDNDomain(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"UnicodeIDN", "Б\u00fccher.example.com", "xn--cher-zra930c.example.com"},
+		{"MixedCaseUnicodeIDN", "Б\u00fcCHER.example.com", "xn--cher-zra930c.example.com"},
+		{"UnicodeIDNSubdomain", "sub.Б\u00fccher.example.com", "sub.xn--cher-zra930c.example.com"},
+		{"AlreadyPunycode", "xn--cher-zra930c.example.com", "xn--cher-zra930c.example.com"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// t.Name() includes a "/" separator from the subtest name that the
+			// form-name validator rejects, so sanitize it.
+			formName := strings.ReplaceAll(t.Name(), "/", "_") + " Contact"
+			formData := url.Values{}
+			formData.Set(common.ParamCSRFToken, server.XSRF.Token(fmt.Sprintf("%d", user.ID)))
+			formData.Set(common.ParamName, formName)
+			formData.Set(common.ParamDomain, tc.input)
+			formData.Set(common.ParamURL, "https://hooks.example.com/submit")
+			formData.Set(common.ParamIgnoreError, "true")
+
+			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/new", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(formData.Encode()))
+			req.AddCookie(cookie)
+			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+			req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+
+			w := httptest.NewRecorder()
+			viewModel, err := server.postNewOrgForm(w, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if viewModel == nil {
+				t.Fatal("Expected ViewModel, got nil")
+			}
+			if viewModel.View != formWizardSetupTemplate {
+				t.Fatalf("Expected view %q, got %q", formWizardSetupTemplate, viewModel.View)
+			}
+
+			forms, _, err := store.Impl().RetrieveOrgForms(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var createdForm *dbgen.Form
+			for _, f := range forms {
+				if f.Name == formName {
+					createdForm = f
+					break
+				}
+			}
+			if createdForm == nil {
+				t.Fatalf("form %q not found in org", formName)
+			}
+			createdProperty, err := store.Impl().GetCachedPropertyByID(ctx, createdForm.PropertyID)
+			if err != nil {
+				t.Fatalf("expected backing property, got %v", err)
+			}
+			if createdProperty == nil {
+				t.Fatal("expected backing property to exist")
+			}
+			if createdProperty.Domain != tc.want {
+				t.Errorf("expected normalized backing property domain %q, got %q (raw input was %q)", tc.want, createdProperty.Domain, tc.input)
+			}
+		})
+	}
+}
+
 func TestGetFormDashboard(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

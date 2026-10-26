@@ -321,24 +321,32 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vie
 	return &ViewModel{Model: data, View: propertyWizardTemplate, IsNew: true}, nil
 }
 
-func (s *Server) validateDomainName(ctx context.Context, domain string, ignoreResolveError bool) common.StatusCode {
+// validateDomainName validates the supplied domain name and reports the
+// validation status together with the IDNA ASCII (punycode) form of the
+// domain. The punycode form is what callers must persist: browsers always
+// serialize IDN hosts as punycode in the Origin/Referer headers, so a stored
+// raw-Unicode form would never match the read-side origin check (see
+// isOriginAllowed) and would also leak into /verify responses and the edge
+// token "host" claim in the wrong representation. On any validation failure
+// the returned string is empty.
+func (s *Server) validateDomainName(ctx context.Context, domain string, ignoreResolveError bool) (common.StatusCode, string) {
 	if status, ok := validateDomainBasics(ctx, domain); !ok {
-		return status
+		return status, ""
 	}
 
 	ascii, err := idna.Lookup.ToASCII(domain)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to convert domain name to ASCII", "domain", domain, common.ErrAttr(err))
-		return common.StatusPropertyDomainNameInvalidError
+		return common.StatusPropertyDomainNameInvalidError, ""
 	}
 
 	if status, ok := validateDomainBasics(ctx, ascii); !ok {
-		return status
+		return status, ""
 	}
 
 	if ignoreResolveError {
 		slog.WarnContext(ctx, "Skipping resolving domain name", "domain", ascii)
-		return common.StatusOK
+		return common.StatusOK, ascii
 	}
 
 	const timeout = 3 * time.Second
@@ -357,18 +365,18 @@ func (s *Server) validateDomainName(ctx context.Context, domain string, ignoreRe
 
 		if !anyNonLocal {
 			slog.WarnContext(ctx, "Only loopback IPs are resolved", "domain", ascii, "first", names[0])
-			return common.StatusPropertyDomainLocalhostError
+			return common.StatusPropertyDomainLocalhostError, ""
 		}
 
 		slog.DebugContext(ctx, "Resolved domain name", "domain", ascii, "ips", len(names), "first", names[0])
-		return common.StatusOK
+		return common.StatusOK, ascii
 	}
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to resolve domain name", "domain", ascii, common.ErrAttr(err))
 	}
 
-	return common.StatusPropertyDomainResolveError
+	return common.StatusPropertyDomainResolveError, ""
 }
 
 // validateDomainBasics performs the basic domain validation checks (non-empty,
@@ -499,11 +507,14 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vi
 	}
 
 	_, ignoreError := r.Form[common.ParamIgnoreError]
-	if domainStatus := s.validateDomainName(ctx, domain, ignoreError); !domainStatus.Success() {
+	domainStatus, ascii := s.validateDomainName(ctx, domain, ignoreError)
+	if !domainStatus.Success() {
 		renderCtx.DomainError = domainStatus.String()
 		return &ViewModel{Model: renderCtx, View: createPropertyTemplate, IsNew: false}, nil
 	}
-	domain = strings.ToLower(domain)
+	// Persist the IDNA ASCII (punycode) form so it matches the punycode host
+	// browsers send in the Origin/Referer header (see isOriginAllowed).
+	domain = strings.ToLower(ascii)
 
 	if limitError := s.validatePropertiesLimit(ctx, org, user); len(limitError) > 0 {
 		renderCtx.ErrorMessage = limitError

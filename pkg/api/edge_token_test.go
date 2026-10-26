@@ -1210,3 +1210,62 @@ func TestEdgeJWKSHTTP(t *testing.T) {
 		t.Fatalf("unconfigured JWKS: %d %s %v", w.Code, w.Body.String(), w.Header())
 	}
 }
+
+// TestEdgeTokenHostClaimIsPunycodeForIDNProperty asserts that the edge-token
+// "host" claim is signed verbatim from property.Domain and therefore carries
+// the punycode form for an IDN property (the form browsers send in the
+// request host, which downstream edge enforcement compares against). Also
+// verifies that newVerificationResponse surfaces the same punycode form as
+// response.Origin. Runs under -short (in-memory signer only).
+func TestEdgeTokenHostClaimIsPunycodeForIDNProperty(t *testing.T) {
+	signer := newTestEdgeSigner(t)
+	cache := db.NewStaticCache[db.CacheKey, any](10, &db.CacheMissingValue{})
+	if err := cache.SetMissing(t.Context(), db.CompiledPropertyRulesCacheKey(1)); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{EdgeTokens: signer, BusinessDB: db.NewBusinessEx(nil, cache)}
+	now := time.Unix(1700000000, 0)
+	property := &dbgen.Property{
+		ID:                        1,
+		ExternalID:                db.UUIDFromSiteKey("11111111222233334444555555555555"),
+		Domain:                    "xn--cher-zra930c.example.com", // the form stored post-fix
+		EdgeTokenValidityInterval: time.Hour,
+	}
+	result := &puzzle.VerifyResult{
+		Error:             puzzle.VerifyNoError,
+		PuzzleID:          1,
+		PuzzleVersion:     puzzle.PuzzleVersion3,
+		Domain:            property.Domain,
+		EdgeTokenValidity: time.Hour,
+	}
+	response := newVerificationResponse(result, false)
+	// response.Origin == result.Domain == property.Domain == punycode
+	if response.Origin != "xn--cher-zra930c.example.com" {
+		t.Fatalf("response.Origin (Hostname) = %q, want punycode form", response.Origin)
+	}
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/verify", nil)
+	if err := s.addEdgeToken(req, response, result, property, now); err != nil {
+		t.Fatal(err)
+	}
+	if response.EdgeToken == "" {
+		t.Fatal("expected edge token to be signed for IDN property with edge enabled")
+	}
+	// Parse the JWT body (without signature verification — the JWKS test
+	// above already covers signature correctness) and assert the host claim.
+	parts := strings.Split(response.EdgeToken, ".")
+	if len(parts) != 3 {
+		t.Fatalf("invalid compact JWS: %s", response.EdgeToken)
+	}
+	body, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var claims map[string]any
+	if err := json.Unmarshal(body, &claims); err != nil {
+		t.Fatal(err)
+	}
+	host, _ := claims["host"].(string)
+	if host != "xn--cher-zra930c.example.com" {
+		t.Errorf("edge token host claim = %q, want punycode %q (downstream edge enforcement compares against the browser-sent punycode request host)", host, "xn--cher-zra930c.example.com")
+	}
+}

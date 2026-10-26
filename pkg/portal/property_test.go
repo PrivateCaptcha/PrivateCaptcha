@@ -87,7 +87,7 @@ func TestValidateDomainNameRejectsEmptyNormalization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			status := srv.validateDomainName(ctx, tt.domain, tt.ignoreResolve)
+			status, _ := srv.validateDomainName(ctx, tt.domain, tt.ignoreResolve)
 			if status != tt.wantStatus {
 				t.Errorf("status = %v; want %v", status, tt.wantStatus)
 			}
@@ -104,18 +104,96 @@ func TestValidateDomainNameResolveBranch(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("ResolveError", func(t *testing.T) {
-		status := srv.validateDomainName(ctx, "nonexistent-domain.invalid", false)
+		status, _ := srv.validateDomainName(ctx, "nonexistent-domain.invalid", false)
 		if status != common.StatusPropertyDomainResolveError {
 			t.Errorf("status = %v; want %v", status, common.StatusPropertyDomainResolveError)
 		}
 	})
 
 	t.Run("ResolveSuccess", func(t *testing.T) {
-		status := srv.validateDomainName(ctx, "example.com", false)
+		status, _ := srv.validateDomainName(ctx, "example.com", false)
 		if status != common.StatusOK {
 			t.Errorf("status = %v; want %v", status, common.StatusOK)
 		}
 	})
+}
+
+// TestValidateDomainNameReturnsPunycode ensures validateDomainName returns
+// the IDNA ASCII (punycode) form on success so that the persisted property
+// domain matches the punycode host that browsers always send in the
+// Origin/Referer header (see pkg/api isOriginAllowed). Runs under -short
+// because the ignoreResolveError path skips DNS and does not touch the DB.
+func TestValidateDomainNameReturnsPunycode(t *testing.T) {
+	srv := &Server{}
+	ctx := t.Context()
+
+	tests := []struct {
+		name       string
+		domain     string
+		wantStatus common.StatusCode
+		wantASCII  string
+	}{
+		{
+			name:       "ASCII",
+			domain:     "example.com",
+			wantStatus: common.StatusOK,
+			wantASCII:  "example.com",
+		},
+		{
+			name:       "MixedCaseASCII",
+			domain:     "Example.COM",
+			wantStatus: common.StatusOK,
+			wantASCII:  "example.com",
+		},
+		{
+			name:       "SubdomainASCII",
+			domain:     "sub.example.com",
+			wantStatus: common.StatusOK,
+			wantASCII:  "sub.example.com",
+		},
+		{
+			name:       "IDNUnicodeReturnsPunycode",
+			domain:     "Б\u00fccher.example.com",
+			wantStatus: common.StatusOK,
+			wantASCII:  "xn--cher-zra930c.example.com",
+		},
+		{
+			name:       "IDNUnicodeSubdomainReturnsPunycode",
+			domain:     "sub.Б\u00fccher.example.com",
+			wantStatus: common.StatusOK,
+			wantASCII:  "sub.xn--cher-zra930c.example.com",
+		},
+		{
+			name:       "AlreadyPunycode",
+			domain:     "xn--cher-zra930c.example.com",
+			wantStatus: common.StatusOK,
+			wantASCII:  "xn--cher-zra930c.example.com",
+		},
+		{
+			name:       "InvalidIDNA",
+			domain:     "_.example.com",
+			wantStatus: common.StatusPropertyDomainNameInvalidError,
+			wantASCII:  "",
+		},
+		{
+			name:       "Empty",
+			domain:     "",
+			wantStatus: common.StatusPropertyDomainEmptyError,
+			wantASCII:  "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status, ascii := srv.validateDomainName(ctx, tt.domain, true /*ignoreResolveError*/)
+			if status != tt.wantStatus {
+				t.Errorf("status = %v; want %v", status, tt.wantStatus)
+			}
+			if ascii != tt.wantASCII {
+				t.Errorf("ascii = %q; want %q (raw input was %q)", ascii, tt.wantASCII, tt.domain)
+			}
+		})
+	}
 }
 
 func TestValidateDomainBasics(t *testing.T) {
@@ -419,6 +497,87 @@ func TestPostNewOrgPropertyNormalizesDomainCase(t *testing.T) {
 	}
 	if pp[0].Domain != "example.com" {
 		t.Errorf("Expected normalized domain %q, got %q (raw input was %q)", "example.com", pp[0].Domain, "Example.com")
+	}
+}
+
+// TestPostNewOrgPropertyNormalizesIDNDomain asserts that the portal property
+// wizard stores the IDNA ASCII (punycode) form of internationalized domain
+// names so that visitors' browsers (which always serialize IDN hosts as
+// punycode in the Origin/Referer header) match the read-side
+// isOriginAllowed check and the CAPTCHA widget actually loads.
+func TestPostNewOrgPropertyNormalizesIDNDomain(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"UnicodeIDN", "Б\u00fccher.example.com", "xn--cher-zra930c.example.com"},
+		{"MixedCaseUnicodeIDN", "Б\u00fcCHER.example.com", "xn--cher-zra930c.example.com"},
+		{"UnicodeIDNSubdomain", "sub.Б\u00fccher.example.com", "sub.xn--cher-zra930c.example.com"},
+		{"AlreadyPunycode", "xn--cher-zra930c.example.com", "xn--cher-zra930c.example.com"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			// t.Name() includes a "/" separator from the subtest name that the
+			// property-name validator rejects, so sanitize it.
+			propertyName := strings.ReplaceAll(t.Name(), "/", "_") + "Property"
+
+			form := url.Values{}
+			form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+			form.Set(common.ParamName, propertyName)
+			form.Set(common.ParamDomain, tc.input)
+			form.Set(common.ParamIgnoreError, "true")
+
+			req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", server.IDHasher.Encrypt(int(org.ID))),
+				strings.NewReader(form.Encode()))
+			req.AddCookie(cookie)
+			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			resp := w.Result()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("Unexpected status code %v", resp.StatusCode)
+			}
+
+			pp, _, err := store.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var found *dbgen.Property
+			for _, p := range pp {
+				if p.Name == propertyName {
+					found = p
+					break
+				}
+			}
+			if found == nil {
+				t.Fatalf("property %q not found in org", propertyName)
+			}
+			if found.Domain != tc.want {
+				t.Errorf("Expected normalized domain %q, got %q (raw input was %q)", tc.want, found.Domain, tc.input)
+			}
+		})
 	}
 }
 

@@ -3830,3 +3830,88 @@ func TestApiPostPropertiesNormalizesDomainCase(t *testing.T) {
 		}
 	}
 }
+
+// TestApiPostPropertiesNormalizesIDNDomain asserts that the API create
+// flow stores the IDNA ASCII (punycode) form of internationalized domain
+// names. Browsers serialize IDN hosts as punycode in the Origin/Referer
+// header, so a stored raw-Unicode form would never match the read-side
+// isOriginAllowed check and would silently 403 every browser challenge
+// request. Storing the punycode form is the fix; the legacy read-side
+// defense-in-depth (idna normalization inside isOriginAllowed) covers
+// rows stored before this fix.
+func TestApiPostPropertiesNormalizesIDNDomain(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"UnicodeIDN", "Б\u00fccher.example.com", "xn--cher-zra930c.example.com"},
+		{"MixedCaseUnicodeIDN", "Б\u00fcCHER.example.com", "xn--cher-zra930c.example.com"},
+		{"UnicodeIDNSubdomain", "sub.Б\u00fccher.example.com", "sub.xn--cher-zra930c.example.com"},
+		{"AlreadyPunycode", "xn--cher-zra930c.example.com", "xn--cher-zra930c.example.com"},
+		{"SchemeUnicodeIDN", "https://Б\u00fccher.example.com", "xn--cher-zra930c.example.com"},
+	}
+
+	inputs := make([]*apiCreatePropertyInput, 0, len(cases))
+	for _, tc := range cases {
+		inputs = append(inputs, &apiCreatePropertyInput{
+			apiPropertySettings: apiPropertySettings{Name: t.Name() + " " + tc.name},
+			Domain:              tc.input,
+		})
+	}
+
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, inputs,
+		http.MethodPost,
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !meta.Code.Success() {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+
+	finished := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+		if result.Finished {
+			finished = true
+			break
+		}
+	}
+	if !finished {
+		t.Fatal("Async task did not complete within timeout")
+	}
+
+	properties, _, err := server.BusinessDB.Impl().RetrieveOrgPropertiesByDateAscending(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(properties) != len(cases) {
+		t.Fatalf("Unexpected number of properties: %v, want %d", len(properties), len(cases))
+	}
+	for i, tc := range cases {
+		if properties[i].Domain != tc.want {
+			t.Errorf("case %d (%s): stored domain = %q, want %q (raw input was %q)",
+				i, tc.name, properties[i].Domain, tc.want, tc.input)
+		}
+	}
+}

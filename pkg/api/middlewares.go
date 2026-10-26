@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/maypok86/otter/v2"
+	"golang.org/x/net/idna"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -513,19 +514,43 @@ func isOriginAllowed(origin string, property *dbgen.Property) bool {
 		return true
 	}
 
-	if strings.EqualFold(origin, property.Domain) {
+	// IDNA-normalize both sides so IDN (internationalized) domains match
+	// regardless of which representation each side uses: browsers always
+	// serialize IDN hosts as punycode (IDNA ASCII) in the Origin/Referer
+	// headers, but legacy property rows (stored before the write path was
+	// fixed; migration 000145 only lowercased) may still hold the raw Unicode
+	// form. ToASCII is a no-op for already-ASCII hosts and lowercases them as
+	// a side effect; on error (e.g., hosts with disallowed underscores that
+	// idna rejects) we fall back to the original value so the existing
+	// case-insensitive comparison remains intact.
+	normalizedOrigin := idnaASCIIOrDefault(origin, origin)
+	normalizedDomain := idnaASCIIOrDefault(property.Domain, property.Domain)
+
+	if strings.EqualFold(normalizedOrigin, normalizedDomain) {
 		return true
 	}
 
-	if common.IsLocalhost(origin) || common.IsSubDomainOrDomain(origin, "localhost") {
+	if common.IsLocalhost(normalizedOrigin) || common.IsSubDomainOrDomain(normalizedOrigin, "localhost") {
 		return property.AllowLocalhost
 	}
 
 	if property.AllowSubdomains {
-		return common.IsSubDomainOrDomain(origin, property.Domain)
+		return common.IsSubDomainOrDomain(normalizedOrigin, normalizedDomain)
 	}
 
 	return false
+}
+
+// idnaASCIIOrDefault converts a host to its IDNA ASCII (punycode) form. It
+// returns the default value if the host fails IDNA validation so callers can
+// fall back to the original representation, preserving prior behavior for
+// inputs that idna rejects (such as hosts with disallowed underscores).
+func idnaASCIIOrDefault(host, defaultVal string) string {
+	ascii, err := idna.Lookup.ToASCII(host)
+	if err != nil {
+		return defaultVal
+	}
+	return strings.ToLower(ascii)
 }
 
 func (am *AuthMiddleware) SitekeyOptions(next http.Handler) http.Handler {

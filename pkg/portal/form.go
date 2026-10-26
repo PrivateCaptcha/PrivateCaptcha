@@ -213,11 +213,14 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 	}
 
 	_, ignoreError := r.Form[common.ParamIgnoreError]
-	if domainStatus := s.validateDomainName(ctx, domain, ignoreError); !domainStatus.Success() {
+	domainStatus, ascii := s.validateDomainName(ctx, domain, ignoreError)
+	if !domainStatus.Success() {
 		renderCtx.DomainError = domainStatus.String()
 		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate, IsNew: false}, nil
 	}
-	domain = strings.ToLower(domain)
+	// Persist the IDNA ASCII (punycode) form so it matches the punycode host
+	// browsers send in the Origin/Referer header (see isOriginAllowed).
+	domain = strings.ToLower(ascii)
 
 	renderCtx.URL = strings.TrimSpace(r.FormValue(common.ParamURL))
 	if len(renderCtx.URL) == 0 {
