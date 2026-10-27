@@ -1202,6 +1202,10 @@ body.pc-vertical-stretch {
     @apply absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-pc bg-white py-1 border border-dashed border-pc-grey-250 focus:outline-none divide-y divide-dashed divide-pc-grey-250;
 }
 
+.pc-snippet-options {
+    @apply w-64;
+}
+
 .pc-user-menu-button {
     @apply relative;
     @apply flex;

@@ -1,4 +1,5 @@
 {{template "property-tabs.html" (dict "Root" . "ActiveTab" "integrations")}}
+{{ $extended := or (eq .Params.Property.Challenge .Const.ChallengeTypeArgon2ID) .Params.Property.EdgeEnabled }}
 
 <div x-data="{showAllWebsiteIntegrations: false, showAllServerIntegrations: false}">
     {{ template "integrations-header.html" . }}
@@ -19,7 +20,7 @@
                     </a>
                 </p>
             </div>
-            <div class="mt-6 pc-content-card overflow-hidden divide-y divide-pc-grey-250">
+            <div class="mt-6 pc-content-card divide-y divide-pc-grey-250">
                 <div class="px-4 py-5 sm:px-6">
                     <div class="-ml-4 -mt-4 flex flex-wrap items-center justify-between sm:flex-nowrap">
                         <div class="ml-4 mt-4">
@@ -40,15 +41,51 @@
                         </div>
                     </div>
                 </div>
-                <div class="bg-pc-pastel-50 px-6 py-5 sm:p-6 flex items-center sm:justify-between md:gap-6">
-                    <div class="grow">
-                        {{ template "integrations-snippet.html" . }}
+                <div class="bg-pc-pastel-50 px-6 py-5 sm:p-6 flex flex-col gap-6 sm:flex-row sm:items-center"
+                    x-data="{optionsOpen: false, parameters: []}"
+                    x-init="parameters = Array.from($el.querySelectorAll('input:checked'), input => input.value)">
+                    <div class="min-w-0 w-full flex-1">
+                        <code class="pc-code-block">
+                            <textarea id="snippet" x-ref="snippet" aria-label="Widget integration snippet" readonly
+                                x-on:resize.window="$el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'"
+                                x-effect="$el.value = $el.defaultValue.replace(/privatecaptcha\.js[^&quot;]*/, 'privatecaptcha.js' + (parameters.length ? '?' + parameters.join('&amp;') : '')); $el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'">{{ `<!-- Add this inside the <head> of your website -->` }}
+{{ `<script defer src="https:` }}{{$.Ctx.CDN}}{{ `/widget/js/privatecaptcha.js` }}{{ if $extended }}?v=ext{{ end }}{{ `"></script>` }}
+
+{{ `<!-- Add this inside your form -->` }}
+{{ `<div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>` }}</textarea>
+                        </code>
                     </div>
-                    <div class="mt-4 sm:ml-6 sm:mt-0 sm:flex-shrink-0">
-                        <button type="button" class="pc-setup-button"
-                            onclick="var textarea = document.getElementById('snippet'); textarea.focus(); textarea.select(); document.execCommand('copy');">
+                    <div id="snippet-controls" class="flex shrink-0 flex-col gap-3 self-end sm:self-auto">
+                        <button type="button" class="pc-internal-form-button pc-internal-form-button-primary pc-internal-button-smaller"
+                            @click="$refs.snippet.focus(); $refs.snippet.select(); document.execCommand('copy')">
                             Copy
                         </button>
+                        <div class="relative" @click.outside="optionsOpen = false"
+                            @keydown.escape.stop.prevent="optionsOpen = false; $refs.optionsButton.focus()">
+                            <button type="button" id="snippet-options-button" x-ref="optionsButton" class="pc-setup-button w-full justify-center gap-x-1.5"
+                                @click="optionsOpen = !optionsOpen" :aria-expanded="optionsOpen" aria-controls="snippet-options">
+                                Options
+                                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" class="-mr-1 w-5 h-5 text-pc-grey-600">
+                                    <path d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" fill-rule="evenodd" />
+                                </svg>
+                            </button>
+                            <div id="snippet-options" x-cloak x-show="optionsOpen" aria-labelledby="snippet-options-button"
+                                x-transition:enter="transition ease-out duration-100"
+                                x-transition:enter-start="transform opacity-0 scale-95"
+                                x-transition:enter-end="transform opacity-100 scale-100"
+                                x-transition:leave="transition ease-in duration-75"
+                                x-transition:leave-start="transform opacity-100 scale-100"
+                                x-transition:leave-end="transform opacity-0 scale-95"
+                                class="pc-header-dropdown pc-snippet-options" style="display: none;">
+                                {{ range $option := list
+                                    (dict "ID" "extended-script" "Label" "Extended script" "Parameter" "v=ext" "Checked" $extended)
+                                    (dict "ID" "explicit-rendering" "Label" "Explicit rendering" "Parameter" "render=explicit")
+                                    (dict "ID" "recaptcha-migration" "Label" "reCAPTCHA migration" "Parameter" "compat=recaptcha") }}
+                                {{ template "integrations-option.html" $option }}
+                                {{ end }}
+                                {{ template "integrations-branding-option.html" . }}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

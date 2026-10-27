@@ -1,0 +1,11 @@
+<label for="snippet-{{ .ID }}" class="flex items-center gap-3 px-4 py-2 text-sm/6 pc-checkbox-label {{ if .Disabled }}opacity-50 cursor-not-allowed{{ else }}cursor-pointer{{ end }}">
+    <span class="group grid size-4 shrink-0 grid-cols-1">
+        <input id="snippet-{{ .ID }}" type="checkbox" x-model="parameters" value="{{ .Parameter }}"
+            {{ if .Checked }}checked{{ end }} {{ if .Disabled }}disabled{{ end }}
+            class="col-start-1 row-start-1 pc-internal-form-checkbox" />
+        <svg viewBox="0 0 14 14" fill="none" aria-hidden="true" class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-pc-grey-950/25">
+            <path d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-0 group-has-[:checked]:opacity-100" />
+        </svg>
+    </span>
+    {{ .Label }}
+</label>

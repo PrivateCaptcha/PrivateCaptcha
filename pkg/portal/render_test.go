@@ -233,6 +233,19 @@ func TestRenderHTML(t *testing.T) {
 	blakeProperty.Challenge = string(dbgen.ChallengeTypeBlake2b)
 	argonProperty := stubProperty("Foo", "123")
 	argonProperty.Challenge = string(dbgen.ChallengeTypeArgon2ID)
+	integrationModel := &propertyIntegrationsRenderContext{
+		propertyDashboardRenderContext: propertyDashboardRenderContext{
+			Property: blakeProperty,
+			Org:      stubOrg("123"),
+		},
+		Sitekey: "qwerty",
+	}
+	argonIntegrationModel := *integrationModel
+	argonIntegrationModel.Property = argonProperty
+	edgeIntegrationProperty := *blakeProperty
+	edgeIntegrationProperty.EdgeEnabled = true
+	edgeIntegrationModel := *integrationModel
+	edgeIntegrationModel.Property = &edgeIntegrationProperty
 	edgeProperty := stubProperty("Foo", "123")
 	edgeProperty.HasDomain = true
 	edgeProperty.EdgeTokenValidityInterval = 4
@@ -782,6 +795,91 @@ func TestRenderHTML(t *testing.T) {
 			},
 			selector:   `#chart[data-stats-url="/org/123/property/1/stats"], #ruleChart[data-stats-url="/org/123/property/1/rulestats"]`,
 			matches:    []string{"", ""},
+			enterprise: enterpriseOnly,
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.IntegrationsEndpoint, "snippet-controls"},
+			template: propertyDashboardIntegrationsTemplate,
+			model:    integrationModel,
+			selector: `#snippet-controls > button.pc-internal-form-button-primary, #snippet-options-button[aria-controls="snippet-options"]`,
+			matches:  []string{"Copy", "Options"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.IntegrationsEndpoint, "snippet-options"},
+			template: propertyDashboardIntegrationsTemplate,
+			model:    integrationModel,
+			selector: `#snippet-options label`,
+			matches:  []string{"Extended script", "Explicit rendering", "reCAPTCHA migration", "Unbranded widget"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.IntegrationsEndpoint, "snippet-parameters"},
+			template: propertyDashboardIntegrationsTemplate,
+			model:    integrationModel,
+			selector: `#snippet-options input[type="checkbox"][x-model="parameters"][value="v=ext"], #snippet-options input[type="checkbox"][x-model="parameters"][value="render=explicit"], #snippet-options input[type="checkbox"][x-model="parameters"][value="compat=recaptcha"], #snippet-options input[type="checkbox"][x-model="parameters"][value="branding=none"]`,
+			matches:  []string{"", "", "", ""},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.IntegrationsEndpoint, "snippet-defaults"},
+			template: propertyDashboardIntegrationsTemplate,
+			model:    integrationModel,
+			selector: `#snippet-options input[checked]`,
+			matches:  []string{},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.IntegrationsEndpoint, "snippet-resize"},
+			template: propertyDashboardIntegrationsTemplate,
+			model:    integrationModel,
+			selector: `#snippet[x-on\:resize\.window]`,
+			matches: []string{`<!-- Add this inside the <head> of your website -->
+<script defer src="https:/widget/js/privatecaptcha.js"></script>
+
+<!-- Add this inside your form -->
+<div class="private-captcha" data-sitekey="qwerty"></div>`},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.IntegrationsEndpoint, "snippet-memory-hard-default"},
+			template: propertyDashboardIntegrationsTemplate,
+			model:    &argonIntegrationModel,
+			selector: `#snippet-options input[value="v=ext"][checked]:not([disabled])`,
+			matches:  []string{""},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.IntegrationsEndpoint, "snippet-edge-default"},
+			template: propertyDashboardIntegrationsTemplate,
+			model:    &edgeIntegrationModel,
+			selector: `#snippet-options input[value="v=ext"][checked]:not([disabled])`,
+			matches:  []string{""},
+		},
+		{
+			path:       []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.IntegrationsEndpoint, "snippet-community-branding"},
+			template:   propertyDashboardIntegrationsTemplate,
+			model:      integrationModel,
+			selector:   `#snippet-options input[value="branding=none"][disabled]:not([checked]), #snippet-options label[for="snippet-unbranded-widget"].opacity-50`,
+			matches:    []string{"Unbranded widget", ""},
+			enterprise: new(bool),
+		},
+		{
+			path:       []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.IntegrationsEndpoint, "snippet-enterprise-branding"},
+			template:   propertyDashboardIntegrationsTemplate,
+			model:      integrationModel,
+			selector:   `#snippet-options input[value="branding=none"]:not([disabled]):not([checked])`,
+			matches:    []string{""},
+			enterprise: enterpriseOnly,
+		},
+		{
+			path:       []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.IntegrationsEndpoint, "snippet-community-branding-option"},
+			template:   "property/integrations-branding-option.html",
+			model:      integrationModel,
+			selector:   `label[for="snippet-unbranded-widget"].opacity-50, input#snippet-unbranded-widget[x-model="parameters"][value="branding=none"][disabled]:not([checked])`,
+			matches:    []string{"Unbranded widget", ""},
+			enterprise: new(bool),
+		},
+		{
+			path:       []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.IntegrationsEndpoint, "snippet-enterprise-branding-option"},
+			template:   "property/integrations-branding-option.html",
+			model:      integrationModel,
+			selector:   `label[for="snippet-unbranded-widget"]:not(.opacity-50), input#snippet-unbranded-widget[x-model="parameters"][value="branding=none"]:not([disabled]):not([checked])`,
+			matches:    []string{"Unbranded widget", ""},
 			enterprise: enterpriseOnly,
 		},
 		// same as above, but property integrations _template_
