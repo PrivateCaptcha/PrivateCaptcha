@@ -66,7 +66,14 @@ func (*FormURLSafetyCheckerImpl) IsSafeFormHostname(host string) bool {
 }
 
 var unsafePrefixes = []netip.Prefix{
-	netip.MustParsePrefix("100.64.0.0/10"), // RFC 6598 CGN
+	netip.MustParsePrefix("100.64.0.0/10"),    // RFC 6598 CGN
+	netip.MustParsePrefix("0.0.0.0/8"),        // RFC 1122 "this network"
+	netip.MustParsePrefix("192.0.0.0/24"),     // RFC 6890 IETF protocol assignments
+	netip.MustParsePrefix("192.88.99.0/24"),   // RFC 7526 6to4 relay anycast (deprecated)
+	netip.MustParsePrefix("198.18.0.0/15"),    // RFC 2544 benchmarking
+	netip.MustParsePrefix("240.0.0.0/4"),      // RFC 1112 reserved
+	netip.MustParsePrefix("168.63.129.16/32"), // Azure platform virtual IP (WireServer / platform DNS)
+	netip.MustParsePrefix("fec0::/10"),        // RFC 3879 deprecated IPv6 site-local
 }
 
 func isKnownUnsafeIP(ip netip.Addr) bool {
