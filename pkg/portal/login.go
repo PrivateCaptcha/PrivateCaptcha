@@ -3,7 +3,6 @@ package portal
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -151,9 +150,9 @@ func (s *Server) startSignIn(w http.ResponseWriter, r *http.Request, user *dbgen
 		return session.Authority{}, false
 	}
 
-	code := twoFactorCode(ctx)
+	code := twoFactorCode()
 	location := r.Header.Get(s.CountryCodeHeader.Value())
-	result, err := s.Sessions.IssueSignInChallenge(w, r, sess, user.ID, fmt.Sprintf("%06d", code), s.TwoFactorDuration, maxFailedAttempts)
+	result, err := s.Sessions.IssueSignInChallenge(w, r, sess, user.ID, code, s.TwoFactorDuration, maxFailedAttempts)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to issue sign-in challenge", common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)

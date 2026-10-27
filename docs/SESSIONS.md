@@ -107,6 +107,8 @@ Queueing is best effort. A cookie may outlive the database row if renewal is dro
 
 ### Challenge Replay
 
+Verification codes are six cryptographically random characters from `0-9` and `A-Z`, including leading zeros. Codes are stored and delivered as strings and compared case-sensitively.
+
 Cached challenge data cannot authenticate a user. Every attempt is decided by a guarded PostgreSQL query, so replicas share expiration and the cumulative attempt count for that SID. Issuing another email-change challenge preserves the existing count and is rejected once the cap is reached.
 
 `ConsumeSignInChallenge` revokes the pending predecessor and inserts one authenticated successor in a single statement. Concurrent replicas therefore get one winner. With valid CSRF, registration consumes and revokes its challenge, then separately creates the account and authenticated successor. Registration screening runs in a background job after challenge issuance and marks both PostgreSQL and the local cached Authority when more verification is required. Resend preserves the existing attempt count. See [`ConsumeSignInChallenge`](../pkg/db/queries/postgres/sessions.sql) and [`postTwoFactor`](../pkg/portal/twofactor.go).

@@ -252,9 +252,9 @@ func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code := twoFactorCode(ctx)
+	code := twoFactorCode()
 	location := r.Header.Get(s.CountryCodeHeader.Value())
-	result, err := s.Sessions.ResendPendingChallenge(ctx, sess, fmt.Sprintf("%06d", code), s.TwoFactorDuration, maxFailedAttempts)
+	result, err := s.Sessions.ResendPendingChallenge(ctx, sess, code, s.TwoFactorDuration, maxFailedAttempts)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to resend pending challenge", common.ErrAttr(err))
 		s.render(w, r, "login/resend-error.html", renderContextNothing, false /*new*/)
