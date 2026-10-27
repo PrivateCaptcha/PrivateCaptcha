@@ -87,7 +87,7 @@ func TestStaticWidgetVariant(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := "static"
-			cacheControl := "public, max-age=300, must-revalidate"
+			cacheControl := "public, max-age=300, s-maxage=3600"
 			if enterpriseBuild && tt.whitelabel {
 				root = "whitelabel"
 				cacheControl = "private, no-cache, must-revalidate"
