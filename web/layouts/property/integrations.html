@@ -79,8 +79,8 @@
                                 class="pc-header-dropdown pc-snippet-options" style="display: none;">
                                 {{ range $option := list
                                     (dict "ID" "extended-script" "Label" "Extended script" "Parameter" "v=ext" "Checked" $extended)
-                                    (dict "ID" "explicit-rendering" "Label" "Explicit rendering" "Parameter" "render=explicit")
-                                    (dict "ID" "recaptcha-migration" "Label" "reCAPTCHA migration" "Parameter" "compat=recaptcha") }}
+                                    (dict "ID" "explicit-rendering" "Label" "Explicit rendering" "Parameter" "render=explicit" "Checked" false)
+                                    (dict "ID" "recaptcha-migration" "Label" "reCAPTCHA migration" "Parameter" "compat=recaptcha" "Checked" false) }}
                                 {{ template "integrations-option.html" $option }}
                                 {{ end }}
                                 {{ template "integrations-branding-option.html" . }}
