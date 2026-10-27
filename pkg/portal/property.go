@@ -434,13 +434,17 @@ func (s *Server) echoPuzzle(w http.ResponseWriter, r *http.Request) {
 
 	var level common.DifficultyLevel
 	if difficultyParam, err := common.StrPathArg(r, common.ParamDifficulty); err == nil {
-		level = difficultyLevelFromValue(ctx, difficultyParam, 1, int(common.MaxDifficultyLevel))
+		level = difficultyLevelFromValue(ctx, difficultyParam, int(common.DifficultyLevelSmall), int(common.MaxDifficultyLevel))
 	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve difficulty argument", common.ErrAttr(err))
 		level = common.DifficultyLevelSmall
 	}
 
-	sitekey := r.URL.Query().Get(common.ParamSiteKey)
+	// Echo puzzles are used only by the in-portal widget demo. They are signed with the
+	// deployment puzzle salt, so the property must never be chosen by the caller: a puzzle
+	// minted for a real property sitekey would otherwise be accepted as a valid captcha
+	// solution for that property by every verification endpoint.
+	sitekey := strings.ReplaceAll(propertySettingsPropertyID, "-", "")
 	uuid := db.UUIDFromSiteKey(sitekey)
 
 	p := puzzle.NewComputePuzzle(0 /*puzzle ID*/, uuid.Bytes, uint8(level))
