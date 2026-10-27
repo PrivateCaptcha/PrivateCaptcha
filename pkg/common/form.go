@@ -32,6 +32,13 @@ func NewFormHTTPClient(verifier FormURLVerifier, redirectCount int16) *http.Clie
 
 	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
 		clone := transport.Clone()
+		// Form URLs are verified by resolving them and dialling the verified IP
+		// literal, which is what makes the check rebinding-proof. An HTTP proxy
+		// would receive the request instead and resolve the hostname itself, so
+		// the verification would only ever apply to the proxy address: never
+		// route these requests through a proxy, even if one is configured in the
+		// environment.
+		clone.Proxy = nil
 		clone.DialContext = verifier.DialContext
 		client.Transport = clone
 		clone.DisableKeepAlives = true
