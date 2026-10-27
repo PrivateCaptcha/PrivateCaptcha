@@ -339,10 +339,10 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (*ViewModel, 
 	renderCtx.EditEmail = true
 	renderCtx.TwoFactorEmail = common.MaskEmail(user.Email, '*')
 
-	code := twoFactorCode(ctx)
+	code := twoFactorCode()
 	location := r.Header.Get(s.CountryCodeHeader.Value())
 
-	result, err := s.Sessions.IssueEmailChangeChallenge(ctx, sess, fmt.Sprintf("%06d", code), s.TwoFactorDuration, maxFailedAttempts)
+	result, err := s.Sessions.IssueEmailChangeChallenge(ctx, sess, code, s.TwoFactorDuration, maxFailedAttempts)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to issue email-change challenge", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to start email verification. Please try again."

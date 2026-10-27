@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -66,11 +65,11 @@ func loginSuite(srv *http.ServeMux, email, token string, cookies ...*http.Cookie
 	return w.Result()
 }
 
-func twoFactorSuite(srv *http.ServeMux, email, token string, code int, cookie *http.Cookie) *http.Response {
+func twoFactorSuite(srv *http.ServeMux, email, token string, code string, cookie *http.Cookie) *http.Response {
 	form := url.Values{}
 	form.Add(common.ParamCSRFToken, token)
 	form.Add(common.ParamEmail, email)
-	form.Add(common.ParamVerificationCode, strconv.Itoa(code))
+	form.Add(common.ParamVerificationCode, code)
 
 	// now send the 2fa request
 	req := httptest.NewRequest("POST", "/"+common.TwoFactorEndpoint, bytes.NewBufferString(form.Encode()))
@@ -79,6 +78,13 @@ func twoFactorSuite(srv *http.ServeMux, email, token string, code int, cookie *h
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 	return w.Result()
+}
+
+func differentTwoFactorCode(code string) string {
+	if code[0] == '0' {
+		return "1" + code[1:]
+	}
+	return "0" + code[1:]
 }
 
 func TestPostTwoFactorRotatesSession(t *testing.T) {
@@ -177,7 +183,7 @@ func TestPostTwoFactorAttemptLimit(t *testing.T) {
 	}
 
 	for attempt := 1; attempt < maxFailedAttempts; attempt++ {
-		resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code+1, cookie)
+		resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), differentTwoFactorCode(code), cookie)
 		body, readErr := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if readErr != nil {
@@ -188,7 +194,7 @@ func TestPostTwoFactorAttemptLimit(t *testing.T) {
 		}
 	}
 
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code+1, cookie)
+	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), differentTwoFactorCode(code), cookie)
 	body, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
@@ -274,7 +280,7 @@ func TestRegistrationInvalidCSRFCannotConsumeAttempt(t *testing.T) {
 	}
 
 	for attempt := 1; attempt < maxFailedAttempts; attempt++ {
-		resp = twoFactorSuite(srv, emailAddress, server.XSRF.Token(emailAddress), code+1, cookie)
+		resp = twoFactorSuite(srv, emailAddress, server.XSRF.Token(emailAddress), differentTwoFactorCode(code), cookie)
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("failed attempt %d status = %v, want OK", attempt, resp.StatusCode)
@@ -286,7 +292,7 @@ func TestRegistrationInvalidCSRFCannotConsumeAttempt(t *testing.T) {
 		t.Fatalf("mailer type = %T, want *email.StubMailer", server.Mailer)
 	}
 	sentBeforeExhaustion := mailer.TwoFactorCount()
-	resp = twoFactorSuite(srv, emailAddress, server.XSRF.Token("wrong-email@example.com"), code+1, cookie)
+	resp = twoFactorSuite(srv, emailAddress, server.XSRF.Token("wrong-email@example.com"), differentTwoFactorCode(code), cookie)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Fatalf("cap-reaching registration status = %v, want redirect", resp.StatusCode)
@@ -358,7 +364,7 @@ func TestResend2FA(t *testing.T) {
 
 	// Try to use a wrong code first (but don't complete login)
 	// This simulates a user who received the code but wants to resend
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), 999999, cookie)
+	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), differentTwoFactorCode(originalCode), cookie)
 	// Using wrong code should fail
 	if resp.StatusCode == http.StatusSeeOther {
 		t.Fatal("Should not have succeeded with wrong code")
@@ -378,7 +384,7 @@ func TestResend2FA(t *testing.T) {
 
 	// Verify that the new code is different from the original
 	if newCode == originalCode {
-		t.Errorf("New 2FA code should be different from original code (both were %d)", newCode)
+		t.Errorf("New 2FA code should be different from original code (both were %q)", newCode)
 	}
 
 	// Verify we can use the new code to complete login

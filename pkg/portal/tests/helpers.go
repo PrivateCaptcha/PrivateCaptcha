@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -122,19 +121,19 @@ func Text(node *html.Node) string {
 	return strings.TrimSpace(sel.Text())
 }
 
-var twoFactorCodeSource func(string) (int, bool)
+var twoFactorCodeSource func(string) (string, bool)
 
-func SetTwoFactorCodeSource(source func(string) (int, bool)) {
+func SetTwoFactorCodeSource(source func(string) (string, bool)) {
 	twoFactorCodeSource = source
 }
 
-func TwoFactorCodeFromEmail(email string) (int, error) {
+func TwoFactorCodeFromEmail(email string) (string, error) {
 	if twoFactorCodeSource != nil {
 		if code, ok := twoFactorCodeSource(email); ok {
 			return code, nil
 		}
 	}
-	return 0, errors.New("2FA code not found in mail capture")
+	return "", errors.New("2FA code not found in mail capture")
 }
 
 func AuthenticateSuite(ctx context.Context, email string, srv *http.ServeMux, xsrf *common.XSRFMiddleware, sessions *session.Manager) (*http.Cookie, error) {
@@ -164,7 +163,7 @@ func AuthenticateSuite(ctx context.Context, email string, srv *http.ServeMux, xs
 	form = url.Values{}
 	form.Add(common.ParamCSRFToken, xsrf.Token(email))
 	form.Add(common.ParamEmail, email)
-	form.Add(common.ParamVerificationCode, strconv.Itoa(code))
+	form.Add(common.ParamVerificationCode, code)
 
 	// now send the 2fa request
 	req = httptest.NewRequest("POST", "/"+common.TwoFactorEndpoint, bytes.NewBufferString(form.Encode()))

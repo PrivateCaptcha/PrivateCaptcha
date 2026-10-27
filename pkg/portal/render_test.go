@@ -370,6 +370,8 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.LoginEndpoint},
 			template: twofactorContentsTemplate,
 			model:    &loginRenderContext{CsrfRenderContext: stubToken(), Email: "foo@bar.com"},
+			selector: `input[name="vcode"][pattern="[0-9A-Z]{6}"]`,
+			matches:  []string{""},
 		},
 		{
 			path:     []string{common.RegisterEndpoint},
@@ -1225,6 +1227,20 @@ func TestRenderHTML(t *testing.T) {
 				EmailError: "Email error",
 				NameError:  "Name error",
 			},
+		},
+		{
+			path:     []string{common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint},
+			template: settingsGeneralFormTemplate,
+			model: &settingsGeneralRenderContext{
+				SettingsCommonRenderContext: SettingsCommonRenderContext{
+					CsrfRenderContext: stubToken(),
+					Email:             "foo@bar.com",
+				},
+				EditEmail:      true,
+				TwoFactorEmail: "f**@bar.com",
+			},
+			selector: `input[name="vcode"][pattern="[0-9A-Z]{6}"]`,
+			matches:  []string{""},
 		},
 		{
 			path:     []string{common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint},

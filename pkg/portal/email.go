@@ -100,7 +100,7 @@ func NewPortalMailer(cdnURL, portalURL string, mailer emailpkg.Sender, cfg commo
 
 var _ common.Mailer = (*PortalMailer)(nil)
 
-func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code int, userAgent string, location string, isRegistration bool) error {
+func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code string, userAgent string, location string, isRegistration bool) error {
 	if len(email) == 0 {
 		return errInvalidEmail
 	}
@@ -110,7 +110,7 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 	location = validCountryCode(location)
 
 	data := &emailpkg.TwoFactorEmailContext{
-		Code:        fmt.Sprintf("%06d", code),
+		Code:        code,
 		CDNURL:      pm.CDNURL,
 		PortalURL:   pm.PortalURL,
 		CurrentYear: tnow.Year(),

@@ -3,7 +3,6 @@ package portal
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -95,7 +94,7 @@ type registrationInput struct {
 type issuedRegistrationChallenge struct {
 	authority session.Authority
 	sess      *session.Session
-	code      int
+	code      string
 	location  string
 }
 
@@ -153,7 +152,7 @@ func (s *Server) validateRegistrationInput(ctx context.Context, input registrati
 
 func (s *Server) issueRegistrationChallenge(w http.ResponseWriter, r *http.Request, input registrationInput) (*issuedRegistrationChallenge, bool) {
 	ctx := r.Context()
-	code := twoFactorCode(ctx)
+	code := twoFactorCode()
 	location := r.Header.Get(s.CountryCodeHeader.Value())
 
 	sess, err := s.Sessions.Start(w, r)
@@ -167,7 +166,7 @@ func (s *Server) issueRegistrationChallenge(w http.ResponseWriter, r *http.Reque
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return nil, false
 	}
-	result, err := s.Sessions.IssueRegistrationChallenge(w, r, sess, input.inviteID, input.email, fmt.Sprintf("%06d", code),
+	result, err := s.Sessions.IssueRegistrationChallenge(w, r, sess, input.inviteID, input.email, code,
 		s.TwoFactorDuration, maxFailedAttempts)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to issue registration challenge", common.ErrAttr(err))

@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"log/slog"
-	"math/big"
-	randv2 "math/rand/v2"
 	"net/http"
 	"time"
 
@@ -16,17 +14,22 @@ import (
 )
 
 // NOTE: this will eventually be replaced by proper OTP
-func twoFactorCode(ctx context.Context) int {
-	const span = 900000
-	const start = 100000
-	n, err := rand.Int(rand.Reader, big.NewInt(span))
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to generate two-factor code using crypto/rand", common.ErrAttr(err))
-
-		return randv2.IntN(span) + start
+func twoFactorCode() string {
+	const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	const uniformRange = 256 / len(alphabet) * len(alphabet)
+	var code [6]byte
+	var random [1]byte
+	for i := range code {
+		for {
+			_, _ = rand.Read(random[:])
+			// Reject the partial range to avoid modulo bias.
+			if int(random[0]) < uniformRange {
+				code[i] = alphabet[int(random[0])%len(alphabet)]
+				break
+			}
+		}
 	}
-
-	return int(n.Int64()) + start
+	return string(code[:])
 }
 
 func (s *Server) Org(user *dbgen.User, r *http.Request) (*dbgen.Organization, dbgen.NullAccessLevel, error) {

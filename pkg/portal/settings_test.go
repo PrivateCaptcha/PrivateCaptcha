@@ -728,11 +728,11 @@ func TestEmailChangeLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	update := func(email string, verificationCode int) *settingsGeneralRenderContext {
+	update := func(email string, verificationCode string) *settingsGeneralRenderContext {
 		form := url.Values{}
 		form.Set(common.ParamCSRFToken, csrfToken)
 		form.Set(common.ParamEmail, email)
-		form.Set(common.ParamVerificationCode, strconv.Itoa(verificationCode))
+		form.Set(common.ParamVerificationCode, verificationCode)
 		req := httptest.NewRequest(http.MethodPut, "/settings/tab/general", strings.NewReader(form.Encode()))
 		req.AddCookie(cookie)
 		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
@@ -752,7 +752,7 @@ func TestEmailChangeLifecycle(t *testing.T) {
 	}
 
 	newEmail := strings.ToLower(t.Name()) + "_new@privatecaptcha.com"
-	renderCtx = update(newEmail, code+1)
+	renderCtx = update(newEmail, differentTwoFactorCode(code))
 	if renderCtx.TwoFactorError != "Code is not valid." {
 		t.Fatalf("Expected invalid-code error, got %q", renderCtx.TwoFactorError)
 	}

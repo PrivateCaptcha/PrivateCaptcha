@@ -47,7 +47,7 @@ func TestTwoFactorEmailValidatesLocation(t *testing.T) {
 			sender := &captureSender{}
 			mailer := NewPortalMailer("https://cdn.example", "https://portal.example", sender, mailConfig{}, nil)
 
-			if err := mailer.SendTwoFactor(t.Context(), "user@example.com", 123456, "", tt.location, false); err != nil {
+			if err := mailer.SendTwoFactor(t.Context(), "user@example.com", "0A1B2Z", "", tt.location, false); err != nil {
 				t.Fatal(err)
 			}
 
@@ -61,6 +61,11 @@ func TestTwoFactorEmailValidatesLocation(t *testing.T) {
 			for _, body := range []string{sender.message.HTMLBody, sender.message.TextBody} {
 				if (tt.forbiddenText != "") && strings.Contains(body, tt.forbiddenText) {
 					t.Errorf("email body contains rejected location %q", tt.forbiddenText)
+				}
+			}
+			for _, content := range []string{sender.message.Subject, sender.message.HTMLBody, sender.message.TextBody} {
+				if !strings.Contains(content, "0A1B2Z") {
+					t.Error("email did not preserve the alphanumeric verification code")
 				}
 			}
 		})
@@ -90,7 +95,7 @@ func TestTwoFactorAdminCaseMismatchReturnsError(t *testing.T) {
 
 	mailer := NewPortalMailer("https://cdn.example", "https://portal.example", &failingSender{}, cfg, nil)
 
-	if err := mailer.SendTwoFactor(t.Context(), "admin@example.com", 123456, "", "", false); err != nil {
+	if err := mailer.SendTwoFactor(t.Context(), "admin@example.com", "0A1B2Z", "", "", false); err != nil {
 		t.Fatalf("SendTwoFactor returned %v; expected nil (admin email should match case-insensitively, swallowing the send failure)", err)
 	}
 }
@@ -101,7 +106,7 @@ func TestTwoFactorSpammerCaseMismatchReturnsError(t *testing.T) {
 
 	mailer := NewPortalMailer("https://cdn.example", "https://portal.example", &failingSender{}, cfg, nil)
 
-	if err := mailer.SendTwoFactor(t.Context(), "Spammer@privatecaptcha.local", 123456, "", "", false); err != nil {
+	if err := mailer.SendTwoFactor(t.Context(), "Spammer@privatecaptcha.local", "0A1B2Z", "", "", false); err != nil {
 		t.Fatalf("SendTwoFactor returned %v; expected nil (spammer email should match case-insensitively, swallowing the send failure)", err)
 	}
 }

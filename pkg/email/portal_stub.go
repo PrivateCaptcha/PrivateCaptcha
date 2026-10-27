@@ -9,22 +9,22 @@ import (
 )
 
 type StubMailer struct {
-	LastCode  int
+	LastCode  string
 	LastEmail string
 	Mailer    common.Mailer
 	mu        sync.RWMutex
-	codes     map[string]int
+	codes     map[string]string
 	sentCodes uint
 }
 
 var _ common.Mailer = (*StubMailer)(nil)
 
-func (sm *StubMailer) SendTwoFactor(ctx context.Context, email string, code int, ua string, location string, isRegistration bool) error {
+func (sm *StubMailer) SendTwoFactor(ctx context.Context, email string, code string, ua string, location string, isRegistration bool) error {
 	sm.mu.Lock()
 	sm.LastCode = code
 	sm.LastEmail = email
 	if sm.codes == nil {
-		sm.codes = make(map[string]int)
+		sm.codes = make(map[string]string)
 	}
 	sm.codes[email] = code
 	sm.sentCodes++
@@ -38,7 +38,7 @@ func (sm *StubMailer) SendTwoFactor(ctx context.Context, email string, code int,
 	return nil
 }
 
-func (sm *StubMailer) TwoFactorCode(email string) (int, bool) {
+func (sm *StubMailer) TwoFactorCode(email string) (string, bool) {
 	sm.mu.RLock()
 	code, ok := sm.codes[email]
 	sm.mu.RUnlock()
