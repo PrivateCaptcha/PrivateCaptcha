@@ -337,11 +337,14 @@ func TestPostNewOrgProperty(t *testing.T) {
 	}
 
 	propertyName := t.Name() + "Property"
+	const domain = "g\u00f6\u00f6gle.com"
+	const domainASCII = "xn--ggle-5qaa.com"
 
 	form := url.Values{}
 	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
 	form.Set(common.ParamName, propertyName)
-	form.Set(common.ParamDomain, "google.com")
+	form.Set(common.ParamDomain, domain)
+	form.Set(common.ParamIgnoreError, "true")
 
 	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", server.IDHasher.Encrypt(int(org.ID))),
 		strings.NewReader(form.Encode()))
@@ -362,12 +365,121 @@ func TestPostNewOrgProperty(t *testing.T) {
 	}
 
 	if count := len(pp); count != 1 {
-		t.Errorf("Unexpected number of properties in org: %v", count)
-	} else {
-		if pp[0].Name != propertyName {
-			t.Errorf("Unexpected property in org: %v", pp[0].Name)
-		}
+		t.Fatalf("Unexpected number of properties in org: %v", count)
 	}
+	property := pp[0]
+	if property.Name != propertyName {
+		t.Errorf("Unexpected property in org: %v", property.Name)
+	}
+	if property.Domain != domain || property.DomainASCII != domainASCII {
+		t.Errorf("Unexpected property domains: raw=%q ASCII=%q", property.Domain, property.DomainASCII)
+	}
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	cached, _, err := store.Impl().GetCachedPropertyBySitekey(ctx, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cached.Domain != domain || cached.DomainASCII != domainASCII {
+		t.Errorf("Unexpected cached property domains: raw=%q ASCII=%q", cached.Domain, cached.DomainASCII)
+	}
+
+	for _, tc := range []struct {
+		name string
+		read func() ([]*dbgen.Property, error)
+	}{
+		{
+			name: "BySitekey",
+			read: func() ([]*dbgen.Property, error) {
+				p, err := store.Impl().RetrievePropertyBySitekey(ctx, sitekey)
+				return []*dbgen.Property{p}, err
+			},
+		},
+		{
+			name: "ByOrg",
+			read: func() ([]*dbgen.Property, error) {
+				p, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+				return []*dbgen.Property{p}, err
+			},
+		},
+		{
+			name: "ByName",
+			read: func() ([]*dbgen.Property, error) {
+				p, err := store.Impl().FindOrgProperty(ctx, propertyName, org)
+				return []*dbgen.Property{p}, err
+			},
+		},
+		{
+			name: "BulkBySitekey",
+			read: func() ([]*dbgen.Property, error) {
+				return store.Impl().RetrievePropertiesBySitekey(ctx, map[string]uint{sitekey: 1}, 0)
+			},
+		},
+		{
+			name: "BulkByID",
+			read: func() ([]*dbgen.Property, error) {
+				return store.Impl().RetrievePropertiesByID(ctx, map[int32]uint{property.ID: 1})
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store.ClearCache()
+			for range 2 {
+				properties, err := tc.read()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(properties) != 1 {
+					t.Fatalf("Unexpected property count: %d", len(properties))
+				}
+				p := properties[0]
+				if p.Domain != domain || p.DomainASCII != domainASCII {
+					t.Errorf("Unexpected property domains: raw=%q ASCII=%q", p.Domain, p.DomainASCII)
+				}
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name string
+		sort db.OrgPropertiesSort
+	}{
+		{name: "DateAscending", sort: db.OrgPropertiesSortDateAscending},
+		{name: "DateDescending", sort: db.OrgPropertiesSortDateDescending},
+		{name: "NameAscending", sort: db.OrgPropertiesSortNameAscending},
+		{name: "NameDescending", sort: db.OrgPropertiesSortNameDescending},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store.ClearCache()
+			for range 2 {
+				properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org, tc.sort, 0, db.MaxOrgPropertiesPageSize)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(properties) != 1 {
+					t.Fatalf("Unexpected property count: %d", len(properties))
+				}
+				p := properties[0]
+				if p.Domain != domain || p.DomainASCII != domainASCII {
+					t.Errorf("Unexpected property domains: raw=%q ASCII=%q", p.Domain, p.DomainASCII)
+				}
+			}
+		})
+	}
+	t.Run("Update", func(t *testing.T) {
+		updated, _, err := store.Impl().UpdateProperty(ctx, org, user, db.NewUpdatePropertyParams(property))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if updated.Domain != domain || updated.DomainASCII != domainASCII {
+			t.Errorf("Unexpected updated property domains: raw=%q ASCII=%q", updated.Domain, updated.DomainASCII)
+		}
+		cached, _, err := store.Impl().GetCachedPropertyBySitekey(ctx, sitekey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cached.Domain != domain || cached.DomainASCII != domainASCII {
+			t.Errorf("Unexpected cached property domains after update: raw=%q ASCII=%q", cached.Domain, cached.DomainASCII)
+		}
+	})
 }
 
 func TestPostNewOrgPropertyNormalizesDomainCase(t *testing.T) {

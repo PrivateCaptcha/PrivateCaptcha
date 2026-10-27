@@ -782,6 +782,7 @@ type Property struct {
 	CreatorID                 pgtype.Int4        `db:"creator_id" json:"creator_id"`
 	OrgOwnerID                pgtype.Int4        `db:"org_owner_id" json:"org_owner_id"`
 	Domain                    string             `db:"domain" json:"domain"`
+	DomainASCII               string             `db:"-" json:"-"`
 	Level                     pgtype.Int2        `db:"level" json:"level"`
 	Salt                      []byte             `db:"salt" json:"salt"`
 	Growth                    DifficultyGrowth   `db:"growth" json:"growth"`

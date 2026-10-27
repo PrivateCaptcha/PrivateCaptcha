@@ -263,6 +263,7 @@ sqlc:
 	# https://github.com/sqlc-dev/sqlc/issues/3571
 	echo "CREATE SCHEMA backend;" > $(SQLC_MIGRATION_FIX)
 	cd pkg/db && sqlc generate --no-remote
+	go run cmd/patchmodels/main.go -w pkg/db/generated/models.go
 	go run cmd/clumpbools/main.go -w pkg/db/generated/models.go
 	find pkg/db -type f -name '*.sql.go' -exec go run cmd/clumpbools/main.go -w {} \;
 	gofmt -w pkg/db/generated/models.go

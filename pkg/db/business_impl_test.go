@@ -521,6 +521,27 @@ func TestBusinessStoreImplSoftDeleteUser(t *testing.T) {
 	})
 }
 
+func TestNormalizePropertyDomain(t *testing.T) {
+	for _, tc := range []struct {
+		domain string
+		ascii  string
+	}{
+		{domain: "", ascii: ""},
+		{domain: "Example.com", ascii: "example.com"},
+		{domain: "g\u00f6\u00f6gle.com", ascii: "xn--ggle-5qaa.com"},
+		{domain: "xn--ggle-5qaa.com", ascii: "xn--ggle-5qaa.com"},
+		{domain: "invalid\xff.com", ascii: ""},
+	} {
+		property := &dbgen.Property{
+			Domain: tc.domain,
+		}
+		normalizePropertyDomain(t.Context(), property)
+		if property.Domain != tc.domain || property.DomainASCII != tc.ascii {
+			t.Errorf("Unexpected property domains: raw=%q ASCII=%q, want raw=%q ASCII=%q", property.Domain, property.DomainASCII, tc.domain, tc.ascii)
+		}
+	}
+}
+
 func TestBusinessStoreImplRetrievePropertyBySitekey(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)

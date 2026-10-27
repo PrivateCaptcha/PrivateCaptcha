@@ -509,11 +509,15 @@ func (am *AuthMiddleware) originAllowed(r *http.Request, origin string) (bool, [
 }
 
 func isOriginAllowed(origin string, property *dbgen.Property) bool {
-	if len(property.Domain) == 0 {
+	domain := property.DomainASCII
+	if len(domain) == 0 {
+		domain = property.Domain
+	}
+	if len(domain) == 0 {
 		return true
 	}
 
-	if strings.EqualFold(origin, property.Domain) {
+	if strings.EqualFold(origin, domain) {
 		return true
 	}
 
@@ -522,7 +526,7 @@ func isOriginAllowed(origin string, property *dbgen.Property) bool {
 	}
 
 	if property.AllowSubdomains {
-		return common.IsSubDomainOrDomain(origin, property.Domain)
+		return common.IsSubDomainOrDomain(origin, domain)
 	}
 
 	return false
