@@ -259,6 +259,7 @@ func (s *Server) Init(ctx context.Context, config ServerConfig, workers *sync.Wa
 
 func (s *Server) Update(ctx context.Context) {
 	s.Verifier.UpdateMemoryBudget(ctx)
+	s.Verifier.updateMinSolveTimeAtMedium(ctx)
 	if err := s.EdgeTokens.Update(ctx); err != nil {
 		slog.ErrorContext(ctx, "Failed to reload edge token keys", common.ErrAttr(err))
 	}

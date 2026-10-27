@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -42,8 +43,9 @@ const (
 	TestPropertyError       VerifyError = 10
 	IntegrityError          VerifyError = 11
 	OrgScopeError           VerifyError = 12
+	SolutionTooFastError    VerifyError = 13
 	// Add new fields _above_
-	VERIFY_ERRORS_COUNT
+	VERIFY_ERRORS_COUNT VerifyError = iota
 )
 
 func (verr VerifyError) String() string {
@@ -74,6 +76,8 @@ func (verr VerifyError) String() string {
 		return "property-test"
 	case IntegrityError:
 		return "integrity-error"
+	case SolutionTooFastError:
+		return "solution-too-fast"
 	default:
 		return "error"
 	}
@@ -227,7 +231,7 @@ func (vp *VerifyPayload) Puzzle() Puzzle {
 	return vp.puzzle
 }
 
-func (vp *VerifyPayload) VerifySolutions(ctx context.Context) (*Metadata, VerifyError) {
+func (vp *VerifyPayload) VerifySolutions(ctx context.Context, minSolveTimeAtMedium *time.Duration) (*Metadata, VerifyError) {
 	solutions := vp.solutions
 	if solutions == nil || len(solutions.Buffer) != vp.puzzle.SolutionsCount()*SolutionLength ||
 		(vp.puzzle.Challenge() == ChallengeArgon2ID && vp.puzzle.SolutionsCount() != Argon2IDSolutionsCount) {
@@ -263,7 +267,63 @@ func (vp *VerifyPayload) VerifySolutions(ctx context.Context) (*Metadata, Verify
 		return solutions.Metadata, InvalidSolutionError
 	}
 
+	verr := verifySolveTime(vp.puzzle, solutions.Metadata, minSolveTimeAtMedium)
+	if verr != VerifyNoError {
+		return solutions.Metadata, verr
+	}
+
 	return solutions.Metadata, VerifyNoError
+}
+
+// Full-puzzle solve times in seconds, measured at each bucket's lower difficulty.
+// Source: BenchmarkSolverDifficultyBuckets in solver_test.go.
+// Run: make bench-puzzle-solver EXTRA_TEST_FLAGS='-bench=BenchmarkSolverDifficultyBuckets'
+var blake2bSolveTimeSeconds = [...]float64{
+	0.069360138,  // Measured at 136; bucket 136-151.
+	0.279922708,  // Measured at 152; bucket 152-167 (small).
+	1.053332916,  // Measured at 168; bucket 168-183 (medium).
+	4.002525749,  // Measured at 184; bucket 184-199 (high).
+	21.181988666, // Measured at 200; bucket 200-255 (capped at 200).
+}
+
+func verifySolveTime(p Puzzle, metadata *Metadata, minSolveTimeAtMedium *time.Duration) VerifyError {
+	if minSolveTimeAtMedium == nil || p.Challenge() != ChallengeBlake2b || p.SolutionsCount() == 0 || p.IsZero() {
+		return VerifyNoError
+	}
+	const minDifficulty = uint8(common.DifficultyLevelSmall - common.DifficultyDelta)
+	if p.Difficulty() < minDifficulty {
+		return VerifyNoError
+	}
+	// Recorded times only gate eligibility, using the preceding measured bucket
+	// and the last bucket for harder puzzles. Subsecond benchmarks are unreliable.
+	bucket := min(int(p.Difficulty()-minDifficulty)/common.DifficultyDelta, len(blake2bSolveTimeSeconds)-1)
+	if blake2bSolveTimeSeconds[bucket] < 1 {
+		return VerifyNoError
+	}
+	// The widget packs signed JS elapsed milliseconds into four bytes. Negative
+	// values arrive as two's-complement uint32 values and are ignored here.
+	elapsedMillis := int32(metadata.ElapsedMillis())
+	if elapsedMillis < 0 {
+		return VerifyNoError
+	}
+	if elapsedMillis == 0 {
+		return SolutionTooFastError
+	}
+	// Difficulty scales as 2^(d/8), so relative work versus medium is
+	// 2^((d-medium)/8). Use the actual difficulty rather than the bucket edge;
+	// cap it at the highest recorded difficulty to avoid unmeasured extrapolation.
+	// Every eight steps double the minimum; medium's factor is exactly one.
+	// Keep fractional seconds throughout: rounding to milliseconds would lose
+	// submillisecond minima, while scaling time.Duration could overflow.
+	const maxDifficulty = int(minDifficulty) + (len(blake2bSolveTimeSeconds)-1)*common.DifficultyDelta
+	difficulty := min(int(p.Difficulty()), maxDifficulty)
+	workFactor := math.Exp2(float64(difficulty-int(common.DifficultyLevelMedium)) / 8.0)
+	minimumSeconds := minSolveTimeAtMedium.Seconds() * workFactor
+	elapsedSeconds := float64(elapsedMillis) / 1000.0
+	if elapsedSeconds < minimumSeconds {
+		return SolutionTooFastError
+	}
+	return VerifyNoError
 }
 
 func NewStubPayload(p Puzzle) *stubVerifyPayload {
@@ -274,7 +334,7 @@ type stubVerifyPayload struct {
 	p Puzzle
 }
 
-func (p *stubVerifyPayload) VerifySolutions(ctx context.Context) (*Metadata, VerifyError) {
+func (p *stubVerifyPayload) VerifySolutions(ctx context.Context, minSolveTimeAtMedium *time.Duration) (*Metadata, VerifyError) {
 	return &Metadata{}, TestPropertyError
 }
 func (p *stubVerifyPayload) Puzzle() Puzzle {

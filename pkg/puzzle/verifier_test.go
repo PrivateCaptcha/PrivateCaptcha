@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/base64"
+	"encoding/binary"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -43,6 +45,7 @@ func TestSolutionsArgon2IDSignedRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	solutions.Metadata.elapsedMillis = 0
 	salt := NewSalt([]byte("test-salt"))
 	signed, err := p.Serialize(t.Context(), salt, nil)
 	if err != nil {
@@ -61,14 +64,336 @@ func TestSolutionsArgon2IDSignedRoundTrip(t *testing.T) {
 	if err := vp.VerifySignature(t.Context(), salt, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, result := vp.VerifySolutions(t.Context()); result != VerifyNoError {
+	if _, result := vp.VerifySolutions(t.Context(), new(100*time.Millisecond)); result != VerifyNoError {
 		t.Fatalf("verification = %v, want %v", result, VerifyNoError)
 	}
 
 	parsed := vp.puzzle.(*ComputePuzzle)
 	parsed.solutionsCount++
-	if _, result := vp.VerifySolutions(t.Context()); result == VerifyNoError {
+	if _, result := vp.VerifySolutions(t.Context(), nil); result == VerifyNoError {
 		t.Fatal("wrong signed Argon solution count passed verification")
+	}
+}
+
+func TestVerifyPayloadSolveTime(t *testing.T) {
+	for _, difficulty := range []uint8{152, 168} {
+		t.Run(fmt.Sprintf("Difficulty%d", difficulty), func(t *testing.T) {
+			p := NewComputePuzzle(123, [PropertyIDSize]byte{1}, difficulty)
+			if err := p.Init(DefaultValidityPeriod); err != nil {
+				t.Fatal(err)
+			}
+			solutions, err := (&ComputeSolver{}).Solve(t.Context(), p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			salt := NewSalt([]byte("test-salt"))
+			signed, err := p.Serialize(t.Context(), salt, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var encoded bytes.Buffer
+			encoded.WriteString(solutions.String())
+			encoded.WriteByte('.')
+			if err := signed.Write(&encoded); err != nil {
+				t.Fatal(err)
+			}
+
+			for _, tc := range []struct {
+				name    string
+				elapsed uint32
+				want    VerifyError
+			}{
+				{
+					name:    "Zero",
+					elapsed: 0,
+					want:    SolutionTooFastError,
+				},
+				{
+					name:    "FarBelowMinimum",
+					elapsed: 2,
+					want:    SolutionTooFastError,
+				},
+				{
+					name:    "BelowMinimum",
+					elapsed: 99,
+					want:    SolutionTooFastError,
+				},
+				{
+					name:    "AboveMinimum",
+					elapsed: 100,
+					want:    VerifyNoError,
+				},
+				{
+					name:    "Normal",
+					elapsed: 325,
+					want:    VerifyNoError,
+				},
+				{
+					name:    "Slower",
+					elapsed: 1000,
+					want:    VerifyNoError,
+				},
+				{
+					name:    "Maximum",
+					elapsed: ^uint32(0),
+					want:    VerifyNoError,
+				},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					tampered := mutateEncodedPayloadPart(t, encoded.Bytes(), 0, func(data []byte) []byte {
+						binary.LittleEndian.PutUint32(data[3:metadataLength], tc.elapsed)
+						return data
+					})
+					vp, err := ParseVerifyPayload[ComputePuzzle](t.Context(), tampered)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := vp.VerifySignature(t.Context(), salt, nil); err != nil {
+						t.Fatal(err)
+					}
+					metadata, result := vp.VerifySolutions(t.Context(), new(100*time.Millisecond))
+					want := tc.want
+					if difficulty == 152 {
+						want = VerifyNoError
+					}
+					if result != want || metadata.ElapsedMillis() != tc.elapsed {
+						t.Fatalf("verification = %v, elapsed = %d; want %v, %d", result, metadata.ElapsedMillis(), want, tc.elapsed)
+					}
+				})
+			}
+
+			solutions.Metadata.elapsedMillis = 0
+			copy(solutions.Buffer[SolutionLength:2*SolutionLength], solutions.Buffer[:SolutionLength])
+			body, err := p.MarshalBinary()
+			if err != nil {
+				t.Fatal(err)
+			}
+			vp := &VerifyPayload{
+				puzzle:     p,
+				puzzleData: body,
+				solutions:  solutions,
+			}
+			if _, result := vp.VerifySolutions(t.Context(), new(100*time.Millisecond)); result != DuplicateSolutionsError {
+				t.Fatalf("duplicate solutions with zero elapsed time = %v, want %v", result, DuplicateSolutionsError)
+			}
+		})
+	}
+}
+
+func TestTooFastVerificationResult(t *testing.T) {
+	result := NewVerifyResult(VerifyError(13))
+	if !result.Success() {
+		t.Fatal("too-fast verification must still succeed")
+	}
+	if result.Error.String() != "solution-too-fast" {
+		t.Fatalf("too-fast error string = %q", result.Error.String())
+	}
+	if codes := result.ErrorsToStrings(); len(codes) != 1 || codes[0] != "solution-too-fast" {
+		t.Fatalf("too-fast error codes = %v", codes)
+	}
+}
+
+func TestVerifySolveTimeBuckets(t *testing.T) {
+	for _, tc := range []struct {
+		difficulty uint8
+		fastMillis uint32
+	}{
+		{
+			difficulty: 168,
+			fastMillis: 99,
+		},
+		{
+			difficulty: 169,
+			fastMillis: 109,
+		},
+		{
+			difficulty: 176,
+			fastMillis: 199,
+		},
+		{
+			difficulty: 183,
+			fastMillis: 366,
+		},
+		{
+			difficulty: 184,
+			fastMillis: 399,
+		},
+		{
+			difficulty: 192,
+			fastMillis: 799,
+		},
+		{
+			difficulty: 199,
+			fastMillis: 1467,
+		},
+		{
+			difficulty: 200,
+			fastMillis: 1599,
+		},
+		{
+			difficulty: 255,
+			fastMillis: 1599,
+		},
+	} {
+		t.Run(fmt.Sprintf("Difficulty%d", tc.difficulty), func(t *testing.T) {
+			p := NewComputePuzzle(123, [PropertyIDSize]byte{}, tc.difficulty)
+			metadata := &Metadata{
+				elapsedMillis: tc.fastMillis,
+			}
+			if result := verifySolveTime(p, metadata, new(100*time.Millisecond)); result != SolutionTooFastError {
+				t.Fatalf("%dms verification = %v, want %v", metadata.elapsedMillis, result, SolutionTooFastError)
+			}
+			metadata.elapsedMillis++
+			if result := verifySolveTime(p, metadata, new(100*time.Millisecond)); result != VerifyNoError {
+				t.Fatalf("%dms verification = %v, want %v", metadata.elapsedMillis, result, VerifyNoError)
+			}
+		})
+	}
+}
+
+func TestVerifySolveTimeWithoutBaseline(t *testing.T) {
+	for _, challenge := range []Challenge{ChallengeBlake2b, ChallengeArgon2ID} {
+		for _, difficulty := range []uint8{0, 1, 135} {
+			p, err := NewComputePuzzleForChallenge(123, [PropertyIDSize]byte{}, difficulty, challenge)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result := verifySolveTime(p, nil, new(100*time.Millisecond)); result != VerifyNoError {
+				t.Fatalf("challenge %d, difficulty %d, zero elapsed = %v", challenge, difficulty, result)
+			}
+			metadata := &Metadata{
+				elapsedMillis: 1,
+			}
+			if result := verifySolveTime(p, metadata, new(100*time.Millisecond)); result != VerifyNoError {
+				t.Fatalf("challenge %d, difficulty %d, positive elapsed = %v", challenge, difficulty, result)
+			}
+		}
+	}
+	zero := NewComputePuzzle(0, [PropertyIDSize]byte{}, 0)
+	if result := verifySolveTime(zero, nil, new(100*time.Millisecond)); result != VerifyNoError {
+		t.Fatalf("zero puzzle timing = %v, want %v", result, VerifyNoError)
+	}
+}
+
+func TestVerifySolveTimeSubsecondBenchmarks(t *testing.T) {
+	for _, difficulty := range []uint8{136, 151, 152, 167} {
+		p := NewComputePuzzle(123, [PropertyIDSize]byte{}, difficulty)
+		for _, elapsed := range []uint32{0, 1, 1000} {
+			metadata := &Metadata{
+				elapsedMillis: elapsed,
+			}
+			for _, minimum := range []time.Duration{100 * time.Millisecond, time.Hour} {
+				if result := verifySolveTime(p, metadata, &minimum); result != VerifyNoError {
+					t.Fatalf("difficulty %d, elapsed %dms, minimum %v: got %v, want %v", difficulty, elapsed, minimum, result, VerifyNoError)
+				}
+			}
+		}
+	}
+}
+
+func TestVerifySolveTimeBenchmarkCutoff(t *testing.T) {
+	previous := blake2bSolveTimeSeconds[0]
+	t.Cleanup(func() { blake2bSolveTimeSeconds[0] = previous })
+	p := NewComputePuzzle(123, [PropertyIDSize]byte{}, 136)
+	for _, tc := range []struct {
+		seconds float64
+		want    VerifyError
+	}{
+		{
+			seconds: 0.999999999,
+			want:    VerifyNoError,
+		},
+		{
+			seconds: 1,
+			want:    SolutionTooFastError,
+		},
+		{
+			seconds: 1.000000001,
+			want:    SolutionTooFastError,
+		},
+	} {
+		blake2bSolveTimeSeconds[0] = tc.seconds
+		for _, elapsed := range []uint32{0, 1} {
+			metadata := &Metadata{
+				elapsedMillis: elapsed,
+			}
+			if result := verifySolveTime(p, metadata, new(100*time.Millisecond)); result != tc.want {
+				t.Fatalf("benchmark %vs, elapsed %dms: got %v, want %v", tc.seconds, elapsed, result, tc.want)
+			}
+		}
+	}
+}
+
+func TestVerifyMinSolveTimeAtMedium(t *testing.T) {
+	p := NewComputePuzzle(123, [PropertyIDSize]byte{}, 168)
+	metadata := &Metadata{
+		elapsedMillis: 100,
+	}
+	for _, minimum := range []time.Duration{50 * time.Millisecond, 100 * time.Millisecond} {
+		if result := verifySolveTime(p, metadata, &minimum); result != VerifyNoError {
+			t.Fatalf("minimum %v: result = %v, want %v", minimum, result, VerifyNoError)
+		}
+	}
+	for _, minimum := range []time.Duration{100*time.Millisecond + time.Nanosecond, 150 * time.Millisecond, time.Second} {
+		if result := verifySolveTime(p, metadata, &minimum); result != SolutionTooFastError {
+			t.Fatalf("minimum %v: result = %v, want %v", minimum, result, SolutionTooFastError)
+		}
+	}
+	higher := NewComputePuzzle(123, [PropertyIDSize]byte{}, 255)
+	if result := verifySolveTime(higher, metadata, new(time.Duration(1<<63-1))); result != SolutionTooFastError {
+		t.Fatalf("maximum duration: result = %v, want %v", result, SolutionTooFastError)
+	}
+	metadata.elapsedMillis = 0
+	if result := verifySolveTime(p, metadata, new(time.Millisecond)); result != SolutionTooFastError {
+		t.Fatalf("zero elapsed bypassed minimum: %v", result)
+	}
+}
+
+func TestVerifyNegativeElapsedMillis(t *testing.T) {
+	p := NewComputePuzzle(123, [PropertyIDSize]byte{}, 168)
+	for _, encoded := range []uint32{0x80000000, 0xffffffff} {
+		data := make([]byte, metadataLength)
+		data[0] = metadataVersion
+		binary.LittleEndian.PutUint32(data[3:], encoded)
+		metadata := &Metadata{}
+		if err := metadata.UnmarshalBinary(data); err != nil {
+			t.Fatal(err)
+		}
+		if result := verifySolveTime(p, metadata, new(time.Duration(1<<63-1))); result != VerifyNoError {
+			t.Fatalf("negative encoded elapsed %x: got %v, want %v", encoded, result, VerifyNoError)
+		}
+	}
+}
+
+func TestVerifySolveTimeDisabled(t *testing.T) {
+	p := NewComputePuzzle(123, [PropertyIDSize]byte{}, 168)
+	for _, elapsed := range []uint32{0, 1, 99} {
+		metadata := &Metadata{
+			elapsedMillis: elapsed,
+		}
+		if result := verifySolveTime(p, metadata, nil); result != VerifyNoError {
+			t.Fatalf("disabled heuristic, elapsed %dms: got %v, want %v", elapsed, result, VerifyNoError)
+		}
+	}
+}
+
+func TestVerifyInvalidSolutionsBeforeTiming(t *testing.T) {
+	p := NewComputePuzzle(123, [PropertyIDSize]byte{}, 255)
+	body, err := p.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	solutions := emptySolutions(p.SolutionsCount())
+	for lane := range p.SolutionsCount() {
+		solutions.Buffer[lane*SolutionLength] = byte(lane)
+	}
+	vp := &VerifyPayload{
+		puzzle:     p,
+		puzzleData: body,
+		solutions:  solutions,
+	}
+	if _, result := vp.VerifySolutions(t.Context(), nil); result != InvalidSolutionError {
+		t.Fatalf("invalid proof with zero elapsed = %v, want %v", result, InvalidSolutionError)
 	}
 }
 
@@ -118,7 +443,7 @@ func TestPuzzleEdgeTokenValiditySignedRoundTrip(t *testing.T) {
 			if parsed.Puzzle().EdgeTokenValidity() != 30*time.Minute {
 				t.Fatal("signed payload lost edge-token validity")
 			}
-			if _, result := parsed.VerifySolutions(t.Context()); result != VerifyNoError {
+			if _, result := parsed.VerifySolutions(t.Context(), nil); result != VerifyNoError {
 				t.Fatalf("verification = %v, want %v", result, VerifyNoError)
 			}
 			tampered := mutateEncodedPayloadPart(t, encoded.Bytes(), 1, func(data []byte) []byte {
@@ -179,7 +504,7 @@ func TestParseVerifyPayloadVariableUserData(t *testing.T) {
 			if err := parsed.VerifySignature(t.Context(), salt, nil); err != nil {
 				t.Fatal(err)
 			}
-			if _, result := parsed.VerifySolutions(t.Context()); result != VerifyNoError {
+			if _, result := parsed.VerifySolutions(t.Context(), nil); result != VerifyNoError {
 				t.Fatalf("verification = %v, want %v", result, VerifyNoError)
 			}
 
@@ -498,7 +823,7 @@ func TestVerifyPayloadRejectsWrongCountBeforeHashing(t *testing.T) {
 				Metadata: &Metadata{},
 			},
 		}
-		_, result := vp.VerifySolutions(t.Context())
+		_, result := vp.VerifySolutions(t.Context(), nil)
 		if result != ParseResponseError {
 			t.Fatalf("count %d result = %v, want %v", count, result, ParseResponseError)
 		}
@@ -615,7 +940,7 @@ func TestStubVerifyPayload(t *testing.T) {
 	stub := NewStubPayload(puzzle)
 
 	// Test VerifySolutions
-	meta, verr := stub.VerifySolutions(ctx)
+	meta, verr := stub.VerifySolutions(ctx, nil)
 	if verr != TestPropertyError {
 		t.Errorf("Expected TestPropertyError, got %v", verr)
 	}

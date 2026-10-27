@@ -34,7 +34,8 @@ func (vr *VerifyResult) Valid() bool {
 
 func (vr *VerifyResult) Success() bool {
 	return (vr.Error == VerifyNoError) ||
-		(vr.Error == MaintenanceModeError)
+		(vr.Error == MaintenanceModeError) ||
+		(vr.Error == SolutionTooFastError)
 }
 
 func (vr *VerifyResult) SetError(verr VerifyError) {
@@ -75,7 +76,7 @@ type Puzzle interface {
 }
 
 type SolutionPayload interface {
-	VerifySolutions(ctx context.Context) (*Metadata, VerifyError)
+	VerifySolutions(ctx context.Context, minSolveTimeAtMedium *time.Duration) (*Metadata, VerifyError)
 	Puzzle() Puzzle
 	NeedsExtraSalt() bool
 	VerifySignature(ctx context.Context, salt *Salt, extraSalt []byte) error

@@ -135,6 +135,10 @@ func TestValidateConfigNumbersAndBooleans(t *testing.T) {
 			valid:   []string{"0", "00", "+0", "16", "256", maxMemoryMiB},
 			invalid: []string{"-1", "8", "16MiB", "9007199254740992", "9223372036854775808"},
 		},
+		common.MinSolveTimeAtMediumKey: {
+			valid:   []string{"1ms", "100.5ms", "2s"},
+			invalid: []string{"0", "0s", "-1ms", "NaN", "+Inf", "-Inf", "100", "invalid", "2562047h47m16.854775808s"},
+		},
 		common.PortKey: {
 			valid:   []string{"0", "8080", "65535", "http"},
 			invalid: []string{"-1", "65536", "invalid", "8080/tcp"},
@@ -411,6 +415,7 @@ func TestValidateConfigAllKeys(t *testing.T) {
 		common.ClickHousePortKey:            "9000",
 		common.GradualDataCleanupKey:        "yes",
 		common.Argon2IDMemoryBudgetKey:      "256",
+		common.MinSolveTimeAtMediumKey:      "100ms",
 	}
 	for key, value := range optional {
 		values[key] = value

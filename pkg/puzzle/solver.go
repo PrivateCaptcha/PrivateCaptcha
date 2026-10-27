@@ -53,7 +53,7 @@ func (s *ComputeSolver) solveArgon2ID(ctx context.Context, p Puzzle, body []byte
 		}
 		copy(solutions.Buffer[lane*SolutionLength:], nonce)
 	}
-	solutions.Metadata.elapsedMillis = uint32(time.Since(started).Milliseconds())
+	solutions.Metadata.elapsedMillis = uint32(max(1, time.Since(started).Milliseconds()))
 	return solutions, nil
 }
 
@@ -159,7 +159,7 @@ func (s *ComputeSolver) Solve(ctx context.Context, p Puzzle) (*Solutions, error)
 		Buffer: buffer,
 		Metadata: &Metadata{
 			errorCode:     0,
-			elapsedMillis: uint32(elapsed.Milliseconds()),
+			elapsedMillis: uint32(max(1, elapsed.Milliseconds())),
 			wasmFlag:      false,
 		},
 	}, nil

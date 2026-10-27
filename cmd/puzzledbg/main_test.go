@@ -57,7 +57,7 @@ func TestPuzzledbg(t *testing.T) {
 			if err := payload.VerifySignature(t.Context(), salt, nil); err != nil {
 				t.Fatal(err)
 			}
-			if _, result := payload.VerifySolutions(t.Context()); result != puzzle.VerifyNoError {
+			if _, result := payload.VerifySolutions(t.Context(), nil); result != puzzle.VerifyNoError {
 				t.Fatalf("solved payload verification = %s", result)
 			}
 		})

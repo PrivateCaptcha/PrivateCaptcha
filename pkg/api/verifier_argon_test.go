@@ -66,14 +66,16 @@ type admissionTestPayload struct {
 	release chan struct{}
 	result  puzzle.VerifyError
 	calls   int
+	minimum *time.Duration
 }
 
 func (p *admissionTestPayload) VerifySignature(context.Context, *puzzle.Salt, []byte) error {
 	return nil
 }
 
-func (p *admissionTestPayload) VerifySolutions(context.Context) (*puzzle.Metadata, puzzle.VerifyError) {
+func (p *admissionTestPayload) VerifySolutions(_ context.Context, minimum *time.Duration) (*puzzle.Metadata, puzzle.VerifyError) {
 	p.calls++
+	p.minimum = minimum
 	if p.started != nil {
 		close(p.started)
 		<-p.release
@@ -192,7 +194,10 @@ func TestVerificationAdmissionWaitsForCapacity(t *testing.T) {
 		t.Fatal(err)
 	}
 	weight := int64(puzzle.Argon2IDMemoryKiB)
-	verifier := &Verifier{verificationSemaphore: semaphore.NewWeighted(weight), verificationCapacityKiB: weight}
+	verifier := &Verifier{
+		verificationSemaphore:   semaphore.NewWeighted(weight),
+		verificationCapacityKiB: weight,
+	}
 	if err := verifier.verificationSemaphore.Acquire(t.Context(), weight); err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +232,10 @@ func TestVerificationAdmissionHonorsCallerDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 	weight := int64(puzzle.Argon2IDMemoryKiB)
-	verifier := &Verifier{verificationSemaphore: semaphore.NewWeighted(weight), verificationCapacityKiB: weight}
+	verifier := &Verifier{
+		verificationSemaphore:   semaphore.NewWeighted(weight),
+		verificationCapacityKiB: weight,
+	}
 	if err := verifier.verificationSemaphore.Acquire(t.Context(), weight); err != nil {
 		t.Fatal(err)
 	}
@@ -287,6 +295,78 @@ func TestMemoryBudgetUpdateWaitsForActiveVerification(t *testing.T) {
 	}
 	if verifier.verificationSemaphore == initial || verifier.verificationCapacityKiB != 32*1024 {
 		t.Fatalf("updated capacity = %d KiB, want 32768", verifier.verificationCapacityKiB)
+	}
+}
+
+func TestMinSolveTimeAtMediumConcurrentReload(t *testing.T) {
+	verifier := &Verifier{
+		MinSolveTimeAtMediumKey: config.NewStaticValue(common.MinSolveTimeAtMediumKey, "100ms"),
+	}
+	p := puzzle.NewComputePuzzle(1, [puzzle.PropertyIDSize]byte{}, 0)
+	type outcome struct {
+		minimum *time.Duration
+		result  puzzle.VerifyError
+		err     error
+	}
+	const count = 32
+	start := make(chan struct{})
+	done := make(chan outcome, count)
+	for range count {
+		go func() {
+			<-start
+			verifier.updateMinSolveTimeAtMedium(t.Context())
+			payload := &admissionTestPayload{
+				SolutionPayload: puzzle.NewStubPayload(p),
+			}
+			_, result, err := verifier.verifyPayload(t.Context(), payload, false)
+			done <- outcome{
+				minimum: payload.minimum,
+				result:  result,
+				err:     err,
+			}
+		}()
+	}
+	close(start)
+	for range count {
+		current := <-done
+		if current.minimum == nil || *current.minimum != 100*time.Millisecond || current.result != puzzle.VerifyNoError || current.err != nil {
+			t.Fatalf("inconsistent concurrent reload: %+v", current)
+		}
+	}
+}
+
+func TestMinSolveTimeAtMediumDoesNotUseAdmissionLock(t *testing.T) {
+	verifier := &Verifier{
+		MinSolveTimeAtMediumKey: config.NewStaticValue(common.MinSolveTimeAtMediumKey, "100ms"),
+	}
+	verifier.verificationMu.Lock()
+	defer verifier.verificationMu.Unlock()
+	ctx := t.Context()
+	type outcome struct {
+		minimum *time.Duration
+		result  puzzle.VerifyError
+		err     error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		verifier.updateMinSolveTimeAtMedium(ctx)
+		payload := &admissionTestPayload{
+			SolutionPayload: puzzle.NewStubPayload(puzzle.NewComputePuzzle(1, [puzzle.PropertyIDSize]byte{}, 0)),
+		}
+		_, result, err := verifier.verifyPayload(ctx, payload, false)
+		done <- outcome{
+			minimum: payload.minimum,
+			result:  result,
+			err:     err,
+		}
+	}()
+	select {
+	case current := <-done:
+		if current.minimum == nil || *current.minimum != 100*time.Millisecond || current.result != puzzle.VerifyNoError || current.err != nil {
+			t.Fatalf("timing configuration or Blake verification failed: %+v", current)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timing configuration or Blake verification blocked on the admission lock")
 	}
 }
 

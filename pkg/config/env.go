@@ -89,6 +89,7 @@ func init() {
 	configKeyToEnvName[common.EdgeTokenSigningPublicKeyKey] = "PC_EDGE_TOKEN_SIGNING_PUBLIC_KEY"
 	configKeyToEnvName[common.EdgeTokenSecondaryPublicKeyKey] = "PC_EDGE_TOKEN_SECONDARY_PUBLIC_KEY"
 	configKeyToEnvName[common.ShutdownDelayKey] = "PC_SHUTDOWN_DELAY"
+	configKeyToEnvName[common.MinSolveTimeAtMediumKey] = "PC_MIN_SOLVE_TIME_AT_MEDIUM"
 
 	for i, v := range configKeyToEnvName {
 		if len(v) == 0 {
