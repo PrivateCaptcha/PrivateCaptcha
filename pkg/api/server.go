@@ -518,10 +518,12 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 	s.applyAPIKeyRateLimits(ctx, r, ownerSource.cachedKey)
 
 	vr2 := &VerifyResponseRecaptchaV2{
-		Success:     result.Success() || ((result.Error == puzzle.TestPropertyError) && isExplicitTestSitekey),
-		ErrorCodes:  result.ErrorsToStrings(),
-		ChallengeTS: common.JSONTime(result.CreatedAt),
-		Hostname:    result.Domain,
+		Success:    result.Success() || ((result.Error == puzzle.TestPropertyError) && isExplicitTestSitekey),
+		ErrorCodes: result.ErrorsToStrings(),
+	}
+	if vr2.Success {
+		vr2.ChallengeTS = common.JSONTime(result.CreatedAt)
+		vr2.Hostname = result.Domain
 	}
 
 	var response easyjson.Marshaler = vr2
