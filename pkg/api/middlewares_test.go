@@ -412,6 +412,31 @@ func TestIsOriginAllowed(t *testing.T) {
 	}
 }
 
+func TestIsOriginAllowedNormalizedDomain(t *testing.T) {
+	t.Parallel()
+
+	property := &dbgen.Property{
+		Domain:          "g\u00f6\u00f6gle.com",
+		DomainASCII:     "xn--ggle-5qaa.com",
+		AllowSubdomains: true,
+	}
+	for _, tc := range []struct {
+		origin  string
+		allowed bool
+	}{
+		{origin: "xn--ggle-5qaa.com", allowed: true},
+		{origin: "sub.xn--ggle-5qaa.com", allowed: true},
+		{origin: "g\u00f6\u00f6gle.com", allowed: false},
+		{origin: "sub.g\u00f6\u00f6gle.com", allowed: false},
+		{origin: "notxn--ggle-5qaa.com", allowed: false},
+		{origin: "xn--ggle-5qaa.com.example.com", allowed: false},
+	} {
+		if got := isOriginAllowed(tc.origin, property); got != tc.allowed {
+			t.Errorf("isOriginAllowed(%q) = %v, want %v", tc.origin, got, tc.allowed)
+		}
+	}
+}
+
 type errUserLimiter struct{}
 
 func (errUserLimiter) CheckUsers(context.Context, map[int32]uint) error {

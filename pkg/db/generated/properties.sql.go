@@ -976,13 +976,13 @@ type UpdatePropertyParams struct {
 	AllowSubdomains           bool              `db:"allow_subdomains" json:"allow_subdomains"`
 	AllowLocalhost            bool              `db:"allow_localhost" json:"allow_localhost"`
 	PreserveBasicSettings     bool              `db:"preserve_basic_settings" json:"preserve_basic_settings"`
-	PreserveEdgeTokenValidity bool              `db:"preserve_edge_token_validity" json:"preserve_edge_token_validity"`
 	PreserveLevel             bool              `db:"preserve_level" json:"preserve_level"`
 	PreserveGrowth            bool              `db:"preserve_growth" json:"preserve_growth"`
 	PreserveValidityInterval  bool              `db:"preserve_validity_interval" json:"preserve_validity_interval"`
 	PreserveAllowSubdomains   bool              `db:"preserve_allow_subdomains" json:"preserve_allow_subdomains"`
 	PreserveAllowLocalhost    bool              `db:"preserve_allow_localhost" json:"preserve_allow_localhost"`
 	PreserveMaxReplayCount    bool              `db:"preserve_max_replay_count" json:"preserve_max_replay_count"`
+	PreserveEdgeTokenValidity bool              `db:"preserve_edge_token_validity" json:"preserve_edge_token_validity"`
 }
 
 type UpdatePropertyRow struct {

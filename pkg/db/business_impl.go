@@ -19,6 +19,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"golang.org/x/net/idna"
 )
 
 const (
@@ -1208,7 +1209,14 @@ func (impl *BusinessStoreImpl) RetrievePropertyBySitekey(ctx context.Context, si
 	}
 
 	if impl.querier != nil {
-		reader.QueryFunc = impl.querier.GetPropertyByExternalID
+		reader.QueryFunc = func(ctx context.Context, externalID pgtype.UUID) (*dbgen.Property, error) {
+			property, err := impl.querier.GetPropertyByExternalID(ctx, externalID)
+			if err != nil {
+				return nil, err
+			}
+			normalizePropertyDomain(ctx, property)
+			return property, nil
+		}
 		reader.QueryKeyFunc = queryKeySitekeyUUID
 	}
 
@@ -1253,6 +1261,7 @@ func (impl *BusinessStoreImpl) RetrievePropertiesBySitekey(ctx context.Context, 
 	}
 
 	for _, item := range items {
+		normalizePropertyDomain(ctx, item)
 		sitekey := UUIDToSiteKey(item.ExternalID)
 		cacheKey := PropertyBySitekeyCacheKey(sitekey)
 		_ = impl.cache.SetEx(ctx, cacheKey, item, propertyTTL, defaultCacheRefresh)
@@ -1283,6 +1292,7 @@ func (impl *BusinessStoreImpl) RetrievePropertiesByID(ctx context.Context, batch
 	}
 
 	for _, item := range items {
+		normalizePropertyDomain(ctx, item)
 		sitekey := UUIDToSiteKey(item.ExternalID)
 		cacheKey := PropertyBySitekeyCacheKey(sitekey)
 		_ = impl.cache.SetEx(ctx, cacheKey, item, propertyTTL, defaultCacheRefresh)
@@ -1671,11 +1681,24 @@ func (impl *BusinessStoreImpl) retrieveOrganizationWithAccess(ctx context.Contex
 	return org, orgAndAccess.Level, nil
 }
 
+func normalizePropertyDomain(ctx context.Context, property *dbgen.Property) {
+	if property == nil || property.Domain == "" || property.DomainASCII != "" {
+		return
+	}
+	domain, err := idna.Lookup.ToASCII(property.Domain)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to normalize property domain", "propID", property.ID, "domain", property.Domain, common.ErrAttr(err))
+		return
+	}
+	property.DomainASCII = domain
+}
+
 func (impl *BusinessStoreImpl) cacheProperty(ctx context.Context, property *dbgen.Property) {
 	if property == nil {
 		return
 	}
 
+	normalizePropertyDomain(ctx, property)
 	key := PropertyByIDCacheKey(property.ID)
 	_ = impl.cache.Set(ctx, key, property)
 	sitekey := UUIDToSiteKey(property.ExternalID)
@@ -1765,7 +1788,8 @@ func (impl *BusinessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, p
 
 	if properties, err := FetchCachedArray[dbgen.Property](ctx, impl.cache, orgPropertiesCacheKey(orgID, OrgPropertiesSortDateAscending)); err == nil {
 		if index := slices.IndexFunc(properties, func(p *dbgen.Property) bool { return p.ID == propID }); index != -1 {
-			property := properties[index]
+			property := new(dbgen.Property)
+			*property = *properties[index]
 			impl.cacheProperty(ctx, property)
 			return property, nil
 		}
@@ -1836,6 +1860,7 @@ func (impl *BusinessStoreImpl) FindOrgProperty(ctx context.Context, name string,
 		return nil, err
 	}
 
+	normalizePropertyDomain(ctx, property)
 	return property, nil
 }
 
@@ -2355,32 +2380,41 @@ type orgPropertiesQueryParams struct {
 }
 
 func (impl *BusinessStoreImpl) queryOrgProperties(ctx context.Context, params *orgPropertiesQueryParams) ([]*dbgen.Property, error) {
+	var properties []*dbgen.Property
+	var err error
 	switch params.Sort {
 	case OrgPropertiesSortDateDescending:
-		return impl.querier.GetOrgPropertiesByDateDescending(ctx, &dbgen.GetOrgPropertiesByDateDescendingParams{
+		properties, err = impl.querier.GetOrgPropertiesByDateDescending(ctx, &dbgen.GetOrgPropertiesByDateDescendingParams{
 			OrgID:  Int(params.OrgID),
 			Offset: params.Offset,
 			Limit:  params.Limit,
 		})
 	case OrgPropertiesSortNameAscending:
-		return impl.querier.GetOrgPropertiesByNameAscending(ctx, &dbgen.GetOrgPropertiesByNameAscendingParams{
+		properties, err = impl.querier.GetOrgPropertiesByNameAscending(ctx, &dbgen.GetOrgPropertiesByNameAscendingParams{
 			OrgID:  Int(params.OrgID),
 			Offset: params.Offset,
 			Limit:  params.Limit,
 		})
 	case OrgPropertiesSortNameDescending:
-		return impl.querier.GetOrgPropertiesByNameDescending(ctx, &dbgen.GetOrgPropertiesByNameDescendingParams{
+		properties, err = impl.querier.GetOrgPropertiesByNameDescending(ctx, &dbgen.GetOrgPropertiesByNameDescendingParams{
 			OrgID:  Int(params.OrgID),
 			Offset: params.Offset,
 			Limit:  params.Limit,
 		})
 	default:
-		return impl.querier.GetOrgPropertiesByDateAscending(ctx, &dbgen.GetOrgPropertiesByDateAscendingParams{
+		properties, err = impl.querier.GetOrgPropertiesByDateAscending(ctx, &dbgen.GetOrgPropertiesByDateAscendingParams{
 			OrgID:  Int(params.OrgID),
 			Offset: params.Offset,
 			Limit:  params.Limit,
 		})
 	}
+	if err != nil {
+		return nil, err
+	}
+	for _, property := range properties {
+		normalizePropertyDomain(ctx, property)
+	}
+	return properties, nil
 }
 
 func (impl *BusinessStoreImpl) RetrieveOrgProperties(ctx context.Context, org *dbgen.Organization, sort OrgPropertiesSort, offset, limit int) ([]*dbgen.Property, bool, error) {
@@ -3232,6 +3266,9 @@ func (impl *BusinessStoreImpl) RetrieveSoftDeletedProperties(ctx context.Context
 
 	slog.DebugContext(ctx, "Fetched soft-deleted properties", "count", len(properties), "before", before)
 
+	for _, property := range properties {
+		normalizePropertyDomain(ctx, &property.Property)
+	}
 	return properties, nil
 }
 
@@ -3491,6 +3528,9 @@ func (impl *BusinessStoreImpl) RetrieveProperties(ctx context.Context, limit int
 
 	slog.DebugContext(ctx, "Fetched properties", "count", len(properties))
 
+	for _, property := range properties {
+		normalizePropertyDomain(ctx, property)
+	}
 	return properties, nil
 }
 
