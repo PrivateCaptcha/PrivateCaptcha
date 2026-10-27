@@ -16,7 +16,7 @@ func StaticFiles() *embed.FS {
 
 var (
 	widgetCachedHeaders = map[string][]string{
-		common.HeaderCacheControl: []string{"public, max-age=300, must-revalidate"},
+		common.HeaderCacheControl: []string{"public, max-age=300, s-maxage=3600"},
 	}
 )
 
