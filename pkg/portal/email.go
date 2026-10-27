@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/mail"
 	"net/netip"
 	"strings"
 	"time"
@@ -28,6 +29,11 @@ var _ common.EmailVerifier = (*PortalEmailVerifier)(nil)
 func (ev *PortalEmailVerifier) VerifyEmail(ctx context.Context, email string) error {
 	if err := checkmail.ValidateFormat(email); err != nil {
 		return err
+	}
+
+	address, err := mail.ParseAddress(email)
+	if (err != nil) || (address.Address != email) || strings.ContainsAny(email, "\r\n") {
+		return errInvalidEmail
 	}
 
 	if at := strings.LastIndex(email, "@"); at != -1 {
