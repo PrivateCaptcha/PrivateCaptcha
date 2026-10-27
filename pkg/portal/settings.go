@@ -18,7 +18,6 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
-	"github.com/badoux/checkmail"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -387,7 +386,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 		renderCtx.Email = formEmail
 		renderCtx.TwoFactorEmail = common.MaskEmail(user.Email, '*')
 
-		if err := checkmail.ValidateFormat(formEmail); err != nil {
+		if err := s.EmailVerifier.VerifyEmail(ctx, formEmail); err != nil {
 			slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
 			renderCtx.EmailError = "Email address is not valid."
 			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
