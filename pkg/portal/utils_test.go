@@ -14,8 +14,8 @@ func TestTwoFactorCode(t *testing.T) {
 	}{
 		{
 			name:   "LeadingZero",
-			random: []byte{0, 10, 1, 11, 2, 35},
-			want:   "0A1B2Z",
+			random: []byte{0, 10, 1, 11, 2, 28},
+			want:   "0B1C2Z",
 		},
 		{
 			name:   "Digits",
@@ -24,23 +24,23 @@ func TestTwoFactorCode(t *testing.T) {
 		},
 		{
 			name:   "Letters",
-			random: []byte{10, 11, 12, 33, 34, 35},
-			want:   "ABCXYZ",
+			random: []byte{10, 11, 12, 26, 27, 28},
+			want:   "BCDWXZ",
 		},
 		{
 			name:   "HighestAcceptedByte",
-			random: bytes.Repeat([]byte{251}, 6),
+			random: bytes.Repeat([]byte{231}, 6),
 			want:   "ZZZZZZ",
 		},
 		{
 			name:   "UpperUniformRange",
-			random: []byte{216, 217, 218, 219, 220, 221},
+			random: []byte{203, 204, 205, 206, 207, 208},
 			want:   "012345",
 		},
 		{
 			name:   "RejectBiasedBytes",
-			random: []byte{252, 253, 254, 255, 0, 10, 1, 11, 2, 35},
-			want:   "0A1B2Z",
+			random: []byte{232, 233, 254, 255, 0, 10, 1, 11, 2, 28},
+			want:   "0B1C2Z",
 		},
 	}
 	for _, tt := range tests {
