@@ -227,8 +227,22 @@ func (v *Verifier) checkUserPermissions(ctx context.Context, property *dbgen.Pro
 	// currently we just allow all access and rely on userLimiter logic in APIs but we should somehow check
 	// this here as well. So if user has inactive subscription, they shouldn't access their own properties
 	// but they can access properties from other ("valid") orgs where they are a member
-	if (property.OrgOwnerID.Int32 == userID) || (property.CreatorID.Int32 == userID) {
+	if property.OrgOwnerID.Int32 == userID {
 		return true
+	}
+
+	if property.CreatorID.Int32 == userID {
+		// A property creator keeps access only while they are still a member of the
+		// organization that owns the property: leaving the organization or being
+		// removed from it must revoke verification access.
+		if !property.OrgID.Valid || v.Store.CheckUserPropertyAccess(ctx, property, userID) {
+			return true
+		}
+
+		slog.WarnContext(ctx, "Property creator is not a member of the owning organization", "userID", userID,
+			"propID", property.ID, "orgID", property.OrgID.Int32)
+
+		return false
 	}
 
 	slog.DebugContext(ctx, "Org owner does not match expected owner", "expectedOwner", userID,
