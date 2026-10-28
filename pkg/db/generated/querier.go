@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	AdvanceEmailChangeChallenge(ctx context.Context, arg *AdvanceEmailChangeChallengeParams) (*AdvanceEmailChangeChallengeRow, error)
 	// Atomically claim a pending task for execution. Increments processing_attempts
 	// as the claim token. Returns 0 rows if the task is already completed
 	// (processed_at IS NOT NULL) or has exhausted its attempts, so concurrent

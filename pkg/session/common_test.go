@@ -68,6 +68,9 @@ func (s *stubStore) IssueEmailChangeChallenge(context.Context, EmailChangeChalle
 func (s *stubStore) ConsumeEmailChangeChallenge(context.Context, EmailChangeChallengeConsume) (*ChallengeResult, error) {
 	return nil, nil
 }
+func (s *stubStore) AdvanceEmailChangeChallenge(context.Context, EmailChangeChallengeAdvance) (*ChallengeResult, error) {
+	return nil, nil
+}
 func (s *stubStore) RevokeSession(ctx context.Context, sid string) (*RevocationResult, error) {
 	if s.revokeSession == nil {
 		return nil, nil

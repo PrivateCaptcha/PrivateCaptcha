@@ -23,13 +23,19 @@
     </div>
 
     {{ if .Params.EditEmail }}
+    {{ if .Params.VerifyNewEmail }}
+    <input type="hidden" name="{{ .Const.VerifyNewEmail }}" value="true" />
+    <p role="status" class="col-span-full text-sm leading-6 text-pc-grey-800">Step 2 of 2: Verify your new email.</p>
+    {{ else }}
+    <p role="status" class="col-span-full text-sm leading-6 text-pc-grey-800">Step 1 of 2: Verify your current email.</p>
+    {{ end }}
     <div class="sm:col-span-full">
         <label for="{{ .Const.VerificationCode}}" class="pc-internal-form-label">Verification code (sent to <span class="italic">{{ .Params.TwoFactorEmail }}</span>)</label>
         <div class="mt-2 relative">
             {{- if .Params.TwoFactorError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.VerificationCode }}" placeholder="XXXXXX" class="w-full pc-internal-form-input-base {{ if .Params.TwoFactorError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" pattern="[0-9A-Z]{6}" required />
+            <input type="text" id="{{ .Const.VerificationCode }}" name="{{ .Const.VerificationCode }}" placeholder="XXXXXX" autocomplete="one-time-code" maxlength="6" class="w-full pc-internal-form-input-base {{ if .Params.TwoFactorError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" pattern="[0-9A-Z]{6}" required />
         </div>
         {{- if .Params.TwoFactorError -}}
         <p class="pc-form-error-text">{{ .Params.TwoFactorError }}</p>
@@ -42,7 +48,7 @@
             {{- if .Params.EmailError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="email" name="{{ .Const.Email }}" maxlength="255" placeholder="{{ .Params.Email }}" class="w-full pc-internal-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="email" id="{{ .Const.Email }}" name="{{ .Const.Email }}" maxlength="255" value="{{ .Params.Email }}" {{ if .Params.VerifyNewEmail }}readonly{{ end }} class="w-full pc-internal-form-input-base {{ if .Params.VerifyNewEmail }}pc-form-input-disabled{{ else if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
         </div>
         {{- if .Params.EmailError -}}
         <p class="pc-form-error-text">{{ .Params.EmailError }}</p>
@@ -72,7 +78,7 @@
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            Save
+            {{ if .Params.VerifyNewEmail }}Confirm email{{ else if .Params.EditEmail }}Continue{{ else }}Save{{ end }}
         </button>
         {{ if .Params.EditEmail }}
         <button type="button" class="pc-internal-form-button pc-internal-form-button-secondary"

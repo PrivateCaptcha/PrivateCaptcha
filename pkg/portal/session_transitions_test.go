@@ -121,11 +121,16 @@ func TestAuthoritativeSessionManagerSignInLifecycle(t *testing.T) {
 	if err != nil || emailIssued.Outcome != session.TransitionSucceeded || emailIssued.Session == nil {
 		t.Fatalf("email-change issue = (%+v, %v), want succeeded", emailIssued, err)
 	}
-	emailFailed, err := manager.ConsumeEmailChangeChallenge(req.Context(), emailIssued.Session, "000000", 5)
+	newEmail := prefix + "-new@example.com"
+	emailAdvanced, err := manager.AdvanceEmailChangeChallenge(req.Context(), emailIssued.Session, "333333", newEmail, "444444", 15*time.Minute, 5)
+	if err != nil || emailAdvanced.Outcome != session.TransitionSucceeded || emailAdvanced.Session == nil {
+		t.Fatalf("email-change advance = (%+v, %v), want succeeded", emailAdvanced, err)
+	}
+	emailFailed, err := manager.ConsumeEmailChangeChallenge(req.Context(), emailAdvanced.Session, "000000", newEmail, 5)
 	if err != nil || emailFailed.Outcome != session.TransitionInvalidCode || emailFailed.FailedAttempts != 1 {
 		t.Fatalf("email-change failure = (%+v, %v), want first invalid attempt", emailFailed, err)
 	}
-	emailConsumed, err := manager.ConsumeEmailChangeChallenge(req.Context(), emailFailed.Session, "333333", 5)
+	emailConsumed, err := manager.ConsumeEmailChangeChallenge(req.Context(), emailFailed.Session, "444444", newEmail, 5)
 	if err != nil || emailConsumed.Outcome != session.TransitionSucceeded || emailConsumed.Session == nil {
 		t.Fatalf("email-change consume = (%+v, %v), want succeeded", emailConsumed, err)
 	}
@@ -321,7 +326,10 @@ func TestSessionSignInTransitions(t *testing.T) {
 		t.Fatalf("exhausted reissue = (%+v, %v), want attempts_exhausted", reissued, err)
 	}
 	emailChange, err := primary.ConsumeEmailChangeChallenge(ctx, &dbgen.ConsumeEmailChangeChallengeParams{
-		SessionID: sid, ChallengeCode: db.Text("333333"), MaxAttempts: 2,
+		SessionID:      sid,
+		ChallengeCode:  db.Text("333333"),
+		ChallengeEmail: db.Text("new@example.com"),
+		MaxAttempts:    2,
 	})
 	if err != nil || emailChange.Outcome != session.TransitionStale {
 		t.Fatalf("email-change consume against exhausted sign-in = (%+v, %v), want stale", emailChange, err)
@@ -612,8 +620,14 @@ func TestSessionEmailChangeTransitions(t *testing.T) {
 		issued.Session.ChallengeEmail != email {
 		t.Fatalf("issue = (%+v, %v), want database email", issued, err)
 	}
-	invalid, err := secondary.ConsumeEmailChangeChallenge(ctx, &dbgen.ConsumeEmailChangeChallengeParams{
-		SessionID: sid, ChallengeCode: db.Text("000000"), MaxAttempts: 2,
+	newEmail := prefix + "-new@example.com"
+	invalid, err := secondary.AdvanceEmailChangeChallenge(ctx, &dbgen.AdvanceEmailChangeChallengeParams{
+		SessionID:     sid,
+		ChallengeCode: db.Text("000000"),
+		NewEmail:      db.Text(newEmail),
+		NewCode:       db.Text("NEW123"),
+		ChallengeTtl:  15 * time.Minute,
+		MaxAttempts:   2,
 	})
 	if err != nil || invalid.Outcome != session.TransitionInvalidCode || invalid.FailedAttempts != 1 {
 		t.Fatalf("invalid consume = (%+v, %v), want invalid_code", invalid, err)
@@ -634,8 +648,22 @@ func TestSessionEmailChangeTransitions(t *testing.T) {
 	if failedAttempts != 1 || challengeCode != "222222" {
 		t.Fatalf("reissued challenge state = (%d, %q), want (1, %q)", failedAttempts, challengeCode, "222222")
 	}
+	advanced, err := primary.AdvanceEmailChangeChallenge(ctx, &dbgen.AdvanceEmailChangeChallengeParams{
+		SessionID:     sid,
+		ChallengeCode: db.Text("222222"),
+		NewEmail:      db.Text(newEmail),
+		NewCode:       db.Text("NEW123"),
+		ChallengeTtl:  15 * time.Minute,
+		MaxAttempts:   2,
+	})
+	if err != nil || advanced.Outcome != session.TransitionSucceeded || advanced.FailedAttempts != 1 {
+		t.Fatalf("advance after failed attempt = (%+v, %v), want attempts preserved", advanced, err)
+	}
 	exhausted, err := primary.ConsumeEmailChangeChallenge(ctx, &dbgen.ConsumeEmailChangeChallengeParams{
-		SessionID: sid, ChallengeCode: db.Text("000000"), MaxAttempts: 2,
+		SessionID:      sid,
+		ChallengeCode:  db.Text("000000"),
+		ChallengeEmail: db.Text(newEmail),
+		MaxAttempts:    2,
 	})
 	if err != nil || exhausted.Outcome != session.TransitionAttemptsExhausted || exhausted.FailedAttempts != 2 {
 		t.Fatalf("exhausted consume = (%+v, %v), want attempts_exhausted", exhausted, err)
@@ -656,8 +684,120 @@ func TestSessionEmailChangeTransitions(t *testing.T) {
 	).Scan(&failedAttempts, &challengeCode); err != nil {
 		t.Fatal(err)
 	}
-	if failedAttempts != 2 || challengeCode != "222222" {
-		t.Fatalf("exhausted challenge state = (%d, %q), want (2, %q)", failedAttempts, challengeCode, "222222")
+	if failedAttempts != 2 || challengeCode != "NEW123" {
+		t.Fatalf("exhausted challenge state = (%d, %q), want (2, %q)", failedAttempts, challengeCode, "NEW123")
+	}
+}
+
+func TestSessionAdvanceEmailChangeChallenge(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	prefix := transitionTestPrefix(t)
+	userID, oldEmail := transitionTestUser(t, prefix)
+	sid := prefix + "-authenticated"
+	if _, err := store.Pool.Exec(ctx, `
+		INSERT INTO backend.sessions (session_id, state, user_id, data, expires_at)
+		VALUES ($1, 'authenticated', $2, '', NOW() + INTERVAL '3 hours')
+	`, sid, userID); err != nil {
+		t.Fatal(err)
+	}
+	primary := db.NewSessionStore(store, server.Metrics)
+	secondary := db.NewSessionStore(store, server.Metrics)
+	t.Cleanup(primary.Stop)
+	t.Cleanup(secondary.Stop)
+	manager := &session.Manager{
+		Store: primary,
+	}
+	sess, err := primary.Resolve(ctx, sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := manager.IssueEmailChangeChallenge(ctx, sess, "OLD123", 15*time.Minute, 3)
+	if err != nil || issued == nil || issued.Outcome != session.TransitionSucceeded {
+		t.Fatalf("issue = (%+v, %v)", issued, err)
+	}
+	// Warm another replica before the transition so its authority is stale.
+	stale, err := secondary.Resolve(ctx, sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newEmail := prefix + "-new@example.com"
+	invalid, err := manager.AdvanceEmailChangeChallenge(ctx, sess, "WRONG1", newEmail, "NEW123", 15*time.Minute, 3)
+	if err != nil || invalid == nil || invalid.Outcome != session.TransitionInvalidCode || invalid.FailedAttempts != 1 {
+		t.Fatalf("invalid advance = (%+v, %v)", invalid, err)
+	}
+	advanced, err := manager.AdvanceEmailChangeChallenge(ctx, sess, "OLD123", newEmail, "NEW123", 15*time.Minute, 3)
+	if err != nil || advanced == nil || advanced.Outcome != session.TransitionSucceeded || advanced.Session == nil {
+		t.Fatalf("advance = (%+v, %v)", advanced, err)
+	}
+	if advanced.Authority.ChallengeKind != session.ChallengeKindEmailChangeNew || advanced.Authority.ChallengeEmail != newEmail ||
+		advanced.Authority.State != session.StateAuthenticated || advanced.FailedAttempts != 1 {
+		t.Fatalf("advanced authority = %+v, attempts = %d", advanced.Authority, advanced.FailedAttempts)
+	}
+	manager.Store = secondary
+	replayed, err := manager.AdvanceEmailChangeChallenge(ctx, stale, "OLD123", prefix+"-other@example.com", "OTHER1", 15*time.Minute, 3)
+	if err != nil || replayed == nil || replayed.Outcome == session.TransitionSucceeded {
+		t.Fatalf("replay from stale replica = (%+v, %v)", replayed, err)
+	}
+	var storedCode, storedEmail string
+	var attempts int32
+	if err := store.Pool.QueryRow(ctx, `
+		SELECT challenge_code, challenge_email, failed_attempts FROM backend.sessions WHERE session_id = $1
+	`, sid).Scan(&storedCode, &storedEmail, &attempts); err != nil {
+		t.Fatal(err)
+	}
+	if storedCode != "NEW123" || storedEmail != newEmail || attempts != 1 {
+		t.Fatalf("stored challenge = (%q, %q, %d)", storedCode, storedEmail, attempts)
+	}
+	var currentEmail string
+	if err := store.Pool.QueryRow(ctx, "SELECT email FROM backend.users WHERE id = $1", userID).Scan(&currentEmail); err != nil {
+		t.Fatal(err)
+	}
+	if currentEmail != oldEmail {
+		t.Fatalf("first verification changed account email to %q", currentEmail)
+	}
+	type consumeResult struct {
+		result *session.ChallengeResult
+		err    error
+	}
+	results := make(chan consumeResult, 2)
+	for _, replica := range []*db.SessionStore{primary, secondary} {
+		go func() {
+			result, err := replica.ConsumeEmailChangeChallenge(ctx, session.EmailChangeChallengeConsume{
+				SessionID:      sid,
+				ChallengeCode:  "NEW123",
+				ChallengeEmail: newEmail,
+				MaxAttempts:    3,
+			})
+			results <- consumeResult{
+				result: result,
+				err:    err,
+			}
+		}()
+	}
+	winners := 0
+	for range 2 {
+		consumed := <-results
+		if consumed.err != nil || consumed.result == nil {
+			t.Fatalf("concurrent consume = (%+v, %v)", consumed.result, consumed.err)
+		}
+		if consumed.result.Outcome == session.TransitionSucceeded {
+			winners++
+			if consumed.result.Email != newEmail || consumed.result.FailedAttempts != 1 {
+				t.Fatalf("consumed challenge = %+v", consumed.result)
+			}
+		}
+	}
+	if winners != 1 {
+		t.Fatalf("concurrent new-address confirmations = %d, want 1", winners)
+	}
+	assertSessionChallengeCodeCleared(t, store.Pool, sid)
+	replay, err := manager.ConsumeEmailChangeChallenge(ctx, stale, "NEW123", newEmail, 3)
+	if err != nil || replay == nil || replay.Outcome == session.TransitionSucceeded {
+		t.Fatalf("new-address replay = (%+v, %v)", replay, err)
 	}
 }
 
@@ -702,11 +842,25 @@ func TestInactiveUsersCannotCompleteAuthenticationTransitions(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	newEmail := prefix + "-new@example.com"
+	if _, err := impl.AdvanceEmailChangeChallenge(ctx, &dbgen.AdvanceEmailChangeChallengeParams{
+		SessionID:     emailSID,
+		ChallengeCode: db.Text("222222"),
+		NewEmail:      db.Text(newEmail),
+		NewCode:       db.Text("NEW123"),
+		ChallengeTtl:  15 * time.Minute,
+		MaxAttempts:   5,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := store.Pool.Exec(ctx, "UPDATE backend.users SET deleted_at = NOW() WHERE id = $1", emailUserID); err != nil {
 		t.Fatal(err)
 	}
 	emailResult, err := impl.ConsumeEmailChangeChallenge(ctx, &dbgen.ConsumeEmailChangeChallengeParams{
-		SessionID: emailSID, ChallengeCode: db.Text("222222"), MaxAttempts: 5,
+		SessionID:      emailSID,
+		ChallengeCode:  db.Text("NEW123"),
+		ChallengeEmail: db.Text(newEmail),
+		MaxAttempts:    5,
 	})
 	if err != nil || emailResult.Outcome != session.TransitionStale {
 		t.Fatalf("deleted-user email-change consume = (%+v, %v), want stale", emailResult, err)

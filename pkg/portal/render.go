@@ -42,6 +42,7 @@ type RenderConstants struct {
 	Method                          string
 	Tab                             string
 	VerificationCode                string
+	VerifyNewEmail                  string
 	Domain                          string
 	Difficulty                      string
 	Growth                          string
@@ -164,6 +165,7 @@ func NewRenderConstants() *RenderConstants {
 		Method:                          common.ParamMethod,
 		Tab:                             common.ParamTab,
 		VerificationCode:                common.ParamVerificationCode,
+		VerifyNewEmail:                  common.ParamVerifyNewEmail,
 		Domain:                          common.ParamDomain,
 		Difficulty:                      common.ParamDifficulty,
 		Growth:                          common.ParamGrowth,

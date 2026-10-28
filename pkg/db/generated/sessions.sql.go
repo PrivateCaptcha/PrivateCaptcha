@@ -8,46 +8,47 @@ package generated
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const consumeEmailChangeChallenge = `-- name: ConsumeEmailChangeChallenge :one
+const advanceEmailChangeChallenge = `-- name: AdvanceEmailChangeChallenge :one
 UPDATE backend.sessions AS sessions
-SET version = version + 1,
-    failed_attempts = CASE
-        WHEN challenge_code = $1 THEN 0
-        ELSE failed_attempts + 1
-    END,
-    challenge_kind = CASE WHEN challenge_code = $1 THEN NULL ELSE challenge_kind END,
-    challenge_code = CASE WHEN challenge_code = $1 THEN NULL ELSE challenge_code END,
-    challenge_email = CASE WHEN challenge_code = $1 THEN NULL ELSE challenge_email END,
-    challenge_expires_at = CASE WHEN challenge_code = $1 THEN NULL ELSE challenge_expires_at END
-WHERE session_id = $2
+SET version = sessions.version + 1,
+    failed_attempts = sessions.failed_attempts + CASE WHEN challenge_code = $1 THEN 0 ELSE 1 END,
+    challenge_kind = CASE WHEN challenge_code = $1 THEN 'email_change_new' ELSE challenge_kind END,
+    challenge_code = CASE WHEN challenge_code = $1 THEN $2 ELSE challenge_code END,
+    challenge_email = CASE WHEN challenge_code = $1 THEN $3 ELSE challenge_email END,
+    challenge_expires_at = CASE WHEN challenge_code = $1 THEN NOW() + $4::INTERVAL ELSE challenge_expires_at END
+WHERE session_id = $5
   AND state = 'authenticated'
   AND challenge_kind = 'email_change'
   AND expires_at > NOW()
   AND challenge_expires_at > NOW()
-  AND failed_attempts < $3
+  AND failed_attempts < $6
   AND EXISTS (
-      SELECT 1
-      FROM backend.users
+      SELECT 1 FROM backend.users
       WHERE users.id = sessions.user_id
+        AND users.email = sessions.challenge_email
         AND users.enabled
         AND users.deleted_at IS NULL
   )
 RETURNING
-    CASE WHEN sessions.challenge_kind IS NULL THEN 'succeeded' ELSE 'invalid_code' END::TEXT AS outcome,
+    CASE WHEN sessions.challenge_kind = 'email_change_new' THEN 'succeeded' ELSE 'invalid_code' END::TEXT AS outcome,
     sessions.session_id, sessions.state, sessions.version, sessions.user_id, sessions.data, sessions.expires_at, sessions.challenge_kind, sessions.challenge_code, sessions.challenge_email, sessions.challenge_expires_at, sessions.failed_attempts, sessions.verify_registration, sessions.registration_invite_id
 `
 
-type ConsumeEmailChangeChallengeParams struct {
-	ChallengeCode pgtype.Text `db:"challenge_code" json:"challenge_code"`
-	SessionID     string      `db:"session_id" json:"session_id"`
-	MaxAttempts   int32       `db:"max_attempts" json:"max_attempts"`
+type AdvanceEmailChangeChallengeParams struct {
+	ChallengeCode pgtype.Text   `db:"challenge_code" json:"challenge_code"`
+	NewCode       pgtype.Text   `db:"new_code" json:"new_code"`
+	NewEmail      pgtype.Text   `db:"new_email" json:"new_email"`
+	ChallengeTtl  time.Duration `db:"challenge_ttl" json:"challenge_ttl"`
+	SessionID     string        `db:"session_id" json:"session_id"`
+	MaxAttempts   int32         `db:"max_attempts" json:"max_attempts"`
 }
 
-type ConsumeEmailChangeChallengeRow struct {
+type AdvanceEmailChangeChallengeRow struct {
 	Outcome              string                   `db:"outcome" json:"outcome"`
 	SessionID            string                   `db:"session_id" json:"session_id"`
 	State                SessionState             `db:"state" json:"state"`
@@ -64,11 +65,114 @@ type ConsumeEmailChangeChallengeRow struct {
 	VerifyRegistration   pgtype.Bool              `db:"verify_registration" json:"verify_registration"`
 }
 
+func (q *Queries) AdvanceEmailChangeChallenge(ctx context.Context, arg *AdvanceEmailChangeChallengeParams) (*AdvanceEmailChangeChallengeRow, error) {
+	row := q.db.QueryRow(ctx, advanceEmailChangeChallenge,
+		arg.ChallengeCode,
+		arg.NewCode,
+		arg.NewEmail,
+		arg.ChallengeTtl,
+		arg.SessionID,
+		arg.MaxAttempts,
+	)
+	var i AdvanceEmailChangeChallengeRow
+	err := row.Scan(
+		&i.Outcome,
+		&i.SessionID,
+		&i.State,
+		&i.Version,
+		&i.UserID,
+		&i.Data,
+		&i.ExpiresAt,
+		&i.ChallengeKind,
+		&i.ChallengeCode,
+		&i.ChallengeEmail,
+		&i.ChallengeExpiresAt,
+		&i.FailedAttempts,
+		&i.VerifyRegistration,
+		&i.RegistrationInviteID,
+	)
+	return &i, err
+}
+
+const consumeEmailChangeChallenge = `-- name: ConsumeEmailChangeChallenge :one
+WITH challenge AS (
+    SELECT session_id AS id,
+           challenge_email AS email,
+           challenge_email IS DISTINCT FROM $3 AS cancelled
+    FROM backend.sessions
+    WHERE session_id = $4
+    FOR UPDATE
+)
+UPDATE backend.sessions AS sessions
+SET version = version + 1,
+    failed_attempts = CASE
+        WHEN challenge.cancelled OR challenge_code = $1 THEN failed_attempts
+        ELSE failed_attempts + 1
+    END,
+    challenge_kind = CASE WHEN challenge.cancelled OR challenge_code = $1 THEN NULL ELSE challenge_kind END,
+    challenge_code = CASE WHEN challenge.cancelled OR challenge_code = $1 THEN NULL ELSE challenge_code END,
+    challenge_email = CASE WHEN challenge.cancelled OR challenge_code = $1 THEN NULL ELSE challenge_email END,
+    challenge_expires_at = CASE WHEN challenge.cancelled OR challenge_code = $1 THEN NULL ELSE challenge_expires_at END
+FROM challenge
+WHERE sessions.session_id = challenge.id
+  AND state = 'authenticated'
+  AND challenge_kind = 'email_change_new'
+  AND expires_at > NOW()
+  AND challenge_expires_at > NOW()
+  AND failed_attempts < $2
+  AND EXISTS (
+      SELECT 1
+      FROM backend.users
+      WHERE users.id = sessions.user_id
+        AND users.enabled
+        AND users.deleted_at IS NULL
+  )
+RETURNING
+    CASE
+        WHEN challenge.cancelled THEN 'cancelled'
+        WHEN sessions.challenge_kind IS NULL THEN 'succeeded'
+        ELSE 'invalid_code'
+    END::TEXT AS outcome,
+    CASE WHEN NOT challenge.cancelled AND sessions.challenge_kind IS NULL THEN COALESCE(challenge.email, '') ELSE '' END::TEXT AS verified_email,
+    sessions.session_id, sessions.state, sessions.version, sessions.user_id, sessions.data, sessions.expires_at, sessions.challenge_kind, sessions.challenge_code, sessions.challenge_email, sessions.challenge_expires_at, sessions.failed_attempts, sessions.verify_registration, sessions.registration_invite_id
+`
+
+type ConsumeEmailChangeChallengeParams struct {
+	ChallengeCode  pgtype.Text `db:"challenge_code" json:"challenge_code"`
+	MaxAttempts    int32       `db:"max_attempts" json:"max_attempts"`
+	ChallengeEmail pgtype.Text `db:"challenge_email" json:"challenge_email"`
+	SessionID      string      `db:"session_id" json:"session_id"`
+}
+
+type ConsumeEmailChangeChallengeRow struct {
+	Outcome              string                   `db:"outcome" json:"outcome"`
+	VerifiedEmail        string                   `db:"verified_email" json:"verified_email"`
+	SessionID            string                   `db:"session_id" json:"session_id"`
+	State                SessionState             `db:"state" json:"state"`
+	Version              int32                    `db:"version" json:"version"`
+	UserID               pgtype.Int4              `db:"user_id" json:"user_id"`
+	Data                 []byte                   `db:"data" json:"data"`
+	ExpiresAt            pgtype.Timestamptz       `db:"expires_at" json:"expires_at"`
+	ChallengeKind        NullSessionChallengeKind `db:"challenge_kind" json:"challenge_kind"`
+	ChallengeCode        pgtype.Text              `db:"challenge_code" json:"challenge_code"`
+	ChallengeEmail       pgtype.Text              `db:"challenge_email" json:"challenge_email"`
+	ChallengeExpiresAt   pgtype.Timestamptz       `db:"challenge_expires_at" json:"challenge_expires_at"`
+	FailedAttempts       int32                    `db:"failed_attempts" json:"failed_attempts"`
+	RegistrationInviteID pgtype.Int4              `db:"registration_invite_id" json:"registration_invite_id"`
+	VerifyRegistration   pgtype.Bool              `db:"verify_registration" json:"verify_registration"`
+}
+
 func (q *Queries) ConsumeEmailChangeChallenge(ctx context.Context, arg *ConsumeEmailChangeChallengeParams) (*ConsumeEmailChangeChallengeRow, error) {
-	row := q.db.QueryRow(ctx, consumeEmailChangeChallenge, arg.ChallengeCode, arg.SessionID, arg.MaxAttempts)
+	row := q.db.QueryRow(ctx, consumeEmailChangeChallenge,
+		arg.ChallengeCode,
+		arg.MaxAttempts,
+		arg.ChallengeEmail,
+		arg.SessionID,
+	)
 	var i ConsumeEmailChangeChallengeRow
 	err := row.Scan(
 		&i.Outcome,
+		&i.VerifiedEmail,
 		&i.SessionID,
 		&i.State,
 		&i.Version,

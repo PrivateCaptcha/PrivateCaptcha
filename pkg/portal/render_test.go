@@ -1243,6 +1243,28 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{""},
 		},
 		{
+			path:     []string{common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint},
+			template: settingsGeneralFormTemplate,
+			model: &settingsGeneralRenderContext{
+				SettingsCommonRenderContext: SettingsCommonRenderContext{
+					CsrfRenderContext: stubToken(),
+					Email:             "new@example.com",
+				},
+				EditEmail:      true,
+				VerifyNewEmail: true,
+				TwoFactorEmail: "n**@example.com",
+				TwoFactorError: "Code is not valid.",
+			},
+			selector: `input[name="verify_new_email"][value="true"], p[role="status"], input#vcode[pattern="[0-9A-Z]{6}"][autocomplete="one-time-code"], input#email.pc-form-input-disabled[readonly][value="new@example.com"]:not([disabled]), button[type="submit"]`,
+			matches: []string{
+				"",
+				"Step 2 of 2: Verify your new email.",
+				"",
+				"",
+				"Confirm email",
+			},
+		},
+		{
 			path:     []string{common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint},
 			template: settingsAPIKeysTemplatePrefix + "page.html",
 			model: &settingsAPIKeysRenderContext{

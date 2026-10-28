@@ -17,9 +17,10 @@ const (
 type ChallengeKind string
 
 const (
-	ChallengeKindSignIn       ChallengeKind = "sign_in"
-	ChallengeKindRegistration ChallengeKind = "registration"
-	ChallengeKindEmailChange  ChallengeKind = "email_change"
+	ChallengeKindSignIn         ChallengeKind = "sign_in"
+	ChallengeKindRegistration   ChallengeKind = "registration"
+	ChallengeKindEmailChange    ChallengeKind = "email_change"
+	ChallengeKindEmailChangeNew ChallengeKind = "email_change_new"
 )
 
 type StoredSession struct {

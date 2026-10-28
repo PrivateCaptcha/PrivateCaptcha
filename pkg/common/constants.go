@@ -24,6 +24,7 @@ const (
 	ParamURL                       = "url"
 	ParamCSRFToken                 = "csrf_token"
 	ParamVerificationCode          = "vcode"
+	ParamVerifyNewEmail            = "verify_new_email"
 	ParamDomain                    = "domain"
 	ParamDifficulty                = "difficulty"
 	ParamGrowth                    = "growth"

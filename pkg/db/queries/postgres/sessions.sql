@@ -218,19 +218,28 @@ ON CONFLICT (session_id) DO NOTHING
 RETURNING sessions.*;
 
 -- name: ConsumeEmailChangeChallenge :one
+WITH challenge AS (
+    SELECT session_id AS id,
+           challenge_email AS email,
+           challenge_email IS DISTINCT FROM sqlc.arg(challenge_email) AS cancelled
+    FROM backend.sessions
+    WHERE session_id = sqlc.arg(session_id)
+    FOR UPDATE
+)
 UPDATE backend.sessions AS sessions
 SET version = version + 1,
     failed_attempts = CASE
-        WHEN challenge_code = sqlc.arg(challenge_code) THEN 0
+        WHEN challenge.cancelled OR challenge_code = sqlc.arg(challenge_code) THEN failed_attempts
         ELSE failed_attempts + 1
     END,
-    challenge_kind = CASE WHEN challenge_code = sqlc.arg(challenge_code) THEN NULL ELSE challenge_kind END,
-    challenge_code = CASE WHEN challenge_code = sqlc.arg(challenge_code) THEN NULL ELSE challenge_code END,
-    challenge_email = CASE WHEN challenge_code = sqlc.arg(challenge_code) THEN NULL ELSE challenge_email END,
-    challenge_expires_at = CASE WHEN challenge_code = sqlc.arg(challenge_code) THEN NULL ELSE challenge_expires_at END
-WHERE session_id = sqlc.arg(session_id)
+    challenge_kind = CASE WHEN challenge.cancelled OR challenge_code = sqlc.arg(challenge_code) THEN NULL ELSE challenge_kind END,
+    challenge_code = CASE WHEN challenge.cancelled OR challenge_code = sqlc.arg(challenge_code) THEN NULL ELSE challenge_code END,
+    challenge_email = CASE WHEN challenge.cancelled OR challenge_code = sqlc.arg(challenge_code) THEN NULL ELSE challenge_email END,
+    challenge_expires_at = CASE WHEN challenge.cancelled OR challenge_code = sqlc.arg(challenge_code) THEN NULL ELSE challenge_expires_at END
+FROM challenge
+WHERE sessions.session_id = challenge.id
   AND state = 'authenticated'
-  AND challenge_kind = 'email_change'
+  AND challenge_kind = 'email_change_new'
   AND expires_at > NOW()
   AND challenge_expires_at > NOW()
   AND failed_attempts < sqlc.arg(max_attempts)
@@ -242,7 +251,37 @@ WHERE session_id = sqlc.arg(session_id)
         AND users.deleted_at IS NULL
   )
 RETURNING
-    CASE WHEN sessions.challenge_kind IS NULL THEN 'succeeded' ELSE 'invalid_code' END::TEXT AS outcome,
+    CASE
+        WHEN challenge.cancelled THEN 'cancelled'
+        WHEN sessions.challenge_kind IS NULL THEN 'succeeded'
+        ELSE 'invalid_code'
+    END::TEXT AS outcome,
+    CASE WHEN NOT challenge.cancelled AND sessions.challenge_kind IS NULL THEN COALESCE(challenge.email, '') ELSE '' END::TEXT AS verified_email,
+    sessions.*;
+
+-- name: AdvanceEmailChangeChallenge :one
+UPDATE backend.sessions AS sessions
+SET version = sessions.version + 1,
+    failed_attempts = sessions.failed_attempts + CASE WHEN challenge_code = sqlc.arg(challenge_code) THEN 0 ELSE 1 END,
+    challenge_kind = CASE WHEN challenge_code = sqlc.arg(challenge_code) THEN 'email_change_new' ELSE challenge_kind END,
+    challenge_code = CASE WHEN challenge_code = sqlc.arg(challenge_code) THEN sqlc.arg(new_code) ELSE challenge_code END,
+    challenge_email = CASE WHEN challenge_code = sqlc.arg(challenge_code) THEN sqlc.arg(new_email) ELSE challenge_email END,
+    challenge_expires_at = CASE WHEN challenge_code = sqlc.arg(challenge_code) THEN NOW() + sqlc.arg(challenge_ttl)::INTERVAL ELSE challenge_expires_at END
+WHERE session_id = sqlc.arg(session_id)
+  AND state = 'authenticated'
+  AND challenge_kind = 'email_change'
+  AND expires_at > NOW()
+  AND challenge_expires_at > NOW()
+  AND failed_attempts < sqlc.arg(max_attempts)
+  AND EXISTS (
+      SELECT 1 FROM backend.users
+      WHERE users.id = sessions.user_id
+        AND users.email = sessions.challenge_email
+        AND users.enabled
+        AND users.deleted_at IS NULL
+  )
+RETURNING
+    CASE WHEN sessions.challenge_kind = 'email_change_new' THEN 'succeeded' ELSE 'invalid_code' END::TEXT AS outcome,
     sessions.*;
 
 -- name: UpdateSessionPayloads :many

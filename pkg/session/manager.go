@@ -213,10 +213,22 @@ func (m *Manager) IssueEmailChangeChallenge(
 	})
 }
 
-func (m *Manager) ConsumeEmailChangeChallenge(ctx context.Context, sess *Session, code string, maxAttempts int32) (*ChallengeResult, error) {
+func (m *Manager) ConsumeEmailChangeChallenge(ctx context.Context, sess *Session, code, email string, maxAttempts int32) (*ChallengeResult, error) {
 	return m.Store.ConsumeEmailChangeChallenge(sessionContext(ctx, sess), EmailChangeChallengeConsume{
+		SessionID:      sess.ID(),
+		ChallengeCode:  code,
+		ChallengeEmail: email,
+		MaxAttempts:    maxAttempts,
+	})
+}
+
+func (m *Manager) AdvanceEmailChangeChallenge(ctx context.Context, sess *Session, code, newEmail, newCode string, challengeTTL time.Duration, maxAttempts int32) (*ChallengeResult, error) {
+	return m.Store.AdvanceEmailChangeChallenge(sessionContext(ctx, sess), EmailChangeChallengeAdvance{
 		SessionID:     sess.ID(),
 		ChallengeCode: code,
+		NewEmail:      newEmail,
+		NewCode:       newCode,
+		ChallengeTTL:  challengeTTL,
 		MaxAttempts:   maxAttempts,
 	})
 }
