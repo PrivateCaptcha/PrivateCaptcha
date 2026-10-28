@@ -66,7 +66,7 @@ func verify(ctx context.Context, in io.Reader, count int) error {
 		if got := payload.Puzzle().EdgeTokenValidity(); got != expectedValidity {
 			return fmt.Errorf("puzzle %d: edge-token validity = %v, want %v", verified, got, expectedValidity)
 		}
-		if _, result := payload.VerifySolutions(ctx); result != puzzle.VerifyNoError {
+		if _, result := payload.VerifySolutions(ctx, nil, nil); result != puzzle.VerifyNoError {
 			return fmt.Errorf("puzzle %d: %s", verified, result)
 		}
 	}

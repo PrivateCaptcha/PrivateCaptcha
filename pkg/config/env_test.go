@@ -28,6 +28,25 @@ func TestClickHousePortEnvName(t *testing.T) {
 	}
 }
 
+func TestMinSolveTimeAtMediumEnv(t *testing.T) {
+	value := "100.5ms"
+	cfg := NewEnvConfig(func(name string) string {
+		if name == "PC_MIN_SOLVE_TIME_AT_MEDIUM" {
+			return value
+		}
+		return ""
+	})
+	item := cfg.Get(common.MinSolveTimeAtMediumKey)
+	if item.Value() != value {
+		t.Fatalf("threshold = %q, want %q", item.Value(), value)
+	}
+	value = "250ms"
+	cfg.Update(t.Context())
+	if item.Value() != value {
+		t.Fatalf("updated threshold = %q, want %q", item.Value(), value)
+	}
+}
+
 func TestEnvConfigValueUpdate(t *testing.T) {
 	t.Parallel()
 

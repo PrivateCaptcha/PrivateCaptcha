@@ -15,6 +15,35 @@ function puzzle(solutionsCount = 2) {
     };
 }
 
+for (const { elapsed, expected } of [
+    { elapsed: 0, expected: 1 },
+    { elapsed: -1, expected: -1 },
+    { elapsed: 1234, expected: 1234 },
+]) {
+    test(`WorkersPool serializes ${elapsed}ms of completed work as ${expected}ms`, (t) => {
+        let now = 0;
+        t.mock.method(performance, 'now', () => { throw new Error('performance.now is unavailable'); });
+        t.mock.method(Date, 'now', () => now);
+        const { TestWorker, workers } = workerHarness();
+        const work = puzzle(1);
+        const pool = new WorkersPool({}, false, TestWorker);
+        assert.strictEqual(pool.elapsedMillis(), 0);
+        pool.init(work, false);
+        pool.solve(work);
+        assert.strictEqual(pool.elapsedMillis(), 0);
+        now = elapsed;
+        workers[0].onmessage({ data: {
+            command: 'solve', argument: { id: work.ID, solution: new Uint8Array(8), wasm: true },
+        } });
+
+        const serialized = Uint8Array.from(atob(pool.serializeSolutions(0)), (char) => char.charCodeAt(0));
+        assert.strictEqual(new DataView(serialized.buffer).getUint32(3, true), expected >>> 0);
+        assert.strictEqual(pool.elapsedMillis(), expected);
+        pool.reset();
+        assert.strictEqual(pool.elapsedMillis(), 0);
+    });
+}
+
 test('WorkersPool dispatches eight Argon2id lanes sequentially through one worker', () => {
     const { TestWorker, workers } = workerHarness();
     const work = puzzle(8);

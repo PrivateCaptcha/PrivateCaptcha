@@ -189,7 +189,7 @@ func (s *server) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, verr := verifyPayload.VerifySolutions(ctx); verr != puzzle.VerifyNoError {
+	if _, verr := verifyPayload.VerifySolutions(ctx, nil, nil); verr != puzzle.VerifyNoError {
 		fmt.Fprintln(w, redPage)
 		return
 	}

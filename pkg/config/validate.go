@@ -116,6 +116,9 @@ func validateItem(item common.ConfigItem) error {
 	case common.Argon2IDMemoryBudgetKey:
 		_, err := parseArgon2IDMemoryBudget(value, int64(puzzle.Argon2IDMemoryKiB))
 		return err
+	case common.MinSolveTimeAtMediumKey:
+		_, err := parseMinSolveTimeAtMedium(value)
+		return err
 	case common.PortKey:
 		if _, err := net.LookupPort("tcp", value); err != nil {
 			return errors.New("invalid TCP port")
