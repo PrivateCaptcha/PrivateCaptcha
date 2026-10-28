@@ -15,6 +15,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"golang.org/x/net/idna"
 )
 
 type edgeBackfillQuerier struct {
@@ -433,6 +434,67 @@ func TestIsOriginAllowedNormalizedDomain(t *testing.T) {
 	} {
 		if got := isOriginAllowed(tc.origin, property); got != tc.allowed {
 			t.Errorf("isOriginAllowed(%q) = %v, want %v", tc.origin, got, tc.allowed)
+		}
+	}
+}
+
+// TestIsOriginAllowedTrailingDotDomain reproduces the bug where a property
+// domain entered with a trailing root dot (DNS FQDN notation, e.g.
+// "example.com.") is stored verbatim and then breaks every puzzle request,
+// because dot-less browser origins never match the dotted stored domain.
+// The fix lives in common.ParseDomainName, which both creation paths (portal
+// and management API) use, so feeding a dotted input through ParseDomainName
+// must yield a dot-less domain whose DomainASCII derivation also drops the dot.
+func TestIsOriginAllowedTrailingDotDomain(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []string{"example.com.", "https://example.com.", "Example.Com."} {
+		parsed, err := common.ParseDomainName(raw)
+		if err != nil {
+			t.Fatalf("ParseDomainName(%q) returned error: %v", raw, err)
+		}
+		if strings.HasSuffix(parsed, ".") {
+			t.Fatalf("ParseDomainName(%q) = %q, trailing root dot must be stripped", raw, parsed)
+		}
+		// ParseDomainName strips only the trailing dot; case is preserved so
+		// callers (portal/API) can lowercase the result themselves.
+		if raw == "Example.Com." && parsed != "Example.Com" {
+			t.Fatalf("ParseDomainName(%q) = %q, want %q (case preserved)", raw, parsed, "Example.Com")
+		}
+		if raw != "Example.Com." && parsed != "example.com" {
+			t.Fatalf("ParseDomainName(%q) = %q, want %q", raw, parsed, "example.com")
+		}
+
+		// Mirror normalizePropertyDomain (pkg/db/business_impl.go): the stored
+		// domain is fed to idna.Lookup.ToASCII to derive DomainASCII, which
+		// isOriginAllowed prefers over Domain.
+		ascii, err := idna.Lookup.ToASCII(parsed)
+		if err != nil {
+			t.Fatalf("ToASCII(%q) returned error: %v", parsed, err)
+		}
+		if strings.HasSuffix(ascii, ".") {
+			t.Fatalf("DomainASCII %q still has a trailing root dot for input %q", ascii, raw)
+		}
+
+		property := &dbgen.Property{
+			Domain:          parsed,
+			DomainASCII:     ascii,
+			AllowSubdomains: true,
+		}
+		for _, tc := range []struct {
+			origin  string
+			allowed bool
+		}{
+			{origin: "example.com", allowed: true},
+			{origin: "www.example.com", allowed: true},
+			{origin: "deep.sub.example.com", allowed: true},
+			{origin: "notexample.com", allowed: false},
+			{origin: "example.com.evil.com", allowed: false},
+			{origin: "other.com", allowed: false},
+		} {
+			if got := isOriginAllowed(tc.origin, property); got != tc.allowed {
+				t.Errorf("isOriginAllowed(%q, property from %q) = %v, want %v", tc.origin, raw, got, tc.allowed)
+			}
 		}
 	}
 }

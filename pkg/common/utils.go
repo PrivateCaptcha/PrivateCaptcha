@@ -283,6 +283,18 @@ func ParseDomainName(input string) (string, error) {
 	if domain == "" {
 		return "", ErrEmptyDomain
 	}
+	// Strip a trailing root dot (DNS FQDN notation, e.g. "example.com." ->
+	// "example.com"). The dot is valid for resolution and therefore passes
+	// downstream validation (including DNS lookup), and it survives every
+	// other normalization layer (strings.ToLower, idna.Lookup.ToASCII), so the
+	// derived property.DomainASCII keeps it. That breaks isOriginAllowed,
+	// which compares against dot-less browser origins and would 403 every
+	// puzzle request. Mirrors the trailing-dot trim already applied to form
+	// URLs in pkg/api/form_url_verifier.go.
+	domain = strings.TrimSuffix(domain, ".")
+	if domain == "" {
+		return "", ErrEmptyDomain
+	}
 	return domain, nil
 }
 
