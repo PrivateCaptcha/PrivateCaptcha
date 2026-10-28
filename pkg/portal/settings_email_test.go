@@ -199,10 +199,11 @@ func TestEmailChangeDestinationTamperingCancels(t *testing.T) {
 			}
 			submit := func(sessionStore *db.SessionStore, address, code string) *settingsGeneralRenderContext {
 				t.Helper()
-				manager := *server.Sessions
+				originalManager := server.Sessions
+				manager := *originalManager
 				manager.Store = sessionStore
-				srv := *server
-				srv.Sessions = &manager
+				server.Sessions = &manager
+				defer func() { server.Sessions = originalManager }()
 				form := url.Values{
 					common.ParamEmail:            {address},
 					common.ParamVerificationCode: {code},
@@ -214,7 +215,7 @@ func TestEmailChangeDestinationTamperingCancels(t *testing.T) {
 					Value: sid,
 				})
 				req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-				view, err := srv.putGeneralSettings(httptest.NewRecorder(), req)
+				view, err := server.putGeneralSettings(httptest.NewRecorder(), req)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -270,12 +271,17 @@ func TestEmailChangeDeliveryFailureAndRestart(t *testing.T) {
 	}
 	sessionStore := db.NewSessionStore(store, server.Metrics)
 	t.Cleanup(sessionStore.Stop)
-	manager := *server.Sessions
+	originalManager := server.Sessions
+	originalMailer := server.Mailer
+	t.Cleanup(func() {
+		server.Sessions = originalManager
+		server.Mailer = originalMailer
+	})
+	manager := *originalManager
 	manager.Store = sessionStore
 	mailer := &email.StubMailer{}
-	srv := *server
-	srv.Sessions = &manager
-	srv.Mailer = mailer
+	server.Sessions = &manager
+	server.Mailer = mailer
 	cookie := &http.Cookie{
 		Name:  manager.CookieName,
 		Value: sid,
@@ -283,7 +289,7 @@ func TestEmailChangeDeliveryFailureAndRestart(t *testing.T) {
 	issue := func() string {
 		t.Helper()
 		req := requestWithSessionCookie(http.MethodPost, "/settings/tab/general/email", cookie)
-		if _, err := srv.editEmail(httptest.NewRecorder(), req); err != nil {
+		if _, err := server.editEmail(httptest.NewRecorder(), req); err != nil {
 			t.Fatal(err)
 		}
 		code, ok := mailer.TwoFactorCode(oldEmail)
@@ -305,7 +311,7 @@ func TestEmailChangeDeliveryFailureAndRestart(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPut, "/settings/tab/general", strings.NewReader(form.Encode()))
 		req.AddCookie(cookie)
 		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-		view, err := srv.putGeneralSettings(httptest.NewRecorder(), req)
+		view, err := server.putGeneralSettings(httptest.NewRecorder(), req)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -315,7 +321,7 @@ func TestEmailChangeDeliveryFailureAndRestart(t *testing.T) {
 		return view.Model.(*settingsGeneralRenderContext)
 	}
 	code := issue()
-	srv.Mailer = failingEmailChangeMailer{
+	server.Mailer = failingEmailChangeMailer{
 		Mailer: mailer,
 	}
 	model := update(code, false)
@@ -329,7 +335,7 @@ func TestEmailChangeDeliveryFailureAndRestart(t *testing.T) {
 	if model.TwoFactorError != "Code has expired. Cancel and start the email change again." {
 		t.Fatalf("expired second challenge error = %q", model.TwoFactorError)
 	}
-	srv.Mailer = mailer
+	server.Mailer = mailer
 	restartedCode := issue()
 	model = update(restartedCode, true)
 	if model.TwoFactorError == "" {

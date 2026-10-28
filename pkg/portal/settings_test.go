@@ -729,14 +729,13 @@ func TestEmailChangeLifecycle(t *testing.T) {
 	}
 	secondaryStore := db.NewSessionStore(store, server.Metrics)
 	t.Cleanup(secondaryStore.Stop)
-	secondaryManager := *server.Sessions
+	originalManager := server.Sessions
+	t.Cleanup(func() { server.Sessions = originalManager })
+	secondaryManager := *originalManager
 	secondaryManager.Store = secondaryStore
-	secondaryServer := *server
-	secondaryServer.Sessions = &secondaryManager
 	if _, err := secondaryManager.Get(issueReq); err != nil {
 		t.Fatal(err)
 	}
-	activeServer := server
 
 	update := func(email string, verificationCode string, verifyNew bool) *settingsGeneralRenderContext {
 		form := url.Values{}
@@ -750,7 +749,7 @@ func TestEmailChangeLifecycle(t *testing.T) {
 		req.AddCookie(cookie)
 		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 		w := httptest.NewRecorder()
-		viewModel, err := activeServer.putGeneralSettings(w, req)
+		viewModel, err := server.putGeneralSettings(w, req)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -805,7 +804,7 @@ func TestEmailChangeLifecycle(t *testing.T) {
 	if newCode == code {
 		t.Fatal("second challenge reused the current-address code")
 	}
-	activeServer = &secondaryServer
+	server.Sessions = &secondaryManager
 
 	renderCtx = update(newEmail, code, false)
 	if renderCtx.TwoFactorError == "" {
