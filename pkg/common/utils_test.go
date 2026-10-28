@@ -81,6 +81,18 @@ func TestCleanupDomain(t *testing.T) {
 		{"http://bar.com/index.html", "bar.com", false},
 		{"https://bar.com", "bar.com", false},
 		{"https://bar.com/api", "bar.com", false},
+		// A trailing root dot (DNS FQDN notation) must be stripped, otherwise
+		// it survives ToASCII and breaks isOriginAllowed against dot-less
+		// browser origins (see pkg/api/middlewares.go).
+		{"example.com.", "example.com", false},
+		{"http://example.com.", "example.com", false},
+		{"https://example.com.", "example.com", false},
+		{"https://example.com./api", "example.com", false},
+		// Mixed-case dotted input is stripped before callers lowercase it.
+		{"Example.Com.", "Example.Com", false},
+		// A bare root label "." reduces to an empty domain after stripping the
+		// trailing dot, so it must be rejected like other empty parses.
+		{".", "", true},
 		// An empty raw input is rejected.
 		{"", "", true},
 		// A non-empty raw input that parses to an empty domain must also be
