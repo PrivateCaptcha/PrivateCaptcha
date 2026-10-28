@@ -15,7 +15,7 @@ import (
 
 // NOTE: this will eventually be replaced by proper OTP
 func twoFactorCode() string {
-	const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	const alphabet = "0123456789BCDFGHKLMNPQRSTVWXZ"
 	const uniformRange = 256 / len(alphabet) * len(alphabet)
 	var code [6]byte
 	var random [1]byte
