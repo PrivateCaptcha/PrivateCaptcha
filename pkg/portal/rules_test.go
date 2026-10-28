@@ -227,7 +227,7 @@ func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 
 	// with registry, should use custom display name
 	registry := NewRuleRegistry()
-	registry.RegisterCondition(string(dbgen.RuleConditionPropertyIPAddress), nil, "Custom IP Display", nil)
+	registry.conditions[string(dbgen.RuleConditionPropertyIPAddress)] = ConditionRegistration{DisplayName: "Custom IP Display"}
 	model = DifficultyRuleToDisplay(rule, true, hasher, registry)
 	if model.ConditionProperty != "Custom IP Display" {
 		t.Errorf("Expected 'Custom IP Display', got '%s'", model.ConditionProperty)
@@ -247,7 +247,7 @@ func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 	}
 
 	// unknown property with registry override should use custom display name
-	registry.RegisterCondition("some_custom_property", nil, "My Custom Prop", nil)
+	registry.conditions["some_custom_property"] = ConditionRegistration{DisplayName: "My Custom Prop"}
 	model = DifficultyRuleToDisplay(rule, true, hasher, registry)
 	if model.ConditionProperty != "My Custom Prop" {
 		t.Errorf("Expected 'My Custom Prop', got '%s'", model.ConditionProperty)
@@ -279,22 +279,6 @@ func TestBrowserVersionRuleToDisplay(t *testing.T) {
 	model = DifficultyRuleToDisplay(rule, true, hasher, NewRuleRegistry())
 	if model.ConditionOperator != "not more" {
 		t.Errorf("ConditionOperator = %q, want %q", model.ConditionOperator, "not more")
-	}
-}
-
-func TestRegisterConditionPreservesBrowserVersionValueType(t *testing.T) {
-	registry := NewRuleRegistry()
-	err := registry.RegisterCondition(string(dbgen.RuleConditionPropertyBrowserVersion), browserVersionConditionParser, "Custom display", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	registration, ok := registry.conditionRegistration(string(dbgen.RuleConditionPropertyBrowserVersion))
-	if !ok {
-		t.Fatal("browser version condition is not registered")
-	}
-	if registration.valueType != conditionValueInteger {
-		t.Errorf("valueType = %v, want %v", registration.valueType, conditionValueInteger)
 	}
 }
 
@@ -346,7 +330,7 @@ func TestFormatConditionValue(t *testing.T) {
 		}
 
 		registry := NewRuleRegistry()
-		registry.RegisterCondition(string(dbgen.RuleConditionPropertyUserAgent), nil, "User Agent", nil)
+		registry.conditions[string(dbgen.RuleConditionPropertyUserAgent)] = ConditionRegistration{DisplayName: "User Agent"}
 		result := registry.FormatConditionValue(rule)
 		if result != "curl/7.0" {
 			t.Errorf("Expected 'curl/7.0', got '%s'", result)
@@ -360,7 +344,7 @@ func TestFormatConditionValue(t *testing.T) {
 		}
 
 		registry := NewRuleRegistry()
-		registry.RegisterCondition(string(dbgen.RuleConditionPropertyUserAgent), nil, "User Agent", nil)
+		registry.conditions[string(dbgen.RuleConditionPropertyUserAgent)] = ConditionRegistration{DisplayName: "User Agent"}
 		result := registry.FormatConditionValue(rule)
 		if result != "99" {
 			t.Errorf("Expected '99', got '%s'", result)
@@ -374,9 +358,12 @@ func TestFormatConditionValue(t *testing.T) {
 		}
 
 		registry := NewRuleRegistry()
-		registry.RegisterCondition("custom_property", nil, "Custom Prop", func(r *dbgen.DifficultyRule) string {
-			return fmt.Sprintf("Level %d", r.ConditionValueInt.Int32)
-		})
+		registry.conditions["custom_property"] = ConditionRegistration{
+			DisplayName: "Custom Prop",
+			ValueFormatter: func(r *dbgen.DifficultyRule) string {
+				return fmt.Sprintf("Level %d", r.ConditionValueInt.Int32)
+			},
+		}
 		result := registry.FormatConditionValue(rule)
 		if result != "Level 5" {
 			t.Errorf("Expected 'Level 5', got '%s'", result)
@@ -424,9 +411,12 @@ func TestFormatConditionValue(t *testing.T) {
 		}
 
 		registry := NewRuleRegistry()
-		registry.RegisterCondition("custom_property", nil, "Custom Prop", func(r *dbgen.DifficultyRule) string {
-			return fmt.Sprintf("option-%d", r.ConditionValueInt.Int32)
-		})
+		registry.conditions["custom_property"] = ConditionRegistration{
+			DisplayName: "Custom Prop",
+			ValueFormatter: func(r *dbgen.DifficultyRule) string {
+				return fmt.Sprintf("option-%d", r.ConditionValueInt.Int32)
+			},
+		}
 
 		model := DifficultyRuleToDisplay(rule, true, hasher, registry)
 		if model.ConditionValue != "option-3" {
@@ -4106,7 +4096,7 @@ func TestDifficultyRuleToDisplayAllSwitchCases(t *testing.T) {
 	}
 }
 
-func TestRegisterAction(t *testing.T) {
+func TestActionParser(t *testing.T) {
 	t.Parallel()
 
 	registry := &RuleRegistry{
@@ -4114,24 +4104,9 @@ func TestRegisterAction(t *testing.T) {
 		actions:    map[string]ActionFormParser{},
 	}
 
-	t.Run("empty key returns error", func(t *testing.T) {
-		err := registry.RegisterAction("", func(v string) (int32, common.StatusCode) {
-			return 0, common.StatusOK
-		})
-		if err == nil {
-			t.Fatal("Expected error for empty key")
-		}
-		if err != errRuleActionEmpty {
-			t.Errorf("Expected errRuleActionEmpty, got: %v", err)
-		}
-	})
-
-	t.Run("valid registration", func(t *testing.T) {
-		err := registry.RegisterAction("test_action", func(v string) (int32, common.StatusCode) {
+	t.Run("registered key returns parser", func(t *testing.T) {
+		registry.actions["test_action"] = func(v string) (int32, common.StatusCode) {
 			return 42, common.StatusOK
-		})
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
 		}
 
 		parser, ok := registry.ActionParser("test_action")

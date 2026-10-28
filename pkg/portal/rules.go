@@ -1,7 +1,6 @@
 package portal
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -15,9 +14,7 @@ import (
 )
 
 var (
-	errRuleConditionPropertyEmpty = errors.New("rule condition property is empty")
-	errRuleActionEmpty            = errors.New("rule action is empty")
-	titleCaser                    = cases.Title(language.Und)
+	titleCaser = cases.Title(language.Und)
 )
 
 type rulesRenderContext struct {
@@ -157,51 +154,6 @@ type ConditionRegistration struct {
 type RuleRegistry struct {
 	conditions map[string]ConditionRegistration
 	actions    map[string]ActionFormParser
-}
-
-func (r *RuleRegistry) RegisterCondition(key string, parser ConditionFormParser, displayName string, valueFormatter ConditionValueFormatter) error {
-	if len(key) == 0 {
-		return errRuleConditionPropertyEmpty
-	}
-
-	if r.conditions == nil {
-		r.conditions = make(map[string]ConditionRegistration)
-	}
-
-	previous := r.conditions[key]
-	reg := ConditionRegistration{
-		Parser:      parser,
-		DisplayName: displayName,
-		valueType:   previous.valueType,
-	}
-	if valueFormatter != nil {
-		reg.ValueFormatter = valueFormatter
-	}
-	r.conditions[key] = reg
-
-	return nil
-}
-
-func (r *RuleRegistry) RegisterAction(key string, parser ActionFormParser) error {
-	if len(key) == 0 {
-		return errRuleActionEmpty
-	}
-
-	if r.actions == nil {
-		r.actions = make(map[string]ActionFormParser)
-	}
-
-	r.actions[key] = parser
-
-	return nil
-}
-
-func (r *RuleRegistry) ConditionParser(key string) (ConditionFormParser, bool) {
-	reg, ok := r.conditions[key]
-	if !ok {
-		return nil, false
-	}
-	return reg.Parser, true
 }
 
 func (r *RuleRegistry) conditionRegistration(key string) (ConditionRegistration, bool) {
