@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -743,6 +744,124 @@ func TestCreateAuditLogsContext(t *testing.T) {
 
 	if renderCtx.AuditLogs == nil {
 		t.Error("Expected AuditLogs to be initialized")
+	}
+}
+
+func TestUserAuditLogsRequireCurrentOrgAccess(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	for _, revoke := range []string{"Removed", "Left"} {
+		t.Run(revoke, func(t *testing.T) {
+			ctx := t.Context()
+			member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"Member", testPlan)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			persist := func(events ...*common.AuditLogEvent) {
+				t.Helper()
+				for _, event := range events {
+					if event == nil {
+						t.Fatal("expected an audit event")
+					}
+					event.Timestamp = time.Now().UTC()
+					event.Source = common.AuditLogSourcePortal
+				}
+				if err := store.AuditLog().(*db.AuditLog).PersistAuditLog(ctx, events); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			tenants := []struct {
+				name        string
+				owner       *dbgen.User
+				org         *dbgen.Organization
+				property    *dbgen.Property
+				creation    *common.AuditLogEvent
+				updates     []*common.AuditLogEvent
+				wantUpdates bool
+			}{
+				{
+					name: "RevokedTenant",
+				},
+				{
+					name:        "CurrentTenant",
+					wantUpdates: true,
+				},
+			}
+			for i := range tenants {
+				tenant := &tenants[i]
+				tenant.owner, tenant.org, err = db_tests.CreateNewAccountForTest(ctx, store, t.Name()+tenant.name, testPlan)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := store.Impl().InviteUserToOrg(ctx, tenant.owner, tenant.org, member); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := store.Impl().JoinOrg(ctx, tenant.org.ID, member); err != nil {
+					t.Fatal(err)
+				}
+				tenant.property, tenant.creation, err = store.Impl().CreateNewProperty(ctx,
+					db_tests.CreateNewPropertyParams(member.ID, "audit-access.example.com"), tenant.org)
+				if err != nil {
+					t.Fatal(err)
+				}
+				persist(tenant.creation)
+			}
+
+			var revocation *common.AuditLogEvent
+			if revoke == "Removed" {
+				revocation, err = store.Impl().RemoveUserFromOrg(ctx, tenants[0].owner, tenants[0].org, member.ID)
+			} else {
+				revocation, err = store.Impl().LeaveOrg(ctx, tenants[0].org.ID, member)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			persist(revocation)
+
+			for i := range tenants {
+				tenant := &tenants[i]
+				params := db.NewUpdatePropertyParams(tenant.property)
+				params.Name = tenant.name + " edited after revocation"
+				updated, propertyEvent, err := store.Impl().UpdateProperty(ctx, tenant.org, tenant.owner, params)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, edgeEvent, err := store.Impl().UpdateEdgeSettings(ctx, tenant.org, tenant.owner, updated, dbgen.EdgeWidgetStartModeLoad)
+				if err != nil {
+					t.Fatal(err)
+				}
+				tenant.updates = []*common.AuditLogEvent{propertyEvent, edgeEvent}
+				persist(tenant.updates...)
+			}
+
+			logs, err := store.Impl().RetrieveUserAuditLogs(ctx, member, 100, time.Now().UTC().Add(-time.Hour), true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertVisible := func(event *common.AuditLogEvent, want bool) {
+				t.Helper()
+				got := slices.ContainsFunc(logs, func(row *dbgen.GetUserAuditLogsRow) bool {
+					log := &row.AuditLog
+					return log.UserID.Int32 == event.UserID && log.EntityTable == event.TableName &&
+						log.EntityID.Int64 == event.EntityID && string(log.Action) == event.Action.String()
+				})
+				if got != want {
+					t.Errorf("audit event visibility for %s %s %d by user %d = %v, want %v",
+						event.Action.String(), event.TableName, event.EntityID, event.UserID, got, want)
+				}
+			}
+			for _, tenant := range tenants {
+				assertVisible(tenant.creation, true)
+				for _, event := range tenant.updates {
+					assertVisible(event, tenant.wantUpdates)
+				}
+			}
+			assertVisible(revocation, true)
+		})
 	}
 }
 

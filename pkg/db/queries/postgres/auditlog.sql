@@ -20,6 +20,13 @@ WHERE (a.user_id = $1 OR
     (
         a.entity_table IN ('properties', 'edge_property_settings')
         AND ((a.old_value ->> 'creator_id')::bigint = $1 OR (a.new_value ->> 'creator_id')::bigint = $1)
+        AND EXISTS (
+            SELECT 1
+            FROM backend.organizations o
+            LEFT JOIN backend.organization_users ou ON ou.org_id = o.id AND ou.user_id = $1
+            WHERE o.id = COALESCE((a.new_value ->> 'org_id')::int, (a.old_value ->> 'org_id')::int)
+              AND (o.user_id = $1 OR (ou.user_id = $1 AND ou.level IN ('member', 'owner')))
+        )
     )
 )
 AND a.created_at >= $2
