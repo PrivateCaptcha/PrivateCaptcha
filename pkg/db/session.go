@@ -314,7 +314,10 @@ func (ss *SessionStore) IssueEmailChangeChallenge(ctx context.Context, issue ses
 // ConsumeEmailChangeChallenge verifies and clears an authenticated session's email challenge.
 func (ss *SessionStore) ConsumeEmailChangeChallenge(ctx context.Context, consume session.EmailChangeChallengeConsume) (*session.ChallengeResult, error) {
 	result, err := ss.store.Impl().ConsumeEmailChangeChallenge(ctx, &dbgen.ConsumeEmailChangeChallengeParams{
-		SessionID: consume.SessionID, ChallengeCode: Text(consume.ChallengeCode), MaxAttempts: consume.MaxAttempts,
+		SessionID:      consume.SessionID,
+		ChallengeCode:  Text(consume.ChallengeCode),
+		ChallengeEmail: Text(consume.ChallengeEmail),
+		MaxAttempts:    consume.MaxAttempts,
 	})
 	if err != nil {
 		return nil, err
@@ -325,7 +328,36 @@ func (ss *SessionStore) ConsumeEmailChangeChallenge(ctx context.Context, consume
 	if result.Outcome == session.TransitionSucceeded && result.Session == nil {
 		return nil, session.ErrInvalidTransitionResult
 	}
-	converted := &session.ChallengeResult{Outcome: result.Outcome, FailedAttempts: result.FailedAttempts}
+	converted := &session.ChallengeResult{
+		Outcome:        result.Outcome,
+		FailedAttempts: result.FailedAttempts,
+		Email:          result.Email,
+	}
+	if result.Session != nil {
+		converted.Session, converted.Authority, err = ss.publishTransitionSession(result.Session)
+	}
+	return converted, err
+}
+
+func (ss *SessionStore) AdvanceEmailChangeChallenge(ctx context.Context, advance session.EmailChangeChallengeAdvance) (*session.ChallengeResult, error) {
+	result, err := ss.store.Impl().AdvanceEmailChangeChallenge(ctx, &dbgen.AdvanceEmailChangeChallengeParams{
+		SessionID:     advance.SessionID,
+		ChallengeCode: Text(advance.ChallengeCode),
+		NewEmail:      Text(advance.NewEmail),
+		NewCode:       Text(advance.NewCode),
+		ChallengeTtl:  advance.ChallengeTTL,
+		MaxAttempts:   advance.MaxAttempts,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if result == nil || (result.Outcome == session.TransitionSucceeded && result.Session == nil) {
+		return nil, session.ErrInvalidTransitionResult
+	}
+	converted := &session.ChallengeResult{
+		Outcome:        result.Outcome,
+		FailedAttempts: result.FailedAttempts,
+	}
 	if result.Session != nil {
 		converted.Session, converted.Authority, err = ss.publishTransitionSession(result.Session)
 	}

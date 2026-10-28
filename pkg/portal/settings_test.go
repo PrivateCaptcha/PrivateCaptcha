@@ -727,17 +727,30 @@ func TestEmailChangeLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	secondaryStore := db.NewSessionStore(store, server.Metrics)
+	t.Cleanup(secondaryStore.Stop)
+	secondaryManager := *server.Sessions
+	secondaryManager.Store = secondaryStore
+	secondaryServer := *server
+	secondaryServer.Sessions = &secondaryManager
+	if _, err := secondaryManager.Get(issueReq); err != nil {
+		t.Fatal(err)
+	}
+	activeServer := server
 
-	update := func(email string, verificationCode string) *settingsGeneralRenderContext {
+	update := func(email string, verificationCode string, verifyNew bool) *settingsGeneralRenderContext {
 		form := url.Values{}
 		form.Set(common.ParamCSRFToken, csrfToken)
 		form.Set(common.ParamEmail, email)
 		form.Set(common.ParamVerificationCode, verificationCode)
+		if verifyNew {
+			form.Set(common.ParamVerifyNewEmail, "true")
+		}
 		req := httptest.NewRequest(http.MethodPut, "/settings/tab/general", strings.NewReader(form.Encode()))
 		req.AddCookie(cookie)
 		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 		w := httptest.NewRecorder()
-		viewModel, err := server.putGeneralSettings(w, req)
+		viewModel, err := activeServer.putGeneralSettings(w, req)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -752,7 +765,11 @@ func TestEmailChangeLifecycle(t *testing.T) {
 	}
 
 	newEmail := strings.ToLower(t.Name()) + "_new@privatecaptcha.com"
-	renderCtx = update(newEmail, differentTwoFactorCode(code))
+	renderCtx = update(newEmail, code, true)
+	if renderCtx.TwoFactorError == "" {
+		t.Fatal("forged second-step flag bypassed current-address verification")
+	}
+	renderCtx = update(newEmail, differentTwoFactorCode(code), false)
 	if renderCtx.TwoFactorError != "Code is not valid." {
 		t.Fatalf("Expected invalid-code error, got %q", renderCtx.TwoFactorError)
 	}
@@ -767,9 +784,40 @@ func TestEmailChangeLifecycle(t *testing.T) {
 		t.Fatalf("invalid code changed email to %q", current.Email)
 	}
 
-	renderCtx = update(newEmail, code)
+	renderCtx = update(newEmail, code, false)
 	if renderCtx.TwoFactorError != "" || renderCtx.ErrorMessage != "" {
-		t.Fatalf("Expected successful email change, got errors %q, %q", renderCtx.TwoFactorError, renderCtx.ErrorMessage)
+		t.Fatalf("Expected new-address verification, got errors %q, %q", renderCtx.TwoFactorError, renderCtx.ErrorMessage)
+	}
+	if !renderCtx.EditEmail || !renderCtx.VerifyNewEmail || renderCtx.TwoFactorEmail != common.MaskEmail(newEmail, '*') || renderCtx.SuccessMessage != "" {
+		t.Fatalf("Expected second verification form, got %+v", renderCtx)
+	}
+	current, err = store.Impl().RetrieveUser(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Email != user.Email {
+		t.Fatalf("current-address code changed email to unverified %q", current.Email)
+	}
+	newCode, err := portal_tests.TwoFactorCodeFromEmail(newEmail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newCode == code {
+		t.Fatal("second challenge reused the current-address code")
+	}
+	activeServer = &secondaryServer
+
+	renderCtx = update(newEmail, code, false)
+	if renderCtx.TwoFactorError == "" {
+		t.Fatal("current-address code replay advanced the challenge again")
+	}
+	renderCtx = update(newEmail, differentTwoFactorCode(newCode), true)
+	if renderCtx.TwoFactorError != "Code is not valid." {
+		t.Fatalf("Expected invalid second-code error, got %q", renderCtx.TwoFactorError)
+	}
+	renderCtx = update(newEmail, newCode, true)
+	if renderCtx.TwoFactorError != "" || renderCtx.ErrorMessage != "" || renderCtx.EditEmail || renderCtx.SuccessMessage == "" {
+		t.Fatalf("Expected successful email change, got %+v", renderCtx)
 	}
 	current, err = store.Impl().RetrieveUser(ctx, user.ID)
 	if err != nil {
@@ -780,7 +828,7 @@ func TestEmailChangeLifecycle(t *testing.T) {
 	}
 
 	replayEmail := strings.ToLower(t.Name()) + "_replay@privatecaptcha.com"
-	renderCtx = update(replayEmail, code)
+	renderCtx = update(replayEmail, newCode, true)
 	if renderCtx.TwoFactorError != "Code is not valid." {
 		t.Fatalf("Expected replay to fail verification, got %q", renderCtx.TwoFactorError)
 	}

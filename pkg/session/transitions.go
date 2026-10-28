@@ -14,6 +14,7 @@ type TransitionOutcome string
 
 const (
 	TransitionSucceeded            TransitionOutcome = "succeeded"
+	TransitionCancelled            TransitionOutcome = "cancelled"
 	TransitionInvalidCode          TransitionOutcome = "invalid_code"
 	TransitionExpired              TransitionOutcome = "expired"
 	TransitionAttemptsExhausted    TransitionOutcome = "attempts_exhausted"
@@ -47,6 +48,7 @@ type EmailChangeChallengeConsumeResult struct {
 	Outcome        TransitionOutcome
 	Session        *StoredSession
 	FailedAttempts int32
+	Email          string
 }
 
 type RegistrationSuccessorResult struct {
@@ -59,6 +61,7 @@ type ChallengeResult struct {
 	Session        *Session
 	Authority      Authority
 	FailedAttempts int32
+	Email          string
 }
 
 type RegistrationConsumeResult struct {
@@ -127,8 +130,18 @@ type EmailChangeChallengeIssue struct {
 }
 
 type EmailChangeChallengeConsume struct {
+	SessionID      string
+	ChallengeCode  string
+	ChallengeEmail string
+	MaxAttempts    int32
+}
+
+type EmailChangeChallengeAdvance struct {
 	SessionID     string
 	ChallengeCode string
+	NewEmail      string
+	NewCode       string
+	ChallengeTTL  time.Duration
 	MaxAttempts   int32
 }
 

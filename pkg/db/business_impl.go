@@ -310,6 +310,8 @@ func mutationOutcome(value string) (session.TransitionOutcome, error) {
 		return session.TransitionSucceeded, nil
 	case session.TransitionInvalidCode:
 		return session.TransitionInvalidCode, nil
+	case session.TransitionCancelled:
+		return session.TransitionCancelled, nil
 	default:
 		return "", fmt.Errorf("unexpected session transition outcome %q", value)
 	}
@@ -322,7 +324,7 @@ func challengeKindMatches(record *dbgen.InspectSessionChallengeRow, kind session
 			(actualKind == session.ChallengeKindSignIn || actualKind == session.ChallengeKindRegistration)
 	}
 	expectedState := dbgen.SessionStatePending
-	if kind == session.ChallengeKindEmailChange {
+	if kind == session.ChallengeKindEmailChange || kind == session.ChallengeKindEmailChangeNew {
 		expectedState = dbgen.SessionStateAuthenticated
 	}
 	return record.State == expectedState && actualKind == kind
@@ -347,16 +349,17 @@ func (impl *BusinessStoreImpl) inspectChallengeMiss(
 		return "", err
 	}
 
-	if kind != session.ChallengeKindEmailChange &&
+	if kind != session.ChallengeKindEmailChange && kind != session.ChallengeKindEmailChangeNew &&
 		challengeKindMatches(record, "") &&
 		!record.SessionExpired && challengeAttemptsExhausted(record, maxAttempts) {
 		return session.TransitionAttemptsExhausted, nil
 	}
+	if (kind == session.ChallengeKindEmailChange || kind == session.ChallengeKindEmailChangeNew) &&
+		record.State == dbgen.SessionStateAuthenticated && !record.SessionExpired && challengeAttemptsExhausted(record, maxAttempts) {
+		return session.TransitionAttemptsExhausted, nil
+	}
 	if !challengeKindMatches(record, kind) {
 		return session.TransitionStale, nil
-	}
-	if kind == session.ChallengeKindEmailChange && !record.SessionExpired && challengeAttemptsExhausted(record, maxAttempts) {
-		return session.TransitionAttemptsExhausted, nil
 	}
 	if record.SessionExpired || record.ChallengeExpired.Bool {
 		return session.TransitionExpired, nil
@@ -637,7 +640,7 @@ func (impl *BusinessStoreImpl) CreateRegistrationSuccessor(ctx context.Context, 
 }
 
 func (impl *BusinessStoreImpl) ConsumeEmailChangeChallenge(ctx context.Context, params *dbgen.ConsumeEmailChangeChallengeParams) (*session.EmailChangeChallengeConsumeResult, error) {
-	if params == nil || params.SessionID == "" || !params.ChallengeCode.Valid || params.MaxAttempts <= 0 {
+	if params == nil || params.SessionID == "" || !params.ChallengeCode.Valid || !params.ChallengeEmail.Valid || params.MaxAttempts <= 0 {
 		return nil, ErrInvalidInput
 	}
 	if impl.querier == nil {
@@ -646,11 +649,54 @@ func (impl *BusinessStoreImpl) ConsumeEmailChangeChallenge(ctx context.Context, 
 
 	record, err := impl.querier.ConsumeEmailChangeChallenge(ctx, params)
 	if errors.Is(err, pgx.ErrNoRows) {
-		outcome, inspectErr := impl.inspectChallengeMiss(ctx, params.SessionID, session.ChallengeKindEmailChange, params.MaxAttempts)
+		outcome, inspectErr := impl.inspectChallengeMiss(ctx, params.SessionID, session.ChallengeKindEmailChangeNew, params.MaxAttempts)
 		return &session.EmailChangeChallengeConsumeResult{Outcome: outcome}, inspectErr
 	}
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to consume email-change challenge", common.ErrAttr(err))
+		return nil, err
+	}
+	outcome, err := mutationOutcome(record.Outcome)
+	if err != nil {
+		return nil, err
+	}
+	if outcome == session.TransitionInvalidCode && record.FailedAttempts >= params.MaxAttempts {
+		outcome = session.TransitionAttemptsExhausted
+	}
+	return &session.EmailChangeChallengeConsumeResult{
+		Outcome: outcome,
+		Email:   record.VerifiedEmail,
+		Session: storedSession(
+			record.SessionID,
+			record.State,
+			record.Version,
+			record.UserID,
+			record.Data,
+			record.ExpiresAt,
+			record.ChallengeKind,
+			record.ChallengeEmail,
+			record.VerifyRegistration,
+		),
+		FailedAttempts: record.FailedAttempts,
+	}, nil
+}
+
+func (impl *BusinessStoreImpl) AdvanceEmailChangeChallenge(ctx context.Context, params *dbgen.AdvanceEmailChangeChallengeParams) (*session.EmailChangeChallengeConsumeResult, error) {
+	if params == nil || params.SessionID == "" || !params.ChallengeCode.Valid ||
+		!params.NewEmail.Valid || params.NewEmail.String == "" || !params.NewCode.Valid || params.NewCode.String == "" ||
+		params.ChallengeTtl <= 0 || params.MaxAttempts <= 0 {
+		return nil, ErrInvalidInput
+	}
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+	record, err := impl.querier.AdvanceEmailChangeChallenge(ctx, params)
+	if errors.Is(err, pgx.ErrNoRows) {
+		outcome, inspectErr := impl.inspectChallengeMiss(ctx, params.SessionID, session.ChallengeKindEmailChange, params.MaxAttempts)
+		return &session.EmailChangeChallengeConsumeResult{Outcome: outcome}, inspectErr
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to advance email-change challenge", common.ErrAttr(err))
 		return nil, err
 	}
 	outcome, err := mutationOutcome(record.Outcome)

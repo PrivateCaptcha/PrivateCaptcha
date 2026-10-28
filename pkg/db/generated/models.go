@@ -9,8 +9,9 @@ import (
 	"fmt"
 	"net/netip"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type AccessLevel string
@@ -504,9 +505,10 @@ func (ns NullRuleConditionProperty) Value() (driver.Value, error) {
 type SessionChallengeKind string
 
 const (
-	SessionChallengeKindSignIn       SessionChallengeKind = "sign_in"
-	SessionChallengeKindRegistration SessionChallengeKind = "registration"
-	SessionChallengeKindEmailChange  SessionChallengeKind = "email_change"
+	SessionChallengeKindSignIn                SessionChallengeKind = "sign_in"
+	SessionChallengeKindRegistration          SessionChallengeKind = "registration"
+	SessionChallengeKindEmailChange           SessionChallengeKind = "email_change"
+	BackendSessionChallengeKindEmailChangeNew SessionChallengeKind = "email_change_new"
 )
 
 func (e *SessionChallengeKind) Scan(src interface{}) error {

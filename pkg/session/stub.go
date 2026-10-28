@@ -46,6 +46,9 @@ func (s *StubSessionStore) IssueEmailChangeChallenge(context.Context, EmailChang
 func (s *StubSessionStore) ConsumeEmailChangeChallenge(context.Context, EmailChangeChallengeConsume) (*ChallengeResult, error) {
 	return nil, nil
 }
+func (s *StubSessionStore) AdvanceEmailChangeChallenge(context.Context, EmailChangeChallengeAdvance) (*ChallengeResult, error) {
+	return nil, nil
+}
 func (s *StubSessionStore) RevokeSession(context.Context, string) (*RevocationResult, error) {
 	return nil, nil
 }

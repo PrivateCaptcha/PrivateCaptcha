@@ -28,6 +28,9 @@ func (s *QuerierStub) UpsertEdgeSettings(ctx context.Context, arg *dbgen.UpsertE
 func (s *QuerierStub) ConsumeEmailChangeChallenge(ctx context.Context, arg *dbgen.ConsumeEmailChangeChallengeParams) (*dbgen.ConsumeEmailChangeChallengeRow, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) AdvanceEmailChangeChallenge(ctx context.Context, arg *dbgen.AdvanceEmailChangeChallengeParams) (*dbgen.AdvanceEmailChangeChallengeRow, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) ConsumeRegistrationChallenge(ctx context.Context, arg *dbgen.ConsumeRegistrationChallengeParams) (*dbgen.ConsumeRegistrationChallengeRow, error) {
 	return nil, s.Error
 }

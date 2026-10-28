@@ -264,6 +264,22 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 		},
 		// --- Settings pages ---
 		{
+			Path:       p(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint),
+			Template:   settingsGeneralTemplatePrefix + "page.html",
+			ShowInList: true,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				commonCtx := settingsCommon(common.GeneralEndpoint, a)
+				commonCtx.Email = "new@example.com"
+				return &settingsGeneralRenderContext{
+					SettingsCommonRenderContext: commonCtx,
+					Name:                        "Jane Doe",
+					EditEmail:                   true,
+					VerifyNewEmail:              true,
+					TwoFactorEmail:              "n**@example.com",
+				}
+			},
+		},
+		{
 			Path:       p(common.SettingsEndpoint),
 			Template:   settingsGeneralTemplatePrefix + "page.html",
 			ShowInList: true,

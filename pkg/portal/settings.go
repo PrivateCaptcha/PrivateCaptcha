@@ -111,6 +111,7 @@ type settingsGeneralRenderContext struct {
 	TwoFactorError string
 	TwoFactorEmail string
 	EditEmail      bool
+	VerifyNewEmail bool
 }
 
 type userAPIKey struct {
@@ -337,6 +338,7 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (*ViewModel, 
 
 	renderCtx := s.createGeneralSettingsModel(ctx, user)
 	renderCtx.EditEmail = true
+	renderCtx.Email = ""
 	renderCtx.TwoFactorEmail = common.MaskEmail(user.Email, '*')
 
 	code := twoFactorCode()
@@ -375,26 +377,52 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 	}
 
 	formName := strings.TrimSpace(r.FormValue(common.ParamName))
-	formEmail := strings.TrimSpace(r.FormValue(common.ParamEmail))
+	formEmail := r.FormValue(common.ParamEmail)
 
 	renderCtx := s.createGeneralSettingsModel(ctx, user)
-	renderCtx.EditEmail = (len(formEmail) > 0) && (formEmail != user.Email) && ((len(formName) == 0) || (formName == user.Name))
+	renderCtx.VerifyNewEmail = r.FormValue(common.ParamVerifyNewEmail) == "true"
+	if !renderCtx.VerifyNewEmail {
+		formEmail = strings.TrimSpace(formEmail)
+	}
+	renderCtx.EditEmail = renderCtx.VerifyNewEmail || ((len(formEmail) > 0) && (formEmail != user.Email) && ((len(formName) == 0) || (formName == user.Name)))
 
 	anyChange := false
 
 	if renderCtx.EditEmail {
 		renderCtx.Email = formEmail
 		renderCtx.TwoFactorEmail = common.MaskEmail(user.Email, '*')
-
-		if err := s.EmailVerifier.VerifyEmail(ctx, formEmail); err != nil {
-			slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
-			renderCtx.EmailError = "Email address is not valid."
-			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
+		if renderCtx.VerifyNewEmail {
+			renderCtx.TwoFactorEmail = common.MaskEmail(formEmail, '*')
 		}
 
-		result, err := s.Sessions.ConsumeEmailChangeChallenge(ctx, sess, strings.TrimSpace(r.FormValue(common.ParamVerificationCode)), maxFailedAttempts)
+		if !renderCtx.VerifyNewEmail {
+			if err := s.EmailVerifier.VerifyEmail(ctx, formEmail); err != nil {
+				slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
+				renderCtx.EmailError = "Email address is not valid."
+				return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
+			}
+		}
+
+		code := strings.TrimSpace(r.FormValue(common.ParamVerificationCode))
+		var result *session.ChallengeResult
+		var newCode string
+		if renderCtx.VerifyNewEmail {
+			result, err = s.Sessions.ConsumeEmailChangeChallenge(ctx, sess, code, formEmail, maxFailedAttempts)
+		} else {
+			newCode = twoFactorCode()
+			for newCode == code {
+				newCode = twoFactorCode()
+			}
+			result, err = s.Sessions.AdvanceEmailChangeChallenge(ctx, sess, code, formEmail, newCode, s.TwoFactorDuration, maxFailedAttempts)
+		}
 		if err != nil {
 			return nil, err
+		}
+		if result != nil && result.Outcome == session.TransitionCancelled {
+			slog.WarnContext(ctx, "Cancelled email change with modified destination", "userID", user.ID)
+			renderCtx = s.createGeneralSettingsModel(ctx, user)
+			renderCtx.ErrorMessage = "Email change cancelled. Please start again."
+			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
 		}
 		if result == nil || result.Outcome != session.TransitionSucceeded || result.Session == nil {
 			if result != nil && result.Authority.ChallengeEmail != "" {
@@ -402,12 +430,33 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 			}
 			if result != nil && result.Outcome == session.TransitionAttemptsExhausted {
 				renderCtx.TwoFactorError = emailChangeAttemptsExhaustedMessage
+			} else if result != nil && result.Outcome == session.TransitionExpired {
+				renderCtx.TwoFactorError = "Code has expired. Cancel and start the email change again."
 			} else {
 				renderCtx.TwoFactorError = "Code is not valid."
 			}
 			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
 		}
 		sess = result.Session
+		if !renderCtx.VerifyNewEmail {
+			authority, ok := challengeResultAuthority(result, session.ChallengeKindEmailChangeNew)
+			if !ok {
+				return nil, session.ErrInvalidTransitionResult
+			}
+			renderCtx.VerifyNewEmail = true
+			renderCtx.Email = authority.ChallengeEmail
+			renderCtx.TwoFactorEmail = common.MaskEmail(authority.ChallengeEmail, '*')
+			location := r.Header.Get(s.CountryCodeHeader.Value())
+			if err := s.Mailer.SendTwoFactor(ctx, authority.ChallengeEmail, newCode, r.UserAgent(), location, false); err != nil {
+				slog.ErrorContext(ctx, "Failed to send new-email verification code", common.ErrAttr(err))
+				renderCtx.ErrorMessage = "Failed to send verification code. Cancel and start the email change again."
+			}
+			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
+		}
+		if result.Email == "" {
+			return nil, session.ErrInvalidTransitionResult
+		}
+		formEmail = result.Email
 
 		anyChange = (len(formEmail) > 0) && (formEmail != user.Email)
 	} else /*edit name only*/ {
@@ -437,6 +486,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 		if auditEvent, err = s.Store.Impl().UpdateUser(ctx, user, renderCtx.Name, emailToUpdate, user.Email); err == nil {
 			renderCtx.SuccessMessage = "Settings were updated."
 			renderCtx.EditEmail = false
+			renderCtx.VerifyNewEmail = false
 			_ = sess.Set(ctx, session.KeyUserName, renderCtx.Name)
 			if emailToUpdate != user.Email {
 				renderCtx.Email = emailToUpdate

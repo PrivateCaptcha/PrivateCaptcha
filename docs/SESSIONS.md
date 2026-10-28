@@ -31,7 +31,7 @@ flowchart LR
     Registration -->|wrong code, resend, or more verification| Registration
     Registration -->|correct code| Revoked
     Registration -->|account created, new SID| Authenticated
-    Authenticated -->|email challenge| Authenticated
+    Authenticated -->|current-address then new-address email challenges| Authenticated
     Authenticated -->|logout| Revoked
     Revoked -->|after expiry| Deleted["deleted"]
 ```
@@ -110,6 +110,10 @@ Queueing is best effort. A cookie may outlive the database row if renewal is dro
 Verification codes are six cryptographically random characters from `0-9` and `A-Z`, including leading zeros. Codes are stored and delivered as strings and compared case-sensitively.
 
 Cached challenge data cannot authenticate a user. Every attempt is decided by a guarded PostgreSQL query, so replicas share expiration and the cumulative attempt count for that SID. Issuing another email-change challenge preserves the existing count and is rejected once the cap is reached.
+
+Email changes use two challenges on the authenticated SID. `IssueEmailChangeChallenge` targets the current database email. `AdvanceEmailChangeChallenge` verifies that code and the unchanged current email, then atomically issues `email_change_new` bound to the new address. `ConsumeEmailChangeChallenge` verifies the second code and exact destination, returns that address for the account update, and clears the challenge. A modified destination cancels the flow; expiry or delivery failure requires restarting. Failed attempts remain cumulative across both steps, success, and restarts.
+
+The form's step flag only selects a PostgreSQL transition. Cached Authority and best-effort Payload cannot authorize verification; pending addresses and codes stay out of Payload.
 
 `ConsumeSignInChallenge` revokes the pending predecessor and inserts one authenticated successor in a single statement. Concurrent replicas therefore get one winner. With valid CSRF, registration consumes and revokes its challenge, then separately creates the account and authenticated successor. Registration screening runs in a background job after challenge issuance and marks both PostgreSQL and the local cached Authority when more verification is required. Resend preserves the existing attempt count. See [`ConsumeSignInChallenge`](../pkg/db/queries/postgres/sessions.sql) and [`postTwoFactor`](../pkg/portal/twofactor.go).
 

@@ -58,7 +58,7 @@ func (s *Session) Delete(ctx context.Context, key SessionKey) error {
 
 // Consume logic:
 // Sign-in atomically revokes and inserts a successor, registration revokes and returns data for a later account transaction,
-// while email change keeps the session authenticated and only clears challenge columns.
+// while email change keeps the session authenticated and advances or clears challenge columns.
 type Store interface {
 	EnqueueExpirationRenewal(ctx context.Context, sid string)
 	StartAnonymousSession(sid string) *Session
@@ -71,6 +71,7 @@ type Store interface {
 	ConsumeRegistrationChallenge(ctx context.Context, consume RegistrationChallengeConsume) (*RegistrationConsumeResult, error)
 	CreateRegistrationSuccessor(ctx context.Context, create RegistrationSuccessorCreate) (*ChallengeResult, error)
 	IssueEmailChangeChallenge(ctx context.Context, issue EmailChangeChallengeIssue) (*ChallengeResult, error)
+	AdvanceEmailChangeChallenge(ctx context.Context, advance EmailChangeChallengeAdvance) (*ChallengeResult, error)
 	ConsumeEmailChangeChallenge(ctx context.Context, consume EmailChangeChallengeConsume) (*ChallengeResult, error)
 	RevokeSession(ctx context.Context, sid string) (*RevocationResult, error)
 	RevokeUserSessions(ctx context.Context, userID int32) error
