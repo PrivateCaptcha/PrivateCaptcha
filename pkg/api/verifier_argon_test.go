@@ -66,14 +66,16 @@ type admissionTestPayload struct {
 	release chan struct{}
 	result  puzzle.VerifyError
 	calls   int
+	minimum *time.Duration
 }
 
 func (p *admissionTestPayload) VerifySignature(context.Context, *puzzle.Salt, []byte) error {
 	return nil
 }
 
-func (p *admissionTestPayload) VerifySolutions(context.Context) (*puzzle.Metadata, puzzle.VerifyError) {
+func (p *admissionTestPayload) VerifySolutions(_ context.Context, minimum *time.Duration, _ *time.Duration) (*puzzle.Metadata, puzzle.VerifyError) {
 	p.calls++
+	p.minimum = minimum
 	if p.started != nil {
 		close(p.started)
 		<-p.release
@@ -104,17 +106,17 @@ func TestVerificationAdmission(t *testing.T) {
 	}
 	done := make(chan admissionOutcome, 1)
 	go func() {
-		_, result, err := verifier.verifyPayload(t.Context(), first, false)
+		_, result, err := verifier.verifyPayload(t.Context(), first, nil, false)
 		done <- admissionOutcome{result, err}
 	}()
 	<-first.started
 
 	waiting := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p)}
-	if _, result, err := verifier.verifyPayload(t.Context(), waiting, false); err != errVerificationBusy || result != puzzle.VerifyNoError || waiting.calls != 0 {
+	if _, result, err := verifier.verifyPayload(t.Context(), waiting, nil, false); err != errVerificationBusy || result != puzzle.VerifyNoError || waiting.calls != 0 {
 		t.Fatalf("full admission: result = %v, err = %v, calls = %d", result, err, waiting.calls)
 	}
 	unsafe := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p)}
-	if _, result, err := verifier.verifyPayload(t.Context(), unsafe, true); err != nil || result != puzzle.VerifyNoError || unsafe.calls != 1 {
+	if _, result, err := verifier.verifyPayload(t.Context(), unsafe, nil, true); err != nil || result != puzzle.VerifyNoError || unsafe.calls != 1 {
 		t.Fatalf("bypassed admission: result = %v, err = %v, calls = %d", result, err, unsafe.calls)
 	}
 	close(first.release)
@@ -124,17 +126,17 @@ func TestVerificationAdmission(t *testing.T) {
 
 	for _, expected := range []puzzle.VerifyError{puzzle.VerifyNoError, puzzle.DuplicateSolutionsError, puzzle.InvalidSolutionError} {
 		payload := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p), result: expected}
-		if _, result, err := verifier.verifyPayload(t.Context(), payload, false); result != expected || err != nil || payload.calls != 1 {
+		if _, result, err := verifier.verifyPayload(t.Context(), payload, nil, false); result != expected || err != nil || payload.calls != 1 {
 			t.Fatalf("released capacity after %v: result = %v, err = %v, calls = %d", expected, result, err, payload.calls)
 		}
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, result, err := verifier.verifyPayload(ctx, waiting, false); err != context.Canceled || result != puzzle.VerifyNoError || waiting.calls != 0 {
+	if _, result, err := verifier.verifyPayload(ctx, waiting, nil, false); err != context.Canceled || result != puzzle.VerifyNoError || waiting.calls != 0 {
 		t.Fatalf("canceled context result = %v, err = %v, calls = %d", result, err, waiting.calls)
 	}
 	blake := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(puzzle.NewComputePuzzle(2, [puzzle.PropertyIDSize]byte{}, 0))}
-	if _, result, err := verifier.verifyPayload(ctx, blake, false); result != puzzle.VerifyNoError || err != nil || blake.calls != 1 {
+	if _, result, err := verifier.verifyPayload(ctx, blake, nil, false); result != puzzle.VerifyNoError || err != nil || blake.calls != 1 {
 		t.Fatalf("Blake verification result = %v, err = %v, calls = %d", result, err, blake.calls)
 	}
 }
@@ -156,18 +158,18 @@ func TestArgon2IDDisabledVerification(t *testing.T) {
 		t.Fatal("Argon2ID is still enabled")
 	}
 	for _, skip := range []bool{false, true} {
-		if _, result, err := verifier.verifyPayload(t.Context(), argon, skip); err != nil || result != puzzle.VerifyErrorOther || argon.calls != 0 {
+		if _, result, err := verifier.verifyPayload(t.Context(), argon, nil, skip); err != nil || result != puzzle.VerifyErrorOther || argon.calls != 0 {
 			t.Fatalf("disabled Argon2ID (skip = %t): result = %v, err = %v, calls = %d", skip, result, err, argon.calls)
 		}
 	}
 	blake := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(puzzle.NewComputePuzzle(2, [puzzle.PropertyIDSize]byte{}, 0))}
-	if _, result, err := verifier.verifyPayload(t.Context(), blake, false); err != nil || result != puzzle.VerifyNoError || blake.calls != 1 {
+	if _, result, err := verifier.verifyPayload(t.Context(), blake, nil, false); err != nil || result != puzzle.VerifyNoError || blake.calls != 1 {
 		t.Fatalf("Blake2b while Argon2ID disabled: result = %v, err = %v, calls = %d", result, err, blake.calls)
 	}
 
 	item.value = "16"
 	verifier.UpdateMemoryBudget(t.Context())
-	if _, result, err := verifier.verifyPayload(t.Context(), argon, false); err != nil || result != puzzle.VerifyNoError || argon.calls != 1 {
+	if _, result, err := verifier.verifyPayload(t.Context(), argon, nil, false); err != nil || result != puzzle.VerifyNoError || argon.calls != 1 {
 		t.Fatalf("re-enabled Argon2ID: result = %v, err = %v, calls = %d", result, err, argon.calls)
 	}
 }
@@ -181,7 +183,7 @@ func TestArgon2IDInitiallyDisabledVerification(t *testing.T) {
 		t.Fatal(err)
 	}
 	argon := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p)}
-	if _, result, err := verifier.verifyPayload(t.Context(), argon, false); err != nil || result != puzzle.VerifyErrorOther || argon.calls != 0 {
+	if _, result, err := verifier.verifyPayload(t.Context(), argon, nil, false); err != nil || result != puzzle.VerifyErrorOther || argon.calls != 0 {
 		t.Fatalf("initially disabled Argon2ID: result = %v, err = %v, calls = %d", result, err, argon.calls)
 	}
 }
@@ -192,7 +194,10 @@ func TestVerificationAdmissionWaitsForCapacity(t *testing.T) {
 		t.Fatal(err)
 	}
 	weight := int64(puzzle.Argon2IDMemoryKiB)
-	verifier := &Verifier{verificationSemaphore: semaphore.NewWeighted(weight), verificationCapacityKiB: weight}
+	verifier := &Verifier{
+		verificationSemaphore:   semaphore.NewWeighted(weight),
+		verificationCapacityKiB: weight,
+	}
 	if err := verifier.verificationSemaphore.Acquire(t.Context(), weight); err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +211,7 @@ func TestVerificationAdmissionWaitsForCapacity(t *testing.T) {
 	waiting := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p)}
 	done := make(chan error, 1)
 	go func() {
-		_, _, err := verifier.verifyPayload(t.Context(), waiting, false)
+		_, _, err := verifier.verifyPayload(t.Context(), waiting, nil, false)
 		done <- err
 	}()
 	select {
@@ -227,7 +232,10 @@ func TestVerificationAdmissionHonorsCallerDeadline(t *testing.T) {
 		t.Fatal(err)
 	}
 	weight := int64(puzzle.Argon2IDMemoryKiB)
-	verifier := &Verifier{verificationSemaphore: semaphore.NewWeighted(weight), verificationCapacityKiB: weight}
+	verifier := &Verifier{
+		verificationSemaphore:   semaphore.NewWeighted(weight),
+		verificationCapacityKiB: weight,
+	}
 	if err := verifier.verificationSemaphore.Acquire(t.Context(), weight); err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +244,7 @@ func TestVerificationAdmissionHonorsCallerDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 	waiting := &admissionTestPayload{SolutionPayload: puzzle.NewStubPayload(p)}
-	if _, _, err := verifier.verifyPayload(ctx, waiting, false); err != context.DeadlineExceeded || waiting.calls != 0 {
+	if _, _, err := verifier.verifyPayload(ctx, waiting, nil, false); err != context.DeadlineExceeded || waiting.calls != 0 {
 		t.Fatalf("caller deadline: err = %v, calls = %d", err, waiting.calls)
 	}
 }
@@ -260,7 +268,7 @@ func TestMemoryBudgetUpdateWaitsForActiveVerification(t *testing.T) {
 	}()
 	done := make(chan error, 1)
 	go func() {
-		_, _, err := verifier.verifyPayload(t.Context(), first, false)
+		_, _, err := verifier.verifyPayload(t.Context(), first, nil, false)
 		done <- err
 	}()
 	<-first.started
@@ -287,6 +295,78 @@ func TestMemoryBudgetUpdateWaitsForActiveVerification(t *testing.T) {
 	}
 	if verifier.verificationSemaphore == initial || verifier.verificationCapacityKiB != 32*1024 {
 		t.Fatalf("updated capacity = %d KiB, want 32768", verifier.verificationCapacityKiB)
+	}
+}
+
+func TestMinSolveTimeAtMediumConcurrentReload(t *testing.T) {
+	verifier := &Verifier{
+		MinSolveTimeAtMediumKey: config.NewStaticValue(common.MinSolveTimeAtMediumKey, "100ms"),
+	}
+	p := puzzle.NewComputePuzzle(1, [puzzle.PropertyIDSize]byte{}, 0)
+	type outcome struct {
+		minimum *time.Duration
+		result  puzzle.VerifyError
+		err     error
+	}
+	const count = 32
+	start := make(chan struct{})
+	done := make(chan outcome, count)
+	for range count {
+		go func() {
+			<-start
+			verifier.updateMinSolveTimeAtMedium(t.Context())
+			payload := &admissionTestPayload{
+				SolutionPayload: puzzle.NewStubPayload(p),
+			}
+			_, result, err := verifier.verifyPayload(t.Context(), payload, nil, false)
+			done <- outcome{
+				minimum: payload.minimum,
+				result:  result,
+				err:     err,
+			}
+		}()
+	}
+	close(start)
+	for range count {
+		current := <-done
+		if current.minimum == nil || *current.minimum != 100*time.Millisecond || current.result != puzzle.VerifyNoError || current.err != nil {
+			t.Fatalf("inconsistent concurrent reload: %+v", current)
+		}
+	}
+}
+
+func TestMinSolveTimeAtMediumDoesNotUseAdmissionLock(t *testing.T) {
+	verifier := &Verifier{
+		MinSolveTimeAtMediumKey: config.NewStaticValue(common.MinSolveTimeAtMediumKey, "100ms"),
+	}
+	verifier.verificationMu.Lock()
+	defer verifier.verificationMu.Unlock()
+	ctx := t.Context()
+	type outcome struct {
+		minimum *time.Duration
+		result  puzzle.VerifyError
+		err     error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		verifier.updateMinSolveTimeAtMedium(ctx)
+		payload := &admissionTestPayload{
+			SolutionPayload: puzzle.NewStubPayload(puzzle.NewComputePuzzle(1, [puzzle.PropertyIDSize]byte{}, 0)),
+		}
+		_, result, err := verifier.verifyPayload(ctx, payload, nil, false)
+		done <- outcome{
+			minimum: payload.minimum,
+			result:  result,
+			err:     err,
+		}
+	}()
+	select {
+	case current := <-done:
+		if current.minimum == nil || *current.minimum != 100*time.Millisecond || current.result != puzzle.VerifyNoError || current.err != nil {
+			t.Fatalf("timing configuration or Blake verification failed: %+v", current)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timing configuration or Blake verification blocked on the admission lock")
 	}
 }
 

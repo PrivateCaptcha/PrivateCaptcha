@@ -250,8 +250,9 @@ export class WorkersPool {
     }
 
     elapsedMillis() {
-        if (this._timeStarted && this._timeFinished) {
-            return this._timeFinished - this._timeStarted;
+        if (this._timeStarted !== null && this._timeFinished !== null) {
+            const elapsedMillis = this._timeFinished - this._timeStarted;
+            return elapsedMillis === 0 ? 1 : elapsedMillis;
         }
 
         return 0;

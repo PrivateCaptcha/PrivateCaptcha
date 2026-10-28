@@ -259,6 +259,7 @@ func (s *Server) Init(ctx context.Context, config ServerConfig, workers *sync.Wa
 
 func (s *Server) Update(ctx context.Context) {
 	s.Verifier.UpdateMemoryBudget(ctx)
+	s.Verifier.updateMinSolveTimeAtMedium(ctx)
 	if err := s.EdgeTokens.Update(ctx); err != nil {
 		slog.ErrorContext(ctx, "Failed to reload edge token keys", common.ErrAttr(err))
 	}
@@ -627,7 +628,8 @@ func newVerificationResponse(result *puzzle.VerifyResult, isExplicitTestSitekey 
 }
 
 func (s *Server) addEdgeToken(r *http.Request, response *VerificationResponse, result *puzzle.VerifyResult, property *dbgen.Property, now time.Time) error {
-	if (result.Error != puzzle.VerifyNoError && result.Error != puzzle.MaintenanceModeError) || property == nil || property.EdgeTokenValidityInterval == 0 {
+	if (result.Error != puzzle.VerifyNoError && result.Error != puzzle.MaintenanceModeError && result.Error != puzzle.SolutionTimingError) ||
+		property == nil || property.EdgeTokenValidityInterval == 0 {
 		return nil
 	}
 	ctx := r.Context()

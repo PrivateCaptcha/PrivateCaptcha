@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -46,6 +47,7 @@ type Verifier struct {
 	UserFingerprintKey      *userFingerprintKey
 	FingerprintHeaderKey    common.ConfigItem
 	Argon2IDMemoryBudgetKey common.ConfigItem
+	MinSolveTimeAtMediumKey common.ConfigItem
 	FingerprintHeader       string
 	UAParser                *useragent.Parser
 	Store                   db.Implementor
@@ -56,6 +58,7 @@ type Verifier struct {
 	verificationMu          sync.RWMutex
 	verificationSemaphore   *semaphore.Weighted
 	verificationCapacityKiB int64
+	minSolveTimeAtMedium    atomic.Pointer[time.Duration]
 }
 
 var _ PuzzleEngine = (*Verifier)(nil)
@@ -67,12 +70,14 @@ func NewVerifier(cfg common.ConfigStore, store db.Implementor, fingerprintHeader
 
 	testPuzzle := puzzle.NewComputePuzzle(0 /*puzzle ID*/, db.TestPropertyUUID.Bytes, 0 /*difficulty*/)
 	budgetKey := cfg.Get(common.Argon2IDMemoryBudgetKey)
+	minSolveTimeKey := cfg.Get(common.MinSolveTimeAtMediumKey)
 	capacity := config.Argon2IDMemoryBudgetKiB(context.Background(), budgetKey, int64(puzzle.Argon2IDMemoryKiB))
-	return &Verifier{
+	v := &Verifier{
 		Salt:                    NewPuzzleSalt(cfg.Get(common.APISaltKey)),
 		UserFingerprintKey:      NewUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
 		FingerprintHeaderKey:    fingerprintHeaderKey,
 		Argon2IDMemoryBudgetKey: budgetKey,
+		MinSolveTimeAtMediumKey: minSolveTimeKey,
 		FingerprintHeader:       fingerprintHeaderKey.Value(),
 		UAParser:                uaParser,
 		Store:                   store,
@@ -82,6 +87,8 @@ func NewVerifier(cfg common.ConfigStore, store db.Implementor, fingerprintHeader
 		verificationSemaphore:   semaphore.NewWeighted(capacity),
 		verificationCapacityKiB: capacity,
 	}
+	v.updateMinSolveTimeAtMedium(context.Background())
+	return v
 }
 
 func (v *Verifier) Update(ctx context.Context) error {
@@ -108,6 +115,7 @@ func (v *Verifier) Update(ctx context.Context) error {
 	}
 
 	v.UpdateMemoryBudget(ctx)
+	v.updateMinSolveTimeAtMedium(ctx)
 
 	return nil
 }
@@ -121,6 +129,10 @@ func (v *Verifier) UpdateMemoryBudget(ctx context.Context) {
 		v.verificationSemaphore = semaphore.NewWeighted(capacity)
 		v.verificationCapacityKiB = capacity
 	}
+}
+
+func (v *Verifier) updateMinSolveTimeAtMedium(ctx context.Context) {
+	v.minSolveTimeAtMedium.Store(config.MinSolveTimeAtMedium(ctx, v.MinSolveTimeAtMediumKey))
 }
 
 func (v *Verifier) argon2IDEnabled() bool {
@@ -280,7 +292,7 @@ func (v *Verifier) verify(
 	result := puzzle.NewVerifyResult(perr)
 	if puzzleObject != nil && !puzzleObject.IsZero() {
 		result.PuzzleID = puzzleObject.PuzzleID()
-		// The puzzle bytes are untrusted until their signature is verified (and we parse expiration/creation time from bytes)
+		// The puzzle bytes are untrusted until their signature is verified (and expiration is parsed from those bytes)
 		// Zero CreatedAt means the result is not reportable so we protect DB from attacker-controlled rows (and previously
 		// we used result.Valid() which checks IDs and CreatedAt, but not the verification error)
 		// So we want to establish fact of: "Non-zero analytics timestamps came from a signature-validated puzzle"
@@ -343,8 +355,13 @@ func (v *Verifier) verify(
 		return result, property, nil
 	}
 
-	metadata, verr, err := v.verifyPayload(ctx, verifyPayload, skipMemorySemaphore)
-	if err != nil || verr != puzzle.VerifyNoError {
+	var maxSolveTime *time.Duration
+	if !result.CreatedAt.IsZero() {
+		// Bound client-reported time by the age inferred from the signed expiration.
+		maxSolveTime = new(tnow.Sub(result.CreatedAt))
+	}
+	metadata, verr, err := v.verifyPayload(ctx, verifyPayload, maxSolveTime, skipMemorySemaphore)
+	if err != nil || (verr != puzzle.VerifyNoError && verr != puzzle.SolutionTimingError) {
 		reservation.Release()
 	}
 	if err != nil {
@@ -356,7 +373,7 @@ func (v *Verifier) verify(
 		if property != nil {
 			vlog = vlog.With("userID", property.OrgOwnerID.Int32, "propID", property.ID)
 		}
-		vlog.WarnContext(ctx, "Failed to verify solutions")
+		vlog.WarnContext(ctx, "Puzzle verification returned a diagnostic")
 
 		result.SetError(verr)
 		return result, property, nil
@@ -368,9 +385,10 @@ func (v *Verifier) verify(
 	return result, property, nil
 }
 
-func (v *Verifier) verifyPayload(ctx context.Context, payload puzzle.SolutionPayload, skipMemorySemaphore bool) (*puzzle.Metadata, puzzle.VerifyError, error) {
+func (v *Verifier) verifyPayload(ctx context.Context, payload puzzle.SolutionPayload, maxSolveTime *time.Duration, skipMemorySemaphore bool) (*puzzle.Metadata, puzzle.VerifyError, error) {
+	minimum := v.minSolveTimeAtMedium.Load()
 	if payload.Puzzle().Challenge() != puzzle.ChallengeArgon2ID {
-		metadata, result := payload.VerifySolutions(ctx)
+		metadata, result := payload.VerifySolutions(ctx, minimum, maxSolveTime)
 		return metadata, result, nil
 	}
 	v.verificationMu.RLock()
@@ -382,7 +400,7 @@ func (v *Verifier) verifyPayload(ctx context.Context, payload puzzle.SolutionPay
 		if err := ctx.Err(); err != nil {
 			return nil, puzzle.VerifyNoError, err
 		}
-		metadata, result := payload.VerifySolutions(ctx)
+		metadata, result := payload.VerifySolutions(ctx, minimum, maxSolveTime)
 		return metadata, result, nil
 	}
 	if v.verificationSemaphore == nil {
@@ -409,7 +427,7 @@ func (v *Verifier) verifyPayload(ctx context.Context, payload puzzle.SolutionPay
 	if ctx.Err() != nil {
 		return nil, puzzle.VerifyNoError, ctx.Err()
 	}
-	metadata, result := payload.VerifySolutions(ctx)
+	metadata, result := payload.VerifySolutions(ctx, minimum, maxSolveTime)
 	return metadata, result, nil
 }
 

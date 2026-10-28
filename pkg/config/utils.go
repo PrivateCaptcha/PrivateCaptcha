@@ -24,6 +24,27 @@ var (
 	errBareIPURLLiteral = errors.New("bare IPv6 literal must be bracketed in a URL")
 )
 
+func MinSolveTimeAtMedium(ctx context.Context, item common.ConfigItem) *time.Duration {
+	if item == nil || item.Value() == "" {
+		return nil
+	}
+	minimum, err := parseMinSolveTimeAtMedium(item.Value())
+	if err != nil {
+		slog.WarnContext(ctx, "Invalid minimum solve time at medium; disabling timing heuristic",
+			"value", item.Value(), common.ErrAttr(err))
+		return nil
+	}
+	return &minimum
+}
+
+func parseMinSolveTimeAtMedium(value string) (time.Duration, error) {
+	minimum, err := time.ParseDuration(value)
+	if err != nil || minimum <= 0 {
+		return 0, errors.New("minimum solve time at medium must be a positive duration")
+	}
+	return minimum, nil
+}
+
 // Argon2IDMemoryBudgetKiB validates the process-wide capacity from a config item.
 func Argon2IDMemoryBudgetKiB(ctx context.Context, item common.ConfigItem, minimumKiB int64) int64 {
 	if item == nil {

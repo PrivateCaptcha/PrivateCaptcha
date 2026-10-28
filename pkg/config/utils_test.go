@@ -45,6 +45,27 @@ func TestAsDuration(t *testing.T) {
 	}
 }
 
+func TestMinSolveTimeAtMedium(t *testing.T) {
+	if got := MinSolveTimeAtMedium(t.Context(), nil); got != nil {
+		t.Fatalf("nil config minimum = %v, want nil", got)
+	}
+	for _, value := range []string{"", "0", "0s", "-1ms", "invalid", "NaN", "+Inf", "-Inf", "100", "2562047h47m16.854775808s"} {
+		t.Run(value, func(t *testing.T) {
+			item := NewStaticValue(common.MinSolveTimeAtMediumKey, value)
+			if got := MinSolveTimeAtMedium(t.Context(), item); got != nil {
+				t.Fatalf("minimum %q = %v, want nil", value, got)
+			}
+		})
+	}
+	for _, value := range []time.Duration{time.Nanosecond, 100 * time.Millisecond, 1500 * time.Microsecond, time.Second, time.Duration(1<<63 - 1)} {
+		item := NewStaticValue(common.MinSolveTimeAtMediumKey, value.String())
+		got := MinSolveTimeAtMedium(t.Context(), item)
+		if got == nil || *got != value {
+			t.Fatalf("minimum %q = %v, want %v", item.Value(), got, value)
+		}
+	}
+}
+
 func TestURLConfigHostPort(t *testing.T) {
 	cfg := AsURL(t.Context(), NewStaticValue(common.CDNBaseURLKey, "localhost:8080/cdn"))
 	if got := cfg.HostPort(); got != "localhost:8080" {

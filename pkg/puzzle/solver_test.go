@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
 func TestSolverArgon2ID(t *testing.T) {
@@ -144,6 +146,17 @@ func TestSolverCancellation(t *testing.T) {
 	}
 }
 
+func TestSolverPositiveElapsedMillis(t *testing.T) {
+	p := NewComputePuzzle(1, [PropertyIDSize]byte{}, 1)
+	solutions, err := (&ComputeSolver{}).Solve(t.Context(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if solutions.Metadata.ElapsedMillis() == 0 {
+		t.Fatal("completed solve reported zero elapsed milliseconds")
+	}
+}
+
 func TestSolverWorkerCounts(t *testing.T) {
 	for _, count := range []uint8{0, 1, 3} {
 		t.Run(fmt.Sprintf("count-%d", count), func(t *testing.T) {
@@ -241,5 +254,24 @@ func BenchmarkSolverFull(b *testing.B) {
 		if _, err := solver.Solve(b.Context(), p); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func BenchmarkSolverDifficultyBuckets(b *testing.B) {
+	for difficulty := common.DifficultyLevelSmall - common.DifficultyDelta; difficulty <= common.DifficultyLevelHigh+common.DifficultyDelta; difficulty += common.DifficultyDelta {
+		b.Run(fmt.Sprintf("Difficulty%d", difficulty), func(b *testing.B) {
+			solver := &ComputeSolver{}
+			for n := 0; n < b.N; n++ {
+				b.StopTimer()
+				p := NewComputePuzzle(1, [PropertyIDSize]byte{}, uint8(difficulty))
+				if err := p.Init(DefaultValidityPeriod); err != nil {
+					b.Fatal(err)
+				}
+				b.StartTimer()
+				if _, err := solver.Solve(b.Context(), p); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }
