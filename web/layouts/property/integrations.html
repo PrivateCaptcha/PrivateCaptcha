@@ -42,8 +42,8 @@
                     </div>
                 </div>
                 <div class="bg-pc-pastel-50 px-6 py-5 sm:p-6 flex flex-col gap-6 sm:flex-row sm:items-center"
-                    x-data="{optionsOpen: false, parameters: []}"
-                    x-init="parameters = Array.from($el.querySelectorAll('input:checked'), input => input.value)">
+                    data-sitekey="{{ .Params.Sitekey }}"
+                    x-data="{optionsOpen: false, parameters: $persist(Array.from($el.querySelectorAll('input:checked'), input => input.value)).as('snippetParameters:' + $el.dataset.sitekey)}">
                     <div class="min-w-0 w-full flex-1">
                         <code class="pc-code-block">
                             <textarea id="snippet" x-ref="snippet" aria-label="Widget integration snippet" readonly
