@@ -9,11 +9,14 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func TestMinSolveTimeAtMediumUpdate(t *testing.T) {
@@ -221,6 +224,173 @@ func TestVerifyMinSolveTimeAtMediumReload(t *testing.T) {
 			}
 			if response.StatusCode != http.StatusOK || !result.Success || result.Code != tc.want {
 				t.Fatalf("minimum %q: status = %d, result = %+v, want %v", tc.value, response.StatusCode, result, tc.want)
+			}
+		})
+	}
+}
+
+// verifyReducedIntervalCase issues a puzzle with issueValidity, then verifies it
+// against a property whose current ValidityInterval is propertyValidity, with the
+// client-reported elapsedMillis. The verify time is placed issueValidity before the
+// signed expiration plus a small solve delay, so the puzzle's remaining validity is
+// (issueValidity - delay). No PostgreSQL is required: the property is served from a
+// static cache and the puzzle cache is in-memory.
+func verifyReducedIntervalCase(t *testing.T, propertyValidity, issueValidity time.Duration, elapsedMillis uint32) (*puzzle.VerifyResult, time.Time) {
+	t.Helper()
+	ctx := t.Context()
+
+	cache := db.NewStaticCache[db.CacheKey, any](10, &db.CacheMissingValue{})
+	property := &dbgen.Property{
+		ID:               1,
+		ExternalID:       pgtype.UUID{Valid: true, Bytes: [puzzle.PropertyIDSize]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}},
+		OrgID:            pgtype.Int4{Valid: true, Int32: 2},
+		OrgOwnerID:       pgtype.Int4{Valid: true, Int32: 3},
+		Domain:           "interval.example.com",
+		ValidityInterval: propertyValidity,
+		Enabled:          true,
+		Growth:           dbgen.DifficultyGrowthMedium,
+		Level:            pgtype.Int2{Valid: true, Int16: int16(common.DifficultyLevelMedium)},
+	}
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	if err := cache.Set(ctx, db.PropertyBySitekeyCacheKey(sitekey), property); err != nil {
+		t.Fatal(err)
+	}
+	store := db.NewBusinessEx(nil, cache)
+
+	verifier := NewVerifier(testsConfigStore(), store, config.NewStaticValue(common.FingerprintHeaderKey, ""), nil)
+	if err := verifier.Update(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	p := puzzle.NewComputePuzzle(puzzle.NextPuzzleID(), property.ExternalID.Bytes, 0)
+	if err := p.Init(issueValidity); err != nil {
+		t.Fatal(err)
+	}
+	signed, err := p.Serialize(ctx, verifier.Salt.Value(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	solutions, err := (&puzzle.ComputeSolver{}).Solve(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var encoded bytes.Buffer
+	encoded.WriteString(solutions.String())
+	encoded.WriteByte('.')
+	if err := signed.Write(&encoded); err != nil {
+		t.Fatal(err)
+	}
+
+	parts := strings.SplitN(encoded.String(), ".", 2)
+	solutionsBytes, err := base64.StdEncoding.DecodeString(parts[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	binary.LittleEndian.PutUint32(solutionsBytes[3:7], elapsedMillis)
+	payloadStr := base64.StdEncoding.EncodeToString(solutionsBytes) + "." + parts[1]
+	payload, err := verifier.ParseSolutionPayload(ctx, []byte(payloadStr))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Reconstruct the (truncated) issuance time from the signed expiration and the
+	// validity used at issuance, then verify a few seconds later to model the time
+	// the client spends solving before submitting.
+	issuedAt := p.Expiration().Add(-issueValidity)
+	tnow := issuedAt.Add(3 * time.Second)
+	result, _, err := verifier.Verify(ctx, payload, argonOwner{property.OrgOwnerID.Int32}, tnow)
+	if err != nil {
+		t.Fatalf("Verify returned an error: %v", err)
+	}
+	return result, tnow
+}
+
+// TestVerifyValidityIntervalReducedBetweenIssueAndVerify reproduces the bug where a
+// property owner lowering the validity interval mid-window makes the verifier infer
+// a CreatedAt in the future. The fix skips the solution-timing heuristic whenever the
+// inferred CreatedAt is unreliable (in the future), so legitimate solves verify
+// cleanly, and pins the recorded CreatedAt to the conservative MaxValidityPeriod
+// bound so the API never exposes a future challenge_ts.
+func TestVerifyValidityIntervalReducedBetweenIssueAndVerify(t *testing.T) {
+	t.Parallel()
+	const issueValidity = 6 * time.Hour
+
+	t.Run("ReducedIntervalLegitimateSolve", func(t *testing.T) {
+		t.Parallel()
+		result, tnow := verifyReducedIntervalCase(t, 5*time.Minute, issueValidity, 100)
+		if result.Error != puzzle.VerifyNoError {
+			t.Fatalf("legitimate solve after interval reduction: error = %v (%d), want %v",
+				result.Error, result.Error, puzzle.VerifyNoError)
+		}
+		if result.CreatedAt.IsZero() {
+			t.Fatal("CreatedAt is zero; the verify record would be dropped from analytics")
+		}
+		if result.CreatedAt.After(tnow) {
+			t.Fatalf("inferred CreatedAt %v is in the future (now %v); API would expose a future challenge_ts",
+				result.CreatedAt, tnow)
+		}
+		if !result.Valid() {
+			t.Fatalf("verification result is not reportable: %+v", result)
+		}
+		// The /verify response surfaces result.CreatedAt as the timestamp; it must
+		// not drift into the future for solves that should be accepted.
+		response := newVerificationResponse(result, false)
+		if !response.Success || response.Timestamp == nil || time.Time(*response.Timestamp).After(tnow) {
+			t.Fatalf("verification response exposes a missing/future timestamp: %+v", response)
+		}
+	})
+
+	t.Run("UnchangedIntervalLegitimateSolve", func(t *testing.T) {
+		t.Parallel()
+		// Control: with the interval unchanged, the inference and maxSolveTime must
+		// behave exactly as before (no fallback), so a sub-age solve verifies cleanly.
+		result, tnow := verifyReducedIntervalCase(t, issueValidity, issueValidity, 100)
+		if result.Error != puzzle.VerifyNoError {
+			t.Fatalf("legitimate solve with unchanged interval: error = %v, want %v", result.Error, puzzle.VerifyNoError)
+		}
+		if result.CreatedAt.IsZero() || result.CreatedAt.After(tnow) {
+			t.Fatalf("CreatedAt = %v, now %v", result.CreatedAt, tnow)
+		}
+	})
+
+	t.Run("UnchangedIntervalFlagsSolveExceedingAge", func(t *testing.T) {
+		t.Parallel()
+		// Control: with the interval unchanged, a client-reported elapsed that
+		// exceeds the puzzle's inferred age is still rejected by the heuristic.
+		result, _ := verifyReducedIntervalCase(t, issueValidity, issueValidity, 10_000 /* 10s > 3s age */)
+		if result.Error != puzzle.SolutionTimingError {
+			t.Fatalf("solve exceeding puzzle age with unchanged interval: error = %v, want %v",
+				result.Error, puzzle.SolutionTimingError)
+		}
+	})
+}
+
+// TestVerifyCreatedAtNeverInFutureAcrossIntervals sweeps the property's current
+// validity interval across every discrete ValidityDurations option while the puzzle
+// was issued with a larger one, and asserts the inferred CreatedAt never lands in the
+// future for a legitimate, sub-age solve.
+func TestVerifyCreatedAtNeverInFutureAcrossIntervals(t *testing.T) {
+	t.Parallel()
+	const issueValidity = 6 * time.Hour
+	for _, propertyValidity := range puzzle.ValidityDurations {
+		propertyValidity := propertyValidity
+		// Remaining validity is issueValidity - 3s, which exceeds every interval
+		// below 6h, so each of these cases forces the fallback path.
+		if propertyValidity >= issueValidity {
+			continue
+		}
+		t.Run(propertyValidity.String(), func(t *testing.T) {
+			t.Parallel()
+			result, tnow := verifyReducedIntervalCase(t, propertyValidity, issueValidity, 100)
+			if result.Error != puzzle.VerifyNoError {
+				t.Fatalf("error = %v, want %v", result.Error, puzzle.VerifyNoError)
+			}
+			if result.CreatedAt.IsZero() {
+				t.Fatal("CreatedAt is zero")
+			}
+			if result.CreatedAt.After(tnow) {
+				t.Fatalf("CreatedAt %v is in the future (now %v) for property interval %v",
+					result.CreatedAt, tnow, propertyValidity)
 			}
 		})
 	}

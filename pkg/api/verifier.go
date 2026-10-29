@@ -288,6 +288,7 @@ func (v *Verifier) verify(
 ) (*puzzle.VerifyResult, *dbgen.Property, error) {
 	puzzleObject, property, perr := v.verifyPuzzleValid(ctx, verifyPayload, tnow)
 	result := puzzle.NewVerifyResult(perr)
+	createdAtFishy := false
 	if puzzleObject != nil && !puzzleObject.IsZero() {
 		result.PuzzleID = puzzleObject.PuzzleID()
 		// The puzzle bytes are untrusted until their signature is verified (and expiration is parsed from those bytes)
@@ -298,11 +299,15 @@ func (v *Verifier) verify(
 			result.ExpiresAt = puzzleObject.Expiration().UTC()
 			validityPeriod := puzzle.DefaultValidityPeriod
 			if property != nil && !puzzleObject.IsStub() {
-				// NOTE: user could have changed property validity interval of course in between but it should be an edge-case
-				// and it does not affect verification as we rely on expiration rather than creation
 				validityPeriod = property.ValidityInterval
 			}
-			result.CreatedAt = result.ExpiresAt.Add(-min(validityPeriod, puzzle.MaxValidityPeriod))
+			validityPeriod = min(validityPeriod, puzzle.MaxValidityPeriod)
+			// If the property's interval was lowered after issuance, the inferred CreatedAt lands in the future; the timing heuristic is unreliable then, so we skip it and record the MaxValidityPeriod bound.
+			result.CreatedAt = result.ExpiresAt.Add(-validityPeriod)
+			if result.CreatedAt.After(tnow) {
+				createdAtFishy = true
+				result.CreatedAt = result.ExpiresAt.Add(-puzzle.MaxValidityPeriod)
+			}
 		}
 	}
 	if property != nil {
@@ -354,7 +359,8 @@ func (v *Verifier) verify(
 	}
 
 	var maxSolveTime *time.Duration
-	if !result.CreatedAt.IsZero() {
+	// Skip the solution-timing heuristic when CreatedAt is fishy (see above).
+	if !result.CreatedAt.IsZero() && !createdAtFishy {
 		// Bound client-reported time by the age inferred from the signed expiration.
 		maxSolveTime = new(tnow.Sub(result.CreatedAt))
 	}
