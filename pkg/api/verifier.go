@@ -288,6 +288,7 @@ func (v *Verifier) verify(
 ) (*puzzle.VerifyResult, *dbgen.Property, error) {
 	puzzleObject, property, perr := v.verifyPuzzleValid(ctx, verifyPayload, tnow)
 	result := puzzle.NewVerifyResult(perr)
+	createdAtFishy := false
 	if puzzleObject != nil && !puzzleObject.IsZero() {
 		result.PuzzleID = puzzleObject.PuzzleID()
 		// The puzzle bytes are untrusted until their signature is verified (and expiration is parsed from those bytes)
@@ -301,21 +302,12 @@ func (v *Verifier) verify(
 				validityPeriod = property.ValidityInterval
 			}
 			validityPeriod = min(validityPeriod, puzzle.MaxValidityPeriod)
-			// Puzzles only store the signed expiration; the issuance-time validity
-			// interval is not signed, so CreatedAt is inferred as ExpiresAt minus the
-			// property's *current* interval. If the owner lowered the interval after
-			// this puzzle was issued, the inferred creation can land in the future
-			// (whenever the puzzle's remaining validity exceeds the new interval),
-			// which makes maxSolveTime = tnow - CreatedAt negative and flags every
-			// legitimate submission as solution-timing. Init() clamps the issuance
-			// interval to MaxValidityPeriod, so for any unexpired puzzle
-			// ExpiresAt - MaxValidityPeriod is at or before tnow; fall back to that
-			// bound whenever the property's current interval would otherwise push
-			// the inferred creation into the future.
-			if result.ExpiresAt.Add(-validityPeriod).After(tnow) {
-				validityPeriod = puzzle.MaxValidityPeriod
-			}
+			// If the property's interval was lowered after issuance, the inferred CreatedAt lands in the future; the timing heuristic is unreliable then, so we skip it and record the MaxValidityPeriod bound.
 			result.CreatedAt = result.ExpiresAt.Add(-validityPeriod)
+			if result.CreatedAt.After(tnow) {
+				createdAtFishy = true
+				result.CreatedAt = result.ExpiresAt.Add(-puzzle.MaxValidityPeriod)
+			}
 		}
 	}
 	if property != nil {
@@ -367,7 +359,8 @@ func (v *Verifier) verify(
 	}
 
 	var maxSolveTime *time.Duration
-	if !result.CreatedAt.IsZero() {
+	// Skip the solution-timing heuristic when CreatedAt is fishy (see above).
+	if !result.CreatedAt.IsZero() && !createdAtFishy {
 		// Bound client-reported time by the age inferred from the signed expiration.
 		maxSolveTime = new(tnow.Sub(result.CreatedAt))
 	}
