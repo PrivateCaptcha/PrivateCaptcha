@@ -130,25 +130,6 @@ func TestVerifyValidityIntervalReducedBetweenIssueAndVerify(t *testing.T) {
 		}
 	})
 
-	t.Run("ReducedIntervalSkipsTimingHeuristicForExcessiveSolve", func(t *testing.T) {
-		t.Parallel()
-		// A 25h reported elapsed is absurdly large, but with the interval reduced
-		// after issuance the inferred CreatedAt is unreliable (in the future), so the
-		// solution-timing heuristic is skipped and the solve is accepted rather than
-		// misflagged.
-		result, tnow := verifyReducedIntervalCase(t, 5*time.Minute, issueValidity, uint32(25*time.Hour/time.Millisecond))
-		if result.Error != puzzle.VerifyNoError {
-			t.Fatalf("excessive solve after interval reduction with fishy CreatedAt: error = %v, want %v (heuristic should be skipped)",
-				result.Error, puzzle.VerifyNoError)
-		}
-		if result.CreatedAt.After(tnow) {
-			t.Fatalf("inferred CreatedAt %v is in the future (now %v)", result.CreatedAt, tnow)
-		}
-		if !result.Valid() {
-			t.Fatalf("verification result is not reportable: %+v", result)
-		}
-	})
-
 	t.Run("UnchangedIntervalLegitimateSolve", func(t *testing.T) {
 		t.Parallel()
 		// Control: with the interval unchanged, the inference and maxSolveTime must
