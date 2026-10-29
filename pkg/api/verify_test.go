@@ -2609,3 +2609,116 @@ func TestMaintenanceWithoutEdgeTokenPreservesSuccess(t *testing.T) {
 		t.Fatalf("maintenance without an edge token lost verification metadata: %+v", response)
 	}
 }
+
+// TestVerifyHTTPValidityIntervalReducedMidWindow issues a puzzle through the real
+// /puzzle HTTP handler, lowers the property's validity interval via the DB update
+// path (mirroring the owner's dashboard action), evicts the sitekey cache so /verify
+// re-reads the updated property, then solves and posts to /verify and /siteverify.
+// Asserts HTTP 200, success, code 0 (no solution-timing), and a non-future
+// challenge_ts/timestamp. Requires PostgreSQL (the global store/server).
+func TestVerifyHTTPValidityIntervalReducedMidWindow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Issue with the default 6h interval so the puzzle's remaining validity exceeds
+	// the lowered (5m) interval at verify time, reproducing the bug's trigger.
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "interval-http.example.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+
+	// Issue a distinct puzzle per verification endpoint BEFORE lowering the validity
+	// interval, so each subtest verifies a separate (non-replayed) puzzle that was
+	// issued under the original 6h window.
+	proofs := make(map[string]string)
+	for _, name := range []string{"Verify", "SiteVerify"} {
+		puzzleStr, solutionsStr, perr := solutionsSuite(ctx, sitekey, property.Domain)
+		if perr != nil {
+			t.Fatalf("issue %s puzzle: %v", name, perr)
+		}
+		proofs[name] = solutionsStr + "." + puzzleStr
+	}
+
+	// Lower the property's validity interval to 5m after issuance, mirroring the
+	// owner's dashboard action, and evict the cached property so /verify re-reads it.
+	if _, _, err := store.Impl().UpdateProperty(ctx, org, user, &dbgen.UpdatePropertyParams{
+		ID:                        property.ID,
+		Name:                      property.Name,
+		Level:                     property.Level,
+		Growth:                    property.Growth,
+		ValidityInterval:          5 * time.Minute,
+		MaxReplayCount:            property.MaxReplayCount,
+		AllowSubdomains:           property.AllowSubdomains,
+		AllowLocalhost:            property.AllowLocalhost,
+		EdgeTokenValidityInterval: property.EdgeTokenValidityInterval,
+	}); err != nil {
+		t.Fatalf("UpdateProperty: %v", err)
+	}
+	cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey))
+
+	keyParams := db_tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0)
+	keyParams.Scope = dbgen.ApiKeyScopePuzzle
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret := db.UUIDToSecret(apikey.ExternalID)
+
+	tnow := time.Now().UTC()
+	verifyWrapper := func(response, secret, sitekey string, _ ...map[string][]string) (*http.Response, error) {
+		return verifySuite(response, secret, sitekey)
+	}
+	for _, tc := range []struct {
+		name    string
+		do      func(string, string, string, ...map[string][]string) (*http.Response, error)
+		recaptc bool
+	}{
+		{"Verify", verifyWrapper, false},
+		{"SiteVerify", siteVerifySuite, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, err := tc.do(proofs[tc.name], secret, sitekey)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+			}
+			if tc.recaptc {
+				var rr VerifyResponseRecaptchaV2
+				if err := json.NewDecoder(resp.Body).Decode(&rr); err != nil {
+					t.Fatal(err)
+				}
+				if !rr.Success || len(rr.ErrorCodes) != 0 {
+					t.Fatalf("reduced-interval siteverify must succeed with no error codes, got success=%v error_codes=%v",
+						rr.Success, rr.ErrorCodes)
+				}
+				if ts := time.Time(rr.ChallengeTS); ts.After(tnow.Add(time.Second)) {
+					t.Fatalf("siteverify challenge_ts %v is in the future (now %v)", ts, tnow)
+				}
+			} else {
+				var result VerificationResponse
+				if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+					t.Fatal(err)
+				}
+				if !result.Success || result.Code != puzzle.VerifyNoError {
+					t.Fatalf("reduced-interval verify must succeed with code 0, got success=%v code=%v (%s)",
+						result.Success, result.Code, result.Code.String())
+				}
+				if result.Timestamp == nil {
+					t.Fatalf("verify response missing timestamp: %+v", result)
+				}
+				if ts := time.Time(*result.Timestamp); ts.After(tnow.Add(time.Second)) {
+					t.Fatalf("verify response timestamp %v is in the future (now %v)", ts, tnow)
+				}
+			}
+		})
+	}
+}
