@@ -241,9 +241,14 @@ func TestVerifyHTTPValidityIntervalReducedMidWindow(t *testing.T) {
 	// Lower the property's validity interval to 5m after issuance, mirroring the
 	// owner's dashboard action, and evict the cached property so /verify re-reads it.
 	if _, _, err := store.Impl().UpdateProperty(ctx, org, user, &dbgen.UpdatePropertyParams{
-		ID: property.ID, Name: property.Name, Level: property.Level, Growth: property.Growth,
-		ValidityInterval: 5 * time.Minute, MaxReplayCount: property.MaxReplayCount,
-		AllowSubdomains: property.AllowSubdomains, AllowLocalhost: property.AllowLocalhost,
+		ID:                        property.ID,
+		Name:                      property.Name,
+		Level:                     property.Level,
+		Growth:                    property.Growth,
+		ValidityInterval:          5 * time.Minute,
+		MaxReplayCount:            property.MaxReplayCount,
+		AllowSubdomains:           property.AllowSubdomains,
+		AllowLocalhost:            property.AllowLocalhost,
 		EdgeTokenValidityInterval: property.EdgeTokenValidityInterval,
 	}); err != nil {
 		t.Fatalf("UpdateProperty: %v", err)
