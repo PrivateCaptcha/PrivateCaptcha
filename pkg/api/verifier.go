@@ -298,11 +298,24 @@ func (v *Verifier) verify(
 			result.ExpiresAt = puzzleObject.Expiration().UTC()
 			validityPeriod := puzzle.DefaultValidityPeriod
 			if property != nil && !puzzleObject.IsStub() {
-				// NOTE: user could have changed property validity interval of course in between but it should be an edge-case
-				// and it does not affect verification as we rely on expiration rather than creation
 				validityPeriod = property.ValidityInterval
 			}
-			result.CreatedAt = result.ExpiresAt.Add(-min(validityPeriod, puzzle.MaxValidityPeriod))
+			validityPeriod = min(validityPeriod, puzzle.MaxValidityPeriod)
+			// Puzzles only store the signed expiration; the issuance-time validity
+			// interval is not signed, so CreatedAt is inferred as ExpiresAt minus the
+			// property's *current* interval. If the owner lowered the interval after
+			// this puzzle was issued, the inferred creation can land in the future
+			// (whenever the puzzle's remaining validity exceeds the new interval),
+			// which makes maxSolveTime = tnow - CreatedAt negative and flags every
+			// legitimate submission as solution-timing. Init() clamps the issuance
+			// interval to MaxValidityPeriod, so for any unexpired puzzle
+			// ExpiresAt - MaxValidityPeriod is at or before tnow; fall back to that
+			// bound whenever the property's current interval would otherwise push
+			// the inferred creation into the future.
+			if result.ExpiresAt.Add(-validityPeriod).After(tnow) {
+				validityPeriod = puzzle.MaxValidityPeriod
+			}
+			result.CreatedAt = result.ExpiresAt.Add(-validityPeriod)
 		}
 	}
 	if property != nil {
