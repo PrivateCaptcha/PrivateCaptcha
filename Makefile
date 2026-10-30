@@ -6,6 +6,7 @@ DOCKER_IMAGE ?= private-captcha
 DOCKER ?= docker
 SQLC_MIGRATION_FIX = pkg/db/migrations/postgres/000000_sqlc_fix.sql
 EXTRA_BUILD_FLAGS ?=
+EXTRA_LDFLAGS ?=
 EXTRA_TEST_FLAGS ?=
 CGO_TEST_ENABLED ?= 0
 TEST_NAME ?=
@@ -125,7 +126,7 @@ build-tests-ee-race: CGO_TEST_ENABLED = 1
 build-tests-ee-race: build-tests-ee
 
 build-server:
-	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w -X main.GitCommit=$(GIT_COMMIT)" $(EXTRA_BUILD_FLAGS) -o bin/server ./cmd/server
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w -X main.GitCommit=$(GIT_COMMIT) $(EXTRA_LDFLAGS)" $(EXTRA_BUILD_FLAGS) -o bin/server ./cmd/server
 
 build-server-profile: EXTRA_BUILD_FLAGS = -tags profile -gcflags=all=-N
 build-server-profile: build-server
@@ -223,13 +224,17 @@ provision-local:
 	@printf '%s\n' 'GRANT ALL ON privatecaptcha.* TO captchasrv;' | CH_HOST=localhost CH_PORT="$(TEST_CH_PORT)" CH_HTTP_PORT="$(TEST_CH_HTTP_PORT)" $(CLICKHOUSE_TEST_CLIENT) -n
 
 run-local: build-server
-	@test -r docker/pc.env
+	@if [ ! -r docker/pc.env ]; then \
+		echo "Error: docker/pc.env is missing or unreadable. Run 'make setup-docker' and configure docker/pc.env." >&2; \
+		exit 1; \
+	fi
 	@bash -o pipefail -c '{ \
 		sed -E "/^PC_POSTGRES=/ { s#@postgres:5432/#@localhost:$(TEST_PG_PORT)/#; s#sslmode=require#sslmode=disable#; }" docker/pc.env && \
 		printf "\nPC_CLICKHOUSE_HOST=localhost\nPC_CLICKHOUSE_PORT=%s\n" "$(TEST_CH_PORT)"; \
 	} | ./bin/server -env stdin -mode auto -migrate-hash "$(GIT_COMMIT)"'
 
 run-local-ee: EXTRA_BUILD_FLAGS = -tags enterprise
+run-local-ee: EXTRA_LDFLAGS += -X github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance.LicenseURL=http://localhost:8181/selfhosted/activation
 run-local-ee: run-local
 
 run-docker:
