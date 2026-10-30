@@ -1479,9 +1479,9 @@ func TestRenderHTML(t *testing.T) {
 				Property:   stubProperty("my property", "123"),
 				IsEdit:     true,
 			},
-			selector: `option[value="client_side_detection"][selected], label[for="clientDetection-automation"], input#clientDetection-automation[type="checkbox"][value="automation"][x-model="selectedClientSideDetections"]`,
+			selector: `option[value="client_side_detection"][selected], input#clientDetection-condition_negated[type="checkbox"][x-model="conditionNegated"], label[for="clientDetection-condition_negated"], [role="listbox"][aria-labelledby="clientSideDetections-label"][aria-multiselectable="true"] button#clientDetection-automation.pc-rule-country-item[type="button"][role="option"]`,
 			matches: []string{
-				"Client-side detection", "", "automation",
+				"Client-side detection", "", "Invert condition", "Automation",
 			},
 			enterprise: enterpriseOnly,
 		},

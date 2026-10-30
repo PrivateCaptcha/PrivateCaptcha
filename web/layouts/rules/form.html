@@ -102,18 +102,48 @@
         <input type="hidden" name="{{ .Const.ConditionValue }}" :value="activeConditionValue" />
 
         <fieldset x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyClientSideDetection }}'">
-            <legend class="pc-internal-form-label">Detections</legend>
-            {{ range .Const.ClientSideDetections }}
-            <div class="mt-2 flex items-center gap-3">
-                <div class="group grid size-4 shrink-0 grid-cols-1">
-                    <input id="clientDetection-{{ . }}" type="checkbox" value="{{ . }}" x-model="selectedClientSideDetections" class="col-start-1 row-start-1 pc-internal-form-checkbox" />
-                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                        <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
+            <legend id="clientSideDetections-label" class="pc-internal-form-label">Detections</legend>
+
+            <div class="mt-2 mb-3">
+                <div class="flex gap-3">
+                    <div class="flex h-6 shrink-0 items-center">
+                        <div class="group grid size-4 grid-cols-1">
+                            <input id="clientDetection-{{ .Const.ConditionNegated }}" type="checkbox" x-model="conditionNegated" class="col-start-1 row-start-1 pc-internal-form-checkbox" />
+                            <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-pc-grey-950/25" viewBox="0 0 14 14" fill="none">
+                                <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="text-sm/6">
+                        <label for="clientDetection-{{ .Const.ConditionNegated }}" class="font-medium text-pc-grey-950">Invert condition</label>
+                        <span class="text-pc-grey-800">(none of the selected detections)</span>
+                    </div>
                 </div>
-                <label for="clientDetection-{{ . }}" class="text-sm text-pc-grey-950">{{ . }}</label>
             </div>
-            {{ end }}
+
+            <div class="mt-2">
+                <div role="listbox" aria-labelledby="clientSideDetections-label" aria-multiselectable="true" class="border border-pc-grey-250 bg-white rounded-pc max-h-48 overflow-y-auto p-2 space-y-1">
+                    {{ range .Const.ClientSideDetections }}
+                    <button id="clientDetection-{{ . }}" type="button" role="option" class="pc-rule-country-item group w-full"
+                        :aria-selected="selectedClientSideDetections.includes('{{ . }}')"
+                        @click="toggleSelectedValue(selectedClientSideDetections, '{{ . }}')">
+                        <div class="flex items-center gap-3">
+                            <svg class="pointer-events-none size-3.5 self-center justify-self-center group-has-[:disabled]:stroke-pc-grey-950/25"
+                                :class="selectedClientSideDetections.includes('{{ . }}') ? 'stroke-pc-grey-800' : 'stroke-pc-grey-250'"
+                                viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                                <path class="opacity-0 group-hover:opacity-100 group-aria-selected:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <span class="truncate text-sm">{{ title . }}</span>
+                        </div>
+                    </button>
+                    {{ end }}
+                </div>
+
+                <p class="mt-1 truncate text-xs text-pc-grey-800" x-cloak x-show="selectedClientSideDetections.length > 0">Selected detections: <code class="pc-rule-code-chip" x-text="selectedClientSideDetections.join(',')"></code></p>
+
+                <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Const.OperatorIn }}_negated' : '{{ .Const.OperatorIn }}'" :disabled="conditionProperty !== '{{ .Const.ConditionPropertyClientSideDetection }}'" />
+            </div>
         </fieldset>
 
         <div x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyCountryCode }}'">
@@ -142,7 +172,7 @@
                     {{ range .Params.Countries }}
                     <div class="pc-rule-country-item group"
                         :aria-selected="isCountrySelected('{{ .Code }}')"
-                        @click="toggleCountry('{{ .Code }}')">
+                        @click="toggleSelectedValue(selectedCountries, '{{ .Code }}')">
                         <div class="flex items-center gap-3">
                             <svg class="pointer-events-none size-3.5 self-center justify-self-center group-has-[:disabled]:stroke-pc-grey-950/25"
                                 :class="isCountrySelected('{{ .Code }}') ? 'stroke-pc-grey-800' : 'stroke-pc-grey-250'"

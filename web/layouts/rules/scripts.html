@@ -72,7 +72,7 @@ function ruleFormData() {
                 ? formDataConditionValue.split(',').map(value => value.trim()).filter(Boolean)
                 : [],
             getFormattedValue: (ctx) => ctx.selectedClientSideDetections.join(','),
-            showOperator: true,
+            showOperator: false,
             operators: [
                 { value: '{{ .Const.OperatorIn }}', label: 'Detected any of' },
                 { value: '{{ .Const.OperatorIn }}_negated', label: 'Detected none of' }
@@ -230,12 +230,12 @@ function ruleFormData() {
         // Final Extension Hook for arbitrary methods
         {{ block "rule-methods-extension" . }}{{ end }}
 
-        toggleCountry(code) {
-            const index = this.selectedCountries.indexOf(code);
+        toggleSelectedValue(values, value) {
+            const index = values.indexOf(value);
             if (index > -1) {
-                this.selectedCountries.splice(index, 1);
+                values.splice(index, 1);
             } else {
-                this.selectedCountries.push(code);
+                values.push(value);
             }
         },
 
