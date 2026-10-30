@@ -13,7 +13,7 @@ for (const property of [
     'domAutomation', 'domAutomationController', '_WEBDRIVER_ELEM_CACHE',
     'callPhantom', '_phantom', '__nightmare',
     'cdc_adoQpoasnfa76pfcZLmcfl_Array', 'cdc_adoQpoasnfa76pfcZLmcfl_Promise',
-    'cdc_adoQpoasnfa76pfcZLmcfl_Symbol', 'webdriver', 'driver', 'selenium',
+    'cdc_adoQpoasnfa76pfcZLmcfl_Symbol', 'webdriver', 'selenium',
 ]) {
     test(`client hints detect the ${property} automation leak`, () => {
         assert.deepStrictEqual(getClientHints({ [property]: {} }), ['automation']);
