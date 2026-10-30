@@ -65,6 +65,19 @@ function ruleFormData() {
                 { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' }
             ]
         },
+        '{{ .Const.ConditionPropertyClientSideDetection }}': {
+            stateField: 'selectedClientSideDetections',
+            emptyValue: [],
+            initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyClientSideDetection }}' && formDataConditionValue
+                ? formDataConditionValue.split(',').map(value => value.trim()).filter(Boolean)
+                : [],
+            getFormattedValue: (ctx) => ctx.selectedClientSideDetections.join(','),
+            showOperator: true,
+            operators: [
+                { value: '{{ .Const.OperatorIn }}', label: 'Detected any of' },
+                { value: '{{ .Const.OperatorIn }}_negated', label: 'Detected none of' }
+            ]
+        },
         '{{ .Const.ConditionPropertyDomain }}': {
             stateField: 'conditionValueDomain',
             emptyValue: '',

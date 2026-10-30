@@ -81,6 +81,95 @@ func applyRule(r rule, p difficulty.Property) *overrideProperty {
 	return op
 }
 
+func TestClientSideDetectionRule(t *testing.T) {
+	for _, negated := range []bool{false, true} {
+		dbRule := &dbgen.DifficultyRule{
+			Enabled:           true,
+			ConditionProperty: dbgen.RuleConditionPropertyClientSideDetection,
+			ConditionOperator: dbgen.RuleConditionOperatorIn,
+			ConditionValueStr: pgtype.Text{
+				String: "automation",
+				Valid:  true,
+			},
+			ConditionValueSeparator: pgtype.Text{
+				String: ",",
+				Valid:  true,
+			},
+			ConditionOperatorNegated: negated,
+			ActionProperty:           dbgen.RuleActionPropertyHTTPRequest,
+		}
+		compiled, err := testCompiler.CompileRule(t.Context(), dbRule)
+		if err != nil {
+			t.Fatal(err)
+		}
+		original := NewCompiledRules([]rule{compiled})
+		var buf bytes.Buffer
+		if err := gob.NewEncoder(&buf).Encode(original); err != nil {
+			t.Fatal(err)
+		}
+		var restored CompiledRules
+		if err := gob.NewDecoder(&buf).Decode(&restored); err != nil {
+			t.Fatal(err)
+		}
+		if restored.IsStale() {
+			t.Fatal("restored client-side detection rule is stale")
+		}
+		for _, tc := range []struct {
+			hints []string
+			match bool
+		}{
+			{nil, false},
+			{[]string{""}, false},
+			{[]string{"unknown"}, false},
+			{[]string{"automations"}, false},
+			{[]string{"not-automation"}, false},
+			{[]string{"automation"}, true},
+			{[]string{"unknown, automation ,other"}, true},
+			{[]string{"unknown", "automation"}, true},
+		} {
+			req := httptest.NewRequest("GET", "/", nil)
+			for _, value := range tc.hints {
+				req.Header.Add(common.HeaderClientHints, value)
+			}
+			ri := NewRequestInfo(req, "")
+			want := tc.match
+			if negated {
+				want = !want
+			}
+			for _, rules := range []*CompiledRules{original, &restored} {
+				if got := rules.IsRequestBlocked(ri); got != want {
+					t.Errorf("hints=%q negated=%v: blocked=%v, want %v", tc.hints, negated, got, want)
+				}
+			}
+		}
+	}
+}
+
+func TestClientSideDetectionRuleInvalidCondition(t *testing.T) {
+	for _, tc := range []struct {
+		operator dbgen.RuleConditionOperator
+		value    string
+	}{
+		{dbgen.RuleConditionOperatorEquals, "automation"},
+		{dbgen.RuleConditionOperatorIn, ""},
+		{dbgen.RuleConditionOperatorIn, "unknown"},
+		{dbgen.RuleConditionOperatorIn, "automation,unknown"},
+	} {
+		_, err := testCompiler.CompileRule(t.Context(), &dbgen.DifficultyRule{
+			ConditionProperty: dbgen.RuleConditionPropertyClientSideDetection,
+			ConditionOperator: tc.operator,
+			ConditionValueStr: pgtype.Text{
+				String: tc.value,
+				Valid:  true,
+			},
+			ActionProperty: dbgen.RuleActionPropertyHTTPRequest,
+		})
+		if err == nil {
+			t.Errorf("operator=%q value=%q: expected invalid condition error", tc.operator, tc.value)
+		}
+	}
+}
+
 func TestUserAgentEqualsMatch(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
 		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
@@ -594,6 +683,89 @@ func TestCompiledRulesApplyLastMatchWinsLevel(t *testing.T) {
 	}
 	if result.Level() != expected {
 		t.Errorf("Expected last-match-wins level %d, got %d", expected, result.Level())
+	}
+}
+
+func TestRulesPairSystemRules(t *testing.T) {
+	property := difficulty.NewStubProperty(1, true, 1, 1, int16(common.DifficultyLevelMedium), dbgen.DifficultyGrowthMedium)
+	systemRules := testCompiler.Compile(t.Context(), []*dbgen.DifficultyRule{DefaultDifficultyRule()})
+	propertyRules := NewCompiledRules([]rule{&difficultyLevelRule{
+		RuleBase: RuleBase{
+			RuleID:   42,
+			Matcher:  &AlwaysMatcher{},
+			Terminal: true,
+		},
+		PercentDiff: 100,
+	}})
+	orgRules := NewCompiledRules([]rule{&difficultyLevelRule{
+		RuleBase: RuleBase{
+			RuleID:  43,
+			Matcher: &AlwaysMatcher{},
+		},
+		PercentDiff: -50,
+	}})
+	systemLevel := expectedDifficultyLevel(property.Level(), 300)
+	for _, tc := range []struct {
+		name          string
+		propertyRules *CompiledRules
+		orgRules      *CompiledRules
+		wantLevel     int16
+		wantRuleID    int32
+	}{
+		{
+			name:      "SystemOnly",
+			wantLevel: systemLevel,
+		},
+		{
+			name:          "SystemAndProperty",
+			propertyRules: propertyRules,
+			wantLevel:     expectedDifficultyLevel(systemLevel, 100),
+			wantRuleID:    42,
+		},
+		{
+			name:       "SystemAndOrganization",
+			orgRules:   orgRules,
+			wantLevel:  expectedDifficultyLevel(systemLevel, -50),
+			wantRuleID: 43,
+		},
+		{
+			name:          "AllRuleSources",
+			propertyRules: propertyRules,
+			orgRules:      orgRules,
+			wantLevel:     expectedDifficultyLevel(expectedDifficultyLevel(systemLevel, 100), -50),
+			wantRuleID:    43,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pair := &RulesPair{
+				SystemRules:   systemRules,
+				PropertyRules: tc.propertyRules,
+				OrgRules:      tc.orgRules,
+			}
+			ri := newTestRequestInfoWithHeaders("", netip.MustParseAddr("192.0.2.1"), map[string]string{
+				common.HeaderClientHints: "automation",
+			})
+			applied := pair.Apply(ri, property)
+			if applied.Level() != tc.wantLevel || applied.RuleID() != tc.wantRuleID {
+				t.Fatalf("applied level/rule ID = %d/%d, want %d/%d", applied.Level(), applied.RuleID(), tc.wantLevel, tc.wantRuleID)
+			}
+		})
+	}
+}
+
+func TestRulesPairSystemBlock(t *testing.T) {
+	pair := &RulesPair{
+		SystemRules: testCompiler.Compile(t.Context(), []*dbgen.DifficultyRule{{
+			Enabled:           true,
+			ConditionProperty: dbgen.RuleConditionPropertyAlways,
+			ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
+		}}),
+	}
+	if !pair.HasBlockRules() {
+		t.Fatal("system block rule was not detected")
+	}
+	if !pair.IsRequestBlocked(newTestRequestInfo("", netip.MustParseAddr("192.0.2.1"))) {
+		t.Fatal("system block rule did not block the request")
 	}
 }
 

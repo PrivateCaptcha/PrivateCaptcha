@@ -205,6 +205,166 @@ func assertBrowserVersionRule(t *testing.T, rule *dbgen.DifficultyRule, threshol
 	}
 }
 
+func TestParseClientSideDetectionRuleForm(t *testing.T) {
+	for _, operator := range []string{"in", "in_negated"} {
+		t.Run(operator, func(t *testing.T) {
+			form := url.Values{
+				common.ParamName:              {"Client detection"},
+				common.ParamConditionProperty: {string(dbgen.RuleConditionPropertyClientSideDetection)},
+				common.ParamConditionOperator: {operator},
+				common.ParamConditionValue:    {" automation "},
+				common.ParamActionProperty:    {string(dbgen.RuleActionPropertyHTTPRequest)},
+			}
+			req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(form.Encode()))
+			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+			if err := req.ParseForm(); err != nil {
+				t.Fatal(err)
+			}
+			renderCtx := &RuleWizardRenderContext{}
+			params, status := (&Server{
+				Rules: NewRuleRegistry(),
+			}).parseRuleForm(t.Context(), req, renderCtx, "")
+			if status != common.StatusOK {
+				t.Fatalf("parseRuleForm() = %v, want OK", status)
+			}
+			if params.ConditionProperty != dbgen.RuleConditionPropertyClientSideDetection || params.ConditionOperator != dbgen.RuleConditionOperatorIn {
+				t.Errorf("unexpected condition: %+v", params)
+			}
+			if params.ConditionOperatorNegated != (operator == "in_negated") {
+				t.Errorf("unexpected negation: %v", params.ConditionOperatorNegated)
+			}
+			if params.ConditionValueStr != db.Text("automation") || params.ConditionValueSeparator != db.Text(",") || params.ConditionValueInt.Valid {
+				t.Errorf("unexpected condition values: %+v", params)
+			}
+			if renderCtx.ConditionValue != "automation" {
+				t.Errorf("render value = %q, want automation", renderCtx.ConditionValue)
+			}
+		})
+	}
+}
+
+func TestClientSideDetectionConditionValidation(t *testing.T) {
+	parser, ok := NewRuleRegistry().ConditionParser(string(dbgen.RuleConditionPropertyClientSideDetection))
+	if !ok {
+		t.Fatal("client-side detection parser is not registered")
+	}
+	for value, want := range map[string]common.StatusCode{
+		"":                   common.StatusRuleConditionValueRequired,
+		"unknown":            common.StatusRuleConditionValueInvalid,
+		"automations":        common.StatusRuleConditionValueInvalid,
+		"automation,unknown": common.StatusRuleConditionValueInvalid,
+		"automation,":        common.StatusRuleConditionValueInvalid,
+		"automation":         common.StatusOK,
+	} {
+		_, _, got := parser(string(dbgen.RuleConditionOperatorIn), value, "")
+		if got != want {
+			t.Errorf("value=%q: status=%v, want %v", value, got, want)
+		}
+	}
+	if _, _, status := parser(string(dbgen.RuleConditionOperatorEquals), "automation", ""); status != common.StatusRuleConditionOperatorInvalid {
+		t.Errorf("unsupported operator status = %v", status)
+	}
+}
+
+func TestClientSideDetectionRuleDisplayAndForm(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:        dbgen.RuleConditionPropertyClientSideDetection,
+		ConditionOperator:        dbgen.RuleConditionOperatorIn,
+		ConditionOperatorNegated: true,
+		ConditionValueStr:        db.Text("automation"),
+		ConditionValueSeparator:  db.Text(","),
+	}
+	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
+	model := DifficultyRuleToDisplay(rule, true, hasher, NewRuleRegistry())
+	if model.ConditionProperty != "Client-side detection" || model.ConditionOperator != "is not one of" || model.ConditionValue != "automation" {
+		t.Errorf("unexpected display: %+v", model)
+	}
+	form := ruleToFormData(rule)
+	if form.ConditionProperty != string(rule.ConditionProperty) || form.ConditionOperator != "in" || !form.ConditionNegated || form.ConditionValue != "automation" {
+		t.Errorf("unexpected edit form: %+v", form)
+	}
+}
+
+func TestCreateAndEditClientSideDetectionRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := server.XSRF.Token(fmt.Sprint(user.ID))
+	for _, propertyRule := range []bool{false, true} {
+		base := fmt.Sprintf("/org/%s", server.IDHasher.Encrypt(int(org.ID)))
+		if propertyRule {
+			base += fmt.Sprintf("/property/%s", server.IDHasher.Encrypt(int(property.ID)))
+		}
+		var saved *dbgen.DifficultyRule
+		for _, edit := range []bool{false, true} {
+			endpoint := base + "/rules/new"
+			operator := "in"
+			if edit {
+				endpoint = fmt.Sprintf("%s/rules/%s/edit", base, server.IDHasher.Encrypt(int(saved.ID)))
+				operator = "in_negated"
+			}
+			resp := postRuleRequest(srv, cookie, http.MethodPost, endpoint, token, map[string]string{
+				common.ParamName:              "Client detection",
+				common.ParamEnabled:           "on",
+				common.ParamConditionProperty: string(dbgen.RuleConditionPropertyClientSideDetection),
+				common.ParamConditionOperator: operator,
+				common.ParamConditionValue:    "automation",
+				common.ParamActionProperty:    string(dbgen.RuleActionPropertyHTTPRequest),
+				common.ParamActionValue:       "1",
+			})
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusSeeOther {
+				t.Fatalf("property=%v edit=%v: status=%v, want redirect", propertyRule, edit, resp.StatusCode)
+			}
+			var stored map[int32][]*dbgen.DifficultyRule
+			id := org.ID
+			if propertyRule {
+				id = property.ID
+				stored, err = store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{id: 1})
+			} else {
+				stored, err = store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{id: 1})
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(stored[id]) != 1 {
+				t.Fatalf("saved rule count=%d, want 1", len(stored[id]))
+			}
+			saved = stored[id][0]
+			if saved.ConditionProperty != dbgen.RuleConditionPropertyClientSideDetection || saved.ConditionOperator != dbgen.RuleConditionOperatorIn || saved.ConditionOperatorNegated != edit {
+				t.Errorf("unexpected saved condition: %+v", saved)
+			}
+			if saved.ConditionValueStr != db.Text("automation") || saved.ConditionValueSeparator != db.Text(",") || saved.ConditionValueInt.Valid {
+				t.Errorf("unexpected saved values: %+v", saved)
+			}
+			compiled, err := rules.NewRulesCompiler(useragent.NewParser()).CompileRule(ctx, saved)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodGet, "/", nil)
+			req.Header.Set(common.HeaderClientHints, "automation")
+			if got := compiled.Matches(rules.NewRequestInfo(req, "")); got == edit {
+				t.Errorf("edited=%v: saved rule match=%v", edit, got)
+			}
+		}
+	}
+}
+
 func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
 

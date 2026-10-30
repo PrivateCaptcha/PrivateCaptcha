@@ -1463,6 +1463,29 @@ func TestRenderHTML(t *testing.T) {
 			enterprise: enterpriseOnly,
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.RulesEndpoint, "client-detection", common.EditEndpoint},
+			template: ruleTemplate,
+			model: &RuleWizardRenderContext{
+				CsrfRenderContext: stubToken(),
+				RuleFormData: RuleFormData{
+					Name:              "Client detection",
+					ConditionProperty: string(dbgen.RuleConditionPropertyClientSideDetection),
+					ConditionOperator: string(dbgen.RuleConditionOperatorIn),
+					ConditionValue:    "automation",
+					ActionProperty:    string(dbgen.RuleActionPropertyHTTPRequest),
+					Enabled:           true,
+				},
+				CurrentOrg: stubOrg("123"),
+				Property:   stubProperty("my property", "123"),
+				IsEdit:     true,
+			},
+			selector: `option[value="client_side_detection"][selected], label[for="clientDetection-automation"], input#clientDetection-automation[type="checkbox"][value="automation"][x-model="selectedClientSideDetections"]`,
+			matches: []string{
+				"Client-side detection", "", "automation",
+			},
+			enterprise: enterpriseOnly,
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.RulesEndpoint, "edge-validity", common.EditEndpoint},
 			template: ruleTemplate,
 			model: &RuleWizardRenderContext{
@@ -1569,9 +1592,8 @@ func TestRenderHTML(t *testing.T) {
 					CanAddNew: true,
 				},
 			},
-			selector:   "p.rule-name",
-			matches:    ruleNames(stubDifficultyRules()),
-			enterprise: enterpriseOnly,
+			selector: "p.rule-name",
+			matches:  ruleNames(stubDifficultyRules()),
 		},
 		// same as above but empty rules to check for placeholder (also doubles for enterprise and non-enterprise)
 		{

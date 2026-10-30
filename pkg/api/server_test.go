@@ -177,6 +177,36 @@ func TestAPIServerInitRejectsEmptyUserFingerprintKey(t *testing.T) {
 	}
 }
 
+func TestPuzzlePreflightAllowsClientHints(t *testing.T) {
+	srv := &Server{
+		Auth:        &AuthMiddleware{},
+		RateLimiter: &ratelimit.StubRateLimiter{},
+		Metrics:     monitoring.NewStub(),
+		Levels:      difficulty.NewLevels(db.NewMemoryTimeSeries(), 1, PropertyBucketSize),
+	}
+	rg := srv.Setup("", false, common.NoopMiddleware)
+	mux := http.NewServeMux()
+	rg.Register(mux)
+
+	req := httptest.NewRequest(http.MethodOptions, "/puzzle?sitekey="+strings.Repeat("a", db.SitekeyLen), nil)
+	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	const requestedHeaders = "x-pc-captcha-version,x-pc-client-hints"
+	req.Header.Set("Access-Control-Request-Headers", requestedHeaders)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("Preflight status = %d, want %d", w.Code, http.StatusNoContent)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Headers"); got != requestedHeaders {
+		t.Errorf("Allowed headers = %q, want %q", got, requestedHeaders)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "https://example.com" {
+		t.Errorf("Allowed origin = %q, want https://example.com", got)
+	}
+}
+
 func TestAPIServerStoreErrors(t *testing.T) {
 	expectedErr := errors.New("generic db error")
 	stub := &db.QuerierStub{Error: expectedErr}

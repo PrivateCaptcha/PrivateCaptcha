@@ -215,12 +215,17 @@ func apiErrorHandlerID(r *http.Request) string {
 }
 
 func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Property) *rules.RulesPair {
+	// NOTE: probably a DB would have been a better place for system rules, BUT they will unlikely change very often
+	// and storing them in DB opens a Pandora box of opportunities to screw all users by changing system rules (and
+	// the need to add extra protection against such changes). Therefore system rules are "read-only" in code.
+	rulesPair := &rules.RulesPair{
+		SystemRules: s.SystemRules,
+	}
 	impl := s.BusinessDB.Impl()
 	needsBackfill := false
 
-	var propertyRules *rules.CompiledRules
 	if cached, needsRefresh, err := impl.GetCachedCompiledPropertyRules(ctx, property.ID); err == nil {
-		propertyRules = cached
+		rulesPair.PropertyRules = cached
 		if needsRefresh || cached.IsStale() {
 			needsBackfill = true
 		}
@@ -230,10 +235,9 @@ func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Prop
 		slog.ErrorContext(ctx, "Failed to load cached compiled property rules", "propertyID", property.ID, common.ErrAttr(err))
 	}
 
-	var orgRules *rules.CompiledRules
 	if property.OrgID.Valid {
 		if cached, needsRefresh, err := impl.GetCachedCompiledOrgRules(ctx, property.OrgID.Int32); err == nil {
-			orgRules = cached
+			rulesPair.OrgRules = cached
 			if needsRefresh || cached.IsStale() {
 				needsBackfill = true
 			}
@@ -248,10 +252,7 @@ func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Prop
 		s.Auth.RefreshPropertyRules(ctx, property.ID)
 	}
 
-	return &rules.RulesPair{
-		PropertyRules: propertyRules,
-		OrgRules:      orgRules,
-	}
+	return rulesPair
 }
 
 func (am *AuthMiddleware) RefreshPropertyRules(ctx context.Context, propertyID int32) {

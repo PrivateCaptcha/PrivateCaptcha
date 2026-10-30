@@ -20,7 +20,9 @@ func (s *Server) RegisterTaskHandlers(ctx context.Context) {
 }
 
 func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Property) *rules.RulesPair {
-	return &rules.RulesPair{}
+	return &rules.RulesPair{
+		SystemRules: s.SystemRules,
+	}
 }
 
 func (am *AuthMiddleware) RefreshPropertyRules(ctx context.Context, propertyID int32) {

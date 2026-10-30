@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -169,6 +170,28 @@ func (hm *HeaderMatcher) Matches(ri *RequestInfo) bool {
 		return !result
 	}
 	return result
+}
+
+type ClientSideDetectionMatcher struct {
+	ConditionValueItems      []string
+	ConditionOperatorNegated bool
+}
+
+var _ Matcher = (*ClientSideDetectionMatcher)(nil)
+
+func (m *ClientSideDetectionMatcher) IsStale() bool {
+	return false
+}
+
+func (m *ClientSideDetectionMatcher) Matches(ri *RequestInfo) bool {
+	for _, value := range ri.ClientHints() {
+		for hint := range strings.SplitSeq(value, ",") {
+			if slices.Contains(m.ConditionValueItems, strings.TrimSpace(hint)) {
+				return !m.ConditionOperatorNegated
+			}
+		}
+	}
+	return m.ConditionOperatorNegated
 }
 
 // BotMatcher handles bot detection for user agent

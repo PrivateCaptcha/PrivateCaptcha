@@ -92,6 +92,7 @@ var (
 	HeaderAuthorization         = http.CanonicalHeaderKey("Authorization")
 	HeaderCSRFToken             = http.CanonicalHeaderKey("X-CSRF-Token")
 	HeaderCaptchaVersion        = http.CanonicalHeaderKey("X-PC-Captcha-Version")
+	HeaderClientHints           = http.CanonicalHeaderKey("X-PC-Client-Hints")
 	HeaderCaptchaCompat         = http.CanonicalHeaderKey("X-Captcha-Compat-Version")
 	HeaderAPIKey                = http.CanonicalHeaderKey("X-API-Key")
 	HeaderAccessControlOrigin   = http.CanonicalHeaderKey("Access-Control-Allow-Origin")

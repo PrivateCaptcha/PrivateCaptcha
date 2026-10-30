@@ -78,6 +78,10 @@ func (ri *RequestInfo) HasHeader(name string) bool {
 	return ok
 }
 
+func (ri *RequestInfo) ClientHints() []string {
+	return ri.r.Header.Values(common.HeaderClientHints)
+}
+
 func (ri *RequestInfo) Domain() string {
 	if ri.domain == nil {
 		var d string
