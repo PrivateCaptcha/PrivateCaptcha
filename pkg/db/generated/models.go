@@ -458,13 +458,14 @@ func (ns NullRuleConditionOperator) Value() (driver.Value, error) {
 type RuleConditionProperty string
 
 const (
-	RuleConditionPropertyUserAgent      RuleConditionProperty = "user_agent"
-	RuleConditionPropertyIPAddress      RuleConditionProperty = "ip_address"
-	RuleConditionPropertyCountryCode    RuleConditionProperty = "country_code"
-	RuleConditionPropertyDomain         RuleConditionProperty = "domain"
-	RuleConditionPropertyHTTPHeaderName RuleConditionProperty = "http_header_name"
-	RuleConditionPropertyAlways         RuleConditionProperty = "always"
-	RuleConditionPropertyBrowserVersion RuleConditionProperty = "browser_version"
+	RuleConditionPropertyUserAgent           RuleConditionProperty = "user_agent"
+	RuleConditionPropertyIPAddress           RuleConditionProperty = "ip_address"
+	RuleConditionPropertyCountryCode         RuleConditionProperty = "country_code"
+	RuleConditionPropertyDomain              RuleConditionProperty = "domain"
+	RuleConditionPropertyHTTPHeaderName      RuleConditionProperty = "http_header_name"
+	RuleConditionPropertyAlways              RuleConditionProperty = "always"
+	RuleConditionPropertyBrowserVersion      RuleConditionProperty = "browser_version"
+	RuleConditionPropertyClientSideDetection RuleConditionProperty = "client_side_detection"
 )
 
 func (e *RuleConditionProperty) Scan(src interface{}) error {

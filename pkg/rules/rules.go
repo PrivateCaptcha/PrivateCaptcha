@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -27,7 +28,10 @@ var (
 	ErrIPNonSingletonPrefix         = errors.New("equals/in operator requires single IP addresses, not CIDR ranges")
 	ErrUnsupportedConditionOperator = errors.New("unsupported condition operator for rule")
 	ErrInvalidBrowserVersionRule    = errors.New("invalid browser version rule")
+	ErrInvalidClientSideDetection   = errors.New("invalid client-side detection value")
 )
+
+var ClientSideDetections = []string{"automation"}
 
 const (
 	defaultSeparator   = ","
@@ -122,6 +126,10 @@ func (cr *CompiledRules) IsStale() bool {
 	return cr.isStale
 }
 
+func (cr *CompiledRules) Empty() bool {
+	return cr == nil || len(cr.rules) == 0
+}
+
 func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) (difficulty.Property, bool) {
 	if (cr == nil) || (len(cr.rules) == 0) || (ri == nil) {
 		return p, false
@@ -173,10 +181,10 @@ func (cr *CompiledRules) checkRequestBlocked(ri *RequestInfo) (blocked bool, ter
 	return isBlockedByRules(cr.rules, ri)
 }
 
-// RulesPair combines property-level and org-level compiled rules
-// without additional allocations. Property rules run first, but cannot stop
-// organization rules managed by the organization owner.
+// RulesPair applies property, organization, and system rules, in that order.
+// Terminal rules cannot stop subsequent rule sources.
 type RulesPair struct {
+	SystemRules   *CompiledRules
 	PropertyRules *CompiledRules
 	OrgRules      *CompiledRules
 }
@@ -186,16 +194,9 @@ func (rp *RulesPair) Apply(ri *RequestInfo, p difficulty.Property) difficulty.Pr
 		return p
 	}
 
-	current := p
-	propResult, _ := rp.PropertyRules.Apply(ri, current)
-	if propResult != current {
-		current = propResult
-	}
-
-	orgResult, _ := rp.OrgRules.Apply(ri, current)
-	if orgResult != current {
-		current = orgResult
-	}
+	current, _ := rp.PropertyRules.Apply(ri, p)
+	current, _ = rp.OrgRules.Apply(ri, current)
+	current, _ = rp.SystemRules.Apply(ri, current)
 
 	return current
 }
@@ -205,21 +206,18 @@ func (rp *RulesPair) IsRequestBlocked(ri *RequestInfo) bool {
 		return false
 	}
 
-	blocked, _ := rp.PropertyRules.checkRequestBlocked(ri)
-	if blocked {
-		return true
-	}
-
-	return rp.OrgRules.IsRequestBlocked(ri)
+	return rp.PropertyRules.IsRequestBlocked(ri) ||
+		rp.OrgRules.IsRequestBlocked(ri) ||
+		rp.SystemRules.IsRequestBlocked(ri)
 }
 
-// HasBlockRules reports whether the property or org rules contain any enabled
+// HasBlockRules reports whether the system, property, or org rules contain any enabled
 // block-request rules. See CompiledRules.HasBlockRules for details.
 func (rp *RulesPair) HasBlockRules() bool {
 	if rp == nil {
 		return false
 	}
-	return rp.PropertyRules.HasBlockRules() || rp.OrgRules.HasBlockRules()
+	return rp.SystemRules.HasBlockRules() || rp.PropertyRules.HasBlockRules() || rp.OrgRules.HasBlockRules()
 }
 
 type overrideProperty struct {
@@ -416,6 +414,7 @@ func init() {
 	gob.Register(&StringMatcher{})
 	gob.Register(&IPMatcher{})
 	gob.Register(&HeaderMatcher{})
+	gob.Register(&ClientSideDetectionMatcher{})
 	gob.Register(&BotMatcher{})
 	gob.Register(&BrowserVersionMatcher{})
 	gob.Register(&AlwaysMatcher{})
@@ -512,6 +511,27 @@ func BuildHeaderMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 	return hm, nil
 }
 
+func BuildClientSideDetectionMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
+	if rule.ConditionOperator != dbgen.RuleConditionOperatorIn {
+		return nil, ErrUnsupportedConditionOperator
+	}
+	separator := defaultSeparator
+	if rule.ConditionValueSeparator.Valid && rule.ConditionValueSeparator.String != "" {
+		separator = rule.ConditionValueSeparator.String
+	}
+	items := strings.Split(rule.ConditionValueStr.String, separator)
+	for i, item := range items {
+		items[i] = strings.TrimSpace(item)
+		if !slices.Contains(ClientSideDetections, items[i]) {
+			return nil, ErrInvalidClientSideDetection
+		}
+	}
+	return &ClientSideDetectionMatcher{
+		ConditionValueItems:      items,
+		ConditionOperatorNegated: rule.ConditionOperatorNegated,
+	}, nil
+}
+
 func buildAlwaysMatcher(_ *dbgen.DifficultyRule) (Matcher, error) {
 	return &AlwaysMatcher{}, nil
 }
@@ -545,6 +565,7 @@ func (rc *RulesCompiler) registerDefaultFactories() {
 	rc.factories[string(dbgen.RuleConditionPropertyDomain)] = BuildStringMatcher
 	rc.factories[string(dbgen.RuleConditionPropertyIPAddress)] = BuildIPMatcher
 	rc.factories[string(dbgen.RuleConditionPropertyHTTPHeaderName)] = BuildHeaderMatcher
+	rc.factories[string(dbgen.RuleConditionPropertyClientSideDetection)] = BuildClientSideDetectionMatcher
 	rc.factories[string(dbgen.RuleConditionPropertyAlways)] = buildAlwaysMatcher
 	rc.factories[string(dbgen.RuleConditionPropertyBrowserVersion)] = rc.buildBrowserVersionMatcher
 }

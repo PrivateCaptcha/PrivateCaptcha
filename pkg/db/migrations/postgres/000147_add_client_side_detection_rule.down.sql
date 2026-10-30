@@ -1,0 +1,2 @@
+-- PostgreSQL does not support removing values from enum types.
+-- The 'client_side_detection' value cannot be rolled back automatically.

@@ -41,6 +41,7 @@
                 <select name="{{ .Const.ConditionProperty }}" id="{{ .Const.ConditionProperty }}" x-model="conditionProperty" class="w-full pc-internal-form-select">
                     {{ with .Const.ConditionPropertyUserAgent }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>User Agent</option>{{ end }}
                     {{ with .Const.ConditionPropertyBrowserVersion }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Browser version</option>{{ end }}
+                    {{ with .Const.ConditionPropertyClientSideDetection }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Client-side detection</option>{{ end }}
                     {{ with .Const.ConditionPropertyIPAddress }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>IP Address</option>{{ end }}
                     {{ with .Const.ConditionPropertyCountryCode }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Country</option>{{ end }}
                     {{ if and .Params.Property .Params.Property.HasDomain }}{{ with .Const.ConditionPropertyDomain }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Domain</option>{{ end }}{{ end }}
@@ -99,6 +100,21 @@
         </div>
 
         <input type="hidden" name="{{ .Const.ConditionValue }}" :value="activeConditionValue" />
+
+        <fieldset x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyClientSideDetection }}'">
+            <legend class="pc-internal-form-label">Detections</legend>
+            {{ range .Const.ClientSideDetections }}
+            <div class="mt-2 flex items-center gap-3">
+                <div class="group grid size-4 shrink-0 grid-cols-1">
+                    <input id="clientDetection-{{ . }}" type="checkbox" value="{{ . }}" x-model="selectedClientSideDetections" class="col-start-1 row-start-1 pc-internal-form-checkbox" />
+                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                        <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </div>
+                <label for="clientDetection-{{ . }}" class="text-sm text-pc-grey-950">{{ . }}</label>
+            </div>
+            {{ end }}
+        </fieldset>
 
         <div x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyCountryCode }}'">
             <label class="pc-internal-form-label">Countries</label>

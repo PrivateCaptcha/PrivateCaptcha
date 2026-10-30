@@ -121,8 +121,12 @@ func DifficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 		conditionProperty = titleCaser.String(strings.ReplaceAll(string(rule.ConditionProperty), "_", " "))
 	}
 
+	id := ""
+	if rule.ID > 0 {
+		id = hasher.Encrypt(int(rule.ID))
+	}
 	return &DifficultyRuleModel{
-		ID:                hasher.Encrypt(int(rule.ID)),
+		ID:                id,
 		Name:              rule.Name,
 		Enabled:           rule.Enabled,
 		ConditionProperty: conditionProperty,
@@ -131,7 +135,7 @@ func DifficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 		ActionAction:      actionAction,
 		ActionProperty:    actionProperty,
 		ActionValue:       actionValue,
-		CanEdit:           canEdit,
+		CanEdit:           canEdit && rule.ID > 0,
 		Terminal:          rule.Terminal,
 	}
 }

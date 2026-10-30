@@ -114,6 +114,7 @@ type Server struct {
 	NoticeProvider       db.PropertyNoticeProvider
 	EdgeTokens           *EdgeTokenSigner
 	GatePage             *GatePage
+	SystemRules          *rules.CompiledRules
 }
 
 type apiKeyOwnerSource struct {
@@ -220,6 +221,8 @@ func (s *Server) Init(ctx context.Context, config ServerConfig, workers *sync.Wa
 	s.Auth.StartBackfill(config.AuthBackfillDelay, config.BackpressureTimeout, workers)
 	s.RegisterTaskHandlers(ctx)
 
+	s.initSystemRules(ctx)
+
 	baseVerifyCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
 	var cancelVerifyCtx context.Context
 	cancelVerifyCtx, s.VerifyLogCancel = context.WithCancel(context.WithValue(baseVerifyCtx, common.TraceIDContextKey, "flush_verify_log"))
@@ -270,7 +273,7 @@ func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) 
 		// NOTE: due to the implementation of rs/cors, we need not to set "*" as AllowOrigin as this will ruin the response
 		// (in case of "*" allowed origin, response contains the same, while we want to restrict the response to domain)
 		AllowOriginVaryRequestFunc: s.Auth.originAllowed,
-		AllowedHeaders:             []string{common.HeaderCaptchaVersion, "accept", "content-type", "x-requested-with"},
+		AllowedHeaders:             []string{common.HeaderCaptchaVersion, common.HeaderClientHints, "accept", "content-type", "x-requested-with"},
 		ExposedHeaders:             []string{common.HeaderWidgetNotice},
 		AllowedMethods:             []string{http.MethodGet, http.MethodPost, http.MethodOptions},
 		AllowPrivateNetwork:        true,

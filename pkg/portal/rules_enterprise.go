@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -217,6 +218,24 @@ func countryCodeConditionParser(conditionOperator, conditionValue, _ string) (st
 	return conditionValue, separator, common.StatusOK
 }
 
+func clientSideDetectionConditionParser(conditionOperator, conditionValue, _ string) (string, string, common.StatusCode) {
+	const separator = ","
+	if conditionOperator != string(dbgen.RuleConditionOperatorIn) {
+		return "", "", common.StatusRuleConditionOperatorInvalid
+	}
+	if conditionValue == "" {
+		return "", "", common.StatusRuleConditionValueRequired
+	}
+	values := strings.Split(conditionValue, separator)
+	for i, value := range values {
+		values[i] = strings.TrimSpace(value)
+		if !slices.Contains(rules.ClientSideDetections, values[i]) {
+			return "", "", common.StatusRuleConditionValueInvalid
+		}
+	}
+	return strings.Join(values, separator), separator, common.StatusOK
+}
+
 func browserVersionConditionParser(conditionOperator, conditionValue, _ string) (string, string, common.StatusCode) {
 	if conditionOperator != string(dbgen.RuleConditionOperatorMore) {
 		return "", "", common.StatusRuleConditionOperatorInvalid
@@ -412,6 +431,11 @@ func NewRuleRegistry() *RuleRegistry {
 				DisplayName:    "Outdated browser version",
 				ValueFormatter: browserVersionConditionValueFormatter,
 				valueType:      conditionValueInteger,
+			},
+			string(dbgen.RuleConditionPropertyClientSideDetection): ConditionRegistration{
+				Parser:         clientSideDetectionConditionParser,
+				DisplayName:    "Client-side detection",
+				ValueFormatter: commaSeparatedConditionValueFormatter,
 			},
 		},
 		actions: map[string]ActionFormParser{

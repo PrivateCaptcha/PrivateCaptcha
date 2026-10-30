@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,13 +21,309 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/medama-io/go-useragent"
 )
 
 const (
 	testPropertyDomain = "example.com"
 )
+
+type propertyLevelDifficulty struct{}
+
+func (propertyLevelDifficulty) Difficulty(_ *leakybucket.AddResult, _ *leakybucket.AddResult, property difficulty.Property, _ float64) uint8 {
+	return uint8(property.Level())
+}
+
+func newStubSystemRules(ctx context.Context) *rules.CompiledRules {
+	return rules.NewRulesCompiler(nil).Compile(ctx, []*dbgen.DifficultyRule{{
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyClientSideDetection,
+		ConditionOperator: dbgen.RuleConditionOperatorIn,
+		ConditionValueStr: db.Text("automation"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       300,
+	}})
+}
+
+func TestPuzzleHandlerDefaultRules(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		hints      string
+		custom     bool
+		orgRule    bool
+		block      bool
+		nonmatch   bool
+		cold       bool
+		wantLevel  uint8
+		wantRuleID int32
+	}{
+		{
+			name:      "AutomationFallback",
+			hints:     "automation",
+			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
+		},
+		{
+			name:      "NoHints",
+			wantLevel: uint8(common.DifficultyLevelMedium),
+		},
+		{
+			name:      "UnknownHint",
+			hints:     "unknown",
+			wantLevel: uint8(common.DifficultyLevelMedium),
+		},
+		{
+			name:      "PropertyRule",
+			hints:     "automation",
+			custom:    true,
+			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
+		},
+		{
+			name:       "PropertyRuleWithoutHints",
+			custom:     true,
+			wantLevel:  uint8(common.DifficultyLevelMedium),
+			wantRuleID: 42,
+		},
+		{
+			name:      "OrganizationRule",
+			hints:     "automation",
+			custom:    true,
+			orgRule:   true,
+			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
+		},
+		{
+			name:      "NonmatchingPropertyRule",
+			hints:     "automation",
+			custom:    true,
+			nonmatch:  true,
+			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
+		},
+		{
+			name:      "NonmatchingOrganizationRule",
+			hints:     "automation",
+			custom:    true,
+			orgRule:   true,
+			nonmatch:  true,
+			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
+		},
+		{
+			name:   "Blocked",
+			hints:  "automation",
+			custom: true,
+			block:  true,
+		},
+		{
+			name:    "OrganizationBlock",
+			hints:   "automation",
+			custom:  true,
+			orgRule: true,
+			block:   true,
+		},
+		{
+			name:      "ColdProperty",
+			hints:     "automation",
+			cold:      true,
+			wantLevel: uint8(common.DifficultyLevelMedium),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			property := &dbgen.Property{
+				ID: 1,
+				ExternalID: pgtype.UUID{
+					Valid: true,
+					Bytes: [16]byte{1},
+				},
+				OrgID:            db.Int(2),
+				OrgOwnerID:       db.Int(3),
+				Level:            db.Int2(int16(common.DifficultyLevelMedium)),
+				Growth:           dbgen.DifficultyGrowthMedium,
+				ValidityInterval: puzzle.MaxValidityPeriod,
+			}
+			cache := db.NewStaticCache[db.CacheKey, any](10, &db.CacheMissingValue{})
+			if err := cache.SetMissing(ctx, db.CompiledPropertyRulesCacheKey(property.ID)); err != nil {
+				t.Fatal(err)
+			}
+			if err := cache.SetMissing(ctx, db.CompiledOrgRulesCacheKey(property.OrgID.Int32)); err != nil {
+				t.Fatal(err)
+			}
+			parser := useragent.NewParser()
+			if tc.custom {
+				rule := &dbgen.DifficultyRule{
+					ID:                42,
+					Enabled:           true,
+					ConditionProperty: dbgen.RuleConditionPropertyAlways,
+					ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
+					ActionValue:       1,
+					Terminal:          true,
+				}
+				if tc.nonmatch {
+					rule.ConditionProperty = dbgen.RuleConditionPropertyClientSideDetection
+					rule.ConditionOperator = dbgen.RuleConditionOperatorIn
+					rule.ConditionOperatorNegated = true
+					rule.ConditionValueStr = db.Text("automation")
+				}
+				if tc.block {
+					rule.ActionProperty = dbgen.RuleActionPropertyHTTPRequest
+				}
+				key := db.CompiledPropertyRulesCacheKey(property.ID)
+				if tc.orgRule {
+					key = db.CompiledOrgRulesCacheKey(property.OrgID.Int32)
+				}
+				compiled := rules.NewRulesCompiler(parser).Compile(ctx, []*dbgen.DifficultyRule{rule})
+				if err := cache.Set(ctx, key, compiled); err != nil {
+					t.Fatal(err)
+				}
+			}
+			memory := db.NewMemoryTimeSeries()
+			capture := &capturingTimeSeries{
+				TimeSeriesStore: memory,
+				accessRecords:   make(chan *common.AccessRecord, 1),
+			}
+			levels := difficulty.NewLevelsEx(capture, propertyLevelDifficulty{}, 1, time.Minute)
+			levels.Init(time.Hour, time.Hour, time.Second, &sync.WaitGroup{})
+			defer levels.Stop()
+			config := testsConfigStore()
+			verifier := NewVerifier(config, nil, config.Get(common.FingerprintHeaderKey), parser)
+			if err := verifier.Update(ctx); err != nil {
+				t.Fatal(err)
+			}
+			srv := &Server{
+				BusinessDB:  db.NewBusinessEx(nil, cache),
+				Verifier:    verifier,
+				Levels:      levels,
+				Metrics:     monitoring.NewStub(),
+				SystemRules: newStubSystemRules(ctx),
+			}
+			if !tc.cold {
+				ctx = context.WithValue(ctx, common.PropertyContextKey, property)
+			}
+			ctx = context.WithValue(ctx, common.SitekeyContextKey, db.UUIDToSiteKey(property.ExternalID))
+			ctx = context.WithValue(ctx, common.RateLimitKeyContextKey, netip.MustParseAddr("192.0.2.1"))
+			req := httptest.NewRequest(http.MethodGet, "/puzzle", nil).WithContext(ctx)
+			req.Header.Set(common.HeaderClientHints, tc.hints)
+			w := httptest.NewRecorder()
+			srv.puzzleHandler(w, req)
+			if tc.block {
+				if w.Code != http.StatusForbidden {
+					t.Fatalf("status = %d, want forbidden", w.Code)
+				}
+				return
+			}
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, want OK", w.Code)
+			}
+			issued, _, err := parsePuzzle(w.Result())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if issued.Difficulty() != tc.wantLevel {
+				t.Errorf("difficulty = %d, want %d", issued.Difficulty(), tc.wantLevel)
+			}
+			if tc.cold {
+				return
+			}
+			select {
+			case record := <-capture.accessRecords:
+				if record.RuleID != tc.wantRuleID {
+					t.Errorf("access rule ID = %d, want %d", record.RuleID, tc.wantRuleID)
+				}
+				if err := memory.WriteAccessLogBatch(ctx, []*common.AccessRecord{record}); err != nil {
+					t.Fatal(err)
+				}
+				stats, err := memory.RetrievePropertyRuleStatsByPeriod(ctx, 3, 2, 1, common.TimePeriodWeek)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if tc.wantRuleID == 0 && len(stats) != 0 {
+					t.Fatalf("fallback counted in rule statistics: %+v", stats)
+				}
+				if tc.wantRuleID > 0 && len(stats) == 0 {
+					t.Fatal("custom rule missing from statistics")
+				}
+			case <-time.After(time.Second):
+				t.Fatal("timed out waiting for access record")
+			}
+		})
+	}
+}
+
+func TestRetrievePropertyRulesSystemRules(t *testing.T) {
+	compiler := rules.NewRulesCompiler(useragent.NewParser())
+	propertyRules := compiler.Compile(t.Context(), []*dbgen.DifficultyRule{{
+		ID:                42,
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyAlways,
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
+		ActionValue:       1,
+	}})
+	orgRules := compiler.Compile(t.Context(), []*dbgen.DifficultyRule{{
+		ID:                43,
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyAlways,
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
+		ActionValue:       2,
+	}})
+	for _, tc := range []struct {
+		name          string
+		propertyRules *rules.CompiledRules
+		orgRules      *rules.CompiledRules
+	}{
+		{
+			name: "NoCustomRules",
+		},
+		{
+			name:          "PropertyRules",
+			propertyRules: propertyRules,
+		},
+		{
+			name:     "OrganizationRules",
+			orgRules: orgRules,
+		},
+		{
+			name:          "BothCustomRuleSources",
+			propertyRules: propertyRules,
+			orgRules:      orgRules,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			cache := db.NewStaticCache[db.CacheKey, any](10, &db.CacheMissingValue{})
+			for key, compiled := range map[db.CacheKey]*rules.CompiledRules{
+				db.CompiledPropertyRulesCacheKey(1): tc.propertyRules,
+				db.CompiledOrgRulesCacheKey(2):      tc.orgRules,
+			} {
+				var err error
+				if compiled == nil {
+					err = cache.SetMissing(ctx, key)
+				} else {
+					err = cache.Set(ctx, key, compiled)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			srv := &Server{
+				BusinessDB:  db.NewBusinessEx(nil, cache),
+				SystemRules: newStubSystemRules(ctx),
+			}
+			pair := srv.retrievePropertyRules(ctx, &dbgen.Property{
+				ID:    1,
+				OrgID: db.Int(2),
+			})
+			if pair.SystemRules.Empty() {
+				t.Fatal("system rules are missing")
+			}
+			if pair.PropertyRules != tc.propertyRules || pair.OrgRules != tc.orgRules {
+				t.Fatal("system rules replaced a custom rule source")
+			}
+		})
+	}
+}
 
 func createArgonAPIProperty(t *testing.T) (*dbgen.User, *dbgen.Organization, *dbgen.Property, string) {
 	t.Helper()

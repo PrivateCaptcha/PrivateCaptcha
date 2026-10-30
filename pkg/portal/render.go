@@ -11,6 +11,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
@@ -140,6 +141,9 @@ type RenderConstants struct {
 	Body                            string
 	Query                           string
 	SearchEndpoint                  string
+
+	ConditionPropertyClientSideDetection string
+	ClientSideDetections                 []string
 }
 
 func NewRenderConstants() *RenderConstants {
@@ -269,6 +273,9 @@ func NewRenderConstants() *RenderConstants {
 		Body:                            common.ParamBody,
 		Query:                           common.ParamQuery,
 		SearchEndpoint:                  common.SearchEndpoint,
+
+		ConditionPropertyClientSideDetection: string(dbgen.RuleConditionPropertyClientSideDetection),
+		ClientSideDetections:                 rules.ClientSideDetections,
 	}
 }
 

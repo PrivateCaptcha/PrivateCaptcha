@@ -1,6 +1,7 @@
 'use strict';
 
 import { decode } from 'base64-arraybuffer';
+import { getClientHints } from './hints.js';
 import { readUInt32LE } from './puzzle.utils.js';
 
 const PUZZLE_BUFFER_LENGTH = 128;
@@ -23,7 +24,13 @@ export async function getPuzzle(endpoint, sitekey, options = {}) {
     try {
         const separator = endpoint.includes('?') ? '&' : '?';
         return await fetchWithBackoff(`${endpoint}${separator}sitekey=${encodeURIComponent(sitekey)}`, {
-            fetchOptions: { headers: [["x-pc-captcha-version", globalThis.__privateCaptchaExtended === true ? "2" : "1"]], mode: "cors" },
+            fetchOptions: {
+                headers: [
+                    ["x-pc-captcha-version", globalThis.__privateCaptchaExtended === true ? "2" : "1"],
+                    ["x-pc-client-hints", getClientHints().join(',')],
+                ],
+                mode: "cors",
+            },
             maxAttempts: options.attempts ?? 5,
             initialDelay: 800,
             maxDelay: 6000,
