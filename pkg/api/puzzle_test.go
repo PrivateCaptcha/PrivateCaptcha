@@ -71,6 +71,16 @@ func TestPuzzleHandlerDefaultRules(t *testing.T) {
 			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
 		},
 		{
+			name:      "BotFallback",
+			hints:     "bot",
+			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
+		},
+		{
+			name:      "CombinedDetectionFallback",
+			hints:     "automation,bot",
+			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
+		},
+		{
 			name:      "NoHints",
 			wantLevel: uint8(common.DifficultyLevelMedium),
 		},
@@ -245,7 +255,7 @@ func TestPuzzleHandlerDefaultRules(t *testing.T) {
 				Verifier:    verifier,
 				Levels:      levels,
 				Metrics:     monitoring.NewStub(),
-				SystemRules: newStubSystemRules(ctx),
+				SystemRules: newSystemRulesServer(t).SystemRules,
 			}
 			if !tc.cold {
 				ctx = context.WithValue(ctx, common.PropertyContextKey, property)
@@ -253,6 +263,7 @@ func TestPuzzleHandlerDefaultRules(t *testing.T) {
 			ctx = context.WithValue(ctx, common.SitekeyContextKey, db.UUIDToSiteKey(property.ExternalID))
 			ctx = context.WithValue(ctx, common.RateLimitKeyContextKey, netip.MustParseAddr("192.0.2.1"))
 			req := httptest.NewRequest(http.MethodGet, "/puzzle", nil).WithContext(ctx)
+			req.Header.Set("User-Agent", normalUserAgent)
 			req.Header.Set(common.HeaderClientHints, tc.hints)
 			w := httptest.NewRecorder()
 			srv.puzzleHandler(w, req)

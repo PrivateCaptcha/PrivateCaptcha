@@ -12,6 +12,7 @@ if (typeof window !== "undefined" && window.customElements && !window.customElem
 const PUZZLE_ENDPOINT_URL = 'https://api.privatecaptcha.com/puzzle';
 const PUZZLE_EU_ENDPOINT_URL = 'https://api.eu.privatecaptcha.com/puzzle';
 const PUZZLE_EXPIRATION_GRACE_MILLIS = 5000;
+const BOT_DETECTION_TIMEOUT_MILLIS = 500;
 export const RECAPTCHA_COMPAT = 'recaptcha';
 
 
@@ -132,6 +133,7 @@ export class CaptchaWidget {
             theme: this._element.dataset["theme"] || "light",
             styles: this._element.dataset["styles"] || "",
             storeVariable: this._element.dataset["storeVariable"] || null,
+            isBotCallback: this._element.dataset["isBotCallback"] || null,
         }, options);
 
         if ('auto' === this._options.lang) {
@@ -180,8 +182,11 @@ export class CaptchaWidget {
         try {
             this.setState(STATE_LOADING);
             this.setProgressState(STATE_LOADING);
+            const isBot = this._options.isBotCallback ? await this._detectBot() : false;
+            // Skip the request if the widget was reset or reinitialized while awaiting detection.
+            if (generation !== this._initGeneration || this._state !== STATE_LOADING) { return; }
             this.trace(`fetching puzzle. sitekey=${sitekey}`);
-            const puzzleResult = await getPuzzle(this._options.puzzleEndpoint, sitekey);
+            const puzzleResult = await getPuzzle(this._options.puzzleEndpoint, sitekey, { isBot });
             if (generation !== this._initGeneration || this._state !== STATE_LOADING) { return; }
             this._notice = puzzleResult.notice;
             this._puzzle = new Puzzle(puzzleResult.data);
@@ -214,6 +219,31 @@ export class CaptchaWidget {
             this.ensureNoSolutionField();
             this.setProgressState(STATE_EMPTY);
             this.signalErrored();
+        }
+    }
+
+    async _detectBot() {
+        let timeout;
+        try {
+            let callback = this._options.isBotCallback;
+            if (typeof callback === 'string') {
+                callback = window[callback];
+            }
+            if (typeof callback !== 'function') {
+                throw new Error('isBotCallback is not a function');
+            }
+            const result = await Promise.race([
+                Promise.resolve().then(() => callback(this)),
+                new Promise((_, reject) => {
+                    timeout = setTimeout(() => reject(new Error('Bot detection timed out')), BOT_DETECTION_TIMEOUT_MILLIS);
+                }),
+            ]);
+            return !!result;
+        } catch (error) {
+            console.warn('[privatecaptcha] Error in isBotCallback', error);
+            return false;
+        } finally {
+            clearTimeout(timeout);
         }
     }
 

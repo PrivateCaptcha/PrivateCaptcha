@@ -212,11 +212,11 @@ func (s *Server) initSystemRules(ctx context.Context) {
 	s.SystemRules = compiler.Compile(ctx, []*dbgen.DifficultyRule{
 		{
 			ID:                0, // Excluded from rule statistics
-			Name:              "Client-side automation detection",
+			Name:              "Client-side detection",
 			Enabled:           true,
 			ConditionProperty: dbgen.RuleConditionPropertyClientSideDetection,
 			ConditionOperator: dbgen.RuleConditionOperatorIn,
-			ConditionValueStr: db.Text("automation"),
+			ConditionValueStr: db.Text("automation,bot"),
 			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
 			ActionValue:       300,
 			Terminal:          false,

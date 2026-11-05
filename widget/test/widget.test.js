@@ -10,6 +10,7 @@ import './benchmark.test.js';
 import './workerspool.test.js';
 import './hints.test.js';
 import './puzzle.test.js';
+import './bot-detection.test.js';
 import { createWorkerSolver as createBlake2bWorkerSolver } from '../js/worker-solver-blake2b.js';
 import { blake2b, blake2bInit, blake2bUpdate, blake2bFinal } from 'blakejs/blake2b.js';
 

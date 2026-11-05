@@ -23,11 +23,13 @@ const DEFAULT_GLOBAL_TIMEOUT_MS = 30000;
 export async function getPuzzle(endpoint, sitekey, options = {}) {
     try {
         const separator = endpoint.includes('?') ? '&' : '?';
+        const hints = getClientHints();
+        if (options.isBot) { hints.push('bot'); }
         return await fetchWithBackoff(`${endpoint}${separator}sitekey=${encodeURIComponent(sitekey)}`, {
             fetchOptions: {
                 headers: [
                     ["x-pc-captcha-version", globalThis.__privateCaptchaExtended === true ? "2" : "1"],
-                    ["x-pc-client-hints", getClientHints().join(',')],
+                    ["x-pc-client-hints", hints.join(',')],
                 ],
                 mode: "cors",
             },

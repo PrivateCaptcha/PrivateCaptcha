@@ -82,64 +82,104 @@ func applyRule(r rule, p difficulty.Property) *overrideProperty {
 }
 
 func TestClientSideDetectionRule(t *testing.T) {
+	for _, detection := range []string{"automation", "bot"} {
+		t.Run(detection, func(t *testing.T) {
+			for _, negated := range []bool{false, true} {
+				dbRule := &dbgen.DifficultyRule{
+					Enabled:           true,
+					ConditionProperty: dbgen.RuleConditionPropertyClientSideDetection,
+					ConditionOperator: dbgen.RuleConditionOperatorIn,
+					ConditionValueStr: pgtype.Text{
+						String: detection,
+						Valid:  true,
+					},
+					ConditionValueSeparator: pgtype.Text{
+						String: ",",
+						Valid:  true,
+					},
+					ConditionOperatorNegated: negated,
+					ActionProperty:           dbgen.RuleActionPropertyHTTPRequest,
+				}
+				compiled, err := testCompiler.CompileRule(t.Context(), dbRule)
+				if err != nil {
+					t.Fatal(err)
+				}
+				original := NewCompiledRules([]rule{compiled})
+				var buf bytes.Buffer
+				if err := gob.NewEncoder(&buf).Encode(original); err != nil {
+					t.Fatal(err)
+				}
+				var restored CompiledRules
+				if err := gob.NewDecoder(&buf).Decode(&restored); err != nil {
+					t.Fatal(err)
+				}
+				if restored.IsStale() {
+					t.Fatal("restored client-side detection rule is stale")
+				}
+				for _, tc := range []struct {
+					hints []string
+					match bool
+				}{
+					{nil, false},
+					{[]string{""}, false},
+					{[]string{"unknown"}, false},
+					{[]string{detection + "s"}, false},
+					{[]string{"not-" + detection}, false},
+					{[]string{detection}, true},
+					{[]string{"unknown, " + detection + " ,other"}, true},
+					{[]string{"unknown", detection}, true},
+					{[]string{"automation,bot"}, true},
+				} {
+					req := httptest.NewRequest("GET", "/", nil)
+					for _, value := range tc.hints {
+						req.Header.Add(common.HeaderClientHints, value)
+					}
+					ri := NewRequestInfo(req, "")
+					want := tc.match
+					if negated {
+						want = !want
+					}
+					for _, rules := range []*CompiledRules{original, &restored} {
+						if got := rules.IsRequestBlocked(ri); got != want {
+							t.Errorf("hints=%q negated=%v: blocked=%v, want %v", tc.hints, negated, got, want)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestClientSideDetectionRuleMultipleDetections(t *testing.T) {
 	for _, negated := range []bool{false, true} {
-		dbRule := &dbgen.DifficultyRule{
-			Enabled:           true,
-			ConditionProperty: dbgen.RuleConditionPropertyClientSideDetection,
-			ConditionOperator: dbgen.RuleConditionOperatorIn,
-			ConditionValueStr: pgtype.Text{
-				String: "automation",
-				Valid:  true,
-			},
-			ConditionValueSeparator: pgtype.Text{
-				String: ",",
-				Valid:  true,
-			},
+		compiled, err := testCompiler.CompileRule(t.Context(), &dbgen.DifficultyRule{
+			ConditionProperty:        dbgen.RuleConditionPropertyClientSideDetection,
+			ConditionOperator:        dbgen.RuleConditionOperatorIn,
 			ConditionOperatorNegated: negated,
-			ActionProperty:           dbgen.RuleActionPropertyHTTPRequest,
-		}
-		compiled, err := testCompiler.CompileRule(t.Context(), dbRule)
+			ConditionValueStr: pgtype.Text{
+				String: "automation, bot",
+				Valid:  true,
+			},
+			ActionProperty: dbgen.RuleActionPropertyHTTPRequest,
+		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		original := NewCompiledRules([]rule{compiled})
-		var buf bytes.Buffer
-		if err := gob.NewEncoder(&buf).Encode(original); err != nil {
-			t.Fatal(err)
-		}
-		var restored CompiledRules
-		if err := gob.NewDecoder(&buf).Decode(&restored); err != nil {
-			t.Fatal(err)
-		}
-		if restored.IsStale() {
-			t.Fatal("restored client-side detection rule is stale")
-		}
 		for _, tc := range []struct {
-			hints []string
+			hints string
 			match bool
 		}{
-			{nil, false},
-			{[]string{""}, false},
-			{[]string{"unknown"}, false},
-			{[]string{"automations"}, false},
-			{[]string{"not-automation"}, false},
-			{[]string{"automation"}, true},
-			{[]string{"unknown, automation ,other"}, true},
-			{[]string{"unknown", "automation"}, true},
+			{"", false},
+			{"unknown", false},
+			{"bots,not-bot", false},
+			{"automation", true},
+			{"bot", true},
+			{"automation,bot", true},
 		} {
 			req := httptest.NewRequest("GET", "/", nil)
-			for _, value := range tc.hints {
-				req.Header.Add(common.HeaderClientHints, value)
-			}
-			ri := NewRequestInfo(req, "")
-			want := tc.match
-			if negated {
-				want = !want
-			}
-			for _, rules := range []*CompiledRules{original, &restored} {
-				if got := rules.IsRequestBlocked(ri); got != want {
-					t.Errorf("hints=%q negated=%v: blocked=%v, want %v", tc.hints, negated, got, want)
-				}
+			req.Header.Set(common.HeaderClientHints, tc.hints)
+			if got := compiled.Matches(NewRequestInfo(req, "")); got != (tc.match != negated) {
+				t.Errorf("hints=%q negated=%v: match=%v", tc.hints, negated, got)
 			}
 		}
 	}

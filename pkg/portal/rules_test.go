@@ -212,7 +212,7 @@ func TestParseClientSideDetectionRuleForm(t *testing.T) {
 				common.ParamName:              {"Client detection"},
 				common.ParamConditionProperty: {string(dbgen.RuleConditionPropertyClientSideDetection)},
 				common.ParamConditionOperator: {operator},
-				common.ParamConditionValue:    {" automation "},
+				common.ParamConditionValue:    {" automation , bot "},
 				common.ParamActionProperty:    {string(dbgen.RuleActionPropertyHTTPRequest)},
 			}
 			req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(form.Encode()))
@@ -233,11 +233,11 @@ func TestParseClientSideDetectionRuleForm(t *testing.T) {
 			if params.ConditionOperatorNegated != (operator == "in_negated") {
 				t.Errorf("unexpected negation: %v", params.ConditionOperatorNegated)
 			}
-			if params.ConditionValueStr != db.Text("automation") || params.ConditionValueSeparator != db.Text(",") || params.ConditionValueInt.Valid {
+			if params.ConditionValueStr != db.Text("automation,bot") || params.ConditionValueSeparator != db.Text(",") || params.ConditionValueInt.Valid {
 				t.Errorf("unexpected condition values: %+v", params)
 			}
-			if renderCtx.ConditionValue != "automation" {
-				t.Errorf("render value = %q, want automation", renderCtx.ConditionValue)
+			if renderCtx.ConditionValue != "automation,bot" {
+				t.Errorf("render value = %q, want automation,bot", renderCtx.ConditionValue)
 			}
 		})
 	}
@@ -255,6 +255,11 @@ func TestClientSideDetectionConditionValidation(t *testing.T) {
 		"automation,unknown": common.StatusRuleConditionValueInvalid,
 		"automation,":        common.StatusRuleConditionValueInvalid,
 		"automation":         common.StatusOK,
+		"bot":                common.StatusOK,
+		"automation,bot":     common.StatusOK,
+		"Bot":                common.StatusRuleConditionValueInvalid,
+		"bots":               common.StatusRuleConditionValueInvalid,
+		"bot,unknown":        common.StatusRuleConditionValueInvalid,
 	} {
 		_, _, got := parser(string(dbgen.RuleConditionOperatorIn), value, "")
 		if got != want {
@@ -271,16 +276,16 @@ func TestClientSideDetectionRuleDisplayAndForm(t *testing.T) {
 		ConditionProperty:        dbgen.RuleConditionPropertyClientSideDetection,
 		ConditionOperator:        dbgen.RuleConditionOperatorIn,
 		ConditionOperatorNegated: true,
-		ConditionValueStr:        db.Text("automation"),
+		ConditionValueStr:        db.Text("automation,bot"),
 		ConditionValueSeparator:  db.Text(","),
 	}
 	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
 	model := DifficultyRuleToDisplay(rule, true, hasher, NewRuleRegistry())
-	if model.ConditionProperty != "Client-side detection" || model.ConditionOperator != "is not one of" || model.ConditionValue != "automation" {
+	if model.ConditionProperty != "Client-side detection" || model.ConditionOperator != "is not one of" || model.ConditionValue != "automation, bot" {
 		t.Errorf("unexpected display: %+v", model)
 	}
 	form := ruleToFormData(rule)
-	if form.ConditionProperty != string(rule.ConditionProperty) || form.ConditionOperator != "in" || !form.ConditionNegated || form.ConditionValue != "automation" {
+	if form.ConditionProperty != string(rule.ConditionProperty) || form.ConditionOperator != "in" || !form.ConditionNegated || form.ConditionValue != "automation,bot" {
 		t.Errorf("unexpected edit form: %+v", form)
 	}
 }
@@ -314,16 +319,18 @@ func TestCreateAndEditClientSideDetectionRule(t *testing.T) {
 		for _, edit := range []bool{false, true} {
 			endpoint := base + "/rules/new"
 			operator := "in"
+			value := "bot"
 			if edit {
 				endpoint = fmt.Sprintf("%s/rules/%s/edit", base, server.IDHasher.Encrypt(int(saved.ID)))
 				operator = "in_negated"
+				value = "automation,bot"
 			}
 			resp := postRuleRequest(srv, cookie, http.MethodPost, endpoint, token, map[string]string{
 				common.ParamName:              "Client detection",
 				common.ParamEnabled:           "on",
 				common.ParamConditionProperty: string(dbgen.RuleConditionPropertyClientSideDetection),
 				common.ParamConditionOperator: operator,
-				common.ParamConditionValue:    "automation",
+				common.ParamConditionValue:    value,
 				common.ParamActionProperty:    string(dbgen.RuleActionPropertyHTTPRequest),
 				common.ParamActionValue:       "1",
 			})
@@ -349,15 +356,35 @@ func TestCreateAndEditClientSideDetectionRule(t *testing.T) {
 			if saved.ConditionProperty != dbgen.RuleConditionPropertyClientSideDetection || saved.ConditionOperator != dbgen.RuleConditionOperatorIn || saved.ConditionOperatorNegated != edit {
 				t.Errorf("unexpected saved condition: %+v", saved)
 			}
-			if saved.ConditionValueStr != db.Text("automation") || saved.ConditionValueSeparator != db.Text(",") || saved.ConditionValueInt.Valid {
+			if saved.ConditionValueStr != db.Text(value) || saved.ConditionValueSeparator != db.Text(",") || saved.ConditionValueInt.Valid {
 				t.Errorf("unexpected saved values: %+v", saved)
+			}
+			editRequest := httptest.NewRequest(http.MethodGet, fmt.Sprintf("%s/rules/%s/edit", base, server.IDHasher.Encrypt(int(saved.ID))), nil)
+			editRequest.AddCookie(cookie)
+			editRequest.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+			editRequest.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(saved.ID)))
+			getEditRule := server.getOrgEditRule
+			if propertyRule {
+				editRequest.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+				getEditRule = server.getPropertyEditRule
+			}
+			viewModel, err := getEditRule(httptest.NewRecorder(), editRequest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			form, ok := viewModel.Model.(*RuleWizardRenderContext)
+			if !ok {
+				t.Fatalf("unexpected edit model: %T", viewModel.Model)
+			}
+			if !form.IsEdit || form.ConditionValue != value || form.ConditionNegated != edit {
+				t.Errorf("unexpected edit form: %+v", form.RuleFormData)
 			}
 			compiled, err := rules.NewRulesCompiler(useragent.NewParser()).CompileRule(ctx, saved)
 			if err != nil {
 				t.Fatal(err)
 			}
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			req.Header.Set(common.HeaderClientHints, "automation")
+			req.Header.Set(common.HeaderClientHints, "bot")
 			if got := compiled.Matches(rules.NewRequestInfo(req, "")); got == edit {
 				t.Errorf("edited=%v: saved rule match=%v", edit, got)
 			}
