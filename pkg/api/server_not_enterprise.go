@@ -14,7 +14,7 @@ import (
 )
 
 func (s *Server) initSystemRules(ctx context.Context) {
-	s.SystemRules = rules.NewRulesCompiler(nil /*ua parser*/).Compile(ctx, []*dbgen.DifficultyRule{
+	s.SystemRules = rules.NewRulesCompiler(s.Verifier.UAParser).Compile(ctx, []*dbgen.DifficultyRule{
 		{
 			ID:                0, // Excluded from rule statistics
 			Name:              "Client-side automation detection",
