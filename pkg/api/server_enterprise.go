@@ -27,9 +27,6 @@ const (
 	maxUpdatePropertiesBodySize = 1024 * 1024
 )
 
-func (s *Server) initSystemRules(ctx context.Context) {
-}
-
 func (s *Server) setupEnterprise(rg *common.RouteGenerator, publicChain alice.Chain, apiRateLimiter func(next http.Handler) http.Handler) {
 	arg := func(s string) string {
 		return fmt.Sprintf("{%s}", s)
