@@ -54,15 +54,16 @@ func newStubSystemRules(ctx context.Context) *rules.CompiledRules {
 
 func TestPuzzleHandlerDefaultRules(t *testing.T) {
 	for _, tc := range []struct {
-		name       string
-		hints      string
-		custom     bool
-		orgRule    bool
-		block      bool
-		nonmatch   bool
-		cold       bool
-		wantLevel  uint8
-		wantRuleID int32
+		name         string
+		hints        string
+		propertyRule bool
+		orgRule      bool
+		block        bool
+		nonmatch     bool
+		nonterminal  bool
+		cold         bool
+		wantLevel    uint8
+		wantRuleID   int32
 	}{
 		{
 			name:      "AutomationFallback",
@@ -79,49 +80,80 @@ func TestPuzzleHandlerDefaultRules(t *testing.T) {
 			wantLevel: uint8(common.DifficultyLevelMedium),
 		},
 		{
-			name:      "PropertyRule",
-			hints:     "automation",
-			custom:    true,
-			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
+			name:         "PropertyRule",
+			hints:        "automation",
+			propertyRule: true,
+			wantLevel:    uint8(common.DifficultyLevelMedium + common.DifficultyDelta/2),
+			wantRuleID:   42,
 		},
 		{
-			name:       "PropertyRuleWithoutHints",
-			custom:     true,
-			wantLevel:  uint8(common.DifficultyLevelMedium),
-			wantRuleID: 42,
+			name:         "PropertyRuleWithoutHints",
+			propertyRule: true,
+			wantLevel:    uint8(common.DifficultyLevelMedium + common.DifficultyDelta/2),
+			wantRuleID:   42,
 		},
 		{
-			name:      "OrganizationRule",
-			hints:     "automation",
-			custom:    true,
-			orgRule:   true,
-			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
+			name:       "OrganizationRule",
+			hints:      "automation",
+			orgRule:    true,
+			wantLevel:  uint8(common.DifficultyLevelMedium + common.DifficultyDelta/2),
+			wantRuleID: 43,
 		},
 		{
-			name:      "NonmatchingPropertyRule",
-			hints:     "automation",
-			custom:    true,
-			nonmatch:  true,
-			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
+			name:         "NonterminalPropertyRule",
+			hints:        "automation",
+			propertyRule: true,
+			nonterminal:  true,
+			wantLevel:    uint8(common.DifficultyLevelMedium + common.DifficultyDelta/2),
+			wantRuleID:   42,
+		},
+		{
+			name:        "NonterminalOrganizationRule",
+			hints:       "automation",
+			orgRule:     true,
+			nonterminal: true,
+			wantLevel:   uint8(common.DifficultyLevelMedium + common.DifficultyDelta/2),
+			wantRuleID:  43,
+		},
+		{
+			name:         "PropertyAndOrganizationRules",
+			hints:        "automation",
+			propertyRule: true,
+			orgRule:      true,
+			wantLevel:    uint8(common.DifficultyLevelMedium + common.DifficultyDelta),
+			wantRuleID:   43,
+		},
+		{
+			name:         "NonmatchingPropertyRule",
+			hints:        "automation",
+			propertyRule: true,
+			nonmatch:     true,
+			wantLevel:    uint8(common.DifficultyLevelMedium),
 		},
 		{
 			name:      "NonmatchingOrganizationRule",
 			hints:     "automation",
-			custom:    true,
 			orgRule:   true,
 			nonmatch:  true,
-			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
+			wantLevel: uint8(common.DifficultyLevelMedium),
 		},
 		{
-			name:   "Blocked",
-			hints:  "automation",
-			custom: true,
-			block:  true,
+			name:         "NonmatchingPropertyAndOrganizationRules",
+			hints:        "automation",
+			propertyRule: true,
+			orgRule:      true,
+			nonmatch:     true,
+			wantLevel:    uint8(common.DifficultyLevelMedium),
+		},
+		{
+			name:         "Blocked",
+			hints:        "automation",
+			propertyRule: true,
+			block:        true,
 		},
 		{
 			name:    "OrganizationBlock",
 			hints:   "automation",
-			custom:  true,
 			orgRule: true,
 			block:   true,
 		},
@@ -154,14 +186,32 @@ func TestPuzzleHandlerDefaultRules(t *testing.T) {
 				t.Fatal(err)
 			}
 			parser := useragent.NewParser()
-			if tc.custom {
+			for _, source := range []struct {
+				enabled bool
+				key     db.CacheKey
+				ruleID  int32
+			}{
+				{
+					enabled: tc.propertyRule,
+					key:     db.CompiledPropertyRulesCacheKey(property.ID),
+					ruleID:  42,
+				},
+				{
+					enabled: tc.orgRule,
+					key:     db.CompiledOrgRulesCacheKey(property.OrgID.Int32),
+					ruleID:  43,
+				},
+			} {
+				if !source.enabled {
+					continue
+				}
 				rule := &dbgen.DifficultyRule{
-					ID:                42,
+					ID:                source.ruleID,
 					Enabled:           true,
 					ConditionProperty: dbgen.RuleConditionPropertyAlways,
-					ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
-					ActionValue:       1,
-					Terminal:          true,
+					ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+					ActionValue:       100,
+					Terminal:          !tc.nonterminal,
 				}
 				if tc.nonmatch {
 					rule.ConditionProperty = dbgen.RuleConditionPropertyClientSideDetection
@@ -172,12 +222,8 @@ func TestPuzzleHandlerDefaultRules(t *testing.T) {
 				if tc.block {
 					rule.ActionProperty = dbgen.RuleActionPropertyHTTPRequest
 				}
-				key := db.CompiledPropertyRulesCacheKey(property.ID)
-				if tc.orgRule {
-					key = db.CompiledOrgRulesCacheKey(property.OrgID.Int32)
-				}
 				compiled := rules.NewRulesCompiler(parser).Compile(ctx, []*dbgen.DifficultyRule{rule})
-				if err := cache.Set(ctx, key, compiled); err != nil {
+				if err := cache.Set(ctx, source.key, compiled); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -271,12 +317,30 @@ func TestRetrievePropertyRulesSystemRules(t *testing.T) {
 		ActionValue:       2,
 	}})
 	for _, tc := range []struct {
-		name          string
-		propertyRules *rules.CompiledRules
-		orgRules      *rules.CompiledRules
+		name            string
+		propertyRules   *rules.CompiledRules
+		orgRules        *rules.CompiledRules
+		wantSystemRules bool
 	}{
 		{
-			name: "NoCustomRules",
+			name:            "NoCustomRules",
+			wantSystemRules: true,
+		},
+		{
+			name:            "EmptyPropertyRules",
+			propertyRules:   rules.NewCompiledRules(nil),
+			wantSystemRules: true,
+		},
+		{
+			name:            "EmptyOrganizationRules",
+			orgRules:        rules.NewCompiledRules(nil),
+			wantSystemRules: true,
+		},
+		{
+			name:            "BothEmptyRuleSources",
+			propertyRules:   rules.NewCompiledRules(nil),
+			orgRules:        rules.NewCompiledRules(nil),
+			wantSystemRules: true,
 		},
 		{
 			name:          "PropertyRules",
@@ -289,6 +353,16 @@ func TestRetrievePropertyRulesSystemRules(t *testing.T) {
 		{
 			name:          "BothCustomRuleSources",
 			propertyRules: propertyRules,
+			orgRules:      orgRules,
+		},
+		{
+			name:          "PropertyRulesWithEmptyOrganizationRules",
+			propertyRules: propertyRules,
+			orgRules:      rules.NewCompiledRules(nil),
+		},
+		{
+			name:          "EmptyPropertyRulesWithOrganizationRules",
+			propertyRules: rules.NewCompiledRules(nil),
 			orgRules:      orgRules,
 		},
 	} {
@@ -317,8 +391,8 @@ func TestRetrievePropertyRulesSystemRules(t *testing.T) {
 				ID:    1,
 				OrgID: db.Int(2),
 			})
-			if pair.SystemRules.Empty() {
-				t.Fatal("system rules are missing")
+			if got := !pair.SystemRules.Empty(); got != tc.wantSystemRules {
+				t.Fatalf("has system rules = %v, want %v", got, tc.wantSystemRules)
 			}
 			if pair.PropertyRules != tc.propertyRules || pair.OrgRules != tc.orgRules {
 				t.Fatal("system rules replaced a custom rule source")

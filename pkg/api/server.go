@@ -114,7 +114,10 @@ type Server struct {
 	NoticeProvider       db.PropertyNoticeProvider
 	EdgeTokens           *EdgeTokenSigner
 	GatePage             *GatePage
-	SystemRules          *rules.CompiledRules
+	// NOTE: probably a DB would have been a better place for system rules, BUT they will unlikely change very often
+	// and storing them in DB opens a Pandora box of opportunities to screw all users by changing system rules (and
+	// the need to add extra protection against such changes). Therefore system rules are "read-only" in code.
+	SystemRules *rules.CompiledRules
 }
 
 type apiKeyOwnerSource struct {
@@ -201,12 +204,12 @@ type ServerConfig struct {
 	BackpressureTimeout time.Duration
 }
 
-// systemDifficultyRules returns the hardcoded, read-only system difficulty rules
-// that PrivateCaptcha applies to every property on top of any configured property
-// and organization rules. They are compiled once at startup by initSystemRules
-// and applied last by rules.RulesPair. ID 0 excludes a rule from per-rule statistics.
-func systemDifficultyRules() []*dbgen.DifficultyRule {
-	return []*dbgen.DifficultyRule{
+func (s *Server) initSystemRules(ctx context.Context) {
+	compiler := s.Auth.RulesCompiler
+	if compiler == nil {
+		compiler = rules.NewRulesCompiler(s.Verifier.UAParser)
+	}
+	s.SystemRules = compiler.Compile(ctx, []*dbgen.DifficultyRule{
 		{
 			ID:                0, // Excluded from rule statistics
 			Name:              "Client-side automation detection",
@@ -228,15 +231,7 @@ func systemDifficultyRules() []*dbgen.DifficultyRule {
 			ActionValue:       300,
 			Terminal:          false,
 		},
-	}
-}
-
-func (s *Server) initSystemRules(ctx context.Context) {
-	compiler := s.Auth.RulesCompiler
-	if compiler == nil {
-		compiler = rules.NewRulesCompiler(s.Verifier.UAParser)
-	}
-	s.SystemRules = compiler.Compile(ctx, systemDifficultyRules())
+	})
 }
 
 func (s *Server) Init(ctx context.Context, config ServerConfig, workers *sync.WaitGroup) error {

@@ -215,12 +215,7 @@ func apiErrorHandlerID(r *http.Request) string {
 }
 
 func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Property) *rules.RulesPair {
-	// NOTE: probably a DB would have been a better place for system rules, BUT they will unlikely change very often
-	// and storing them in DB opens a Pandora box of opportunities to screw all users by changing system rules (and
-	// the need to add extra protection against such changes). Therefore system rules are "read-only" in code.
-	rulesPair := &rules.RulesPair{
-		SystemRules: s.SystemRules,
-	}
+	rulesPair := &rules.RulesPair{}
 	impl := s.BusinessDB.Impl()
 	needsBackfill := false
 
@@ -250,6 +245,10 @@ func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Prop
 
 	if needsBackfill {
 		s.Auth.RefreshPropertyRules(ctx, property.ID)
+	}
+
+	if rulesPair.Empty() {
+		rulesPair.SystemRules = s.SystemRules
 	}
 
 	return rulesPair

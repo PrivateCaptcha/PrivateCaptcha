@@ -189,6 +189,10 @@ type RulesPair struct {
 	OrgRules      *CompiledRules
 }
 
+func (rp *RulesPair) Empty() bool {
+	return rp.PropertyRules.Empty() && rp.OrgRules.Empty() && rp.SystemRules.Empty()
+}
+
 func (rp *RulesPair) Apply(ri *RequestInfo, p difficulty.Property) difficulty.Property {
 	if (rp == nil) || (ri == nil) {
 		return p
