@@ -485,6 +485,7 @@ func puzzleSuiteEx(ctx context.Context, method, sitekey, domain string, version 
 
 	req.Header.Set("Origin", common_test.PrependProtocol(domain))
 	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	if len(version) > 0 {
 		req.Header.Set(common.HeaderCaptchaVersion, version[0])
 	}
