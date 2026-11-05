@@ -21,8 +21,7 @@ export function getClientHints(browser = globalThis) {
         // Some automation tools leave their evaluation markers in function wrappers.
         const functionSource = browser.Function?.prototype.toString.toString() ?? '';
         if (functionSource.includes('__puppeteer_evaluation_script__') ||
-            functionSource.includes('__playwright_evaluation_script__') ||
-            hasCDP(browser)) {
+            functionSource.includes('__playwright_evaluation_script__')) {
             return ['automation'];
         }
     } catch {
@@ -30,23 +29,4 @@ export function getClientHints(browser = globalThis) {
     }
 
     return [];
-}
-
-function hasCDP(browser) {
-    const location = browser.location;
-    if (!location || location.hostname === 'localhost' || location.search?.includes('botDebug')) {
-        return false;
-    }
-
-    let detected = false;
-    const error = new Error('');
-    // CDP may read the stack when serializing a console error.
-    Object.defineProperty(error, 'stack', {
-        get() {
-            detected = true;
-            return '';
-        },
-    });
-    browser.console?.log(error);
-    return detected;
 }
