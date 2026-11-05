@@ -201,6 +201,36 @@ type ServerConfig struct {
 	BackpressureTimeout time.Duration
 }
 
+// systemDifficultyRules returns the hardcoded, read-only system difficulty rules
+// that PrivateCaptcha applies to every property on top of any configured property
+// and organization rules. They are compiled once at startup by initSystemRules
+// and applied last by rules.RulesPair. ID 0 excludes a rule from per-rule statistics.
+func systemDifficultyRules() []*dbgen.DifficultyRule {
+	return []*dbgen.DifficultyRule{
+		{
+			ID:                0, // Excluded from rule statistics
+			Name:              "Client-side automation detection",
+			Enabled:           true,
+			ConditionProperty: dbgen.RuleConditionPropertyClientSideDetection,
+			ConditionOperator: dbgen.RuleConditionOperatorIn,
+			ConditionValueStr: db.Text("automation"),
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       300,
+			Terminal:          false,
+		},
+		{
+			ID:                0, // Excluded from rule statistics
+			Name:              "User-Agent bot detection",
+			Enabled:           true,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorBot,
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       300,
+			Terminal:          false,
+		},
+	}
+}
+
 func (s *Server) Init(ctx context.Context, config ServerConfig, workers *sync.WaitGroup) error {
 	if s.FeatureFlags == nil {
 		s.FeatureFlags = common.EnabledFeatureFlags{}

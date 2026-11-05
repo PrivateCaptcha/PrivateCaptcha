@@ -28,6 +28,11 @@ const (
 )
 
 func (s *Server) initSystemRules(ctx context.Context) {
+	compiler := s.Auth.RulesCompiler
+	if compiler == nil {
+		compiler = rules.NewRulesCompiler(nil)
+	}
+	s.SystemRules = compiler.Compile(ctx, systemDifficultyRules())
 }
 
 func (s *Server) setupEnterprise(rg *common.RouteGenerator, publicChain alice.Chain, apiRateLimiter func(next http.Handler) http.Handler) {
