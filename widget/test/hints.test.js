@@ -13,13 +13,28 @@ for (const property of [
     'domAutomation', 'domAutomationController', '_WEBDRIVER_ELEM_CACHE',
     'callPhantom', '_phantom', '__nightmare',
     'cdc_adoQpoasnfa76pfcZLmcfl_Array', 'cdc_adoQpoasnfa76pfcZLmcfl_Promise',
-    'cdc_adoQpoasnfa76pfcZLmcfl_Symbol', 'webdriver', 'selenium',
+    'cdc_adoQpoasnfa76pfcZLmcfl_Symbol',
 ]) {
     test(`client hints detect the ${property} automation leak`, () => {
         assert.deepStrictEqual(getClientHints({ [property]: {} }), ['automation']);
         assert.deepStrictEqual(getClientHints({ [property]: false }), []);
     });
 }
+
+test('client hints do not flag host-page elements exposed via Window named access', () => {
+    // Per the HTML spec ("named access on the Window object"), any element with
+    // id="webdriver" or id="selenium" is exposed as a truthy window property.
+    // The widget runs in the host page's top window, so these generic names must
+    // not be probed as automation leaks or every real visitor on such a page is
+    // falsely flagged. The W3C signal is already covered by navigator.webdriver.
+    for (const property of ['webdriver', 'selenium']) {
+        assert.deepStrictEqual(getClientHints({
+            navigator: { userAgent: 'Mozilla/5.0 Chrome/132.0.0.0 Safari/537.36', webdriver: false },
+            [property]: {},
+            Function,
+        }), []);
+    }
+});
 
 for (const property of ['webdriver', 'seleniumWebdriver']) {
     test(`client hints detect navigator.${property}`, () => {
@@ -47,7 +62,7 @@ test('client hints report automation only once when several checks match', () =>
     assert.deepStrictEqual(getClientHints({
         navigator: { webdriver: true, userAgent: 'HeadlessChrome' },
         domAutomation: true,
-        selenium: true,
+        _phantom: true,
     }), ['automation']);
 });
 

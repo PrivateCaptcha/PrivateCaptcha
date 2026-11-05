@@ -2,7 +2,7 @@
 
 const AUTOMATION_PROPERTIES = [
     'domAutomation', 'domAutomationController',
-    '_WEBDRIVER_ELEM_CACHE', 'webdriver', 'selenium',
+    '_WEBDRIVER_ELEM_CACHE',
     'callPhantom', '_phantom', '__nightmare',
     'cdc_adoQpoasnfa76pfcZLmcfl_Array',
     'cdc_adoQpoasnfa76pfcZLmcfl_Promise',
