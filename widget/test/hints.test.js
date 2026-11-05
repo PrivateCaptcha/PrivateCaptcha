@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
+import { Window } from 'happy-dom';
 import { getClientHints } from '../js/hints.js';
 
 test('client hints are empty for a normal browser', () => {
@@ -34,6 +35,30 @@ test('client hints do not flag host-page elements exposed via Window named acces
             Function,
         }), []);
     }
+});
+
+test('real DOM with <section id="selenium"> does not flag automation via Window named access', async () => {
+    const window = new Window();
+    window.document.write('<!DOCTYPE html><html><body><section id="selenium">Selenium docs</section></body></html>');
+
+    assert.ok(window.selenium, 'window.selenium should be truthy via named access');
+    assert.ok(window.selenium instanceof window.HTMLElement, 'window.selenium should be an HTMLElement');
+
+    Object.defineProperty(window.navigator, 'webdriver', { value: false, configurable: true });
+
+    assert.deepStrictEqual(getClientHints(window), [], 'getClientHints should not flag automation for id="selenium"');
+});
+
+test('real DOM with <section id="webdriver"> does not flag automation via Window named access', async () => {
+    const window = new Window();
+    window.document.write('<!DOCTYPE html><html><body><section id="webdriver">WebDriver docs</section></body></html>');
+
+    assert.ok(window.webdriver, 'window.webdriver should be truthy via named access');
+    assert.ok(window.webdriver instanceof window.HTMLElement, 'window.webdriver should be an HTMLElement');
+
+    Object.defineProperty(window.navigator, 'webdriver', { value: false, configurable: true });
+
+    assert.deepStrictEqual(getClientHints(window), [], 'getClientHints should not flag automation for id="webdriver"');
 });
 
 for (const property of ['webdriver', 'seleniumWebdriver']) {
