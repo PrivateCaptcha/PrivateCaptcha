@@ -231,6 +231,14 @@ func systemDifficultyRules() []*dbgen.DifficultyRule {
 	}
 }
 
+func (s *Server) initSystemRules(ctx context.Context) {
+	compiler := s.Auth.RulesCompiler
+	if compiler == nil {
+		compiler = rules.NewRulesCompiler(s.Verifier.UAParser)
+	}
+	s.SystemRules = compiler.Compile(ctx, systemDifficultyRules())
+}
+
 func (s *Server) Init(ctx context.Context, config ServerConfig, workers *sync.WaitGroup) error {
 	if s.FeatureFlags == nil {
 		s.FeatureFlags = common.EnabledFeatureFlags{}

@@ -12,10 +12,6 @@ import (
 	"github.com/justinas/alice"
 )
 
-func (s *Server) initSystemRules(ctx context.Context) {
-	s.SystemRules = rules.NewRulesCompiler(nil /*ua parser*/).Compile(ctx, systemDifficultyRules())
-}
-
 func (s *Server) setupEnterprise(rg *common.RouteGenerator, publicChain alice.Chain, apiRateLimiter func(next http.Handler) http.Handler) {
 }
 
