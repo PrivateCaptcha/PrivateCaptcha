@@ -82,7 +82,7 @@ func applyRule(r rule, p difficulty.Property) *overrideProperty {
 }
 
 func TestClientSideDetectionRule(t *testing.T) {
-	for _, detection := range []string{"automation", "bot"} {
+	for _, detection := range []string{"automation", "custom"} {
 		t.Run(detection, func(t *testing.T) {
 			for _, negated := range []bool{false, true} {
 				dbRule := &dbgen.DifficultyRule{
@@ -128,7 +128,7 @@ func TestClientSideDetectionRule(t *testing.T) {
 					{[]string{detection}, true},
 					{[]string{"unknown, " + detection + " ,other"}, true},
 					{[]string{"unknown", detection}, true},
-					{[]string{"automation,bot"}, true},
+					{[]string{"automation,custom"}, true},
 				} {
 					req := httptest.NewRequest("GET", "/", nil)
 					for _, value := range tc.hints {
@@ -157,7 +157,7 @@ func TestClientSideDetectionRuleMultipleDetections(t *testing.T) {
 			ConditionOperator:        dbgen.RuleConditionOperatorIn,
 			ConditionOperatorNegated: negated,
 			ConditionValueStr: pgtype.Text{
-				String: "automation, bot",
+				String: "automation, custom",
 				Valid:  true,
 			},
 			ActionProperty: dbgen.RuleActionPropertyHTTPRequest,
@@ -171,10 +171,11 @@ func TestClientSideDetectionRuleMultipleDetections(t *testing.T) {
 		}{
 			{"", false},
 			{"unknown", false},
-			{"bots,not-bot", false},
+			{"customs,not-custom", false},
+			{"bot", false},
 			{"automation", true},
-			{"bot", true},
-			{"automation,bot", true},
+			{"custom", true},
+			{"automation,custom", true},
 		} {
 			req := httptest.NewRequest("GET", "/", nil)
 			req.Header.Set(common.HeaderClientHints, tc.hints)
@@ -194,6 +195,9 @@ func TestClientSideDetectionRuleInvalidCondition(t *testing.T) {
 		{dbgen.RuleConditionOperatorIn, ""},
 		{dbgen.RuleConditionOperatorIn, "unknown"},
 		{dbgen.RuleConditionOperatorIn, "automation,unknown"},
+		{dbgen.RuleConditionOperatorIn, "bot"},
+		{dbgen.RuleConditionOperatorIn, "custom,unknown"},
+		{dbgen.RuleConditionOperatorIn, "Custom"},
 	} {
 		_, err := testCompiler.CompileRule(t.Context(), &dbgen.DifficultyRule{
 			ConditionProperty: dbgen.RuleConditionPropertyClientSideDetection,

@@ -144,6 +144,12 @@ type RenderConstants struct {
 
 	ConditionPropertyClientSideDetection string
 	ClientSideDetections                 []string
+	ClientSideDetectionLabels            map[string]string
+}
+
+var clientSideDetectionLabels = map[string]string{
+	"automation": "Automation",
+	"custom":     "Custom",
 }
 
 func NewRenderConstants() *RenderConstants {
@@ -276,6 +282,7 @@ func NewRenderConstants() *RenderConstants {
 
 		ConditionPropertyClientSideDetection: string(dbgen.RuleConditionPropertyClientSideDetection),
 		ClientSideDetections:                 rules.ClientSideDetections,
+		ClientSideDetectionLabels:            clientSideDetectionLabels,
 	}
 }
 

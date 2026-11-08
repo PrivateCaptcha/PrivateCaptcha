@@ -24,7 +24,7 @@ export async function getPuzzle(endpoint, sitekey, options = {}) {
     try {
         const separator = endpoint.includes('?') ? '&' : '?';
         const hints = getClientHints();
-        if (options.isBot) { hints.push('bot'); }
+        if (options.customDetection) { hints.push('custom'); }
         return await fetchWithBackoff(`${endpoint}${separator}sitekey=${encodeURIComponent(sitekey)}`, {
             fetchOptions: {
                 headers: [

@@ -129,6 +129,7 @@ function ruleFormData() {
         conditionProperty: formDataConditionProperty || '{{ .Const.ConditionPropertyUserAgent }}',
         conditionOperator: null,
         conditionNegated: {{ if .Params.ConditionNegated }}true{{ else }}false{{ end }},
+        clientSideDetectionLabels: {{ .Const.ClientSideDetectionLabels }},
 
         actionProperty: formDataActionProperty,
         actionValueDifficultyLevel: formDataActionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}' ? (formDataActionValue || '50') : '50',

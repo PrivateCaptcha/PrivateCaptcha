@@ -31,7 +31,7 @@ var (
 	ErrInvalidClientSideDetection   = errors.New("invalid client-side detection value")
 )
 
-var ClientSideDetections = []string{"automation", "bot"}
+var ClientSideDetections = []string{"automation", "custom"}
 
 const (
 	defaultSeparator   = ","

@@ -216,7 +216,7 @@ func (s *Server) initSystemRules(ctx context.Context) {
 			Enabled:           true,
 			ConditionProperty: dbgen.RuleConditionPropertyClientSideDetection,
 			ConditionOperator: dbgen.RuleConditionOperatorIn,
-			ConditionValueStr: db.Text("automation,bot"),
+			ConditionValueStr: db.Text("automation"),
 			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
 			ActionValue:       300,
 			Terminal:          false,

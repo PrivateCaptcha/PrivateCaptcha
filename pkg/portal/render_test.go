@@ -1471,7 +1471,7 @@ func TestRenderHTML(t *testing.T) {
 					Name:              "Client detection",
 					ConditionProperty: string(dbgen.RuleConditionPropertyClientSideDetection),
 					ConditionOperator: string(dbgen.RuleConditionOperatorIn),
-					ConditionValue:    "automation,bot",
+					ConditionValue:    "automation,custom",
 					ActionProperty:    string(dbgen.RuleActionPropertyHTTPRequest),
 					Enabled:           true,
 				},
@@ -1481,7 +1481,7 @@ func TestRenderHTML(t *testing.T) {
 			},
 			selector: `option[value="client_side_detection"][selected], input#clientDetection-condition_negated[type="checkbox"][x-model="conditionNegated"], label[for="clientDetection-condition_negated"], [role="listbox"][aria-labelledby="clientSideDetections-label"][aria-multiselectable="true"] button.pc-rule-country-item[type="button"][role="option"]`,
 			matches: []string{
-				"Client-side detection", "", "Invert condition", "Automation", "Bot",
+				"Client-side detection", "", "Invert condition", "Automation", "Custom",
 			},
 			enterprise: enterpriseOnly,
 		},

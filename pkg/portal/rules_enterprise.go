@@ -282,6 +282,16 @@ func commaSeparatedConditionValueFormatter(rule *dbgen.DifficultyRule) string {
 	return strings.Join(formattedValues, ", ")
 }
 
+func clientSideDetectionConditionValueFormatter(rule *dbgen.DifficultyRule) string {
+	values := strings.Split(commaSeparatedConditionValueFormatter(rule), ", ")
+	for i, value := range values {
+		if label, ok := clientSideDetectionLabels[value]; ok {
+			values[i] = label
+		}
+	}
+	return strings.Join(values, ", ")
+}
+
 func domainConditionParser(conditionOperator, conditionValue, domain string) (string, string, common.StatusCode) {
 	if len(domain) == 0 {
 		// not supported for orgs (that pass empty domain)
@@ -435,7 +445,7 @@ func NewRuleRegistry() *RuleRegistry {
 			string(dbgen.RuleConditionPropertyClientSideDetection): ConditionRegistration{
 				Parser:         clientSideDetectionConditionParser,
 				DisplayName:    "Client-side detection",
-				ValueFormatter: commaSeparatedConditionValueFormatter,
+				ValueFormatter: clientSideDetectionConditionValueFormatter,
 			},
 		},
 		actions: map[string]ActionFormParser{

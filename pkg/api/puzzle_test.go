@@ -71,13 +71,13 @@ func TestPuzzleHandlerDefaultRules(t *testing.T) {
 			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
 		},
 		{
-			name:      "BotFallback",
-			hints:     "bot",
-			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
+			name:      "CustomDoesNotTriggerFallback",
+			hints:     "custom",
+			wantLevel: uint8(common.DifficultyLevelMedium),
 		},
 		{
 			name:      "CombinedDetectionFallback",
-			hints:     "automation,bot",
+			hints:     "automation,custom",
 			wantLevel: uint8(common.DifficultyLevelMedium + 3*common.DifficultyDelta/2),
 		},
 		{

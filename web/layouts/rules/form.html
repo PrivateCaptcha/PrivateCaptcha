@@ -134,13 +134,13 @@
                                 viewBox="0 0 14 14" fill="none" aria-hidden="true">
                                 <path class="opacity-0 group-hover:opacity-100 group-aria-selected:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
-                            <span class="truncate text-sm">{{ title . }}</span>
+                            <span class="truncate text-sm">{{ index $.Const.ClientSideDetectionLabels . }}</span>
                         </div>
                     </button>
                     {{ end }}
                 </div>
 
-                <p class="mt-1 truncate text-xs text-pc-grey-800" x-cloak x-show="selectedClientSideDetections.length > 0">Selected detections: <code class="pc-rule-code-chip" x-text="selectedClientSideDetections.join(',')"></code></p>
+                <p class="mt-1 truncate text-xs text-pc-grey-800" x-cloak x-show="selectedClientSideDetections.length > 0">Selected detections: <code class="pc-rule-code-chip" x-text="selectedClientSideDetections.map(value => clientSideDetectionLabels[value] || value).join(', ')"></code></p>
 
                 <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Const.OperatorIn }}_negated' : '{{ .Const.OperatorIn }}'" :disabled="conditionProperty !== '{{ .Const.ConditionPropertyClientSideDetection }}'" />
             </div>

@@ -212,7 +212,7 @@ func TestParseClientSideDetectionRuleForm(t *testing.T) {
 				common.ParamName:              {"Client detection"},
 				common.ParamConditionProperty: {string(dbgen.RuleConditionPropertyClientSideDetection)},
 				common.ParamConditionOperator: {operator},
-				common.ParamConditionValue:    {" automation , bot "},
+				common.ParamConditionValue:    {" automation , custom "},
 				common.ParamActionProperty:    {string(dbgen.RuleActionPropertyHTTPRequest)},
 			}
 			req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(form.Encode()))
@@ -233,11 +233,11 @@ func TestParseClientSideDetectionRuleForm(t *testing.T) {
 			if params.ConditionOperatorNegated != (operator == "in_negated") {
 				t.Errorf("unexpected negation: %v", params.ConditionOperatorNegated)
 			}
-			if params.ConditionValueStr != db.Text("automation,bot") || params.ConditionValueSeparator != db.Text(",") || params.ConditionValueInt.Valid {
+			if params.ConditionValueStr != db.Text("automation,custom") || params.ConditionValueSeparator != db.Text(",") || params.ConditionValueInt.Valid {
 				t.Errorf("unexpected condition values: %+v", params)
 			}
-			if renderCtx.ConditionValue != "automation,bot" {
-				t.Errorf("render value = %q, want automation,bot", renderCtx.ConditionValue)
+			if renderCtx.ConditionValue != "automation,custom" {
+				t.Errorf("render value = %q, want automation,custom", renderCtx.ConditionValue)
 			}
 		})
 	}
@@ -255,11 +255,12 @@ func TestClientSideDetectionConditionValidation(t *testing.T) {
 		"automation,unknown": common.StatusRuleConditionValueInvalid,
 		"automation,":        common.StatusRuleConditionValueInvalid,
 		"automation":         common.StatusOK,
-		"bot":                common.StatusOK,
-		"automation,bot":     common.StatusOK,
-		"Bot":                common.StatusRuleConditionValueInvalid,
-		"bots":               common.StatusRuleConditionValueInvalid,
-		"bot,unknown":        common.StatusRuleConditionValueInvalid,
+		"custom":             common.StatusOK,
+		"automation,custom":  common.StatusOK,
+		"Custom":             common.StatusRuleConditionValueInvalid,
+		"customs":            common.StatusRuleConditionValueInvalid,
+		"custom,unknown":     common.StatusRuleConditionValueInvalid,
+		"bot":                common.StatusRuleConditionValueInvalid,
 	} {
 		_, _, got := parser(string(dbgen.RuleConditionOperatorIn), value, "")
 		if got != want {
@@ -276,16 +277,16 @@ func TestClientSideDetectionRuleDisplayAndForm(t *testing.T) {
 		ConditionProperty:        dbgen.RuleConditionPropertyClientSideDetection,
 		ConditionOperator:        dbgen.RuleConditionOperatorIn,
 		ConditionOperatorNegated: true,
-		ConditionValueStr:        db.Text("automation,bot"),
+		ConditionValueStr:        db.Text("automation,custom"),
 		ConditionValueSeparator:  db.Text(","),
 	}
 	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
 	model := DifficultyRuleToDisplay(rule, true, hasher, NewRuleRegistry())
-	if model.ConditionProperty != "Client-side detection" || model.ConditionOperator != "is not one of" || model.ConditionValue != "automation, bot" {
+	if model.ConditionProperty != "Client-side detection" || model.ConditionOperator != "is not one of" || model.ConditionValue != "Automation, Custom" {
 		t.Errorf("unexpected display: %+v", model)
 	}
 	form := ruleToFormData(rule)
-	if form.ConditionProperty != string(rule.ConditionProperty) || form.ConditionOperator != "in" || !form.ConditionNegated || form.ConditionValue != "automation,bot" {
+	if form.ConditionProperty != string(rule.ConditionProperty) || form.ConditionOperator != "in" || !form.ConditionNegated || form.ConditionValue != "automation,custom" {
 		t.Errorf("unexpected edit form: %+v", form)
 	}
 }
@@ -319,11 +320,11 @@ func TestCreateAndEditClientSideDetectionRule(t *testing.T) {
 		for _, edit := range []bool{false, true} {
 			endpoint := base + "/rules/new"
 			operator := "in"
-			value := "bot"
+			value := "custom"
 			if edit {
 				endpoint = fmt.Sprintf("%s/rules/%s/edit", base, server.IDHasher.Encrypt(int(saved.ID)))
 				operator = "in_negated"
-				value = "automation,bot"
+				value = "automation,custom"
 			}
 			resp := postRuleRequest(srv, cookie, http.MethodPost, endpoint, token, map[string]string{
 				common.ParamName:              "Client detection",
@@ -384,7 +385,7 @@ func TestCreateAndEditClientSideDetectionRule(t *testing.T) {
 				t.Fatal(err)
 			}
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
-			req.Header.Set(common.HeaderClientHints, "bot")
+			req.Header.Set(common.HeaderClientHints, "custom")
 			if got := compiled.Matches(rules.NewRequestInfo(req, "")); got == edit {
 				t.Errorf("edited=%v: saved rule match=%v", edit, got)
 			}
