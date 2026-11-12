@@ -23,7 +23,7 @@ const DEFAULT_GLOBAL_TIMEOUT_MS = 30000;
 export async function getPuzzle(endpoint, sitekey, options = {}) {
     try {
         const separator = endpoint.includes('?') ? '&' : '?';
-        const hints = getClientHints();
+        const hints = getClientHints(globalThis, options.activationAutomation);
         if (options.customDetection) { hints.push('custom'); }
         return await fetchWithBackoff(`${endpoint}${separator}sitekey=${encodeURIComponent(sitekey)}`, {
             fetchOptions: {
@@ -47,7 +47,7 @@ export async function getPuzzle(endpoint, sitekey, options = {}) {
 
 function wait(delay, signal) {
     return new Promise((resolve, reject) => {
-        if (signal?.aborted) {
+        if (signal && signal.aborted) {
             return reject(signal.reason || new Error('Aborted'));
         }
         const timeoutId = setTimeout(resolve, delay);
@@ -143,7 +143,7 @@ async function fetchWithBackoff(url, options = {}) {
                 console.warn('[privatecaptcha]', `Fetch attempt ${attempt + 1} timed out`);
                 continue;
             }
-            if (response?.ok) {
+            if (response && response.ok) {
                 clearTimeout(globalTimeoutId);
                 throw err;
             }

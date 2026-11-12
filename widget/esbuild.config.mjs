@@ -52,6 +52,7 @@ async function buildBundle(entryPoint, outfile, format, { blake2bOnly = false, w
         bundle: true,
         outfile,
         format,
+        supported: { 'optional-chain': false },
         define: { 'globalThis.__privateCaptchaExtended': String(!blake2bOnly) },
         loader: { '.css': 'text', '.wasm': 'base64' },
         plugins: [

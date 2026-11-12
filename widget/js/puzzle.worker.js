@@ -34,6 +34,6 @@ self.onmessage = async (event) => {
                 break;
         }
     } catch (error) {
-        self.postMessage({ command: 'error', error: error?.message ?? String(error) });
+        self.postMessage({ command: 'error', error: (error == null ? undefined : error.message) ?? String(error) });
     }
 };

@@ -33,6 +33,11 @@ const builds = [
 ];
 
 for (const { file, branded, library } of builds) {
+    test(`${file} omits optional chaining, including embedded workers`, async () => {
+        const source = await readFile(file, 'utf8');
+        assert.ok(!source.includes('?.'), 'browser bundles must not contain optional chaining');
+    });
+
     test(`${file} has isolated branding dependencies`, async () => {
         const source = await readFile(file, 'utf8');
         const map = JSON.parse(await readFile(`${file}.map`, 'utf8'));

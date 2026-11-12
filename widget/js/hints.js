@@ -9,17 +9,20 @@ const AUTOMATION_PROPERTIES = [
     'cdc_adoQpoasnfa76pfcZLmcfl_Symbol',
 ];
 
-export function getClientHints(browser = globalThis) {
+export function getClientHints(browser = globalThis, activationAutomation = false) {
+    if (activationAutomation) { return ['automation']; }
+
     try {
         const navigator = browser.navigator;
-        if (navigator?.webdriver || navigator?.seleniumWebdriver ||
+        if ((navigator && (navigator.webdriver || navigator.seleniumWebdriver)) ||
             AUTOMATION_PROPERTIES.some((property) => !!browser[property]) ||
-            /headless/i.test(navigator?.userAgent ?? '')) {
+            /headless/i.test(navigator ? (navigator.userAgent ?? '') : '')) {
             return ['automation'];
         }
 
         // Some automation tools leave their evaluation markers in function wrappers.
-        const functionSource = browser.Function?.prototype.toString.toString() ?? '';
+        const functionConstructor = browser.Function;
+        const functionSource = functionConstructor ? (functionConstructor.prototype.toString.toString() ?? '') : '';
         if (functionSource.includes('__puppeteer_evaluation_script__') ||
             functionSource.includes('__playwright_evaluation_script__')) {
             return ['automation'];

@@ -11,6 +11,7 @@ import './workerspool.test.js';
 import './hints.test.js';
 import './puzzle.test.js';
 import './custom-detection.test.js';
+import './activation.test.js';
 import { createWorkerSolver as createBlake2bWorkerSolver } from '../js/worker-solver-blake2b.js';
 import { blake2b, blake2bInit, blake2bUpdate, blake2bFinal } from 'blakejs/blake2b.js';
 
@@ -457,7 +458,7 @@ test('CaptchaWidget execute() during hidden click-mode loading starts and finish
         }, { once: true });
     });
 
-    widget.onFocusIn({ target: document.getElementById('submit-button') });
+    document.getElementById('submit-button').dispatchEvent(new window.Event('focusin', { bubbles: true }));
     assert.strictEqual(widget._state, 'loading', 'Widget should be loading after focus starts init');
 
     widget.execute();

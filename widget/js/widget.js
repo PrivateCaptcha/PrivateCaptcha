@@ -2,7 +2,7 @@
 
 import { getPuzzle, Puzzle } from './puzzle.js'
 import { WorkersPool } from './workerspool.js'
-import { CaptchaElement, STATE_EMPTY, STATE_ERROR, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, STATE_INVALID, DISPLAY_POPUP, DISPLAY_WIDGET } from './html.js';
+import { CaptchaElement, getCheckedEventSource, STATE_EMPTY, STATE_ERROR, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, STATE_INVALID, DISPLAY_POPUP, DISPLAY_WIDGET } from './html.js';
 import * as errors from './errors.js';
 
 if (typeof window !== "undefined" && window.customElements && !window.customElements.get('private-captcha')) {
@@ -14,6 +14,7 @@ const PUZZLE_EU_ENDPOINT_URL = 'https://api.eu.privatecaptcha.com/puzzle';
 const PUZZLE_EXPIRATION_GRACE_MILLIS = 5000;
 const CUSTOM_DETECTION_TIMEOUT_MILLIS = 500;
 export const RECAPTCHA_COMPAT = 'recaptcha';
+const activationStates = new WeakMap();
 
 
 /**
@@ -27,12 +28,63 @@ function findParentFormElement(element) {
     return element;
 }
 
+function recordActivation(widget, event) {
+    const activation = activationStates.get(widget);
+    if (activation.requiresTrustedActivation && event && event.isTrusted === false) {
+        activation.automation = true;
+    }
+}
+
+/**
+ * @param {FocusEvent} event
+ */
+function onFocusIn(event) {
+    this.trace('onFocusIn event handler');
+
+    if (STATE_EMPTY !== this._state) {
+        this.trace(`skipping focusin event with non-empty state. state=${this._state}`)
+        return;
+    }
+
+    const pcElement = this._element.querySelector('private-captcha');
+    if (pcElement && (event.target == pcElement)) {
+        this.trace('skipping focusin event on captcha element')
+        return;
+    }
+
+    recordActivation(this, event);
+    this.init(false /*start*/);
+}
+
+function onChecked(event) {
+    if (event) {
+        event.stopPropagation();
+    }
+
+    if (this._userStarted && (STATE_ERROR !== this._state)) {
+        this.trace('skipping duplicate onChecked handler')
+        return;
+    }
+
+    this.trace(`onChecked event handler. state=${this._state}`);
+    recordActivation(this, getCheckedEventSource(event));
+    this._userStarted = true;
+
+    // always show spinner when user clicked
+    this._triggerSolving(STATE_IN_PROGRESS);
+}
+
 export class CaptchaWidget {
     /**
      * @param {HTMLElement} element
      * @param {Object} options
      */
     constructor(element, options = {}) {
+        activationStates.set(this, {
+            automation: false,
+            activated: false,
+            requiresTrustedActivation: false,
+        });
         this._element = element;
         this._puzzle = null;
         this._expiryTimeout = null;
@@ -60,9 +112,9 @@ export class CaptchaWidget {
         if (form) {
             // NOTE: this does not work on Safari by (Apple) design if we click a button
             // "passive" - cannot use preventDefault()
-            form.addEventListener('focusin', this.onFocusIn.bind(this), { passive: true });
+            form.addEventListener('focusin', onFocusIn.bind(this), { passive: true });
             this._element.replaceChildren(this._createCaptchaElement());
-            this._element.addEventListener('privatecaptcha:checked', this.onChecked.bind(this));
+            this._element.addEventListener('privatecaptcha:checked', onChecked.bind(this));
 
             if (this._options.storeVariable) {
                 this._element[this._options.storeVariable] = this;
@@ -135,6 +187,8 @@ export class CaptchaWidget {
             storeVariable: this._element.dataset["storeVariable"] || null,
             customDetectionCallback: this._element.dataset["customDetectionCallback"] || null,
         }, options);
+        activationStates.get(this).requiresTrustedActivation =
+            DISPLAY_WIDGET === this._options.displayMode || DISPLAY_POPUP === this._options.displayMode;
 
         if ('auto' === this._options.lang) {
             let lang = '';
@@ -165,6 +219,13 @@ export class CaptchaWidget {
             return;
         }
 
+        const activation = activationStates.get(this);
+        // Expiry refreshes continue the original activation; explicit reset/retry starts a new one.
+        if (!activation.activated || STATE_ERROR === this._state) {
+            activation.activated = true;
+            if (document.visibilityState === 'hidden') { activation.automation = true; }
+        }
+
         const generation = ++this._initGeneration;
         this._puzzle = null;
         this._solution = null;
@@ -186,7 +247,10 @@ export class CaptchaWidget {
             // Skip the request if the widget was reset or reinitialized while awaiting detection.
             if (generation !== this._initGeneration || this._state !== STATE_LOADING) { return; }
             this.trace(`fetching puzzle. sitekey=${sitekey}`);
-            const puzzleResult = await getPuzzle(this._options.puzzleEndpoint, sitekey, { customDetection });
+            const puzzleResult = await getPuzzle(this._options.puzzleEndpoint, sitekey, {
+                customDetection,
+                activationAutomation: activation.automation,
+            });
             if (generation !== this._initGeneration || this._state !== STATE_LOADING) { return; }
             this._notice = puzzleResult.notice;
             this._puzzle = new Puzzle(puzzleResult.data);
@@ -337,6 +401,14 @@ export class CaptchaWidget {
      * @param {Object} options
      */
     reset(options = {}) {
+        activationStates.get(this).activated = false;
+        this._reset(options);
+        if (this._options.startMode === 'load') {
+            this.init(false);
+        }
+    }
+
+    _reset(options = {}) {
         this.trace('reset captcha');
 
         this.ensureNoSolutionField();
@@ -364,9 +436,6 @@ export class CaptchaWidget {
         this._apiTriggered = false;
 
         this.signalReset();
-        if (this._options.startMode === 'load') {
-            this.init(false);
-        }
     }
 
     updateStyles() {
@@ -383,7 +452,7 @@ export class CaptchaWidget {
     expire() {
         this.trace('expire captcha');
 
-        this.reset();
+        this._reset();
         if (STATE_EMPTY === this._state) { this.init(false); }
     }
 
@@ -399,26 +468,6 @@ export class CaptchaWidget {
      */
     solution() {
         return this._solution;
-    }
-
-    /**
-     * @param {FocusEvent} event
-     */
-    onFocusIn(event) {
-        this.trace('onFocusIn event handler');
-
-        if (STATE_EMPTY !== this._state) {
-            this.trace(`skipping focusin event with non-empty state. state=${this._state}`)
-            return;
-        }
-
-        const pcElement = this._element.querySelector('private-captcha');
-        if (pcElement && (event.target == pcElement)) {
-            this.trace('skipping focusin event on captcha element')
-            return;
-        }
-
-        this.init(false /*start*/);
     }
 
     /**
@@ -443,23 +492,6 @@ export class CaptchaWidget {
         this._triggerSolving(progressState);
 
         return new Promise(() => { });
-    }
-
-    onChecked(event) {
-        if (event) {
-            event.stopPropagation();
-        }
-
-        if (this._userStarted && (STATE_ERROR !== this._state)) {
-            this.trace('skipping duplicate onChecked handler')
-            return;
-        }
-
-        this.trace(`onChecked event handler. state=${this._state}`);
-        this._userStarted = true;
-
-        // always show spinner when user clicked
-        this._triggerSolving(STATE_IN_PROGRESS);
     }
 
     _triggerSolving(progressState) {
@@ -531,7 +563,7 @@ export class CaptchaWidget {
         if (STATE_ERROR === this._state) { return; }
         console.error('[privatecaptcha] error in worker:', error)
         this._errorCode = errors.ERROR_SOLVE_PUZZLE;
-        this._internalError = error?.message ?? String(error);
+        this._internalError = (error == null ? undefined : error.message) ?? String(error);
         if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); this._expiryTimeout = null; }
         this._solution = null;
         this.ensureNoSolutionField();
