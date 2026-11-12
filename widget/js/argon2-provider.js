@@ -100,8 +100,9 @@ function createNobleProvider(dependencies) {
 async function instantiate(base64, dependencies) {
     const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
     const result = await dependencies.instantiateWasm(bytes);
-    const wasm = (result?.instance ?? result)?.exports;
-    if (!wasm?.memory || typeof wasm.hash_puzzle !== 'function' ||
+    const instance = result && (result.instance ?? result);
+    const wasm = instance && instance.exports;
+    if (!wasm || !wasm.memory || typeof wasm.hash_puzzle !== 'function' ||
         typeof wasm.solve_batch !== 'function' || typeof wasm.prepare_puzzle !== 'function') {
         throw new Error('Argon2id WASM instantiation returned no solver');
     }

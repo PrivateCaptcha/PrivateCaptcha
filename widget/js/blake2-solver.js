@@ -29,7 +29,7 @@ function jsHash(length) {
 }
 
 export async function createSolver(puzzle, runtime = globalThis.WebAssembly) {
-    if (runtime?.instantiate) {
+    if (runtime && runtime.instantiate) {
         try {
             const { instance } = await runtime.instantiate(decodeWasm(scalarBase64));
             const wasm = instance.exports;

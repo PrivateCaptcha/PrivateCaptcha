@@ -29,6 +29,53 @@ const DEBUG_ID = 'pc-debug';
 const DEBUG_ERROR_CLASS = 'warn';
 const DEBUG_NOTICE_CLASS = 'notice';
 const DEBUG_TOOLTIP_CLASS = 'tooltip';
+// The checked CustomEvent is untrusted even for real clicks; retain its native source privately.
+const checkedEventSources = new WeakMap();
+
+export function getCheckedEventSource(event) {
+    return checkedEventSources.get(event) || event;
+}
+
+/**
+ * Module-local so callers cannot manufacture trusted provenance through the element.
+ * @param {Event} event
+ */
+function onCheckboxClicked(event) {
+    event.preventDefault();
+    if (this._debug) {
+        console.debug("[privatecaptcha][progress] checkbox was clicked");
+    }
+    if (event.target.checked) {
+        const checkEvent = new CustomEvent("privatecaptcha:checked", {
+            bubbles: true,
+            composed: true
+        });
+
+        checkedEventSources.set(checkEvent, getCheckedEventSource(event));
+        this.dispatchEvent(checkEvent);
+    } else {
+        console.warn('[privatecaptcha][progress] checkbox was unchecked');
+    }
+}
+
+function bindCheckboxEvents(element) {
+    const checkboxEl = element._root.getElementById(CHECKBOX_ID);
+    if (!checkboxEl) {
+        console.warn('[privatecaptcha][progress] checkbox not found in the Shadow DOM');
+        return;
+    }
+
+    let clickEvent;
+    // A script-triggered click can produce a trusted change event.
+    checkboxEl.addEventListener('click', (event) => { clickEvent = event; });
+    checkboxEl.addEventListener('change', (event) => {
+        if (clickEvent && !clickEvent.defaultPrevented) {
+            checkedEventSources.set(event, clickEvent);
+        }
+        clickEvent = null;
+        onCheckboxClicked.call(element, event);
+    });
+}
 
 const verifiedSVG = `<svg class="verified" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 154 154">
 <g fill="none"><circle cx="77" cy="77" r="76"></circle>
@@ -172,7 +219,7 @@ export class CaptchaElement extends SafeHTMLElement {
     }
 
     disconnectedCallback() {
-        this._themeObserver?.disconnect();
+        if (this._themeObserver) { this._themeObserver.disconnect(); }
     }
 
     /**
@@ -279,14 +326,7 @@ export class CaptchaElement extends SafeHTMLElement {
 
         this._root.replaceChildren(widget);
 
-        if (bindCheckEvent) {
-            const checkboxEl = this._root.getElementById(CHECKBOX_ID);
-            if (checkboxEl) {
-                checkboxEl.addEventListener('change', this.onCheckboxClicked.bind(this));
-            } else {
-                console.warn('[privatecaptcha][progress] checkbox not found in the Shadow DOM');
-            }
-        }
+        if (bindCheckEvent) { bindCheckboxEvents(this); }
     }
 
     _syncHostClass(showPopupIfNeeded) {
@@ -304,26 +344,6 @@ export class CaptchaElement extends SafeHTMLElement {
 
         this.classList.remove('hidden', 'floating');
         if (hostClass) { this.classList.add(hostClass); }
-    }
-
-    /**
-     * @param {Event} event
-     */
-    onCheckboxClicked(event) {
-        event.preventDefault();
-        if (this._debug) {
-            console.debug("[privatecaptcha][progress] checkbox was clicked");
-        }
-        if (event.target.checked) {
-            const checkEvent = new CustomEvent("privatecaptcha:checked", {
-                bubbles: true,
-                composed: true
-            });
-
-            this.dispatchEvent(checkEvent);
-        } else {
-            console.warn('[privatecaptcha][progress] checkbox was unchecked');
-        }
     }
 
     /**

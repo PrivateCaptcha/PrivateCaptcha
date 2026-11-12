@@ -100,3 +100,10 @@ test('client hints tolerate missing browser APIs and throwing getters', () => {
         Function: { prototype: { toString: { toString() { throw new Error('toString unavailable'); } } } },
     }), []);
 });
+
+test('client hints include activation automation once even when browser APIs throw', () => {
+    assert.deepStrictEqual(getClientHints({ navigator: { webdriver: true } }, true), ['automation']);
+    assert.deepStrictEqual(getClientHints({
+        get navigator() { throw new Error('navigator unavailable'); },
+    }, true), ['automation']);
+});
