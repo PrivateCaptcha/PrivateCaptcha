@@ -64,6 +64,14 @@ jobs:
           build-args: |
             GIT_COMMIT=${{ github.sha }}
             STAGE=prod
+          labels: |
+            org.opencontainers.image.title=PrivateCaptcha
+            org.opencontainers.image.description=Community edition of PrivateCaptcha
+            org.opencontainers.image.source=https://github.com/PrivateCaptcha/PrivateCaptcha
+            org.opencontainers.image.version=${{ env.REPO_TAG }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.url=https://privatecaptcha.com
+            org.opencontainers.image.documentation=https://docs.privatecaptcha.com
           tags: |
             ghcr.io/${{ env.REPO_LOWER }}:latest
             ghcr.io/${{ env.REPO_LOWER }}:${{ github.sha }}
@@ -124,6 +132,14 @@ jobs:
             STAGE=prod
             EXTRA_BUILD_FLAGS=-tags enterprise
             WIDGET_WHITELABEL=true
+          labels: |
+            org.opencontainers.image.title=PrivateCaptcha Enterprise
+            org.opencontainers.image.description=Enterprise edition of PrivateCaptcha
+            org.opencontainers.image.source=https://github.com/PrivateCaptcha/PrivateCaptcha
+            org.opencontainers.image.version=${{ env.REPO_TAG }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.url=https://privatecaptcha.com
+            org.opencontainers.image.documentation=https://docs.privatecaptcha.com
           tags: |
             ghcr.io/${{ env.REPO_LOWER_EE }}:latest
             ghcr.io/${{ env.REPO_LOWER_EE }}:${{ github.sha }}
