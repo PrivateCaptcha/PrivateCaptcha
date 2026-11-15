@@ -1657,13 +1657,14 @@ test('getPuzzle preserves the challenge query when adding the sitekey', async ()
     }
 });
 
-test('getPuzzle advertises the bundle version', async () => {
+test('getPuzzle advertises puzzle format independently of the bundle version', async () => {
     const { getPuzzle } = await import('../js/puzzle.js');
     const previousFetch = globalThis.fetch;
     const previousExtended = globalThis.__privateCaptchaExtended;
     const versions = [];
     globalThis.fetch = async (_url, options) => {
-        versions.push(new Headers(options.headers).get('x-pc-captcha-version'));
+        const headers = new Headers(options.headers);
+        versions.push([headers.get('x-pc-captcha-version'), headers.get('x-pc-puzzle-version')]);
         return { ok: true, text: async () => 'puzzle.signature', headers: { get: () => null } };
     };
     try {
@@ -1671,7 +1672,7 @@ test('getPuzzle advertises the bundle version', async () => {
         await getPuzzle('/puzzle', testSitekey, { attempts: 1 });
         globalThis.__privateCaptchaExtended = true;
         await getPuzzle('/puzzle', testSitekey, { attempts: 1 });
-        assert.deepStrictEqual(versions, ['1', '2']);
+        assert.deepStrictEqual(versions, [['1', '3'], ['2', '3']]);
     } finally {
         globalThis.fetch = previousFetch;
         if (previousExtended === undefined) {

@@ -412,6 +412,121 @@ func TestRetrievePropertyRulesSystemRules(t *testing.T) {
 	}
 }
 
+func TestPuzzleEdgeValidityUsesCachedRules(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		missingProperty bool
+		missingOrg      bool
+		invalidCache    bool
+		disabledRule    bool
+		want            time.Duration
+	}{
+		{
+			name:            "PropertyRulesPending",
+			missingProperty: true,
+			want:            24 * time.Hour,
+		},
+		{
+			name:       "OrganizationRulesPending",
+			missingOrg: true,
+			want:       24 * time.Hour,
+		},
+		{
+			name:         "InvalidCachedPropertyRules",
+			invalidCache: true,
+			want:         24 * time.Hour,
+		},
+		{
+			name: "KnownEmptyRules",
+			want: 24 * time.Hour,
+		},
+		{
+			name:         "KnownDisabledRule",
+			disabledRule: true,
+		},
+		{
+			name:         "CachedDisablingRuleWithPendingOrgRules",
+			missingOrg:   true,
+			disabledRule: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			cache := db.NewStaticCache[db.CacheKey, any](20, &db.CacheMissingValue{})
+			for key, missing := range map[db.CacheKey]bool{
+				db.CompiledPropertyRulesCacheKey(1): tc.missingProperty,
+				db.CompiledOrgRulesCacheKey(2):      tc.missingOrg,
+			} {
+				if !missing {
+					if err := cache.SetMissing(ctx, key); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			parser := useragent.NewParser()
+			if tc.invalidCache {
+				if err := cache.Set(ctx, db.CompiledPropertyRulesCacheKey(1), "invalid"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.disabledRule {
+				compiled := rules.NewRulesCompiler(parser).Compile(ctx, []*dbgen.DifficultyRule{{
+					Enabled:           true,
+					ConditionProperty: dbgen.RuleConditionPropertyAlways,
+					ActionProperty:    dbgen.RuleActionPropertyEdgeTokenValidityInterval,
+				}})
+				if err := cache.Set(ctx, db.CompiledPropertyRulesCacheKey(1), compiled); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cfg := testsConfigStore()
+			verifier := NewVerifier(cfg, nil, cfg.Get(common.FingerprintHeaderKey), parser)
+			if err := verifier.Update(ctx); err != nil {
+				t.Fatal(err)
+			}
+			srv := &Server{
+				BusinessDB: db.NewBusinessEx(nil, cache),
+				Verifier:   verifier,
+				Levels:     difficulty.NewLevelsEx(db.NewMemoryTimeSeries(), fixedPuzzleDifficulty(100), 1, time.Minute),
+				Metrics:    monitoring.NewStub(),
+				Auth: &AuthMiddleware{
+					RulesChan:           make(chan int32, 1),
+					backpressureTimeout: time.Second,
+					Metrics:             monitoring.NewStub(),
+				},
+			}
+			property := &dbgen.Property{
+				ID:                        1,
+				ExternalID:                db.UUIDFromSiteKey("11111111222233334444555555555555"),
+				OrgID:                     db.Int(2),
+				OrgOwnerID:                db.Int(3),
+				ValidityInterval:          time.Hour,
+				EdgeTokenValidityInterval: 24 * time.Hour,
+			}
+			ctx = context.WithValue(ctx, common.PropertyContextKey, property)
+			ctx = context.WithValue(ctx, common.RateLimitKeyContextKey, netip.MustParseAddr("192.0.2.1"))
+			req := httptest.NewRequest(http.MethodGet, "/puzzle", nil).WithContext(ctx)
+			req.Header.Set(common.HeaderCaptchaVersion, "1")
+			req.Header.Set(common.HeaderPuzzleVersion, "3")
+			w := httptest.NewRecorder()
+			srv.puzzleHandler(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("puzzle status = %d, want OK", w.Code)
+			}
+			issued, _, err := parsePuzzle(w.Result())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if issued.Version() != puzzle.PuzzleVersion3 || issued.EdgeTokenValidity() != tc.want {
+				t.Fatalf("puzzle version=%d validity=%v, want v3 validity=%v", issued.Version(), issued.EdgeTokenValidity(), tc.want)
+			}
+			if got := len(srv.Auth.RulesChan) > 0; got != (tc.missingProperty || tc.missingOrg) {
+				t.Errorf("backfill queued = %v", got)
+			}
+		})
+	}
+}
+
 func createArgonAPIProperty(t *testing.T) (*dbgen.User, *dbgen.Organization, *dbgen.Property, string) {
 	t.Helper()
 	user, org, err := db_tests.CreateNewAccountForTest(t.Context(), store, t.Name(), testPlan)
@@ -575,6 +690,9 @@ func puzzleSuiteEx(ctx context.Context, method, sitekey, domain string, version 
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	if len(version) > 0 {
 		req.Header.Set(common.HeaderCaptchaVersion, version[0])
+	}
+	if len(version) > 1 {
+		req.Header.Set(common.HeaderPuzzleVersion, version[1])
 	}
 
 	q := req.URL.Query()

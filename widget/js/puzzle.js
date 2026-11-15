@@ -29,6 +29,7 @@ export async function getPuzzle(endpoint, sitekey, options = {}) {
             fetchOptions: {
                 headers: [
                     ["x-pc-captcha-version", globalThis.__privateCaptchaExtended === true ? "2" : "1"],
+                    ["x-pc-puzzle-version", "3"],
                     ["x-pc-client-hints", hints.join(',')],
                 ],
                 mode: "cors",

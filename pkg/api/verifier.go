@@ -542,12 +542,7 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 
 	verificationRate := v.PropertyStats.VerificationRate(property.ID, tnow)
 	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, difficultyProperty, tnow, verificationRate)
-	// The captcha-version header is the same legacy/v3-capability signal used by
-	// selectPropertyChallenge: "1" is the standard-widget signal and "2" is the
-	// extended/Argon2id-capable signal (both predate the v3 parser, see
-	// PuzzleForRequest docs and the widget's x-pc-captcha-version advertisement in
-	// widget/js/puzzle.js). Neither "1" nor "2" is treated as a precise v3 indicator;
-	// only values other than "1"/"2" (or an omitted header) opt into the v3 wire bump.
+	// Solver capability is independent of the supported puzzle wire format.
 	captchaVersion := r.Header.Get(common.HeaderCaptchaVersion)
 	challenge, wireDifficulty, fallback, challengeErr := selectPropertyChallenge(property.Challenge, puzzleDifficulty, captchaVersion, v.argon2IDEnabled())
 	if challengeErr != nil {
@@ -563,16 +558,10 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 	if err := result.Init(property.ValidityInterval); err != nil {
 		slog.ErrorContext(ctx, "Failed to init puzzle", common.ErrAttr(err))
 	}
-	// Only attach edge-token validity to the payload when the client advertises a
-	// captcha version that can parse the v3 wire format. SetEdgeTokenValidity
-	// upgrades the wire format to version 3, which pre-v3 widget bundles cannot
-	// parse. "1" is the legacy/standard-widget signal and "2" is the
-	// extended/Argon2id-capable signal (commit 4190876d, v1.45.0 / npm core-lib
-	// 0.0.28-0.0.31); both predate the v3 parser (commit d053eb51, npm 0.0.32), so
-	// released "2"-senders cannot parse v3. Legacy (< v3) clients still receive
-	// edge tokens: addEdgeToken falls back to property.EdgeTokenValidityInterval
-	// when the puzzle's wire version did not carry the validity field.
-	if property.EdgeTokenValidityInterval > 0 && captchaVersion != "1" && captchaVersion != "2" {
+	// Older "1"/"2" senders cannot parse v3 unless they separately advertise it.
+	// Preserve the existing v3 behavior for other captcha-version values and omission.
+	supportsV3 := r.Header.Get(common.HeaderPuzzleVersion) == "3" || (captchaVersion != "1" && captchaVersion != "2")
+	if property.EdgeTokenValidityInterval > 0 && supportsV3 {
 		result.SetEdgeTokenValidity(difficultyProperty.EdgeTokenValidity())
 	}
 

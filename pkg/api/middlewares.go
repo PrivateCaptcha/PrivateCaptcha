@@ -440,10 +440,6 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 
 	slog.DebugContext(ctx, "Uncached property rules", "total", len(batch), "uncached", len(uncachedPropertyIDs))
 
-	if len(uncachedPropertyIDs) == 0 {
-		return nil
-	}
-
 	// resolve org IDs from properties (they should supposedly be all cached at this time due to other code branches)
 	// we have to use non-cached version to later update org rules of active properties
 	properties, err := impl.RetrievePropertiesByID(ctx, batch)
