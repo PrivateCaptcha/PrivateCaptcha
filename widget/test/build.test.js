@@ -21,6 +21,8 @@ for (const root of ['static', 'whitelabel']) {
         assert.ok(blake2b.length < extended.length);
         assert.ok(/x-pc-captcha-version",\s*(?:false\s*\?\s*"2"\s*:\s*"1"|"1")/.test(blake2b));
         assert.ok(/x-pc-captcha-version",\s*(?:true\s*\?\s*"2"\s*:\s*"1"|"2")/.test(extended));
+        assert.ok(/x-pc-puzzle-version",\s*"3"/.test(blake2b));
+        assert.ok(/x-pc-puzzle-version",\s*"3"/.test(extended));
     });
 }
 

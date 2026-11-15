@@ -177,7 +177,7 @@ func TestAPIServerInitRejectsEmptyUserFingerprintKey(t *testing.T) {
 	}
 }
 
-func TestPuzzlePreflightAllowsClientHints(t *testing.T) {
+func TestPuzzlePreflightAllowsWidgetHeaders(t *testing.T) {
 	srv := &Server{
 		Auth:        &AuthMiddleware{},
 		RateLimiter: &ratelimit.StubRateLimiter{},
@@ -191,7 +191,7 @@ func TestPuzzlePreflightAllowsClientHints(t *testing.T) {
 	req := httptest.NewRequest(http.MethodOptions, "/puzzle?sitekey="+strings.Repeat("a", db.SitekeyLen), nil)
 	req.Header.Set("Origin", "https://example.com")
 	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
-	const requestedHeaders = "x-pc-captcha-version,x-pc-client-hints"
+	const requestedHeaders = "x-pc-captcha-version,x-pc-client-hints,x-pc-puzzle-version"
 	req.Header.Set("Access-Control-Request-Headers", requestedHeaders)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)

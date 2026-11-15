@@ -804,9 +804,6 @@ func TestRulesPairSystemBlock(t *testing.T) {
 			ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
 		}}),
 	}
-	if !pair.HasBlockRules() {
-		t.Fatal("system block rule was not detected")
-	}
 	if !pair.IsRequestBlocked(newTestRequestInfo("", netip.MustParseAddr("192.0.2.1"))) {
 		t.Fatal("system block rule did not block the request")
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -47,6 +48,58 @@ func (q *edgeBackfillQuerier) GetEdgeSettingsBySitekeys(_ context.Context, keys 
 		rows[i] = (*dbgen.GetEdgeSettingsBySitekeysRow)(row)
 	}
 	return rows, q.Error
+}
+
+func TestRulesBackfillResolvesMissingOrganization(t *testing.T) {
+	if testing.Short() {
+		t.Skip("requires PostgreSQL")
+	}
+	for _, withRule := range []bool{false, true} {
+		name := "NoOrganizationRules"
+		if withRule {
+			name = "DisabledOrganizationEdgeValidity"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := t.Context()
+			user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "backfill-org.example.com"), org)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if withRule {
+				if _, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
+					Name:              "Disable edge access",
+					OrgID:             db.Int(org.ID),
+					CreatorID:         db.Int(user.ID),
+					Enabled:           true,
+					ConditionProperty: dbgen.RuleConditionPropertyAlways,
+					ConditionOperator: dbgen.RuleConditionOperatorEquals,
+					ActionProperty:    dbgen.RuleActionPropertyEdgeTokenValidityInterval,
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := cache.SetMissing(ctx, db.CompiledPropertyRulesCacheKey(property.ID)); err != nil {
+				t.Fatal(err)
+			}
+			cache.Delete(ctx, db.CompiledOrgRulesCacheKey(org.ID))
+			cache.Delete(ctx, db.RawOrgRulesCacheKey(org.ID))
+			if err := server.Auth.backfillRulesImpl(ctx, map[int32]uint{property.ID: 1}); err != nil {
+				t.Fatal(err)
+			}
+			compiled, _, err := store.Impl().GetCachedCompiledOrgRules(ctx, org.ID)
+			if withRule {
+				if err != nil || compiled.Empty() {
+					t.Fatalf("organization restriction was not backfilled: %v", err)
+				}
+			} else if err != db.ErrNegativeCacheHit {
+				t.Fatalf("empty organization rules were not negatively cached: %v", err)
+			}
+		})
+	}
 }
 
 func TestBackfillEdgeUsesOneBatchQuery(t *testing.T) {

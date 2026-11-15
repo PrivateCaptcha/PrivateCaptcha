@@ -165,15 +165,6 @@ func (cr *CompiledRules) IsRequestBlocked(ri *RequestInfo) bool {
 	return blocked
 }
 
-// HasBlockRules reports whether the compiled rules contain any enabled
-// block-request rules. This is used to decide whether block-rule enforcement
-// could apply to a request without evaluating the rules against a specific
-// RequestInfo (e.g. when the request available at verification time is not
-// the end-user's request).
-func (cr *CompiledRules) HasBlockRules() bool {
-	return cr != nil && cr.hasBlockRules
-}
-
 func (cr *CompiledRules) checkRequestBlocked(ri *RequestInfo) (blocked bool, terminal bool) {
 	if (cr == nil) || (len(cr.rules) == 0) || (ri == nil) || (!cr.hasBlockRules && !cr.hasTerminalRules) {
 		return false, false
@@ -213,15 +204,6 @@ func (rp *RulesPair) IsRequestBlocked(ri *RequestInfo) bool {
 	return rp.PropertyRules.IsRequestBlocked(ri) ||
 		rp.OrgRules.IsRequestBlocked(ri) ||
 		rp.SystemRules.IsRequestBlocked(ri)
-}
-
-// HasBlockRules reports whether the system, property, or org rules contain any enabled
-// block-request rules. See CompiledRules.HasBlockRules for details.
-func (rp *RulesPair) HasBlockRules() bool {
-	if rp == nil {
-		return false
-	}
-	return rp.SystemRules.HasBlockRules() || rp.PropertyRules.HasBlockRules() || rp.OrgRules.HasBlockRules()
 }
 
 type overrideProperty struct {

@@ -111,11 +111,9 @@ func solutionsSuite(ctx context.Context, sitekey, domain string) (string, string
 	return solutionsSuiteEx(ctx, sitekey, domain, "")
 }
 
-// solutionsSuiteEx is the version-aware variant of solutionsSuite: when version
-// is non-empty it advertises the given x-pc-captcha-version header on the puzzle
-// fetch, mirroring what the standard ("1") and extended ("2") widget bundles do.
-func solutionsSuiteEx(ctx context.Context, sitekey, domain, version string) (string, string, error) {
-	resp, err := puzzleSuiteEx(ctx, http.MethodGet, sitekey, domain, version)
+// Optional versions advertise bundle capability, then supported puzzle format.
+func solutionsSuiteEx(ctx context.Context, sitekey, domain string, versions ...string) (string, string, error) {
+	resp, err := puzzleSuiteEx(ctx, http.MethodGet, sitekey, domain, versions...)
 	if err != nil {
 		return "", "", err
 	}
@@ -950,7 +948,7 @@ func TestVerifyEdgeTokenValidityRule(t *testing.T) {
 		t.Fatal(err)
 	}
 	params := db_tests.CreateNewPropertyParams(user.ID, "edge-rule.example.com")
-	params.EdgeTokenValidityInterval = time.Hour
+	params.EdgeTokenValidityInterval = 24 * time.Hour
 	property, _, err := store.Impl().CreateNewProperty(ctx, params, org)
 	if err != nil {
 		t.Fatal(err)
@@ -965,13 +963,13 @@ func TestVerifyEdgeTokenValidityRule(t *testing.T) {
 	}{
 		{
 			name:     "Default",
-			validity: time.Hour,
+			validity: 24 * time.Hour,
 		},
 		{
 			name:     "DomainRule",
 			withRule: true,
-			action:   3,
-			validity: 30 * time.Minute,
+			action:   1,
+			validity: puzzle.ValidityDurations[0],
 		},
 		{
 			name:     "DisabledByDomainRule",
@@ -998,67 +996,125 @@ func TestVerifyEdgeTokenValidityRule(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
-			if err != nil {
-				t.Fatal(err)
-			}
-			proof := solutionsStr + "." + puzzleStr
-			payload, err := server.Verifier.ParseSolutionPayload(ctx, []byte(proof))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := payload.Puzzle().EdgeTokenValidity(); got != tc.validity {
-				t.Fatalf("puzzle edge-token validity = %v, want %v", got, tc.validity)
-			}
-			resp, err := verifySuite(proof, secret, sitekey)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				t.Fatalf("verify status = %d", resp.StatusCode)
-			}
-			var result VerificationResponse
-			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-				t.Fatal(err)
-			}
-			if tc.validity == 0 {
-				if !result.Success || result.EdgeToken != "" {
-					t.Fatalf("disabled rule must preserve verification without an edge token: %+v", result)
-				}
-				return
-			}
-			parts := strings.Split(result.EdgeToken, ".")
-			if !result.Success || len(parts) != 3 {
-				t.Fatalf("verification did not return an edge token: %+v", result)
-			}
-			data, err := base64.RawURLEncoding.DecodeString(parts[1])
-			if err != nil {
-				t.Fatal(err)
-			}
-			var claims struct {
-				IssuedAt  int64 `json:"iat"`
-				ExpiresAt int64 `json:"exp"`
-			}
-			if err := json.Unmarshal(data, &claims); err != nil {
-				t.Fatal(err)
-			}
-			if got := time.Duration(claims.ExpiresAt-claims.IssuedAt) * time.Second; got != tc.validity {
-				t.Errorf("edge token validity = %v, want %v", got, tc.validity)
+			for _, client := range []struct {
+				name          string
+				version       string
+				puzzleVersion string
+				cold          bool
+			}{
+				{name: "DefaultV3"},
+				{
+					name:    "ExplicitV3",
+					version: "3",
+				},
+				{
+					name:    "LegacyV1",
+					version: "1",
+				},
+				{
+					name:    "LegacyExtended",
+					version: "2",
+				},
+				{
+					name:    "ColdLegacy",
+					version: "1",
+					cold:    true,
+				},
+				{
+					name:          "CurrentStandard",
+					version:       "1",
+					puzzleVersion: "3",
+				},
+				{
+					name:          "CurrentExtended",
+					version:       "2",
+					puzzleVersion: "3",
+				},
+			} {
+				t.Run(client.name, func(t *testing.T) {
+					if err := server.Auth.backfillRulesImpl(ctx, map[int32]uint{property.ID: 1}); err != nil {
+						t.Fatal(err)
+					}
+					puzzleStr, solutionsStr, err := solutionsSuiteEx(ctx, sitekey, property.Domain, client.version, client.puzzleVersion)
+					if err != nil {
+						t.Fatal(err)
+					}
+					proof := solutionsStr + "." + puzzleStr
+					payload, err := server.Verifier.ParseSolutionPayload(ctx, []byte(proof))
+					if err != nil {
+						t.Fatal(err)
+					}
+					wantCarried := tc.validity
+					if client.puzzleVersion != "3" && (client.version == "1" || client.version == "2") {
+						wantCarried = 0
+						if got := payload.Puzzle().Version(); got != 1 {
+							t.Fatalf("legacy Blake2b wire version = %d, want 1", got)
+						}
+					} else if got := payload.Puzzle().Version(); got != puzzle.PuzzleVersion3 {
+						t.Fatalf("v3-capable wire version = %d, want 3", got)
+					}
+					if got := payload.Puzzle().EdgeTokenValidity(); got != wantCarried {
+						t.Fatalf("puzzle edge-token validity = %v, want %v", got, wantCarried)
+					}
+					if client.cold {
+						for _, key := range []db.CacheKey{
+							db.CompiledPropertyRulesCacheKey(property.ID),
+							db.RawPropertyRulesCacheKey(property.ID),
+							db.CompiledOrgRulesCacheKey(org.ID),
+							db.RawOrgRulesCacheKey(org.ID),
+						} {
+							cache.Delete(ctx, key)
+						}
+					}
+					resp, err := verifySuite(proof, secret, sitekey)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer resp.Body.Close()
+					if resp.StatusCode != http.StatusOK {
+						t.Fatalf("verify status = %d", resp.StatusCode)
+					}
+					var result VerificationResponse
+					if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+						t.Fatal(err)
+					}
+					if payload.Puzzle().Version() < puzzle.PuzzleVersion3 {
+						if !result.Success || result.EdgeToken != "" {
+							t.Fatalf("legacy puzzle must verify without an edge token: %+v", result)
+						}
+						return
+					}
+					if tc.validity == 0 {
+						if !result.Success || result.EdgeToken != "" {
+							t.Fatalf("disabled rule must preserve verification without an edge token: %+v", result)
+						}
+						return
+					}
+					parts := strings.Split(result.EdgeToken, ".")
+					if !result.Success || len(parts) != 3 {
+						t.Fatalf("verification did not return an edge token: %+v", result)
+					}
+					data, err := base64.RawURLEncoding.DecodeString(parts[1])
+					if err != nil {
+						t.Fatal(err)
+					}
+					var claims struct {
+						IssuedAt  int64 `json:"iat"`
+						ExpiresAt int64 `json:"exp"`
+					}
+					if err := json.Unmarshal(data, &claims); err != nil {
+						t.Fatal(err)
+					}
+					if got := time.Duration(claims.ExpiresAt-claims.IssuedAt) * time.Second; got != tc.validity {
+						t.Errorf("edge token validity = %v, want %v", got, tc.validity)
+					}
+				})
 			}
 		})
 	}
 }
 
-// TestVerifyEdgeTokenLegacyClient end-to-end asserts the bug fix: a client that
-// advertises x-pc-captcha-version: "1" (the standard/legacy widget wire version,
-// which pre-v3 widget bundles also send) on an edge-token-enabled property
-// receives a puzzle payload it can parse (wire version 1, NOT 3) and still
-// receives an edge token at verify time. The v1 payload does not carry the
-// edge-token-validity field, so addEdgeToken recomputes the validity from the
-// property's configured interval. A v3-capable client (no version header) on
-// the same property receives a v3 payload and a token carrying the wire-sourced
-// validity. This test requires PostgreSQL (the global store/server).
+// Legacy puzzles remain verifiable, but non-stub edge access requires v3 metadata.
 func TestVerifyEdgeTokenLegacyClient(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -1088,19 +1144,12 @@ func TestVerifyEdgeTokenLegacyClient(t *testing.T) {
 		{
 			name:         "LegacyClient",
 			version:      "1",
-			wantWireByte: 1,    // must stay on v1 - pre-v3 widgets cannot parse v3
-			wantCarried:  0,    // v1 never carries the edge-token validity field
-			wantTokenS:   3600, // recomputed from property interval by addEdgeToken fallback
+			wantWireByte: 1,
 		},
 		{
-			// Pre-v3 extended clients (v1.45.0 / npm core-lib 0.0.28-0.0.31) advertise
-			// "2" (the Argon2id-capable signal) but cannot parse v3, so they must keep
-			// receiving a pre-v3 payload and have addEdgeToken recompute the validity.
 			name:         "PreV3ExtendedClient",
 			version:      "2",
-			wantWireByte: 1,    // must stay pre-v3 - extended "2" senders predate the v3 parser
-			wantCarried:  0,    // pre-v3 wire format never carries the edge-token validity field
-			wantTokenS:   3600, // recomputed from property interval by addEdgeToken fallback
+			wantWireByte: 1,
 		},
 		{
 			name:         "V3CapableClient",
@@ -1165,6 +1214,12 @@ func TestVerifyEdgeTokenLegacyClient(t *testing.T) {
 			if !result.Success {
 				t.Fatalf("verification must succeed: %+v", result)
 			}
+			if tc.wantTokenS == 0 {
+				if result.EdgeToken != "" {
+					t.Fatal("legacy non-stub puzzle returned an edge token")
+				}
+				return
+			}
 			parts := strings.Split(result.EdgeToken, ".")
 			if !result.Success || len(parts) != 3 {
 				t.Fatalf("verification did not return an edge token: %+v", result)
@@ -1193,7 +1248,7 @@ func TestVerifyEdgeTokenLegacyClient(t *testing.T) {
 // The cold-cache path is triggered by evicting the sitekey cache entry before
 // both /puzzle and /verify, so /puzzle returns a stub (PuzzleID == 0) and
 // /verify re-fetches the property from the DB.
-// Stubs use the property's default edge-token validity without applying rules.
+// Stub edge tokens always use the minimum validity interval.
 func TestVerifyStubPuzzleEdgeToken(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -1214,25 +1269,29 @@ func TestVerifyStubPuzzleEdgeToken(t *testing.T) {
 	secret := db.UUIDToSecret(key.ExternalID)
 
 	for _, tc := range []struct {
-		name     string
-		withRule bool
-		action   int32
-		validity time.Duration
+		name             string
+		withRule         bool
+		action           int32
+		propertyValidity time.Duration
+		validity         time.Duration
 	}{
 		{
-			name:     "Default",
-			validity: time.Hour,
+			name:             "Default",
+			propertyValidity: time.Hour,
+			validity:         puzzle.ValidityDurations[0],
 		},
 		{
-			name:     "DomainRuleUsesPropertyDefault",
-			withRule: true,
-			action:   3,
-			validity: time.Hour,
+			name:             "DomainRuleKeepsStubMinimum",
+			withRule:         true,
+			action:           3,
+			propertyValidity: time.Hour,
+			validity:         puzzle.ValidityDurations[0],
 		},
 		{
-			name:     "DisablingDomainRuleUsesPropertyDefault",
-			withRule: true,
-			validity: time.Hour,
+			name:             "DisablingDomainRuleKeepsStubMinimum",
+			withRule:         true,
+			propertyValidity: time.Hour,
+			validity:         puzzle.ValidityDurations[0],
 		},
 		{
 			name: "DisabledByProperty",
@@ -1240,7 +1299,7 @@ func TestVerifyStubPuzzleEdgeToken(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			params := db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("edge-stub-%s.example.com", tc.name))
-			params.EdgeTokenValidityInterval = tc.validity
+			params.EdgeTokenValidityInterval = tc.propertyValidity
 			property, _, err := store.Impl().CreateNewProperty(ctx, params, org)
 			if err != nil {
 				t.Fatal(err)
@@ -1259,9 +1318,9 @@ func TestVerifyStubPuzzleEdgeToken(t *testing.T) {
 				}); err != nil {
 					t.Fatal(err)
 				}
-				if err := server.Auth.backfillRulesImpl(ctx, map[int32]uint{property.ID: 1}); err != nil {
-					t.Fatal(err)
-				}
+			}
+			if err := server.Auth.backfillRulesImpl(ctx, map[int32]uint{property.ID: 1}); err != nil {
+				t.Fatal(err)
 			}
 
 			sitekey := db.UUIDToSiteKey(property.ExternalID)
@@ -1311,7 +1370,7 @@ func TestVerifyStubPuzzleEdgeToken(t *testing.T) {
 			}
 			if tc.validity == 0 {
 				if result.EdgeToken != "" {
-					t.Fatalf("property-disabled stub-puzzle must not return an edge token: %+v", result)
+					t.Fatalf("disabled stub-puzzle edge validity must not return an edge token: %+v", result)
 				}
 				return
 			}
@@ -1657,7 +1716,7 @@ func TestStubPuzzleEdgeTokenWithBlockRules(t *testing.T) {
 			name:          "NoBlockRuleIssuesStubEdgeToken",
 			withBlock:     false,
 			wantToken:     true,
-			wantValidityS: int64(time.Hour / time.Second),
+			wantValidityS: int64(puzzle.ValidityDurations[0] / time.Second),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1679,9 +1738,9 @@ func TestStubPuzzleEdgeTokenWithBlockRules(t *testing.T) {
 				}); err != nil {
 					t.Fatal(err)
 				}
-				if err := server.Auth.backfillRulesImpl(ctx, map[int32]uint{property.ID: 1}); err != nil {
-					t.Fatal(err)
-				}
+			}
+			if err := server.Auth.backfillRulesImpl(ctx, map[int32]uint{property.ID: 1}); err != nil {
+				t.Fatal(err)
 			}
 
 			sitekey := db.UUIDToSiteKey(property.ExternalID)

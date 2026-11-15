@@ -306,7 +306,7 @@ func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) 
 		// NOTE: due to the implementation of rs/cors, we need not to set "*" as AllowOrigin as this will ruin the response
 		// (in case of "*" allowed origin, response contains the same, while we want to restrict the response to domain)
 		AllowOriginVaryRequestFunc: s.Auth.originAllowed,
-		AllowedHeaders:             []string{common.HeaderCaptchaVersion, common.HeaderClientHints, "accept", "content-type", "x-requested-with"},
+		AllowedHeaders:             []string{common.HeaderCaptchaVersion, common.HeaderPuzzleVersion, common.HeaderClientHints, "accept", "content-type", "x-requested-with"},
 		ExposedHeaders:             []string{common.HeaderWidgetNotice},
 		AllowedMethods:             []string{http.MethodGet, http.MethodPost, http.MethodOptions},
 		AllowPrivateNetwork:        true,
@@ -670,18 +670,11 @@ func (s *Server) addEdgeToken(r *http.Request, response *VerificationResponse, r
 	}
 	ctx := r.Context()
 	validity := result.EdgeTokenValidity
-	// Stub puzzles (cold cache) and puzzles issued to legacy (< v3) clients never
-	// carry the edge-token-validity field in the wire payload, so the server-side
-	// value is zero. Recompute it from the property so those users still receive an
-	// edge token (mirroring the stub-puzzle path). v3 payloads carry validity
-	// authoritatively, so a zero there means a rule explicitly disabled the token.
-	if result.PuzzleID == 0 || (result.PuzzleVersion < puzzle.PuzzleVersion3) {
-		if rulesPair := s.retrievePropertyRules(ctx, property); rulesPair.HasBlockRules() {
-			slog.Log(ctx, common.LevelTrace, "Issuing short-lived edge token for stub/legacy puzzle")
-			validity = puzzle.ValidityDurations[0]
-		} else {
-			validity = property.EdgeTokenValidityInterval
-		}
+	// Only stubs lack a signed edge-validity decision. Other puzzles must carry v3 metadata.
+	if result.PuzzleID == 0 {
+		validity = puzzle.ValidityDurations[0]
+	} else if result.PuzzleVersion < puzzle.PuzzleVersion3 {
+		return nil
 	}
 	if validity == 0 {
 		return nil
