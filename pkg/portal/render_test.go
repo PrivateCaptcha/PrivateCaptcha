@@ -1543,6 +1543,48 @@ func TestRenderHTML(t *testing.T) {
 			enterprise: enterpriseOnly,
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.RulesEndpoint, "preview-positions"},
+			template: orgRulesTemplate,
+			model: &OrgRulesRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					CurrentOrg: stubOrg("123"),
+				},
+				rulesRenderContext: rulesRenderContext{
+					Rules: stubDifficultyRules(),
+				},
+			},
+			selector:   `select#position > option[value="0"], select#position > option[value="1"], select#position > option[value="2"], select#position > option[value="3"], select#position > option[value="4"], select#position > template`,
+			matches:    []string{"Position 1", "Position 2", "Position 3", "Position 4", "Position 5"},
+			enterprise: enterpriseOnly,
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "1", common.RulesEndpoint, "reorder-positions"},
+			template: propertyDashboardRulesTemplate,
+			model: &PropertyRulesRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{
+					Property: stubProperty("Foo", "123"),
+					Org:      stubOrg("123"),
+				},
+				rulesRenderContext: rulesRenderContext{
+					Rules: []*DifficultyRuleModel{
+						{
+							ID:      "789",
+							Name:    "First Rule",
+							CanEdit: true,
+						},
+						{
+							ID:      "790",
+							Name:    "Second Rule",
+							CanEdit: true,
+						},
+					},
+				},
+			},
+			selector:   `select#position > option[value="0"], select#position > option[value="1"], select#position > template`,
+			matches:    []string{"Position 1", "Position 2"},
+			enterprise: enterpriseOnly,
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "1", common.RulesEndpoint, "789", common.CopyEndpoint},
 			template: propertyDashboardRulesTemplate,
 			model: &PropertyRulesRenderContext{

@@ -1,6 +1,6 @@
 {{ if .Params.Rules }}
-<div x-data="{ moveOpen: false, moveRuleIndex: 0, moveRuleID: '', moveRuleName: '', newPosition: 0, rulesCount: 0 }"
-    x-init="moveOpen = false; rulesCount = {{ len .Params.Rules }}">
+<div x-data="{ moveOpen: false, moveRuleIndex: 0, moveRuleID: '', moveRuleName: '', newPosition: 0 }"
+    x-init="moveOpen = false">
     <div class="mt-4 flow-root{{block "rules-blocker-style" . }}{{ if not $.Platform.Enterprise }} relative sm:px-6{{ end }}{{ end }}">
         <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div class="inline-block min-w-full align-middle sm:px-6 lg:px-8">
@@ -84,9 +84,10 @@
                                         <label for="position" class="pc-internal-form-label">New Position</label>
                                         <div class="mt-2">
                                             <select id="position" name="position" x-model="newPosition" class="w-full pc-internal-form-select">
-                                                <template x-for="(n, index) in rulesCount" :key="index">
-                                                    <option :value="index" :disabled="index === moveRuleIndex" x-text="'Position ' + (index + 1) + (index === moveRuleIndex ? ' (current)' : '')"></option>
-                                                </template>
+                                                {{/* Alpine x-for clones lose their loop scope when restored from htmx history. */}}
+                                                {{ range $index, $rule := .Params.Rules }}
+                                                <option value="{{ $index }}" :disabled="{{ $index }} === moveRuleIndex" x-text="'Position {{ plus1 $index }}' + ({{ $index }} === moveRuleIndex ? ' (current)' : '')">Position {{ plus1 $index }}</option>
+                                                {{ end }}
                                             </select>
                                         </div>
                                     </div>
