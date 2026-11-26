@@ -1637,9 +1637,19 @@ func TestBusinessStoreImplRemoveEmailInviteFromOrg(t *testing.T) {
 func TestBusinessStoreImplUpdateUserSubscription(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
-		_, _, err := store.UpdateUserSubscription(context.Background(), &dbgen.User{ID: 1}, &dbgen.Subscription{ID: 1})
-		if err == nil {
-			t.Errorf("expected error, got nil")
+		user := &dbgen.User{
+			ID:             1,
+			SubscriptionID: Int(2),
+		}
+		subscription := &dbgen.Subscription{
+			ID: 3,
+		}
+		updatedUser, event, err := store.UpdateUserSubscription(t.Context(), user, subscription)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			t.Fatalf("expected pgx.ErrNoRows, got %v", err)
+		}
+		if updatedUser != nil || event != nil {
+			t.Fatalf("expected no updated user or audit event, got %v and %v", updatedUser, event)
 		}
 	})
 

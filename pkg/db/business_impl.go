@@ -2950,8 +2950,9 @@ func (impl *BusinessStoreImpl) UpdateUserSubscription(ctx context.Context, user 
 	}
 
 	updatedUser, err := impl.querier.UpdateUserSubscription(ctx, &dbgen.UpdateUserSubscriptionParams{
-		ID:             user.ID,
-		SubscriptionID: Int(subscription.ID),
+		ID:                     user.ID,
+		SubscriptionID:         Int(subscription.ID),
+		ExpectedSubscriptionID: user.SubscriptionID,
 	})
 
 	if err != nil {

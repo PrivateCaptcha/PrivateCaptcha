@@ -12,6 +12,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
+	"github.com/jackc/pgx/v5"
 )
 
 func TestSoftDeleteOrganization(t *testing.T) {
@@ -326,6 +327,34 @@ func TestUpdateUserSubscription(t *testing.T) {
 
 	if subscr.Source != dbgen.SubscriptionSourceExternal {
 		t.Errorf("Unexpected subscription source: %v", subscr.Source)
+	}
+}
+
+func TestUpdateUserSubscriptionFromNull(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewBareAccount(ctx, store, t.Name())
+	if err != nil {
+		t.Fatalf("Failed to create account without a subscription: %v", err)
+	}
+	subscription, err := store.Impl().CreateNewSubscription(ctx, db_tests.CreateNewSubscriptionParams(testPlan))
+	if err != nil {
+		t.Fatalf("Failed to create subscription: %v", err)
+	}
+
+	updatedUser, _, err := store.Impl().UpdateUserSubscription(ctx, user, subscription)
+	if err != nil {
+		t.Fatalf("Failed to assign the first subscription: %v", err)
+	}
+	if updatedUser.SubscriptionID != db.Int(subscription.ID) {
+		t.Fatalf("Expected subscription %d, got %v", subscription.ID, updatedUser.SubscriptionID)
+	}
+
+	if _, _, err := store.Impl().UpdateUserSubscription(ctx, user, subscription); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("Expected stale update to return pgx.ErrNoRows, got %v", err)
 	}
 }
 

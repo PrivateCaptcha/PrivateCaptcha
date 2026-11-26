@@ -224,16 +224,19 @@ func (q *Queries) UpdateUserData(ctx context.Context, arg *UpdateUserDataParams)
 }
 
 const updateUserSubscription = `-- name: UpdateUserSubscription :one
-UPDATE backend.users SET subscription_id = $2, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled
+UPDATE backend.users SET subscription_id = $2, updated_at = NOW()
+WHERE id = $1 AND subscription_id IS NOT DISTINCT FROM $3::integer
+RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled
 `
 
 type UpdateUserSubscriptionParams struct {
-	ID             int32       `db:"id" json:"id"`
-	SubscriptionID pgtype.Int4 `db:"subscription_id" json:"subscription_id"`
+	ID                     int32       `db:"id" json:"id"`
+	SubscriptionID         pgtype.Int4 `db:"subscription_id" json:"subscription_id"`
+	ExpectedSubscriptionID pgtype.Int4 `db:"expected_subscription_id" json:"expected_subscription_id"`
 }
 
 func (q *Queries) UpdateUserSubscription(ctx context.Context, arg *UpdateUserSubscriptionParams) (*User, error) {
-	row := q.db.QueryRow(ctx, updateUserSubscription, arg.ID, arg.SubscriptionID)
+	row := q.db.QueryRow(ctx, updateUserSubscription, arg.ID, arg.SubscriptionID, arg.ExpectedSubscriptionID)
 	var i User
 	err := row.Scan(
 		&i.ID,

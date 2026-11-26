@@ -11,7 +11,9 @@ INSERT INTO backend.users (name, email, subscription_id) VALUES ($1, $2, $3) RET
 UPDATE backend.users SET name = $2, email = $3, updated_at = NOW() WHERE id = $1 RETURNING *;
 
 -- name: UpdateUserSubscription :one
-UPDATE backend.users SET subscription_id = $2, updated_at = NOW() WHERE id = $1 RETURNING *;
+UPDATE backend.users SET subscription_id = $2, updated_at = NOW()
+WHERE id = $1 AND subscription_id IS NOT DISTINCT FROM sqlc.narg(expected_subscription_id)::integer
+RETURNING *;
 
 -- name: SoftDeleteUser :one
 UPDATE backend.users SET deleted_at = NOW() WHERE id = $1 RETURNING *;
