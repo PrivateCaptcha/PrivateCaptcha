@@ -1,8 +1,8 @@
-# github.com/ClickHouse/ch-go v0.74.0
-## explicit; go 1.25.0
+# github.com/ClickHouse/ch-go v0.75.0
+## explicit; go 1.26.0
 github.com/ClickHouse/ch-go/compress
 github.com/ClickHouse/ch-go/proto
-# github.com/ClickHouse/clickhouse-go/v2 v2.50.0
+# github.com/ClickHouse/clickhouse-go/v2 v2.51.0
 ## explicit; go 1.26.0
 github.com/ClickHouse/clickhouse-go/v2
 github.com/ClickHouse/clickhouse-go/v2/ext
@@ -46,7 +46,7 @@ github.com/denisbrodbeck/machineid
 # github.com/go-faster/city v1.0.1
 ## explicit; go 1.17
 github.com/go-faster/city
-# github.com/go-faster/errors v0.7.1
+# github.com/go-faster/errors v0.8.0
 ## explicit; go 1.20
 github.com/go-faster/errors
 # github.com/go-gomail/gomail v0.0.0-20160411212932-81ebce5c23df
@@ -111,13 +111,14 @@ github.com/jpillora/backoff
 # github.com/justinas/alice v1.2.0
 ## explicit; go 1.12
 github.com/justinas/alice
-# github.com/klauspost/compress v1.20.2
+# github.com/klauspost/compress v1.20.3
 ## explicit; go 1.25
 github.com/klauspost/compress
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
 github.com/klauspost/compress/internal/cpuinfo
 github.com/klauspost/compress/internal/le
+github.com/klauspost/compress/internal/regmask
 github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
@@ -149,11 +150,11 @@ github.com/medama-io/go-useragent/internal
 # github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 ## explicit
 github.com/munnerz/goautoneg
-# github.com/paulmach/orb v0.13.0
+# github.com/paulmach/orb v0.14.0
 ## explicit; go 1.18
 github.com/paulmach/orb
-# github.com/pierrec/lz4/v4 v4.1.27
-## explicit; go 1.17
+# github.com/pierrec/lz4/v4 v4.1.33
+## explicit; go 1.22
 github.com/pierrec/lz4/v4
 github.com/pierrec/lz4/v4/internal/lz4block
 github.com/pierrec/lz4/v4/internal/lz4errors
@@ -204,7 +205,7 @@ github.com/segmentio/asm/cpu/arm
 github.com/segmentio/asm/cpu/arm64
 github.com/segmentio/asm/cpu/cpuid
 github.com/segmentio/asm/cpu/x86
-# github.com/shopspring/decimal v1.5.0
+# github.com/shopspring/decimal v1.6.0
 ## explicit; go 1.10
 github.com/shopspring/decimal
 # github.com/slok/go-http-metrics v0.13.0
