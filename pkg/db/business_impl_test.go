@@ -1645,7 +1645,7 @@ func TestBusinessStoreImplUpdateUserSubscription(t *testing.T) {
 			ID: 3,
 		}
 		updatedUser, event, err := store.UpdateUserSubscription(t.Context(), user, subscription)
-		if !errors.Is(err, pgx.ErrNoRows) {
+		if !errors.Is(err, ErrSubscriptionLinkChanged) {
 			t.Fatalf("expected pgx.ErrNoRows, got %v", err)
 		}
 		if updatedUser != nil || event != nil {

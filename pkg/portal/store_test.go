@@ -12,7 +12,6 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
-	"github.com/jackc/pgx/v5"
 )
 
 func TestSoftDeleteOrganization(t *testing.T) {
@@ -353,7 +352,7 @@ func TestUpdateUserSubscriptionFromNull(t *testing.T) {
 		t.Fatalf("Expected subscription %d, got %v", subscription.ID, updatedUser.SubscriptionID)
 	}
 
-	if _, _, err := store.Impl().UpdateUserSubscription(ctx, user, subscription); !errors.Is(err, pgx.ErrNoRows) {
+	if _, _, err := store.Impl().UpdateUserSubscription(ctx, user, subscription); !errors.Is(err, db.ErrSubscriptionLinkChanged) {
 		t.Fatalf("Expected stale update to return pgx.ErrNoRows, got %v", err)
 	}
 }

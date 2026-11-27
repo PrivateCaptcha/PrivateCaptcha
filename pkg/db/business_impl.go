@@ -2956,6 +2956,10 @@ func (impl *BusinessStoreImpl) UpdateUserSubscription(ctx context.Context, user 
 	})
 
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, ErrSubscriptionLinkChanged
+		}
+
 		slog.ErrorContext(ctx, "Failed to update user subscription", "userID", user.ID, "subscriptionID", subscription.ID, common.ErrAttr(err))
 		return nil, nil, err
 	}
